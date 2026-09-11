@@ -105,15 +105,31 @@ export function createOccurrencesLayer() {
   let _truncated = [];
   let _datasets = {};
   let _groups = {}; // group -> visible
+  let _observedMs = null; // ms of the shared observed time, or null = now
+  let _features = [];
+  let _windowDays = 120;
   let _groupCounts = {};
   let _rowControlsListener = null;
 
   const applyVisibility = () => {
     if (!_dataSource) return;
+    const cutoff = _observedMs ?? Infinity;
     for (const e of _dataSource.entities.values) {
       const g = e.properties?.group?.getValue?.() ?? "other";
-      e.show = _groups[g] !== false;
+      const d = Date.parse(e.properties?.date?.getValue?.() ?? "");
+      e.show = _groups[g] !== false && !(Number.isFinite(d) && d > cutoff);
     }
+  };
+
+  /** Rebuild points so alpha reflects age relative to the observed instant. */
+  const rebuild = () => {
+    if (!_dataSource) return;
+    const now = _observedMs ?? Date.now();
+    _dataSource.entities.suspendEvents();
+    _dataSource.entities.removeAll();
+    _features.forEach((f, i) => _dataSource.entities.add(pointEntity(f, now, _windowDays, i, _datasets)));
+    _dataSource.entities.resumeEvents();
+    applyVisibility();
   };
 
   const layer = {
@@ -155,27 +171,23 @@ export function createOccurrencesLayer() {
           _lastError = "Malformed occurrences.geojson";
           return false;
         }
-        const now = Date.now();
-        const win = Number(gj.window_days) || 120;
-        _dataSource.entities.suspendEvents();
-        _dataSource.entities.removeAll();
+        _windowDays = Number(gj.window_days) || 120;
         const gc = {};
-        gj.features.forEach((f, i) => {
+        for (const f of gj.features) {
           const g = f.properties?.group ?? "other";
           gc[g] = (gc[g] || 0) + 1;
           if (!(g in _groups)) _groups[g] = true;
-          _dataSource.entities.add(pointEntity(f, now, win, i, gj.datasets || {}));
-        });
-        _dataSource.entities.resumeEvents();
+        }
+        _features = gj.features;
+        _datasets = gj.datasets ?? {};
         _groupCounts = gc;
         _count = gj.features.length;
         _counts = gj.counts ?? {};
         _truncated = Array.isArray(gj.truncated) ? gj.truncated : [];
-        _datasets = gj.datasets ?? {};
         _generatedAt = gj.generated_at ?? null;
         _lastUpdate = Date.now();
         _lastError = null;
-        applyVisibility();
+        rebuild();
         _rowControlsListener?.();
         console.log(
           `[Data:Occurrences] Updated: ${_count} records, generated ${_generatedAt}`,
@@ -198,6 +210,17 @@ export function createOccurrencesLayer() {
       _lastUpdate = null;
       _lastError = null;
       _generatedAt = null;
+    },
+
+    /** Shared observed-time hook: records after the instant are hidden, age fades relative to it. */
+    setObservedTime(iso) {
+      const ms = iso ? Date.parse(iso) : null;
+      if (iso && !Number.isFinite(ms)) return false;
+      if (ms === _observedMs) return true;
+      _observedMs = ms;
+      rebuild();
+      _rowControlsListener?.();
+      return true;
     },
 
     setParams(params = {}) {
@@ -277,6 +300,8 @@ export function createOccurrencesLayer() {
         perTaxon: _counts,
         truncated: _truncated,
         datasets: Object.keys(_datasets).length,
+        observed: _observedMs === null ? null : new Date(_observedMs).toISOString(),
+        visible: _dataSource ? _dataSource.entities.values.filter((e) => e.show).length : 0,
       };
     },
   };

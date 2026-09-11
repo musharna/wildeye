@@ -68,3 +68,24 @@ test('update: records that collide at 4 decimals still load (duplicate-id regres
     assert.match(l.getStats().error, /Malformed/);
   } finally { globalThis.fetch = saved; }
 });
+
+test('occurrences: setObservedTime hides records after the instant and fades by age relative to it', async () => {
+  const mk = (date) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [1, 2] },
+    properties: { taxon: 'orca', group: 'whales', date, name: 'Orca', sci: 'Orcinus orca' } });
+  const gj = { type: 'FeatureCollection', window_days: 120, features: [mk('2026-09-01'), mk('2026-09-10')] };
+  const saved = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => gj });
+  try {
+    const l = createOccurrencesLayer();
+    let ds; l.init({ dataSources: { add(d) { ds = d; }, remove() {} } });
+    assert.equal(await l.update(), true);
+    assert.equal(l.getStats().visible, 2);
+    assert.equal(l.setObservedTime('2026-09-05T00:00:00Z'), true);
+    assert.equal(l.getStats().visible, 1, 'the 09-10 record is in the future of the selected instant');
+    const alphaSep1 = ds.entities.values.find((e) => e.show).point.color.getValue().alpha;
+    assert.ok(alphaSep1 > 0.9, `age 4 d at the selected instant should be bright, got ${alphaSep1}`);
+    assert.equal(l.setObservedTime(null), true);
+    assert.equal(l.getStats().visible, 2);
+    assert.equal(l.setObservedTime('bad'), false);
+  } finally { globalThis.fetch = saved; }
+});

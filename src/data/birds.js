@@ -11,6 +11,15 @@ const DATA_URL = 'data/birds.geojson';
 const FIELD_URL = 'data/birds_field.json';
 const MANIFEST_URL = 'data/birds_archive/manifest.json';
 const SEEK_DEBOUNCE_MS = 150;
+
+/** Newest archive frame id ('YYYY-MM-DDTHH') at or before an ISO instant (pure); null when none. */
+export function frameIdAtOrBefore(ids, iso) {
+  const t = Date.parse(iso);
+  if (!Array.isArray(ids) || !Number.isFinite(t)) return null;
+  let best = null;
+  for (const id of ids) { const ft = Date.parse(`${id}:00:00Z`); if (Number.isFinite(ft) && ft <= t && (best === null || ft > Date.parse(`${best}:00:00Z`))) best = id; }
+  return best;
+}
 const PARTICLE_COUNT = 1500;
 const PARTICLE_LIFE_S = 90;
 const PARTICLE_ALT_M = 600;
@@ -116,7 +125,7 @@ export function createBirdsLayer() {
   let _rng = Math.random;        // seeded per frame in replay
   let _gen = 0;                  // generation token: stale async loads are dropped
   let _manifest = null;          // {frames: {id: {...}}, ids: [sorted]}
-  let _replay = null;            // {index, playing, timer, ui:{root,range,label,play}}
+  let _replay = null;            // {index, frameId} while in replay
   let _seekTimer = null;
 
   function applyVisibility() {
@@ -286,14 +295,12 @@ export function createBirdsLayer() {
       if (viewer?.scene?.preRender && !_preRenderRemover) {
         _preRenderRemover = viewer.scene.preRender.addEventListener(onPreRender);
       }
-      if (_replay?.ui) _replay.ui.root.hidden = false;
-      else if (typeof document !== 'undefined') this._loadManifest().then((m) => { if (m && _enabled) this._installReplayUi(); });
+      if (_manifest === null && typeof document !== 'undefined') this._loadManifest();
     },
     disable() {
       _enabled = false;
       applyVisibility();
-      if (_replay?.ui) _replay.ui.root.hidden = true;
-      if (_mode === 'replay') { _mode = 'live'; _rng = Math.random; ++_gen; if (_replay) { _replay.playing = false; clearInterval(_replay.timer); _replay.timer = null; if (_replay.ui) { _replay.ui.play.textContent = '▶'; _replay.ui.label.textContent = 'LIVE'; } } }
+      if (_mode === 'replay') { _mode = 'live'; _rng = Math.random; ++_gen; _replay = null; }
       if (_tickRemover) { _tickRemover(); _tickRemover = null; }
       if (_preRenderRemover) { _preRenderRemover(); _preRenderRemover = null; }
       releaseContinuousRender('birds');
@@ -380,9 +387,6 @@ export function createBirdsLayer() {
         _field = null;
         if (_points) for (let i = 0; i < _points.length; i++) _points.get(i).show = false;
       }
-      if (_replay?.ui) {
-        _replay.ui.label.textContent = `${id.replace('T', ' ')}:00 UTC · ${fj.fresh_count}/${fj.site_count} radars`;
-      }
       _lastUpdate = Date.now(); _lastError = null;
     },
 
@@ -411,13 +415,7 @@ export function createBirdsLayer() {
         const m = await res.json();
         m.ids = Object.keys(m.frames || {}).sort();
         if (!m.ids.length) { if (_manifest === null) _manifest = false; return _manifest; }
-        const wasAtEnd = _replay && _manifest && _replay.index === _manifest.ids.length - 1;
         _manifest = m;
-        if (_replay?.ui) {
-          const last = m.ids.length - 1;
-          _replay.ui.range.max = String(last);
-          if (_mode === 'live' || wasAtEnd) { _replay.index = last; _replay.ui.range.value = String(last); }
-        }
       } catch { if (_manifest === null) _manifest = false; }
       return _manifest;
     },
@@ -427,60 +425,37 @@ export function createBirdsLayer() {
       if (!_manifest || !_manifest.ids.length) return;
       const i = Math.max(0, Math.min(_manifest.ids.length - 1, Math.floor(index)));
       _mode = 'replay';
-      if (_replay) { _replay.index = i; if (_replay.ui) _replay.ui.range.value = String(i); }
+      _replay = { ..._replay, index: i, frameId: _manifest.ids[i] };
       clearTimeout(_seekTimer);
       _seekTimer = setTimeout(() => { this._showFrame(_manifest.ids[i]); }, SEEK_DEBOUNCE_MS);
     },
 
     async setMode(mode) {
       if (mode === 'live' && _mode !== 'live') {
-        _mode = 'live'; _rng = Math.random; ++_gen;
-        if (_replay) { _replay.playing = false; clearInterval(_replay.timer); _replay.timer = null;
-          if (_replay.ui) { _replay.ui.play.textContent = '▶'; _replay.ui.label.textContent = 'LIVE'; } }
+        _mode = 'live'; _rng = Math.random; ++_gen; _replay = null;
         await this.update();
       }
     },
     getMode() { return _mode; },
-    getReplayInfo() { return _manifest ? { frames: _manifest.ids.length, index: _replay?.index ?? null, playing: !!_replay?.playing } : null; },
+    getReplayInfo() { return _manifest ? { frames: _manifest.ids.length, index: _replay?.index ?? null, frameId: _replay?.frameId ?? null } : null; },
 
-    _installReplayUi() {
-      if (_replay?.ui || typeof document === 'undefined') return;
-      const root = document.createElement('div');
-      root.id = 'birds-replay';
-      root.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:30;' +
-        'display:flex;gap:8px;align-items:center;padding:6px 10px;border-radius:8px;' +
-        'background:rgba(8,12,18,0.82);color:#cfe3ff;font:12px/1.2 var(--font-mono, ui-monospace, monospace);' +
-        'border:1px solid rgba(120,170,255,0.35);backdrop-filter:blur(4px)';
-      root.innerHTML = '<span class="brt" style="min-width:8em;opacity:.8">🐦 replay</span>' +
-        '<button class="brp" title="Play / pause (1 frame per second)">▶</button>' +
-        '<button class="brb" title="Previous hour">◀</button>' +
-        '<input class="brr" type="range" min="0" max="0" value="0" style="width:38vw;max-width:520px">' +
-        '<button class="brn" title="Next hour">▶|</button>' +
-        '<button class="brl" title="Return to live data">LIVE</button>' +
-        '<span class="brx" style="min-width:16em"></span>';
-      for (const b of root.querySelectorAll('button')) {
-        b.style.cssText = 'background:#16233a;color:#cfe3ff;border:1px solid rgba(120,170,255,.4);border-radius:5px;padding:2px 7px;cursor:pointer;font:inherit';
-      }
-      document.body.appendChild(root);
-      const range = root.querySelector('.brr'), label = root.querySelector('.brx'), play = root.querySelector('.brp');
-      range.max = String(_manifest.ids.length - 1); range.value = range.max;
-      label.textContent = 'LIVE';
-      _replay = { index: _manifest.ids.length - 1, playing: false, timer: null, ui: { root, range, label, play } };
-      range.addEventListener('input', () => this.seek(Number(range.value)));
-      root.querySelector('.brb').addEventListener('click', () => this.seek((_replay.index ?? 0) - 1));
-      root.querySelector('.brn').addEventListener('click', () => this.seek((_replay.index ?? 0) + 1));
-      root.querySelector('.brl').addEventListener('click', () => this.setMode('live'));
-      play.addEventListener('click', () => {
-        if (_replay.playing) { _replay.playing = false; clearInterval(_replay.timer); _replay.timer = null; play.textContent = '▶'; return; }
-        _replay.playing = true; play.textContent = '❚❚';
-        if (_mode !== 'replay') this.seek(0);
-        _replay.timer = setInterval(() => {
-          const next = (_replay.index ?? -1) + 1;
-          if (next >= _manifest.ids.length) { _replay.playing = false; clearInterval(_replay.timer); _replay.timer = null; play.textContent = '▶'; return; }
-          this.seek(next);
-        }, 1000);
-      });
-      root.hidden = !_enabled;
+    /**
+     * Shared observed-time hook (src/observedTime.js): show the newest archived
+     * hourly frame at or before `iso`; null returns to live. An instant before
+     * the archive start has nothing to show and returns false.
+     */
+    async setObservedTime(iso) {
+      if (!iso) { await this.setMode('live'); return true; }
+      const m = await this._loadManifest();
+      if (!m) return false;
+      const id = frameIdAtOrBefore(m.ids, iso);
+      if (!id) return false;
+      if (_mode === 'replay' && _replay?.frameId === id) return true;
+      _mode = 'replay';
+      _replay = { index: m.ids.indexOf(id), frameId: id };
+      clearTimeout(_seekTimer);
+      await this._showFrame(id);
+      return true;
     },
 
     /** Field JSON → drapes + particle seed. Absent field file is not an error (M1 data only). */
@@ -502,7 +477,6 @@ export function createBirdsLayer() {
     destroy(viewer) {
       this.disable();
       removeImagery();
-      if (_replay?.ui) { _replay.ui.root.remove(); }
       _replay = null; _manifest = null; _mode = 'live';
       _params = { ...DEFAULT_PARAMS }; _fade = 1;
       if (_clickHandler) { _clickHandler.destroy(); _clickHandler = null; }

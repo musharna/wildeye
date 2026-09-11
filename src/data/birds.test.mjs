@@ -1,7 +1,7 @@
 // src/data/birds.test.mjs — pure helpers + layer contract for the radar bird layer.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade } from './birds.js';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore } from './birds.js';
 
 test('birds: analyst record maps fields and nulls', () => {
   const r = mapBirdRecord({ site: 'KOKX', name: 'Upton NY', density_birds_km3: 12.5, heading_deg: 200, speed_ms: 9, peak_altitude_m: 600, scan_time: '2026-09-11T00:12:10Z', stale: false, lat: 40.9, lon: -72.9 }, 0);
@@ -80,5 +80,39 @@ test('birds: manifest is re-read on live update so new archive frames reach the 
     // failure keeps the last good manifest rather than blanking it
     globalThis.fetch = async () => ({ ok: false, status: 500 });
     assert.equal((await l._loadManifest(true)).ids.length, 3);
+  } finally { globalThis.fetch = saved; l.destroy({ dataSources: { remove() {} }, scene: {} }); }
+});
+
+test('birds: frameIdAtOrBefore picks the newest hourly frame not after the instant', () => {
+  const ids = ['2026-09-10T22', '2026-09-10T23', '2026-09-11T00'];
+  assert.equal(frameIdAtOrBefore(ids, '2026-09-10T23:40:00Z'), '2026-09-10T23');
+  assert.equal(frameIdAtOrBefore(ids, '2026-09-11T00:00:00Z'), '2026-09-11T00');
+  assert.equal(frameIdAtOrBefore(ids, '2026-09-10T01:00:00Z'), null);
+  assert.equal(frameIdAtOrBefore(ids, 'nope'), null);
+});
+
+test('birds: setObservedTime enters replay on the matching frame and null returns to live', async () => {
+  const l = createBirdsLayer();
+  const manifest = { frames: { '2026-09-10T22': { dir: 'a' }, '2026-09-10T23': { dir: 'b' } } };
+  const shown = [];
+  const saved = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('manifest.json')) return { ok: true, json: async () => JSON.parse(JSON.stringify(manifest)) };
+    if (u.includes('birds.geojson')) return { ok: true, json: async () => ({ features: [], generated_at: 'x' }) };
+    return { ok: false, status: 404 };
+  };
+  try {
+    l.init({ dataSources: { add() {}, remove() {} }, scene: {} });
+    l._showFrame = async (id) => { shown.push(id); };
+    assert.equal(await l.setObservedTime('2026-09-10T23:30:00Z'), true);
+    assert.equal(l.getMode(), 'replay');
+    assert.deepEqual(l.getReplayInfo(), { frames: 2, index: 1, frameId: '2026-09-10T23' });
+    assert.equal(await l.setObservedTime('2026-09-10T23:59:00Z'), true);
+    assert.deepEqual(shown, ['2026-09-10T23'], 'same frame is not re-fetched');
+    assert.equal(await l.setObservedTime('2026-09-01T00:00:00Z'), false, 'before the archive: nothing to show');
+    assert.equal(await l.update(), true, 'poll is a no-op in replay');
+    assert.equal(await l.setObservedTime(null), true);
+    assert.equal(l.getMode(), 'live');
   } finally { globalThis.fetch = saved; l.destroy({ dataSources: { remove() {} }, scene: {} }); }
 });
