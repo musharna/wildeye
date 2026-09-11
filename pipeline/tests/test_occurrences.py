@@ -158,3 +158,24 @@ def test_feature_carries_provenance_and_resolve_datasets_dedupes_and_records_fai
     ds = resolve_datasets([r, r, {**r, "source": "obis", "dataset_key": "ok1"}], fetch_gbif=fg, fetch_obis=fo)
     assert calls == ["dk1"] and ds["dk1"]["doi"] == "10.1/x"
     assert "error" in ds["ok1"] and ds["ok1"]["title"] == "X"
+
+
+def test_npn_adapter_keeps_only_observed_phenophases_and_carries_cc_by():
+    from pipeline.occurrences import npn_records, normalise_npn, resolve_datasets, NPN_DATASET_KEY
+    import datetime as dt
+    taxon = {**TAXON, "id": "common-milkweed", "npn_species_id": 199}
+    rows = [
+        {"observation_date": "2026-08-01", "latitude": 38.4, "longitude": -78.9, "phenophase_status": 1, "phenophase_description": "Fruits"},
+        {"observation_date": "2026-08-01", "latitude": 38.4, "longitude": -78.9, "phenophase_status": 0, "phenophase_description": "Fruits"},
+        {"observation_date": "2026-08-02", "latitude": 38.4, "longitude": -78.9, "phenophase_status": -1, "phenophase_description": "Fruits"},
+        {"observation_date": "bad", "latitude": 1, "longitude": 2, "phenophase_status": 1},
+    ]
+    seen = []
+    recs, truncated = npn_records(taxon, dt.date(2026, 8, 1), dt.date(2026, 9, 1), fetch=lambda u, timeout=180: (seen.append(u), rows)[1])
+    assert "species_id%5B0%5D=199" in seen[0] and "start_date=2026-08-01" in seen[0]
+    assert truncated is False and len(recs) == 1
+    assert recs[0]["source"] == "npn" and recs[0]["basis"] == "phenophase: Fruits" and "licenses/by/4.0" in recs[0]["license"]
+    assert npn_records(TAXON, dt.date(2026, 8, 1), dt.date(2026, 9, 1), fetch=lambda *a, **k: (_ for _ in ()).throw(AssertionError("no npn id → no call"))) == ([], False)
+    assert normalise_npn({"phenophase_status": 1, "observation_date": "2026-08-01", "latitude": None, "longitude": 1}, taxon) is None
+    ds = resolve_datasets(recs, fetch_gbif=lambda k: 1 / 0, fetch_obis=lambda k: 1 / 0)
+    assert ds[NPN_DATASET_KEY]["publisher"] == "USA National Phenology Network" and "Nature's Notebook" in ds[NPN_DATASET_KEY]["citation"]

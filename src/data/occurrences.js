@@ -13,6 +13,7 @@ export const GROUP_COLORS = Object.freeze({
   turtles: "#aed581",
   insects: "#ffd54f",
   mammals: "#f8bbd0",
+  plants: "#81c784",
   other: "#b0bec5",
 });
 const GROUP_LABELS = Object.freeze({
@@ -21,6 +22,7 @@ const GROUP_LABELS = Object.freeze({
   turtles: "TURTLES",
   insects: "INSECTS",
   mammals: "MAMMALS",
+  plants: "PLANTS (PHENOLOGY)",
   other: "OTHER",
 });
 
@@ -51,7 +53,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 
 /** @param p feature properties  @param ds optional datasets map from the GeoJSON (dataset_key → meta) */
 export function describeOccurrence(p, ds = {}) {
-  const src = p.source === "obis" ? "OBIS" : "GBIF";
+  const src = p.source === "obis" ? "OBIS" : p.source === "npn" ? "USA-NPN" : "GBIF";
   const lic = p.license_label || licenceLabel(p.license);
   const meta = (p.dataset_key && ds[p.dataset_key]) || {};
   const link = p.url
@@ -134,9 +136,9 @@ export function createOccurrencesLayer() {
 
   const layer = {
     id: "occurrences",
-    name: "Wildlife sightings (GBIF + OBIS)",
+    name: "Wildlife sightings (GBIF + OBIS + USA-NPN)",
     icon: "🐋",
-    source: "GBIF + OBIS occurrences (CC0 / CC-BY records only)",
+    source: "GBIF + OBIS occurrences (CC0 / CC-BY records only) + USA-NPN phenology (CC BY 4.0)",
     updateInterval: 3600000,
 
     init(viewer) {

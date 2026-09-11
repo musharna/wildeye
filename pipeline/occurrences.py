@@ -207,11 +207,68 @@ def resolve_datasets(records: list[dict], fetch_gbif=gbif_dataset_meta, fetch_ob
         if not k or k in out:
             continue
         try:
+            if r["source"] == "npn":
+                out[k] = dict(NPN_META)
+                continue
             out[k] = fetch_gbif(k) if r["source"] == "gbif" else fetch_obis(k)
         except Exception as e:  # noqa: BLE001
             log.warning("dataset meta %s failed: %r", k, e)
             out[k] = {"source": r["source"], "title": r.get("dataset"), "error": repr(e)}
     return out
+
+
+NPN = "https://services.usanpn.org/npn_portal/observations/getObservations.json"
+NPN_DATASET_KEY = "usanpn-natures-notebook"
+NPN_META = {
+    "source": "npn",
+    "title": "USA National Phenology Network, Nature's Notebook",
+    "doi": None,
+    "publisher": "USA National Phenology Network",
+    "citation": "Data were provided by the USA National Phenology Network and the many participants who contribute to its Nature's Notebook program.",
+    "license": "https://creativecommons.org/licenses/by/4.0/",
+    "url": "https://www.usanpn.org/data/observational",
+}
+
+
+def npn_records(taxon: dict, since: dt.date, until: dt.date, fetch=None) -> tuple[list[dict], bool]:
+    """USA-NPN phenology observations (CC BY 4.0) for taxa with `npn_species_id`.
+    Only phenophase_status == 1 (the phenophase was observed) becomes an occurrence;
+    0 (looked, not seen) and -1 (uncertain) are dropped. Never truncated: the API returns
+    the whole window."""
+    sid = taxon.get("npn_species_id")
+    if not sid:
+        return [], False
+    q = urllib.parse.urlencode({"start_date": since.isoformat(), "end_date": until.isoformat(),
+                                "species_id[0]": sid, "request_src": "wildeye"})
+    rows = (fetch or _get_json)(f"{NPN}?{q}", timeout=180)
+    out = []
+    for r in rows if isinstance(rows, list) else []:
+        n = normalise_npn(r, taxon)
+        if n:
+            out.append(n)
+    return out, False
+
+
+def normalise_npn(r: dict, taxon: dict) -> dict | None:
+    if r.get("phenophase_status") != 1:
+        return None
+    date = _iso_date(r.get("observation_date"))
+    lat, lon = r.get("latitude"), r.get("longitude")
+    if date is None or lat is None or lon is None:
+        return None
+    return {
+        "taxon": taxon["id"],
+        "date": date,
+        "lat": float(lat),
+        "lon": float(lon),
+        "source": "npn",
+        "dataset": NPN_META["title"],
+        "dataset_key": NPN_DATASET_KEY,
+        "license": NPN_META["license"],
+        "uncertainty_m": None,
+        "basis": f"phenophase: {r.get('phenophase_description') or 'observed'}",
+        "url": "https://www.usanpn.org/data/observational",
+    }
 
 
 def dedupe(records: list[dict]) -> list[dict]:
@@ -254,10 +311,12 @@ def process_taxon(
 ) -> tuple[list[dict], dict]:
     g, gt = gbif_records(taxon, since, until)
     o, ot = obis_records(taxon, since, until)
-    recs = dedupe(sorted(g + o, key=lambda r: r["date"], reverse=True))
+    n, _ = npn_records(taxon, since, until)
+    recs = dedupe(sorted(g + o + n, key=lambda r: r["date"], reverse=True))
     return [to_feature(r, taxon) for r in recs], {
         "gbif": len(g),
         "obis": len(o),
+        "npn": len(n),
         "kept": len(recs),
         "truncated": gt or ot,
         "truncated_gbif": gt,

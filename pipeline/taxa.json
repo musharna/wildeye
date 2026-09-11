@@ -69,7 +69,8 @@
     "sci": "Danaus plexippus",
     "gbif_key": 5133088,
     "group": "insects",
-    "icon": "🦋"
+    "icon": "🦋",
+    "npn_species_id": 396
   },
   {
     "id": "polar-bear",
@@ -86,5 +87,14 @@
     "gbif_key": 9548142,
     "group": "sharks",
     "icon": "🐟"
+  },
+  {
+    "id": "common-milkweed",
+    "name": "Common milkweed",
+    "sci": "Asclepias syriaca",
+    "gbif_key": 3170247,
+    "group": "plants",
+    "icon": "🌱",
+    "npn_species_id": 199
   }
 ]
