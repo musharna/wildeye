@@ -170,5 +170,220 @@
         ]
       ]
     }
+  },
+  {
+    "id": "crw-dhw",
+    "name": "Coral heat stress: degree heating weeks (NOAA CRW)",
+    "icon": "🌡️🪸",
+    "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.transparentPng?CRW_DHW%5B(last)%5D%5B(-60):(60)%5D%5B(-180):(180)%5D&.size=1440%7C480&.colorBar=KT_thermal%7C%7C%7C0%7C16%7C",
+    "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.json?time%5B(last)%5D",
+    "bounds": {
+      "west": -180,
+      "south": -60,
+      "east": 180,
+      "north": 60
+    },
+    "transparent": {
+      "rgb": [
+        4,
+        35,
+        51
+      ],
+      "tolerance": 0
+    },
+    "kind": "ramp",
+    "zrank": 30,
+    "ramp": {
+      "min": 0,
+      "max": 16,
+      "unit": " °C-weeks",
+      "stops": [
+        [
+          4,
+          35,
+          51
+        ],
+        [
+          82,
+          59,
+          154
+        ],
+        [
+          176,
+          95,
+          124
+        ],
+        [
+          242,
+          151,
+          72
+        ],
+        [
+          232,
+          250,
+          91
+        ]
+      ]
+    },
+    "legend": "accumulated heat stress over 12 weeks; ≥4 °C-weeks = bleaching likely, ≥8 = severe; 0 hidden",
+    "credit_key": "noaa-crw",
+    "credit": "Courtesy NOAA Coral Reef Watch (daily 5 km Degree Heating Week v3.1)"
+  },
+  {
+    "id": "crw-hotspot",
+    "name": "Coral heat stress: HotSpot anomaly (NOAA CRW)",
+    "icon": "🔥🪸",
+    "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.transparentPng?CRW_HOTSPOT%5B(last)%5D%5B(-60):(60)%5D%5B(-180):(180)%5D&.size=1440%7C480&.colorBar=KT_thermal%7C%7C%7C0%7C5%7C",
+    "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.json?time%5B(last)%5D",
+    "bounds": {
+      "west": -180,
+      "south": -60,
+      "east": 180,
+      "north": 60
+    },
+    "transparent": {
+      "rgb": [
+        4,
+        35,
+        51
+      ],
+      "tolerance": 0
+    },
+    "kind": "ramp",
+    "zrank": 40,
+    "ramp": {
+      "min": 0,
+      "max": 5,
+      "unit": " °C",
+      "stops": [
+        [
+          4,
+          35,
+          51
+        ],
+        [
+          82,
+          59,
+          154
+        ],
+        [
+          176,
+          95,
+          124
+        ],
+        [
+          242,
+          151,
+          72
+        ],
+        [
+          232,
+          250,
+          91
+        ]
+      ]
+    },
+    "legend": "SST above the maximum monthly mean; ≥1 °C = heat stress; ≤0 hidden",
+    "credit_key": "noaa-crw",
+    "credit": "Courtesy NOAA Coral Reef Watch (daily 5 km Coral Bleaching HotSpot v3.1)"
+  },
+  {
+    "id": "crw-seaice",
+    "name": "Sea ice fraction (NOAA CRW)",
+    "icon": "🧊",
+    "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.transparentPng?CRW_SEAICE%5B(last)%5D%5B(-90):(90)%5D%5B(-180):(180)%5D&.size=1440%7C720&.colorBar=KT_ice%7C%7C%7C0%7C1%7C",
+    "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.json?time%5B(last)%5D",
+    "bounds": {
+      "west": -180,
+      "south": -90,
+      "east": 180,
+      "north": 90
+    },
+    "transparent": "none",
+    "kind": "ramp",
+    "zrank": 25,
+    "ramp": {
+      "min": 0,
+      "max": 100,
+      "unit": " %",
+      "stops": [
+        [
+          27,
+          27,
+          55
+        ],
+        [
+          61,
+          67,
+          137
+        ],
+        [
+          66,
+          123,
+          183
+        ],
+        [
+          107,
+          177,
+          203
+        ],
+        [
+          188,
+          228,
+          231
+        ]
+      ]
+    },
+    "legend": "sea ice concentration; open water (0 %) is transparent in the source",
+    "credit_key": "noaa-crw",
+    "credit": "Courtesy NOAA Coral Reef Watch (daily 5 km sea ice fraction v3.1)"
+  },
+  {
+    "id": "ndvi",
+    "name": "Vegetation greenness NDVI (NOAA VIIRS CDR)",
+    "icon": "🌿",
+    "catalog": "https://www.ncei.noaa.gov/thredds/catalog/cdr/ndvi/2026/catalog.xml",
+    "file_regex": "VIIRS-Land_v001_[A-Z0-9]+_NOAA-20_\\d{8}_c\\d+\\.nc",
+    "time_regex": "_(\\d{4})(\\d{2})(\\d{2})_c",
+    "url_template": "https://www.ncei.noaa.gov/thredds/wms/cdr/ndvi/2026/{file}?service=WMS&version=1.3.0&request=GetMap&layers=NDVI&styles=default-scalar/seq-YlGn&crs=CRS:84&bbox=-180,-90,180,90&width=1440&height=720&format=image/png&transparent=true&colorscalerange=0,0.9&numcolorbands=250&belowmincolor=transparent&abovemaxcolor=extend",
+    "bounds": {
+      "west": -180,
+      "south": -90,
+      "east": 180,
+      "north": 90
+    },
+    "transparent": "none",
+    "kind": "ramp",
+    "zrank": 15,
+    "ramp": {
+      "min": 0,
+      "max": 0.9,
+      "unit": "",
+      "stops": [
+        [
+          255,
+          255,
+          229
+        ],
+        [
+          217,
+          240,
+          163
+        ],
+        [
+          65,
+          171,
+          93
+        ],
+        [
+          0,
+          104,
+          55
+        ]
+      ]
+    },
+    "legend": "NDVI, one day of VIIRS: pale = bare/sparse · dark green = dense canopy; gaps = clouds, night, water",
+    "credit_key": "noaa-ndvi-cdr",
+    "credit": "NOAA Climate Data Record of NDVI, VIIRS daily 0.05°, served by NCEI THREDDS"
   }
 ]

@@ -8,7 +8,8 @@ import earthquakesLayer from './data/earthquakes.js';
 import birdsLayer from './data/birds.js';
 import aloftLayer from './data/aloft.js';
 import occurrencesLayer from './data/occurrences.js';
-import { crwBleachingLayer, oisstLayer, chlorALayer } from './data/rasterDrape.js';
+import tracksLayer from './data/tracks.js';
+import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer } from './data/rasterDrape.js';
 import { createObservedTime, attachObservedTime, installObservedTimeUi } from './observedTime.js';
 import satellitesLayer from './data/satellites.js';
 import rocketLaunchesLayer from './data/rocketLaunches.js';
@@ -220,10 +221,15 @@ async function init() {
     dataManager.register(crwBleachingLayer);
     dataManager.register(oisstLayer);
     dataManager.register(chlorALayer);
+    dataManager.register(crwDhwLayer);
+    dataManager.register(crwHotspotLayer);
+    dataManager.register(crwSeaIceLayer);
+    dataManager.register(ndviLayer);
     dataManager.register(occurrencesLayer);
+    dataManager.register(tracksLayer);
     // Shared observed-time selector: one bar, every bio layer samples its own data at the instant.
     const observedTime = createObservedTime({ domainDays: 30 });
-    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, occurrencesLayer];
+    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, occurrencesLayer, tracksLayer];
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
     dataManager.register(satellitesLayer);

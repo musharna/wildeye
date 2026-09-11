@@ -68,3 +68,18 @@ def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_hi
     assert [e["time"] for e in h3] == ["2026-09-10T12:00:00Z", "2026-09-11T12:00:00Z"]
     assert not (old / f"{stale}.png").exists(), "frame older than keep_days pruned"
     assert sorted(p.name for p in old.iterdir()) == ["20260910T120000Z.png", "20260911T120000Z.png", "notes.txt"]
+
+
+def test_resolve_source_picks_newest_catalog_file_and_dates_it():
+    from pipeline.raster import resolve_source
+    prod = {"id": "ndvi", "catalog": "c", "url_template": "https://x/wms/{file}?GetMap",
+            "file_regex": r"VIIRS-Land_v001_[A-Z0-9]+_NOAA-20_\d{8}_c\d+\.nc", "time_regex": r"_(\d{4})(\d{2})(\d{2})_c"}
+    xml = ('<dataset name="VIIRS-Land_v001_JP113C1_NOAA-20_20260905_c20260907143010.nc"/>'
+           '<dataset name="VIIRS-Land_v001_JP113C1_NOAA-20_20260906_c20260908143010.nc"/>'
+           '<dataset name="VIIRS-Land_v001_JP113C1_NOAA-20_20260904_c20260906143010.nc"/>')
+    url, when = resolve_source(prod, xml)
+    assert url.endswith("NOAA-20_20260906_c20260908143010.nc?GetMap") and when == "2026-09-06T00:00:00Z"
+    assert resolve_source({"id": "s", "url": "u"}) == ("u", None)
+    import pytest
+    with pytest.raises(RuntimeError, match="no file matching"):
+        resolve_source(prod, "<catalog/>")

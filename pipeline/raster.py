@@ -1,7 +1,7 @@
 """Config-driven raster drapes: fetch a data-only PNG (ERDDAP transparentPng), post-process,
 write public/data/rasters/<id>.png and public/data/rasters.json."""
 from __future__ import annotations
-import argparse, datetime as dt, io, json, logging, time, urllib.request
+import argparse, datetime as dt, io, json, logging, re, time, urllib.request
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -49,8 +49,28 @@ def fetch_time(url: str | None) -> str | None:
         d = json.load(r)
     return d["table"]["rows"][0][0]
 
+def resolve_source(product: dict, catalog_xml: str | None = None) -> tuple[str, str | None]:
+    """(url, time) for a product. Static products return (url, None → fetch_time later).
+    Products with `catalog` pick the newest file matching `file_regex` from a THREDDS
+    catalog.xml, fill `url_template` with {file}, and read the acquisition date from the
+    filename via `time_regex` (a date-stamped daily file, e.g. NOAA NDVI CDR on NCEI)."""
+    if "catalog" not in product:
+        return product["url"], None
+    if catalog_xml is None:
+        with _open(product["catalog"], 60) as r:
+            catalog_xml = r.read().decode("utf-8", "replace")
+    files = sorted(set(re.findall(product["file_regex"], catalog_xml)))
+    if not files:
+        raise RuntimeError(f"{product['id']}: no file matching {product['file_regex']!r} in {product['catalog']}")
+    f = files[-1]
+    m = re.search(product["time_regex"], f)
+    when = f"{m.group(1)}-{m.group(2)}-{m.group(3)}T00:00:00Z" if m else None
+    return product["url_template"].format(file=f), when
+
+
 def process(product: dict, out_dir: Path) -> dict:
-    rgba = fetch_png(product["url"])
+    url, when_from_name = resolve_source(product)
+    rgba = fetch_png(url)
     masked = 0.0
     t = product.get("transparent", "none")
     if isinstance(t, dict) and "rgb" in t:
@@ -58,7 +78,7 @@ def process(product: dict, out_dir: Path) -> dict:
         log.info("%s masked %.1f%% of opaque pixels as %s", product["id"], 100 * masked, t["rgb"])
     elif t != "none":
         raise ValueError(f"{product['id']}: transparent must be 'none' or {{'rgb': [r,g,b]}}, got {t!r}")
-    when = fetch_time(product.get("time_url"))
+    when = when_from_name or fetch_time(product.get("time_url"))
     png = out_dir / f"{product['id']}.png"
     png.parent.mkdir(parents=True, exist_ok=True)
     tmp = png.with_suffix(".tmp.png")

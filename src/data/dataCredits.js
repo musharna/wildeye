@@ -75,7 +75,15 @@ export const DATA_CREDITS = [
   },
   {
     key: 'noaa-crw',
-    html: 'Coral bleaching alerts: Courtesy <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (daily 5 km Bleaching Alert Area v3.1)',
+    html: 'Coral bleaching alerts, degree heating weeks, HotSpot and sea ice: Courtesy <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (daily 5 km products v3.1; Bleaching Alert Area on the legacy 0–4 scale)',
+  },
+  {
+    key: 'noaa-ndvi-cdr',
+    html: 'Vegetation greenness: <a href="https://www.ncei.noaa.gov/products/climate-data-records/normalized-difference-vegetation-index" target="_blank" rel="noopener">NOAA NDVI Climate Data Record</a> (VIIRS daily 0.05°, NCEI THREDDS WMS)',
+  },
+  {
+    key: 'ioos-atn',
+    html: 'Animal tracks: <a href="https://atn.ioos.us" target="_blank" rel="noopener">IOOS Animal Telemetry Network</a> — each deployment carries its own citation and licence in the info box',
   },
   {
     key: 'gbif-obis',

@@ -143,6 +143,7 @@ The required Google Maps / Cesium credit renders on the on-globe credit line (`#
 | Chlorophyll-a / algal blooms | NOAA CoastWatch VIIRS S-NPP/NOAA-20 gap-filled daily 4 km via ERDDAP | US public domain ("may be used and redistributed for free") |
 | Coral heat stress (DHW, HotSpot) + sea ice fraction | NOAA Coral Reef Watch 5 km via the same CoastWatch ERDDAP dataset (`CRW_DHW`, `CRW_HOTSPOT`, `CRW_SEAICE`) | US public domain; credit "NOAA Coral Reef Watch" |
 | Vegetation greenness (NDVI) | NOAA NDVI Climate Data Record, VIIRS daily 0.05°, NCEI THREDDS WMS GetMap (newest file resolved from catalog.xml) | US public domain (NOAA CDR); cite the CDR product page (read 2026-09-11) |
+| Animal tracks | IOOS Animal Telemetry Network ERDDAP (`pipeline/tracks.json`), newest deployments per species | per-deployment licence text shown in-app (sampled: "may be used and redistributed for free"); per-deployment citation shown | 
 | Wildlife sightings | GBIF + OBIS occurrence APIs, `pipeline/taxa.json` | per-record CC0 / CC-BY only (NC, SA, © dropped in pipeline); dataset title, publisher, DOI and record licence shown per record; capped taxa flagged `truncated` |
 
 ## wildeye licence matrix (read 2026-09-11, live pages; "could not fetch" = not verified)
