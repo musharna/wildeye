@@ -1,0 +1,17 @@
+[
+  {
+    "id": "atn",
+    "kind": "erddap",
+    "name": "IOOS Animal Telemetry Network",
+    "base": "https://atn.ioos.us/erddap",
+    "match": "_trajectory_",
+    "max_per_species": 12,
+    "min_fixes": 5,
+    "min_gap_s": 3600,
+    "segment_gap_h": 24,
+    "max_speed_ms": 10,
+    "drop_location_classes": ["Z"],
+    "exclude_species": [],
+    "min_age_days": 7
+  }
+]

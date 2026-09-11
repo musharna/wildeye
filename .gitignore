@@ -30,3 +30,5 @@ public/data/rasters.json
 public/data/birds.geojson
 public/data/aloft.geojson
 public/data/occurrences.geojson
+public/data/tracks.geojson
+pipeline/cron_tracks.log

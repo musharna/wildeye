@@ -108,3 +108,17 @@ and `pipeline/seed.sh` copies any missing live file into place, so a fresh clone
 data before the first cron run. Refresh a seed deliberately (`cp` + commit), never by cron.
 Budget: a tracked seed stays under ~100 KB; new feeds (tracks, site series) follow the same
 split and state a payload cap in their README section.
+
+## Animal tracks: IOOS ATN (track contract)
+```bash
+python3 -m pipeline.tracks --out public/data/tracks.geojson            # cron weekly Mon 07:00 (archival source)
+python3 -m pipeline.tracks --limit 3 --out /tmp/t.geojson              # smoke
+```
+Sources in `pipeline/tracks.json` (`kind: erddap`): newest `max_per_species` deployments per
+species from an ERDDAP search; fixes are fetched **serially** (one request in flight), invalid
+Argos class `Z` and fixes implying > `max_speed_ms` are dropped (the later fix, never the
+earlier), a publication lag of `min_age_days` hides recent positions, the display budget keeps
+one fix per `min_gap_s` plus endpoints, segments split on gaps > `segment_gap_h` and at the
+antimeridian (crossing point inserted at ±180). One LineString per segment with a parallel
+`times[]` (length validated). Per-deployment `license`, `citation`, `institution`, `url`
+ride into the info box. Measured 2026-09-11: ~2 s per deployment.
