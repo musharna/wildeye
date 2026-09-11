@@ -35,6 +35,16 @@ Top level: `generated_at`, `site_count`, `fresh_count`, `failures` (site → err
   per-site `u_ms`/`v_ms`; the globe seeds 4,000 ensemble particles from it.
   These are gitignored (regenerated every 10 min).
 
+## Replay archive (M5)
+```bash
+python3 -m pipeline.build_archive --start 2026-08-12 --end 2026-09-10 --hours 0-12 --workers 10
+```
+One frame per UTC hour → `public/data/birds_archive/YYYY/MM/DD/HH/{birds.geojson, field.png, field.json, drape.png}`
+plus `manifest.json`. Scan nearest the hour within 20 min; a site with no scan is absent
+from that frame (no last-good in history). Resumable: existing frames are skipped.
+Measured 2026-09-11: 20 sites, 10 workers, 38 s and 1.2 MB per frame (drape.png ≈ 0.75 MB).
+Gitignored; ~460 MB for 30 nights × 13 h.
+
 ## Measured
 2026-09-10 23:04 EDT: 20 sites, 8 workers, 20 s wall, 20/20 fresh (vol2bird ≈5 s/volume).
 2026-09-10 23:45 EDT: with PPI + field, 40 s wall, 20/20 fresh, 3.4 MB output.
