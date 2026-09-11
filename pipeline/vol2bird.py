@@ -52,7 +52,7 @@ def reduce_profile(bins: list[dict]) -> dict:
     use = [b for b in bins if b.get("height_m") is not None and b["height_m"] <= MAX_HEIGHT_M
            and b.get("dens") is not None]
     out = {"bins": len(bins), "density_birds_km3": None, "heading_deg": None,
-           "speed_ms": None, "peak_altitude_m": None}
+           "speed_ms": None, "peak_altitude_m": None, "u_ms": None, "v_ms": None}
     if not use:
         return out
     dens = [b["dens"] for b in use]
@@ -63,6 +63,13 @@ def reduce_profile(bins: list[dict]) -> dict:
         sx = sum(d * math.sin(math.radians(b["dd"])) for d, b in w)
         sy = sum(d * math.cos(math.radians(b["dd"])) for d, b in w)
         out["heading_deg"] = math.degrees(math.atan2(sx, sy)) % 360
+    uv = [(b["dens"], b["u"], b["v"]) for b in use
+          if b.get("u") is not None and b.get("v") is not None and b["dens"] > 0]
+    if uv:
+        tot = sum(d for d, _, _ in uv)
+        if tot:
+            out["u_ms"] = sum(d * u for d, u, _ in uv) / tot
+            out["v_ms"] = sum(d * v for d, _, v in uv) / tot
     ws = [(b["dens"], b["ff"]) for b in use if b.get("ff") is not None and b["dens"] > 0]
     if ws:
         tot = sum(d for d, _ in ws)

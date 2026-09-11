@@ -18,9 +18,11 @@ def test_reduce_profile_positive_and_negative_control():
     assert r["density_birds_km3"] > 10          # positive control: real migration night
     assert 140 <= r["heading_deg"] <= 165
     assert r["peak_altitude_m"] == 0
+    assert r["u_ms"] > 0 and r["v_ms"] < 0          # SSE flow: east +, north -
     empty = [{**b, "dens": None, "dd": None, "ff": None} for b in bins]
     e = reduce_profile(empty)                   # negative control
     assert e["density_birds_km3"] is None and e["heading_deg"] is None
+    assert e["u_ms"] is None
 
 def test_reduce_profile_circular_mean():
     bins = [
