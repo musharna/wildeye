@@ -18,3 +18,6 @@ pipeline/cron.log
 pipeline/__pycache__/
 pipeline/tests/__pycache__/
 .pytest_cache/
+public/data/birds_ppi/
+public/data/birds_field.png
+public/data/birds_field.json
