@@ -48,10 +48,17 @@ No drape for Europe: raw OPERA volumes are not redistributable; profiles are.
 ```bash
 python3 -m pipeline.raster --out public/data        # cron daily 06:40; --only crw-bleaching,oisst
 ```
-Products in `pipeline/rasters.json`: an ERDDAP `transparentPng` URL, bounds, an optional
-`mode_color` post-process (makes the dominant opaque colour transparent, e.g. bleaching level 0),
-legend and credit. Writes `public/data/rasters/<id>.png` + `rasters.json` (last-good kept per
-product, marked `stale`). Measured 2026-09-11: ~209 s per product (ERDDAP redirect is slow).
+Products in `pipeline/rasters.json`: an ERDDAP `transparentPng` URL, **lat/lon bounds (plate
+carrée only — a polar-stereographic product cannot be draped this way)**, `transparent`
+(`"none"` or `{"rgb": [r,g,b]}` — the *pinned* no-data/class-0 swatch; the build raises
+`PaletteChanged` if that colour is absent, so a palette change fails loud instead of hiding a
+real class), `classes` (discrete legend, `hidden` marks the masked class) or `ramp`
+(`min/max/unit/log/stops` for a continuous legend), `zrank` (stacking: continuous fields low,
+class overlays high), legend text and credit. Writes `public/data/rasters/<id>.png` +
+`rasters.json` (last-good kept per product, marked `stale`; `masked_fraction` logged), and
+archives every new acquisition to `rasters/<id>/<stamp>.png` (`keep_days`, default 30) listed
+as `history` in the manifest — the frontend drape shows the archived acquisition at the shared
+observed time. Measured 2026-09-11: ~209 s per product (ERDDAP redirect is slow).
 Products: `crw-bleaching` (NOAA CRW Bleaching Alert Area, daily) · `oisst` (NOAA OISST v2.1; the
 ERDDAP aggregation lags ~2 weeks) · `chlor-a` (NOAA VIIRS gap-filled chlorophyll-a, log scale, daily NRT).
 Requests carry a wildeye User-Agent: the ERDDAP redirect target (coastwatch.noaa.gov) returns 403 to Python-urllib.
@@ -76,6 +83,9 @@ python3 -m pipeline.build_archive --start 2026-08-12 --end 2026-09-10 --hours 0-
 One frame per UTC hour → `public/data/birds_archive/YYYY/MM/DD/HH/{birds.geojson, field.png, field.json, drape.png}`
 plus `manifest.json`. Scan nearest the hour within 20 min; a site with no scan is absent
 from that frame (no last-good in history). Resumable: existing frames are skipped.
+The globe reads frames through the shared observed-time bar (`src/observedTime.js`): birds
+show the newest frame at or before the selected hour; the manifest is re-read on every live
+poll so frames the cron appends reach an open session.
 Measured 2026-09-11: 20 sites, 10 workers, 38 s and 1.2 MB per frame (drape.png ≈ 0.75 MB).
 Gitignored; ~460 MB for 30 nights × 13 h.
 
