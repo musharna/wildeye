@@ -44,6 +44,8 @@ re-verify terms before each new wave; `DATA_SOURCES.md` row is the ledger.
 
 ## Gate 0 — per-product verification (runs alongside Wave 0)
 
+**Status 2026-09-11:** 20 rows read and graded in `DATA_SOURCES.md` (8ae4dc6). Unreadable by fetcher: Reef Life Survey (403), Kelp Watch (JS app) — need a browser read.
+
 Per product, not one global blocker: licence as read (URL + date), endpoint,
 sample payload, temporal coverage, projection, redistribution right,
 attribution string, `v1 / v2 / no`. Start the human-latency asks now: NEFSC email
@@ -60,12 +62,13 @@ Reef Life Survey, GFW per-layer.
 
 | Product                                    | Notes                                                                                                                                                                                                                  | Status          |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| CRW `CRW_DHW`, `CRW_HOTSPOT`, `CRW_SEAICE` | same `NOAA_DHW` griddap as shipped BAA (variables verified); continuous fields → need the Wave 0 mask, not mode-colour                                                                                                 | after Wave 0    |
-| NDVI (NOAA CDR, VIIRS daily)               | `ncei.noaa.gov/thredds/.../cdr/ndvi/<year>/` exposes **WMS**; probe `GetMap` once — if it renders, it is a `rasters.json` row; else needs a netCDF→PNG mode. Not on CoastWatch ERDDAP. Replay needs the raster archive | after WMS probe |
-| Sea ice                                    | use `CRW_SEAICE`; the NSIDC ERDDAP product is EPSG:3411 metres and cannot be draped as a lat/lon rectangle                                                                                                             | with CRW row    |
-| NOAA HAB                                   | split into named regional products (Gulf of Mexico, Lake Erie) after Gate 0; bulletin-only ones go to polygons or drop                                                                                                 | Gate 0          |
-
+| CRW `CRW_DHW`, `CRW_HOTSPOT`, `CRW_SEAICE` | same `NOAA_DHW` griddap as shipped BAA (variables verified); continuous fields → need the Wave 0 mask, not mode-colour                                                                                                 | **done 8ee51e5** |
+| NDVI (NOAA CDR, VIIRS daily)               | `ncei.noaa.gov/thredds/.../cdr/ndvi/<year>/` exposes **WMS**; probe `GetMap` once — if it renders, it is a `rasters.json` row; else needs a netCDF→PNG mode. Not on CoastWatch ERDDAP. Replay needs the raster archive | **done 8ee51e5** (WMS GetMap 3.7 s, catalog resolver) |
+| Sea ice                                    | use `CRW_SEAICE`; the NSIDC ERDDAP product is EPSG:3411 metres and cannot be draped as a lat/lon rectangle                                                                                                             | **done 8ee51e5** |
+| NOAA HAB                                   | split into named regional products (Gulf of Mexico, Lake Erie) after Gate 0; bulletin-only ones go to polygons or drop                                                                                                 | open: named regional products not yet identified |
 ## Wave 2 — track contract (ATN first, then Movebank)
+
+**Status 2026-09-11:** ATN **shipped 6adbb55** (572 segments / 62 deployments / 7 species). Movebank pilot **needs an account** to read `license_type` (study list is 401 unauthenticated). OTN **parked**: species needs a three-table join and the ERDDAP timed out on aggregate queries.
 
 1. **IOOS ATN DAC ERDDAP** (`atn.ioos.us/erddap`, tabledap per deployment, US-gov,
    no login, no handshake): enumerate `*_trajectory_*` datasets, verify per-dataset
@@ -88,6 +91,8 @@ Reef Life Survey, GFW per-layer.
    declined (personal-use tracker, no API).
 
 ## Wave 3 — occurrence adapters, site series, polygons
+
+**Status 2026-09-11:** USA-NPN **shipped 673c9de**; iNaturalist CC0/CC-BY subset already flows via GBIF (ledger). Site-series and polygon contracts not started: NEON needs a token; DART/APHIS need replies; CDC NWSS (county-level, US-gov) is the next credential-free candidate but needs the polygon contract first.
 
 **Occurrence adapters** (shared runner + per-source adapter with schema + fixture,
 not a declarative JSON normaliser): USA-NPN observations (CC BY 4.0, citation
