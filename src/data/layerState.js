@@ -223,6 +223,11 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('showProjection', 'p', true),
     booleanOption('autoHop', 'a', false),
   ]),
+  birds: Object.freeze([
+    booleanOption('columns', 'c', true),
+    booleanOption('drape', 'd', true),
+    booleanOption('particles', 'p', true),
+  ]),
   radio: Object.freeze([
     Object.freeze({
       key: 'filter',
@@ -277,7 +282,7 @@ export const SHARE_TRACKING_RESTORE_POLICIES = Object.freeze({
 export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'ais-live-vessels', token: 'a', disposition: 'enabled-only' }),
   Object.freeze({ id: 'bikeshare', token: 'b', disposition: 'enabled-only' }),
-  Object.freeze({ id: 'birds', token: 'n', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'birds', token: 'n', disposition: 'enabled+options', optionOwner: 'birds' }),
   Object.freeze({ id: 'cctv', token: 'c', disposition: 'enabled+options', optionOwner: 'cctv' }),
   Object.freeze({ id: 'earthquakes', token: 'e', disposition: 'enabled-only' }),
   Object.freeze({ id: 'flights', token: 'f', disposition: 'enabled+options', optionOwner: 'flights' }),

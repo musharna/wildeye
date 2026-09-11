@@ -1,6 +1,6 @@
 import * as Cesium from 'cesium';
 import { holdContinuousRender, releaseContinuousRender } from '../renderGovernor.js';
-import { buildSpawnCdf, sampleCell, idwVelocity, stepParticle, birdsPerParticle } from './birdsField.js';
+import { buildSpawnCdf, sampleCell, idwVelocity, stepParticle } from './birdsField.js';
 
 /**
  * Nocturnal bird migration density per NEXRAD radar, produced by
@@ -9,18 +9,32 @@ import { buildSpawnCdf, sampleCell, idwVelocity, stepParticle, birdsPerParticle 
  */
 const DATA_URL = 'data/birds.geojson';
 const FIELD_URL = 'data/birds_field.json';
-const PARTICLE_COUNT = 4000;
+const PARTICLE_COUNT = 1500;
 const PARTICLE_LIFE_S = 90;
 const PARTICLE_ALT_M = 600;
-const DRAPE_ALPHA = 0.7;
-const MAX_COLUMN_M = 200000;
-const BASE_RADIUS_M = 25000;
+const PARTICLE_PX = 2;
+const DRAPE_ALPHA = 0.35;
+// Camera-height ramp for the drape: fully visible below FADE_NEAR_M, gone above FADE_FAR_M.
+const FADE_NEAR_M = 800_000;
+const FADE_FAR_M = 2_000_000;
+const MAX_COLUMN_M = 120000;
+const BASE_RADIUS_M = 12000;
 
 export function birdColumn(density) {
   const d = Number(density);
   if (!Number.isFinite(d) || d <= 0) return 0;
-  return Math.min(MAX_COLUMN_M, 8000 * Math.log1p(d));
+  return Math.min(MAX_COLUMN_M, 5000 * Math.log1p(d));
 }
+
+/** Drape opacity multiplier for a camera height in metres: 1 near, 0 far, linear between. */
+export function drapeFade(heightM) {
+  const h = Number(heightM);
+  if (!Number.isFinite(h) || h <= FADE_NEAR_M) return 1;
+  if (h >= FADE_FAR_M) return 0;
+  return 1 - (h - FADE_NEAR_M) / (FADE_FAR_M - FADE_NEAR_M);
+}
+
+const DEFAULT_PARAMS = Object.freeze({ columns: true, drape: true, particles: true });
 
 export function headingColor(deg) {
   const h = Number(deg);
@@ -50,7 +64,7 @@ function describe(p, h) {
   const body = h > 0
     ? `${Number(p.density_birds_km3).toFixed(1)} birds/km³, heading ${Math.round(p.heading_deg)}°, ` +
       `${Number(p.speed_ms ?? 0).toFixed(0)} m/s, peak ${p.peak_altitude_m} m`
-    : 'Quiet — no migration signal (daytime or clear)';
+    : 'Quiet — no biological echo (daytime or clear)';
   return `${head}${body}<br>scan ${p.scan_time}${p.stale ? ' (stale, last good)' : ''}`;
 }
 
@@ -69,6 +83,26 @@ export function createBirdsLayer() {
   let _lastTick = null;
   let _clickHandler = null;
   let _enabled = false;
+  let _params = { ...DEFAULT_PARAMS };
+  let _preRenderRemover = null;
+  let _fade = 1;
+  let _lastWallMs = null;
+  let _rowControlsListener = null;
+
+  function applyVisibility() {
+    if (_dataSource) _dataSource.show = _enabled && _params.columns;
+    for (const il of _imagery) il.show = _enabled && _params.drape;
+    if (_points) _points.show = _enabled && _params.particles;
+  }
+
+  function onPreRender() {
+    if (!_viewer || !_params.drape || !_imagery.length) return;
+    const h = _viewer.camera?.positionCartographic?.height;
+    const f = drapeFade(h);
+    if (Math.abs(f - _fade) < 0.01) return;
+    _fade = f;
+    for (const il of _imagery) il.alpha = DRAPE_ALPHA * f;
+  }
 
   function removeImagery() {
     if (!_viewer) return;
@@ -83,8 +117,8 @@ export function createBirdsLayer() {
       const provider = await Cesium.SingleTileImageryProvider.fromUrl(`${s.png}?t=${Date.now()}`, {
         rectangle: Cesium.Rectangle.fromDegrees(b.west, b.south, b.east, b.north),
       });
-      const il = new Cesium.ImageryLayer(provider, { alpha: DRAPE_ALPHA });
-      il.show = _enabled;
+      const il = new Cesium.ImageryLayer(provider, { alpha: DRAPE_ALPHA * _fade });
+      il.show = _enabled && _params.drape;
       return il;
     }));
     for (const il of layers) { _viewer.imageryLayers.add(il); _imagery.push(il); }
@@ -123,18 +157,20 @@ export function createBirdsLayer() {
   function reseed() {
     if (!_points || !_field || _field.total <= 0) return;
     while (_points.length < PARTICLE_COUNT) {
-      _points.add({ id: `birds-particle:${_points.length}`, pixelSize: 3, show: false,
+      _points.add({ id: `birds-particle:${_points.length}`, pixelSize: PARTICLE_PX, show: false,
         disableDepthTestDistance: Number.POSITIVE_INFINITY });
     }
     for (let i = 0; i < PARTICLE_COUNT; i++) spawn(i);
   }
 
-  function onTick(clock) {
-    if (!_enabled || !_field || !_points || _field.total <= 0) return;
-    const now = clock.currentTime;
-    const dt = _lastTick ? Math.min(2, Math.abs(Cesium.JulianDate.secondsDifference(now, _lastTick))) : 0;
-    _lastTick = now;
-    if (dt === 0) return;
+  function onTick() {
+    // Wall-clock dt: the animation is illustrative and must not follow the
+    // Cesium clock (a replay slider or rewind would otherwise advect forward).
+    if (!_enabled || !_params.particles || !_field || !_points || _field.total <= 0) return;
+    const nowMs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const dt = _lastWallMs === null ? 0 : Math.min(2, (nowMs - _lastWallMs) / 1000);
+    _lastWallMs = nowMs;
+    if (dt <= 0) return;
     for (let i = 0; i < _particles.length; i++) {
       const p = stepParticle(_particles[i], dt, _field.bounds, PARTICLE_LIFE_S);
       if (p.dead) { spawn(i); continue; }
@@ -149,13 +185,13 @@ export function createBirdsLayer() {
     const nearest = f.sites.filter((s) => Number.isFinite(s.density_birds_km3))
       .sort((a, b) => Math.hypot(a.lon - p.lon, a.lat - p.lat) - Math.hypot(b.lon - p.lon, b.lat - p.lat))[0];
     const dens = nearest ? nearest.density_birds_km3 * (weight / 255) : 0;
-    const n = birdsPerParticle(dens, p.lat, f.cellDeg, weight / f.total, PARTICLE_COUNT);
     const speed = Math.hypot(p.u, p.v);
     const heading = ((Math.atan2(p.u, p.v) * 180) / Math.PI + 360) % 360;
-    return `<b>Ensemble contact</b> — represents ~${Math.max(1, Math.round(n)).toLocaleString()} birds (approx.)<br>` +
-      `local density ≈ ${dens.toFixed(1)} birds/km³ · heading ${Math.round(heading)}° · ground speed ${speed.toFixed(0)} m/s<br>` +
+    return `<b>Ensemble contact</b> (illustrative)<br>` +
+      `probable biological echo · local density ≈ ${dens.toFixed(1)} birds/km³ at the radar profile scale<br>` +
+      `heading ${Math.round(heading)}° · ground speed ${speed.toFixed(0)} m/s<br>` +
       `nearest radar ${nearest ? `${nearest.site} (${nearest.name})` : 'n/a'} · scan ${nearest?.scan_time ?? 'n/a'}<br>` +
-      `<i>Weather radar resolves crowds, not individuals; this dot is a statistical stand-in.</i>`;
+      `<i>Weather radar resolves crowds, not individuals. Dots are drawn in proportion to echo strength and move at the radar-measured velocity; the count of birds per dot is not calibrated.</i>`;
   }
 
   function installClick(viewer) {
@@ -203,23 +239,47 @@ export function createBirdsLayer() {
     },
     enable(viewer) {
       _enabled = true;
-      if (_dataSource) _dataSource.show = true;
-      for (const il of _imagery) il.show = true;
-      if (_points) _points.show = true;
+      applyVisibility();
       if (viewer?.clock && !_tickRemover) {
-        _lastTick = null;
+        _lastWallMs = null;
         _tickRemover = viewer.clock.onTick.addEventListener(onTick);
         holdContinuousRender('birds'); // per-frame particle animator
+      }
+      if (viewer?.scene?.preRender && !_preRenderRemover) {
+        _preRenderRemover = viewer.scene.preRender.addEventListener(onPreRender);
       }
     },
     disable() {
       _enabled = false;
-      if (_dataSource) _dataSource.show = false;
-      for (const il of _imagery) il.show = false;
-      if (_points) _points.show = false;
+      applyVisibility();
       if (_tickRemover) { _tickRemover(); _tickRemover = null; }
+      if (_preRenderRemover) { _preRenderRemover(); _preRenderRemover = null; }
       releaseContinuousRender('birds');
     },
+
+    /** Component toggles (columns / drape / particles); share-link persisted via layerState options. */
+    setParams(params = {}) {
+      let changed = false;
+      for (const k of Object.keys(DEFAULT_PARAMS)) {
+        if (typeof params[k] === 'boolean' && params[k] !== _params[k]) { _params[k] = params[k]; changed = true; }
+      }
+      if (changed) { applyVisibility(); _rowControlsListener?.(); }
+      return changed;
+    },
+    getParams() { return { ..._params }; },
+    getRowControls() {
+      const chip = (id, label, title) => ({ id, label, active: _params[id], state: _params[id] ? 'active' : 'idle',
+        title: `${_params[id] ? 'Hide' : 'Show'} ${title}`, params: { [id]: !_params[id] } });
+      return {
+        chips: [
+          chip('columns', 'COLUMNS', 'per-radar density columns'),
+          chip('drape', 'RADAR', 'the probable-biological-echo radar image'),
+          chip('particles', 'FLOW', 'the illustrative migration flow particles'),
+        ],
+        legend: [],
+      };
+    },
+    setRowControlsListener(listener) { _rowControlsListener = typeof listener === 'function' ? listener : null; },
 
     async update() {
       try {
@@ -274,6 +334,7 @@ export function createBirdsLayer() {
       await loadDrapes(fj.sites || []);
       const img = await loadFieldImage(fj.png);
       const { cdf, total } = buildSpawnCdf(img.rgba, img.w, img.h);
+      if (total <= 0 && _points) { for (let i = 0; i < _points.length; i++) _points.get(i).show = false; }
       const b = fj.bounds;
       _field = { cdf, total, w: img.w, h: img.h, bounds: b, sites: fj.sites || [],
         cellLon: (b.east - b.west) / img.w, cellLat: (b.north - b.south) / img.h,
@@ -286,6 +347,7 @@ export function createBirdsLayer() {
     destroy(viewer) {
       this.disable();
       removeImagery();
+      _params = { ...DEFAULT_PARAMS }; _fade = 1;
       if (_clickHandler) { _clickHandler.destroy(); _clickHandler = null; }
       if (_points && viewer.scene?.primitives) { viewer.scene.primitives.remove(_points); }
       _points = null; _particles = []; _field = null;
