@@ -10,6 +10,7 @@ import aloftLayer from './data/aloft.js';
 import occurrencesLayer from './data/occurrences.js';
 import tracksLayer from './data/tracks.js';
 import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer } from './data/rasterDrape.js';
+import { installDrapeExclusivity } from './data/drapeExclusive.js';
 import { createObservedTime, attachObservedTime, installObservedTimeUi } from './observedTime.js';
 import satellitesLayer from './data/satellites.js';
 import rocketLaunchesLayer from './data/rocketLaunches.js';
@@ -225,6 +226,8 @@ async function init() {
     dataManager.register(crwHotspotLayer);
     dataManager.register(crwSeaIceLayer);
     dataManager.register(ndviLayer);
+    // One drape at a time: enabling any raster drape turns the others off (W0-3).
+    installDrapeExclusivity(dataManager, [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer].map((l) => l.id));
     dataManager.register(occurrencesLayer);
     dataManager.register(tracksLayer);
     // Shared observed-time selector: one bar, every bio layer samples its own data at the instant.
