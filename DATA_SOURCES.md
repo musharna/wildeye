@@ -136,4 +136,30 @@ The required Google Maps / Cesium credit renders on the on-globe credit line (`#
 | Layer | Source | License |
 |---|---|---|
 | Bird migration (radar) | NOAA NEXRAD Level II via AWS Open Data (`unidata-nexrad-level2`) | US public domain |
-| (processing) | vol2bird, Dokter et al. | LGPL-3.0 |
+| (processing) | vol2bird, Dokter et al. | MIT (LICENSE file read 2026-09-11) |
+
+## wildeye licence matrix (read 2026-09-11, live pages; "could not fetch" = not verified)
+
+Release policy: wildeye is a **free, non-commercial, open-source** app. Inherited GEV sources
+(OpenSky, TeleGeography, Google News) are already non-commercial, so the whole distribution
+is non-commercial; sources below are graded for that policy.
+
+| Source | v1? | Licence (as read) | Conditions | Attribution | Read |
+|---|---|---|---|---|---|
+| NOAA NEXRAD L2 (AWS NODD) | **yes** | open, "use as desired" | attribution requested; no endorsement | "NEXRAD on AWS, accessed DATE, registry.opendata.aws/noaa-nexrad" | registry.opendata.aws/noaa-nexrad |
+| vol2bird | **yes** | MIT | keep notice | "vol2bird (Dokter et al., MIT)" | github adokter/vol2bird LICENSE |
+| Aloft VPTS (Europe) | **yes** | CC0 (Zenodo 14711024); raw OPERA volumes NOT redistributable | serve profiles only, never raw PVOL | "Aloft / BALTRAD_VPTS (CC0), doi:10.5281/zenodo.14711024" | zenodo, s41597-025-04641-5, aloftdata.eu |
+| OTN detections (ERDDAP) | **yes-cond** | CC-BY 4.0 | keep per-row citation; notify otndc@dal.ca | per-row citation + "Ocean Tracking Network, CC-BY 4.0" | erddap.oceantrack.org info; members.oceantrack.org/data/policies |
+| NOAA Coral Reef Watch 5 km | **yes** | freely available, credit CRW | none | "Courtesy NOAA Coral Reef Watch" | coralreefwatch.noaa.gov citation page |
+| NOAA OISST v2.1 | **yes** | US-gov, open directory | attribution | "NOAA/NCEI OISST v2.1 (Huang et al. 2020)" | ncei.noaa.gov OISST pages |
+| GBIF occurrences | yes-cond | per-dataset CC0/CC-BY/CC-BY-NC (terms page 403) | filter `license=CC0_1_0,CC_BY_4_0`; per-record licence + dataset DOI | "GBIF.org (DATE) Occurrence Download doi:…" | search only |
+| OBIS | yes-cond | per-dataset CC0/CC-BY/CC-BY-NC | per-dataset filter + attribution | "OBIS (2026) IOC-UNESCO obis.org + dataset" | manual.obis.org/policy |
+| Movebank | yes-cond | per-study CC0/CC-BY/CC-BY-NC; public-download only | only public-download or Data Repository DOI studies | repository citation | movebank terms + data-policy |
+| Copernicus Marine BGC | yes-cond | free licence, redistribution + derivatives allowed | registration; credentials server-side only | "Generated using E.U. Copernicus Marine Service Information; DOI …" | marine.copernicus.eu licence; help art. 4444611 |
+| NASA OB.DAAC / CyAN | yes-cond | CC0 unless marked | Earthdata login server-side | "NASA OB.DAAC (CC0), product DOI" | earthdata data-use-guidance |
+| iNaturalist | v2 | default CC-BY-NC per observation; some ARR | filter licence; never de-obscure | "© observers via iNaturalist, licence per record" | help.inaturalist.org |
+| Global Fishing Watch | v2 | CC-BY-NC; token; 50k req/day | server-side token | "Powered by Global Fishing Watch" | gfw license-rate-limits |
+| eBird API | **undecided** | could not fetch (403/login) | read in a browser before any use | — | — |
+| NOAA RWSAS right whales | **undecided** | InPort: "Email point of contact" | ask NEFSC before ingest | — | inport item 23305 |
+| Motus | **no (v1)** | no open licence; public = summaries; collaboration policy | needs Birds Canada agreement | — | motus.org/policy PDF |
+| Happywhale | **no** | CC-NC via OBIS-SEAMAP mirror; own terms unreadable; no API | — | — | seamap partner page |
