@@ -1,6 +1,6 @@
 # wildeye M2+M3 — Radar biology image and particle flow
 
-Date: 2026-09-10. Status: approved in chat (M2 drape + M3 particles). Follows M1.
+Date: 2026-09-10. Status: BUILT 2026-09-10 (M2 drape + M3 particles); visual check by user. Follows M1.
 
 ## Goal
 Localize migrating birds inside each radar's footprint (M2) and animate the

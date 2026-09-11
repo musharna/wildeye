@@ -28,8 +28,16 @@ Downloads cache in `$WILDEYE_WORK` (default `/tmp/wildeye-nexrad`).
 | `stale` | true when this run failed for the site and the last good record was kept |
 Top level: `generated_at`, `site_count`, `fresh_count`, `failures` (site → error).
 
+## Field outputs (M2/M3)
+- `public/data/birds_ppi/<SITE>.png` + bounds: lowest sweep reflectivity with rain
+  masked (RHOHV < 0.95, −10..35 dBZ, 5–150 km), 0.01° grid, viridis ramp.
+- `public/data/birds_field.png/.json`: 0.02° max-composite of all sites plus
+  per-site `u_ms`/`v_ms`; the globe seeds 4,000 ensemble particles from it.
+  These are gitignored (regenerated every 10 min).
+
 ## Measured
 2026-09-10 23:04 EDT: 20 sites, 8 workers, 20 s wall, 20/20 fresh (vol2bird ≈5 s/volume).
+2026-09-10 23:45 EDT: with PPI + field, 40 s wall, 20/20 fresh, 3.4 MB output.
 
 ## Limits
 CONUS only (20 eastern-flyway sites in `sites.json`; 143 exist). Signal is

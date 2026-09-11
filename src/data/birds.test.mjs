@@ -28,4 +28,6 @@ test('birds: layer contract', () => {
   assert.equal(l.id, 'birds');
   for (const k of ['init', 'enable', 'disable', 'update', 'destroy', 'getStats', 'getAnalystRecords']) assert.equal(typeof l[k], 'function');
   assert.deepEqual(l.getAnalystRecords(), []);
+  assert.equal(l.getStats().particles, 0);
+  assert.equal(l.getStats().drapes, 0);
 });
