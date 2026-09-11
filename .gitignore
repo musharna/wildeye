@@ -12,3 +12,9 @@ output/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+
+# wildeye pipeline
+pipeline/cron.log
+pipeline/__pycache__/
+pipeline/tests/__pycache__/
+.pytest_cache/

@@ -1,3 +1,13 @@
+# wildeye
+
+A biology spin-off of [God's Eye View](https://github.com/bilawalsidhu/gods-eye-view):
+the same live photorealistic globe, pointed at living things. First layer:
+**Bird migration (radar)** — nocturnal migration density per NEXRAD radar,
+derived with [vol2bird](https://github.com/adokter/vol2bird) every 10 minutes
+(see `pipeline/README.md`). Upstream layers are kept intact; upstream README follows.
+
+---
+
 <div align="center">
 
 # 🌐 God's Eye View

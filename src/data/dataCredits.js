@@ -67,6 +67,12 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'nexrad-vol2bird',
+    html:
+      'Bird migration: NOAA NEXRAD Level II (AWS Open Data) processed with ' +
+      '<a href="https://github.com/adokter/vol2bird" target="_blank" rel="noopener">vol2bird</a>',
+  },
+  {
     key: 'overpass',
     html:
       'Road geometry (traffic): ' +
