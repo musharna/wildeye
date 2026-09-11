@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from .build_birds import write_atomic
+from .atomic import write_atomic
 
 log = logging.getLogger("occurrences")
 HERE = Path(__file__).parent

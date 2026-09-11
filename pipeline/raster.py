@@ -6,7 +6,7 @@ from collections import Counter
 from pathlib import Path
 import numpy as np
 from PIL import Image
-from .build_birds import write_atomic
+from .atomic import write_atomic
 
 log = logging.getLogger("raster")
 HERE = Path(__file__).parent

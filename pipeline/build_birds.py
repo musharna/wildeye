@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse, datetime as dt, json, logging, os, re, tempfile, time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from .atomic import write_atomic  # noqa: F401  (re-exported for build_archive/tests)
 from .nexrad import latest_volume_key, download_volume
 from .vol2bird import run_vol2bird, parse_profile, reduce_profile
 from .ppi import ppi_for_volume
@@ -36,12 +37,6 @@ def merge_last_good(new: dict[str, dict], previous_geojson: dict | None) -> list
             out[sid] = g
     return [out[k] for k in sorted(out)]
 
-def write_atomic(path: Path, obj: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
-    with os.fdopen(fd, "w") as fh:
-        json.dump(obj, fh, separators=(",", ":"))
-    os.replace(tmp, path)
 
 def process_site(site: dict, workdir: Path, ppi_dir: Path | None, key: str | None = None) -> tuple[dict, dict]:
     """Returns (feature, ppi_meta). ppi_meta = {png, bounds, grid}; png is None when ppi_dir is None."""

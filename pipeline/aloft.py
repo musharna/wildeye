@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import urllib.request
 from .vol2bird import reduce_profile
-from .build_birds import write_atomic
+from .atomic import write_atomic
 
 log = logging.getLogger("aloft")
 BUCKET = "https://aloftdata.s3-eu-west-1.amazonaws.com"
