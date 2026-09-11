@@ -53,6 +53,19 @@ export function headingColor(deg) {
   return Cesium.Color.fromHsl((((h % 360) + 360) % 360) / 360, 0.9, 0.55);
 }
 
+/** On-map legend: colour = heading (hue wheel, shared by columns and flow), height = log density. */
+export function birdsLegend(params = DEFAULT_PARAMS) {
+  const items = [];
+  if (params.columns || params.particles) {
+    for (const [label, deg] of [['→ N', 0], ['→ E', 90], ['→ S', 180], ['→ W', 270]]) {
+      items.push({ label, color: headingColor(deg).toCssColorString(), count: null });
+    }
+  }
+  if (params.columns) items.push({ label: 'column height = log(birds/km³), 5 km per e-fold, faded = stale scan', color: 'transparent', count: null });
+  if (params.drape) items.push({ label: 'radar: probable biological echo (rain masked)', color: 'transparent', count: null });
+  return items;
+}
+
 export function mapBirdRecord(raw, index = 0) {
   const num = (v) => (Number.isFinite(v) ? v : null);
   const text = (v) => { const t = String(v ?? '').trim(); return t || null; };
@@ -325,7 +338,7 @@ export function createBirdsLayer() {
           chip('drape', 'RADAR', 'the probable-biological-echo radar image'),
           chip('particles', 'FLOW', 'the illustrative migration flow particles'),
         ],
-        legend: [],
+        legend: birdsLegend(_params),
       };
     },
     setRowControlsListener(listener) { _rowControlsListener = typeof listener === 'function' ? listener : null; },

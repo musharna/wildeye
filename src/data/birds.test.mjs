@@ -116,3 +116,16 @@ test('birds: setObservedTime enters replay on the matching frame and null return
     assert.equal(l.getMode(), 'live');
   } finally { globalThis.fetch = saved; l.destroy({ dataSources: { remove() {} }, scene: {} }); }
 });
+
+test('birdsLegend: heading wheel only when a heading-coloured component is on; height rule only with columns', async () => {
+  const { birdsLegend } = await import('./birds.js');
+  const all = birdsLegend({ columns: true, drape: true, particles: true });
+  assert.deepEqual(all.slice(0, 4).map((i) => i.label), ['→ N', '→ E', '→ S', '→ W']);
+  assert.equal(new Set(all.slice(0, 4).map((i) => i.color)).size, 4, 'four distinct hues');
+  assert.ok(all.some((i) => /column height/.test(i.label)) && all.some((i) => /radar/.test(i.label)));
+  const drapeOnly = birdsLegend({ columns: false, drape: true, particles: false });
+  assert.deepEqual(drapeOnly.map((i) => i.label), ['radar: probable biological echo (rain masked)']);
+  assert.deepEqual(birdsLegend({ columns: false, drape: false, particles: false }), []);
+  // the layer itself must surface it (default params: drape + flow on)
+  assert.equal(createBirdsLayer().getRowControls().legend.length, 5);
+});
