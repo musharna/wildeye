@@ -224,7 +224,7 @@ const OPTION_GROUPS = Object.freeze({
     booleanOption('autoHop', 'a', false),
   ]),
   birds: Object.freeze([
-    booleanOption('columns', 'c', true),
+    booleanOption('columns', 'c', false),
     booleanOption('drape', 'd', true),
     booleanOption('particles', 'p', true),
   ]),

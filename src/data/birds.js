@@ -36,7 +36,7 @@ export function drapeFade(heightM) {
   return 1 - (h - FADE_NEAR_M) / (FADE_FAR_M - FADE_NEAR_M);
 }
 
-const DEFAULT_PARAMS = Object.freeze({ columns: true, drape: true, particles: true });
+const DEFAULT_PARAMS = Object.freeze({ columns: false, drape: true, particles: true });
 
 export function headingColor(deg) {
   const h = Number(deg);

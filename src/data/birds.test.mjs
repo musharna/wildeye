@@ -42,7 +42,7 @@ test('birds: drape fade is 1 near, 0 far, monotone between', () => {
 
 test('birds: component params toggle and drive row chips', () => {
   const l = createBirdsLayer();
-  assert.deepEqual(l.getParams(), { columns: true, drape: true, particles: true });
+  assert.deepEqual(l.getParams(), { columns: false, drape: true, particles: true });
   assert.equal(l.setParams({ drape: false }), true);
   assert.equal(l.setParams({ drape: false }), false);
   assert.equal(l.setParams({ drape: 'no' }), false);
