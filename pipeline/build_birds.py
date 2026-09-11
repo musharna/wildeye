@@ -43,15 +43,23 @@ def write_atomic(path: Path, obj: dict) -> None:
         json.dump(obj, fh, separators=(",", ":"))
     os.replace(tmp, path)
 
-def process_site(site: dict, workdir: Path, ppi_dir: Path) -> tuple[dict, dict]:
-    """Returns (feature, ppi_meta). ppi_meta = {png, bounds, grid}."""
-    key = latest_volume_key(site["id"])
+def process_site(site: dict, workdir: Path, ppi_dir: Path | None, key: str | None = None) -> tuple[dict, dict]:
+    """Returns (feature, ppi_meta). ppi_meta = {png, bounds, grid}; png is None when ppi_dir is None."""
+    if key is None:
+        key = latest_volume_key(site["id"])
     if not key:
-        raise RuntimeError(f"{site['id']}: no volume found for today/yesterday")
+        raise RuntimeError(f"{site['id']}: no volume found")
     vol = download_volume(key, workdir / site["id"])
     rec = reduce_profile(parse_profile(run_vol2bird(vol)))
-    grid, bounds = ppi_for_volume(vol, ppi_dir / f"{site['id']}.png")
-    return build_feature(site, rec, key), {"png": f"data/birds_ppi/{site['id']}.png", "bounds": bounds, "grid": grid}
+    if ppi_dir is None:
+        from .ppi import bio_grid
+        import pyart
+        grid, bounds = bio_grid(pyart.io.read_nexrad_archive(str(vol)))
+        png = None
+    else:
+        grid, bounds = ppi_for_volume(vol, ppi_dir / f"{site['id']}.png")
+        png = f"data/birds_ppi/{site['id']}.png"
+    return build_feature(site, rec, key), {"png": png, "bounds": bounds, "grid": grid}
 
 def site_entry(feature: dict, meta: dict | None) -> dict:
     p = feature["properties"]

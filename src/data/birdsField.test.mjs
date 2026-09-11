@@ -1,7 +1,7 @@
 // src/data/birdsField.test.mjs — pure helpers for the radar particle field.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSpawnCdf, sampleCell, idwVelocity, stepParticle, birdsPerParticle } from './birdsField.js';
+import { buildSpawnCdf, sampleCell, idwVelocity, stepParticle, birdsPerParticle, seededRandom, frameSeed } from './birdsField.js';
 
 function rgba(vals) { const a = new Uint8ClampedArray(vals.length * 4); vals.forEach((v, i) => { a[i * 4] = v; a[i * 4 + 3] = v ? 255 : 0; }); return a; }
 
@@ -42,4 +42,12 @@ test('birdsPerParticle: density × cell volume / particles in cell', () => {
   // 0.02° cell at 40°N ≈ 2.22 km × 1.70 km ≈ 3.79 km² × 1 km depth; weight share 0.01 of 4000 = 40 particles
   const n = birdsPerParticle(100, 40, 0.02, 0.01, 4000);
   assert.ok(n > 8 && n < 11, String(n));
+});
+
+test('seeded rng: same seed same sequence, different seed differs, values in [0,1)', () => {
+  const a = seededRandom(frameSeed('2026-09-09T03')), b = seededRandom(frameSeed('2026-09-09T03')), c = seededRandom(frameSeed('2026-09-09T04'));
+  const sa = [a(), a(), a()], sb = [b(), b(), b()], sc = [c(), c(), c()];
+  assert.deepEqual(sa, sb);
+  assert.notDeepEqual(sa, sc);
+  assert.ok(sa.every((v) => v >= 0 && v < 1));
 });
