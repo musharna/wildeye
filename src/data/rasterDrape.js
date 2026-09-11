@@ -79,7 +79,7 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
     id, name, icon, source, updateInterval,
 
     init(viewer) { _viewer = viewer; console.log(`[Data:${id}] Initialized`); },
-    enable() { _enabled = true; if (_layer) _layer.show = true; },
+    enable() { _enabled = true; if (_layer) _layer.show = !(_observed && !this._target(_entry || {})); },
     disable() { _enabled = false; if (_layer) _layer.show = false; },
 
     /** Swap the image on the globe. Resolves false when superseded by a newer call. */
@@ -98,10 +98,21 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
       return true;
     },
 
-    /** Which frame to show for the current selection: an archived acquisition or the latest. */
+    /**
+     * Which frame to show for the current selection: an archived acquisition, the latest
+     * when live, or null when the selected instant precedes every archived acquisition —
+     * the drape is then hidden rather than showing newer data under an older time.
+     */
     _target(entry) {
-      if (_observed) { const f = frameAtOrBefore(entry.history, _observed); if (f) return f; }
+      if (_observed) return frameAtOrBefore(entry.history, _observed);
       return { time: entry.time, png: entry.png };
+    },
+
+    _applyGap(f) {
+      const gap = _observed && !f;
+      if (_layer) _layer.show = _enabled && !gap;
+      _lastError = gap ? `no ${id} acquisition at or before ${_observed}` : null;
+      return gap;
     },
 
     /** Observed-time hook: null = live/latest. Re-renders only when the target frame changes. */
@@ -109,6 +120,7 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
       _observed = isoTime || null;
       if (!_entry || !_viewer) return false;
       const f = this._target(_entry);
+      if (this._applyGap(f)) return true;
       if (_shown && _shown.png === f.png) return true;
       return this._show(f, _entry);
     },
@@ -123,6 +135,7 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
         if (!entry || !entry.png || !entry.bounds) { _lastError = `no product ${id} in rasters.json`; return false; }
         _entry = entry;
         const f = this._target(entry);
+        if (this._applyGap(f)) { _lastUpdate = Date.now(); return true; }
         if (_shown && _shown.png === f.png && _shown.time === f.time && _layer) {
           _lastUpdate = Date.now(); _lastError = null; return true; // unchanged
         }

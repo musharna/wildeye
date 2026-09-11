@@ -65,14 +65,21 @@ test('drape: setObservedTime picks an archived frame and update() keeps it; null
   try {
     const l = createRasterDrapeLayer({ id: 'x', name: 'x', icon: 'i', source: 's',
       providerFor: async (url) => { urls.push(url.split('?')[0]); return { url }; }, imageryLayerFor: (p) => ({ p, show: true }) });
-    l.init(viewer);
+    l.init(viewer); l.enable();
     assert.equal(await l.update(), true);
     assert.equal(l.getStats().time, '2026-09-11T12:00:00Z');
     assert.equal(await l.setObservedTime('2026-09-10T20:00:00Z'), true);
     assert.equal(l.getStats().time, '2026-09-10T12:00:00Z');
     assert.equal(await l.update(), true, 'poll keeps the selected frame');
     assert.equal(l.getStats().time, '2026-09-10T12:00:00Z');
+    assert.equal(await l.setObservedTime('2026-09-01T00:00:00Z'), true, 'before every acquisition: hidden, not faked');
+    assert.equal(layers.at(-1).show, false);
+    assert.match(l.getStats().error, /no x acquisition at or before 2026-09-01/);
+    assert.equal(await l.update(), true);
+    assert.equal(layers.at(-1).show, false, 'poll keeps the gap');
     assert.equal(await l.setObservedTime(null), true);
+    assert.equal(layers.at(-1).show, true);
+    assert.equal(l.getStats().error, null);
     assert.equal(l.getStats().time, '2026-09-11T12:00:00Z');
     assert.deepEqual(urls, ['data/rasters/x.png', 'data/rasters/x/20260910T120000Z.png', 'data/rasters/x.png']);
     assert.equal(l.getStats().frames, 2);
