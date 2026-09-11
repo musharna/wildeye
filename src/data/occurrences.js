@@ -53,12 +53,18 @@ export function describeOccurrence(p) {
   );
 }
 
-export function pointEntity(f, nowMs = Date.now(), windowDays = 120) {
+/**
+ * `index` is the feature's position in the file and makes the id unique by
+ * construction. A coordinate-hash id collided (two records in different
+ * pipeline dedupe cells, same 4-decimal string) and Cesium's duplicate-id throw
+ * took the whole layer down as LOAD FAILED (2026-09-11).
+ */
+export function pointEntity(f, nowMs = Date.now(), windowDays = 120, index = 0) {
   const [lon, lat] = f.geometry.coordinates;
   const p = f.properties || {};
   const a = ageAlpha(p.date, nowMs, windowDays);
   return {
-    id: `occ:${p.taxon}:${lon.toFixed(4)}:${lat.toFixed(4)}:${p.date}`,
+    id: `occ:${p.taxon}:${p.date}:${index}`,
     position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
     point: {
       pixelSize: 6,
@@ -136,12 +142,12 @@ export function createOccurrencesLayer() {
         _dataSource.entities.suspendEvents();
         _dataSource.entities.removeAll();
         const gc = {};
-        for (const f of gj.features) {
+        gj.features.forEach((f, i) => {
           const g = f.properties?.group ?? "other";
           gc[g] = (gc[g] || 0) + 1;
           if (!(g in _groups)) _groups[g] = true;
-          _dataSource.entities.add(pointEntity(f, now, win));
-        }
+          _dataSource.entities.add(pointEntity(f, now, win, i));
+        });
         _dataSource.entities.resumeEvents();
         _groupCounts = gc;
         _count = gj.features.length;
@@ -156,8 +162,9 @@ export function createOccurrencesLayer() {
         );
         return true;
       } catch (e) {
-        console.warn("[Data:Occurrences] Fetch error:", e);
-        _lastError = "occurrences.geojson network error";
+        _dataSource?.entities.resumeEvents();
+        console.warn("[Data:Occurrences] Load error:", e);
+        _lastError = `occurrences.geojson load error: ${e?.message || e}`;
         return false;
       }
     },

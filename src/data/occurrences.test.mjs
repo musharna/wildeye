@@ -17,7 +17,8 @@ test('pointEntity: id is stable, colour by group, age drives alpha', () => {
     properties: { taxon: 'humpback', name: 'Humpback whale', sci: 'Megaptera novaeangliae', group: 'whales', icon: '🐋',
       date: '2026-09-11', source: 'obis', license: 'https://creativecommons.org/publicdomain/zero/1.0/', basis: 'HumanObservation' } };
   const e = pointEntity(f, NOW);
-  assert.equal(e.id, 'occ:humpback:-53.0900:48.7000:2026-09-11');
+  assert.equal(e.id, 'occ:humpback:2026-09-11:0');
+  assert.equal(pointEntity(f, NOW, 120, 7).id, 'occ:humpback:2026-09-11:7');
   assert.equal(e.point.color.alpha, 1);
   assert.equal(e.properties.lat, 48.7);
   const old = pointEntity({ ...f, properties: { ...f.properties, date: '2026-01-01', group: 'zzz' } }, NOW);
@@ -34,4 +35,25 @@ test('occurrences: layer contract and group chips', () => {
   assert.deepEqual(l.getAnalystRecords(), []);
   assert.deepEqual(l.getRowControls().chips, []);
   assert.equal(l.setParams({ whales: false }), false);   // unknown group before any data: no-op
+});
+
+test('update: records that collide at 4 decimals still load (duplicate-id regression)', async () => {
+  // 36.80545 and 36.80554 sit in different 0.001° pipeline dedupe cells but both
+  // print as 36.8055 — a coordinate-hash id made Cesium throw and the layer read LOAD FAILED.
+  const mk = (lat) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [-121.9413, lat] },
+    properties: { taxon: 'orca', group: 'whales', date: '2026-06-03', name: 'Orca', sci: 'Orcinus orca' } });
+  const gj = { type: 'FeatureCollection', window_days: 120, features: [mk(36.80545), mk(36.80554)] };
+  const saved = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => gj });
+  try {
+    const l = createOccurrencesLayer();
+    l.init({ dataSources: { add() {}, remove() {} } });
+    assert.equal(await l.update(), true, l.getStats().error);
+    assert.equal(l.getStats().count, 2);
+    assert.equal(l.getRowControls().chips[0].label, 'WHALES 2');
+    // positive control for the error path: a bad payload must still be reported, not thrown
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ nope: 1 }) });
+    assert.equal(await l.update(), false);
+    assert.match(l.getStats().error, /Malformed/);
+  } finally { globalThis.fetch = saved; }
 });
