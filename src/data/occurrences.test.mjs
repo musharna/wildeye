@@ -1,7 +1,7 @@
 // src/data/occurrences.test.mjs — GBIF/OBIS sightings layer: pure helpers + contract.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createOccurrencesLayer, ageAlpha, pointEntity, describeOccurrence, GROUP_COLORS } from './occurrences.js';
+import { createOccurrencesLayer, ageAlpha, pointEntity, describeOccurrence, licenceLabel, GROUP_COLORS } from './occurrences.js';
 
 const NOW = Date.parse('2026-09-11T00:00:00Z');
 
@@ -24,7 +24,14 @@ test('pointEntity: id is stable, colour by group, age drives alpha', () => {
   const old = pointEntity({ ...f, properties: { ...f.properties, date: '2026-01-01', group: 'zzz' } }, NOW);
   assert.equal(old.point.color.alpha, 0.25);
   assert.ok(Object.keys(GROUP_COLORS).includes('whales'));
-  assert.match(describeOccurrence(f.properties), /Humpback whale.*CC0/s);
+  assert.match(describeOccurrence(f.properties), /Humpback whale.*CC0 1\.0/s);
+  // distinct licences are never collapsed; publisher + DOI come from the datasets map
+  const by = { ...f.properties, license: 'http://creativecommons.org/licenses/by/4.0/legalcode', dataset_key: 'dk', uncertainty_m: 12.4 };
+  const html = describeOccurrence(by, { dk: { title: 'Whale survey', publisher: 'Acme Inst', doi: '10.1/abc' } });
+  assert.match(html, /CC BY 4\.0/); assert.doesNotMatch(html, /CC0/);
+  assert.match(html, /±12 m.*Whale survey — Acme Inst.*doi\.org\/10\.1\/abc/s);
+  assert.equal(licenceLabel('https://example.org/weird'), 'https://example.org/weird');
+  assert.match(describeOccurrence({ ...by, name: '<img src=x>' }), /&lt;img/);
 });
 
 test('occurrences: layer contract and group chips', () => {
@@ -51,6 +58,10 @@ test('update: records that collide at 4 decimals still load (duplicate-id regres
     assert.equal(await l.update(), true, l.getStats().error);
     assert.equal(l.getStats().count, 2);
     assert.equal(l.getRowControls().chips[0].label, 'WHALES 2');
+    assert.equal(l.getStats().truncated.length, 0);
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...gj, truncated: ['orca'] }) });
+    await l.update();
+    assert.match(l.getRowControls().legend.map((x) => x.label).join('|'), /partial: orca/);
     // positive control for the error path: a bad payload must still be reported, not thrown
     globalThis.fetch = async () => ({ ok: true, json: async () => ({ nope: 1 }) });
     assert.equal(await l.update(), false);

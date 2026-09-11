@@ -38,18 +38,34 @@ export function groupColor(group, alpha = 1) {
   ).withAlpha(alpha);
 }
 
-export function describeOccurrence(p) {
+/** Short licence label from a URL/code; unknown licences are shown verbatim, never collapsed. */
+export function licenceLabel(text) {
+  const s = String(text || "").toLowerCase();
+  if (s.includes("publicdomain/zero") || s.startsWith("cc0")) return "CC0 1.0";
+  if (s.includes("licenses/by/4.0") || s === "cc_by_4_0") return "CC BY 4.0";
+  if (s.includes("licenses/by/")) return "CC BY";
+  return text || "licence unknown";
+}
+
+const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+/** @param p feature properties  @param ds optional datasets map from the GeoJSON (dataset_key → meta) */
+export function describeOccurrence(p, ds = {}) {
   const src = p.source === "obis" ? "OBIS" : "GBIF";
-  const lic = /zero/i.test(p.license || "") ? "CC0" : "CC-BY";
+  const lic = p.license_label || licenceLabel(p.license);
+  const meta = (p.dataset_key && ds[p.dataset_key]) || {};
   const link = p.url
-    ? `<a href="${p.url}" target="_blank" rel="noopener">${src} record</a>`
+    ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${src} record</a>`
     : src;
+  const doi = meta.doi
+    ? ` · <a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`
+    : "";
+  const publisher = meta.publisher ? ` — ${esc(meta.publisher)}` : "";
+  const unc = Number.isFinite(p.uncertainty_m) ? ` · ±${Math.round(p.uncertainty_m)} m` : "";
   return (
-    `<b>${p.icon ?? ""} ${p.name}</b> <i>${p.sci}</i><br>` +
-    `${p.date} · ${String(p.basis || "")
-      .toLowerCase()
-      .replace(/_/g, " ")}<br>` +
-    `${p.dataset ?? "dataset unknown"}<br>${link} · ${lic}`
+    `<b>${esc(p.icon ?? "")} ${esc(p.name)}</b> <i>${esc(p.sci)}</i><br>` +
+    `${esc(p.date)} · ${esc(String(p.basis || "").toLowerCase().replace(/_/g, " "))}${unc}<br>` +
+    `${esc(meta.title || p.dataset || "dataset unknown")}${publisher}${doi}<br>${link} · ${esc(lic)}`
   );
 }
 
@@ -59,7 +75,7 @@ export function describeOccurrence(p) {
  * pipeline dedupe cells, same 4-decimal string) and Cesium's duplicate-id throw
  * took the whole layer down as LOAD FAILED (2026-09-11).
  */
-export function pointEntity(f, nowMs = Date.now(), windowDays = 120, index = 0) {
+export function pointEntity(f, nowMs = Date.now(), windowDays = 120, index = 0, datasets = {}) {
   const [lon, lat] = f.geometry.coordinates;
   const p = f.properties || {};
   const a = ageAlpha(p.date, nowMs, windowDays);
@@ -74,7 +90,7 @@ export function pointEntity(f, nowMs = Date.now(), windowDays = 120, index = 0) 
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
       scaleByDistance: new Cesium.NearFarScalar(2.0e5, 1.6, 1.5e7, 0.5),
     },
-    description: describeOccurrence(p),
+    description: describeOccurrence(p, datasets),
     properties: { ...p, lat, lon },
   };
 }
@@ -86,6 +102,8 @@ export function createOccurrencesLayer() {
   let _lastError = null;
   let _generatedAt = null;
   let _counts = {};
+  let _truncated = [];
+  let _datasets = {};
   let _groups = {}; // group -> visible
   let _groupCounts = {};
   let _rowControlsListener = null;
@@ -146,12 +164,14 @@ export function createOccurrencesLayer() {
           const g = f.properties?.group ?? "other";
           gc[g] = (gc[g] || 0) + 1;
           if (!(g in _groups)) _groups[g] = true;
-          _dataSource.entities.add(pointEntity(f, now, win, i));
+          _dataSource.entities.add(pointEntity(f, now, win, i, gj.datasets || {}));
         });
         _dataSource.entities.resumeEvents();
         _groupCounts = gc;
         _count = gj.features.length;
         _counts = gj.counts ?? {};
+        _truncated = Array.isArray(gj.truncated) ? gj.truncated : [];
+        _datasets = gj.datasets ?? {};
         _generatedAt = gj.generated_at ?? null;
         _lastUpdate = Date.now();
         _lastError = null;
@@ -216,6 +236,9 @@ export function createOccurrencesLayer() {
             color: "transparent",
             count: null,
           },
+          ...(_truncated.length
+            ? [{ label: `partial: ${_truncated.join(", ")} hit the per-taxon cap`, color: "transparent", count: null }]
+            : []),
         ],
       };
     },
@@ -252,6 +275,8 @@ export function createOccurrencesLayer() {
         error: _lastError,
         generatedAt: _generatedAt,
         perTaxon: _counts,
+        truncated: _truncated,
+        datasets: Object.keys(_datasets).length,
       };
     },
   };

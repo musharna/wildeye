@@ -11,6 +11,7 @@ import argparse
 import datetime as dt
 import json
 import logging
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -36,6 +37,18 @@ def licence_ok(text: str | None) -> bool:
     return False
 
 
+def licence_label(text: str | None) -> str:
+    """Short human label for a licence URL/code; never collapses distinct licences."""
+    s = (text or "").lower()
+    if "publicdomain/zero" in s or s.startswith("cc0"):
+        return "CC0 1.0"
+    if "licenses/by/4.0" in s or s in ("cc_by_4_0", "cc-by-4.0"):
+        return "CC BY 4.0"
+    if "licenses/by/" in s or s in ("cc-by",):
+        return "CC BY"
+    return text or "unknown"
+
+
 def _get_json(url: str, timeout: int = 60) -> dict:
     req = urllib.request.Request(
         url, headers={"User-Agent": "wildeye/0.1 (occurrence sync)"}
@@ -58,9 +71,13 @@ def _iso_date(s: str | None) -> str | None:
 
 def gbif_records(
     taxon: dict, since: dt.date, until: dt.date, cap: int = 600
-) -> list[dict]:
-    out, offset = [], 0
-    while len(out) < cap:
+) -> tuple[list[dict], bool]:
+    """Returns (records, truncated). truncated=True when the cap stopped paging."""
+    out, offset, truncated = [], 0, False
+    while True:
+        if len(out) >= cap:
+            truncated = True
+            break
         q = [
             ("taxonKey", taxon["gbif_key"]),
             ("eventDate", f"{since},{until}"),
@@ -75,7 +92,7 @@ def gbif_records(
         if d.get("endOfRecords", True) or not d.get("results"):
             break
         offset += PAGE
-    return [r for r in out if r]
+    return [r for r in out if r], truncated
 
 
 def normalise_gbif(r: dict, taxon: dict) -> dict | None:
@@ -90,7 +107,9 @@ def normalise_gbif(r: dict, taxon: dict) -> dict | None:
         "lon": float(lon),
         "source": "gbif",
         "dataset": r.get("datasetName") or r.get("datasetKey"),
+        "dataset_key": r.get("datasetKey"),
         "license": r.get("license"),
+        "uncertainty_m": r.get("coordinateUncertaintyInMeters"),
         "basis": r.get("basisOfRecord"),
         "url": f"https://www.gbif.org/occurrence/{r['key']}" if r.get("key") else None,
     }
@@ -98,9 +117,12 @@ def normalise_gbif(r: dict, taxon: dict) -> dict | None:
 
 def obis_records(
     taxon: dict, since: dt.date, until: dt.date, cap: int = 2000
-) -> list[dict]:
-    out, after = [], None
-    while len(out) < cap:
+) -> tuple[list[dict], bool]:
+    out, after, truncated = [], None, False
+    while True:
+        if len(out) >= cap:
+            truncated = True
+            break
         q = [
             ("scientificname", taxon["sci"]),
             ("startdate", since.isoformat()),
@@ -120,7 +142,7 @@ def obis_records(
         after = res[-1].get("id")
         if len(res) < 1000 or not after:
             break
-    return out
+    return out, truncated
 
 
 def normalise_obis(r: dict, taxon: dict) -> dict | None:
@@ -135,12 +157,61 @@ def normalise_obis(r: dict, taxon: dict) -> dict | None:
         "lon": float(lon),
         "source": "obis",
         "dataset": r.get("datasetName") or r.get("dataset_id"),
+        "dataset_key": r.get("dataset_id"),
         "license": r.get("license"),
+        "uncertainty_m": r.get("coordinateUncertaintyInMeters"),
         "basis": r.get("basisOfRecord"),
         "url": f"https://obis.org/dataset/{r['dataset_id']}"
         if r.get("dataset_id")
         else None,
     }
+
+
+def gbif_dataset_meta(key: str) -> dict:
+    """Title, DOI and publishing organisation for one GBIF dataset (per-publisher citation)."""
+    d = _get_json(f"https://api.gbif.org/v1/dataset/{key}")
+    org = None
+    if d.get("publishingOrganizationKey"):
+        org = _get_json(
+            f"https://api.gbif.org/v1/organization/{d['publishingOrganizationKey']}"
+        ).get("title")
+    return {
+        "source": "gbif",
+        "title": d.get("title"),
+        "doi": d.get("doi"),
+        "publisher": org,
+        "license": d.get("license"),
+        "url": f"https://www.gbif.org/dataset/{key}",
+    }
+
+
+def obis_dataset_meta(key: str) -> dict:
+    d = _get_json(f"https://api.obis.org/v3/dataset/{key}").get("results", [{}])[0]
+    cit = d.get("citation") or ""
+    m = re.search(r"10\.\d{4,9}/\S+?(?=[\s.]*$)", cit)
+    return {
+        "source": "obis",
+        "title": d.get("title"),
+        "doi": m.group(0) if m else None,
+        "publisher": None,
+        "citation": cit or None,
+        "url": f"https://obis.org/dataset/{key}",
+    }
+
+
+def resolve_datasets(records: list[dict], fetch_gbif=gbif_dataset_meta, fetch_obis=obis_dataset_meta) -> dict:
+    """One metadata entry per distinct (source, dataset_key); failures are recorded, not hidden."""
+    out = {}
+    for r in records:
+        k = r.get("dataset_key")
+        if not k or k in out:
+            continue
+        try:
+            out[k] = fetch_gbif(k) if r["source"] == "gbif" else fetch_obis(k)
+        except Exception as e:  # noqa: BLE001
+            log.warning("dataset meta %s failed: %r", k, e)
+            out[k] = {"source": r["source"], "title": r.get("dataset"), "error": repr(e)}
+    return out
 
 
 def dedupe(records: list[dict]) -> list[dict]:
@@ -168,7 +239,10 @@ def to_feature(r: dict, taxon: dict) -> dict:
             "date": r["date"],
             "source": r["source"],
             "dataset": r["dataset"],
+            "dataset_key": r.get("dataset_key"),
             "license": r["license"],
+            "license_label": licence_label(r["license"]),
+            "uncertainty_m": r.get("uncertainty_m"),
             "basis": r["basis"],
             "url": r["url"],
         },
@@ -178,14 +252,17 @@ def to_feature(r: dict, taxon: dict) -> dict:
 def process_taxon(
     taxon: dict, since: dt.date, until: dt.date
 ) -> tuple[list[dict], dict]:
-    g = gbif_records(taxon, since, until)
-    o = obis_records(taxon, since, until)
+    g, gt = gbif_records(taxon, since, until)
+    o, ot = obis_records(taxon, since, until)
     recs = dedupe(sorted(g + o, key=lambda r: r["date"], reverse=True))
     return [to_feature(r, taxon) for r in recs], {
         "gbif": len(g),
         "obis": len(o),
         "kept": len(recs),
-    }
+        "truncated": gt or ot,
+        "truncated_gbif": gt,
+        "truncated_obis": ot,
+    }, recs
 
 
 def main(argv=None):
@@ -209,15 +286,16 @@ def main(argv=None):
         taxa = [t for t in taxa if t["id"] in keep]
     until = dt.datetime.now(dt.UTC).date()
     since = until - dt.timedelta(days=a.days)
-    features, counts, failures = [], {}, {}
+    features, counts, failures, all_recs = [], {}, {}, []
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
         futs = {ex.submit(process_taxon, t, since, until): t for t in taxa}
         for f in as_completed(futs):
             t = futs[f]
             try:
-                feats, c = f.result()
+                feats, c, recs = f.result()
                 features += feats
+                all_recs += recs
                 counts[t["id"]] = c
                 log.info(
                     "%s gbif=%d obis=%d kept=%d",
@@ -231,6 +309,7 @@ def main(argv=None):
                 log.error("%s FAILED: %r", t["id"], e)
     if not features:
         raise SystemExit("no occurrences fetched")
+    datasets = resolve_datasets(all_recs)
     write_atomic(
         a.out,
         {
@@ -239,7 +318,9 @@ def main(argv=None):
             "window_days": a.days,
             "since": since.isoformat(),
             "counts": counts,
+            "truncated": sorted(k for k, c in counts.items() if c["truncated"]),
             "failures": failures,
+            "datasets": datasets,
             "taxa": [
                 {k: t[k] for k in ("id", "name", "sci", "group", "icon")} for t in taxa
             ],

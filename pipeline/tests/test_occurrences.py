@@ -120,3 +120,41 @@ def test_taxa_config_is_well_formed():
     assert len(ids) == len(set(ids))
     for t in taxa:
         assert isinstance(t["gbif_key"], int) and t["sci"] and t["group"] and t["icon"]
+
+
+def test_licence_label_never_collapses_distinct_licences():
+    from pipeline.occurrences import licence_label
+    assert licence_label("https://creativecommons.org/publicdomain/zero/1.0") == "CC0 1.0"
+    assert licence_label("http://creativecommons.org/licenses/by/4.0/legalcode") == "CC BY 4.0"
+    assert licence_label("CC_BY_4_0") == "CC BY 4.0"
+    assert licence_label(None) == "unknown"
+    assert licence_label("https://example.org/odd") == "https://example.org/odd"
+
+
+def test_gbif_records_flags_truncation_at_cap(monkeypatch):
+    import pipeline.occurrences as occ
+    page = {"results": [{"key": i, "eventDate": "2026-08-02", "decimalLatitude": 1.0, "decimalLongitude": 2.0,
+                          "license": "CC_BY_4_0", "datasetKey": "dk"} for i in range(300)], "endOfRecords": False}
+    monkeypatch.setattr(occ, "_get_json", lambda url, timeout=60: page)
+    recs, truncated = occ.gbif_records(TAXON, None, None, cap=600)
+    assert truncated is True and len(recs) == 600
+    small = {"results": page["results"][:5], "endOfRecords": True}
+    monkeypatch.setattr(occ, "_get_json", lambda url, timeout=60: small)
+    recs, truncated = occ.gbif_records(TAXON, None, None, cap=600)
+    assert truncated is False and len(recs) == 5  # positive control: uncapped run is not flagged
+
+
+def test_feature_carries_provenance_and_resolve_datasets_dedupes_and_records_failure():
+    from pipeline.occurrences import resolve_datasets
+    r = {"taxon": "humpback", "date": "2026-08-02", "lat": 1.0, "lon": 2.0, "source": "gbif", "dataset": "X",
+         "dataset_key": "dk1", "license": "http://creativecommons.org/licenses/by/4.0/legalcode",
+         "uncertainty_m": 30.0, "basis": "HUMAN_OBSERVATION", "url": None}
+    f = to_feature(r, TAXON)
+    assert f["properties"]["dataset_key"] == "dk1" and f["properties"]["license_label"] == "CC BY 4.0"
+    assert f["properties"]["uncertainty_m"] == 30.0
+    calls = []
+    def fg(k): calls.append(k); return {"source": "gbif", "title": "T", "doi": "10.1/x", "publisher": "P"}
+    def fo(k): raise RuntimeError("obis down")
+    ds = resolve_datasets([r, r, {**r, "source": "obis", "dataset_key": "ok1"}], fetch_gbif=fg, fetch_obis=fo)
+    assert calls == ["dk1"] and ds["dk1"]["doi"] == "10.1/x"
+    assert "error" in ds["ok1"] and ds["ok1"]["title"] == "X"
