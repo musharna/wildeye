@@ -1,107 +1,135 @@
-# Biological data sources — plan of attack
+# Biological data sources — plan of attack (v2, post-panel)
 
-> Roadmap, not a bite-sized TDD plan. Each wave gets its own implementation plan
-> when it starts. Status column is the ledger; update inline.
+> v1 (d2fc6c6) was audited by a 6-judge panel on 2026-09-11; findings and what was
+> verified live are in memory `wildeye_roadmap_panel_audit_2026-09-11.md`. v2 moves
+> the first work _backwards_ into repairing the two shipped patterns v1 planned to
+> clone, adds a fourth data contract, and leads tracks with a US-gov source.
+> Roadmap, not a bite-sized plan; each wave gets its own plan when it starts.
 
-**Goal:** integrate every viable source from the 2026-09-11 survey into wildeye
-without adding a third layer mechanism. Everything lands as one of three shapes
-that already exist:
+**Goal:** integrate every viable source from the survey under the v1 policy
+(CC0 / CC-BY / US-gov only; free non-commercial app) without inventing a
+mechanism per source.
 
-| Shape                                             | Pipeline                                                       | Frontend                                                                 | Adding a source costs                                        |
-| ------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| **Raster drape** (gridded, daily)                 | `pipeline/raster.py` + row in `rasters.json`                   | `createRasterDrapeLayer` in `src/data/rasterDrape.js`                    | 1 JSON row + 1 export + registry token + credit              |
-| **Point feed** (records with lat/lon/date)        | `pipeline/occurrences.py` pattern → own module writing GeoJSON | `createOccurrencesLayer` pattern (group chips, age alpha)                | 1 fetch/normalise module + layer file                        |
-| **Track feed** (ordered positions per individual) | **new, wave 2** — `pipeline/tracks.py`                         | **new** `src/data/tracks.js` (polyline + head marker + time-slider hook) | built once for Movebank, reused by OTN/OCEARCH-class sources |
+## Data contracts (four) and renderers
 
-Hard rules carried from the licence pass (DATA_SOURCES.md):
+| Contract                                         | Fields                                                                                                    | Pipeline                     | Frontend                                                       | Exists?                                                     |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Gridded field** (daily)                        | PNG + lat/lon bounds, **plate carrée only**, explicit class/nodata mask, acquisition time                 | `raster.py` + `rasters.json` | `createRasterDrapeLayer`                                       | yes, needs Wave 0 repair                                    |
+| **Occurrence** (record at lat/lon/date)          | taxon, date, lat/lon, ±uncertainty, publisher, datasetKey/DOI, per-record licence string, `truncated`     | `occurrences.py` → adapters  | `createOccurrencesLayer`                                       | yes, needs Wave 0 repair                                    |
+| **Track** (ordered fixes per individual)         | `(source, study, individual[, deployment])`, segments `[{t, lon, lat}]`, gaps, licence, citation, embargo | **new** `tracks.py`          | **new** `tracks.js` (polyline + head, samples at selected UTC) | no — Wave 2                                                 |
+| **Site series** (repeated value at a fixed site) | site, `[{t, value, unit, qc, effort}]`, measured-zero ≠ missing                                           | **new** `sites.py`           | **new** `siteSeries.js` (marker + sparkline/info box)          | no — Wave 3 (Aloft is NOT a precedent: latest profile only) |
 
-- CC0 / CC-BY / US-gov only in v1. NC or unread terms → v2 column, not shipped.
-- Per-record licence filter in the pipeline, credit per publisher, never de-obscure.
-- No credentials in the browser; keyed sources fetch server-side in cron.
-- Every layer: registry token, `dataCredits.js` entry, voice alias, ledger row,
-  **update() driven over the live file in node before "shipped"** (LOAD FAILED 09-11).
+Not contracts: **tiles** (Cesium imagery provider, zoom-level attribution — never a
+`rasters.json` row), **polygons/coverage** (HPAI counties, ranges: needs an
+acknowledged contract before any polygon source ships), **audio** (media URL on a
+record, player in the info box). Columns / PPI / particles are renderer variants.
 
-## Gate 0 — licence verification sweep (before any code)
+Hard rules (all shapes): per-record or per-study licence filter in the pipeline;
+publisher + DOI/citation survive to the info box and `dataCredits.js`; never
+de-obscure and, for tracks, publication lag + sensitive-taxon exclusion; no
+credentials in the browser; each source row records terms URL + date read;
+re-verify terms before each new wave; `DATA_SOURCES.md` row is the ledger.
 
-One subagent brief, live pages only, output = rows appended to the licence matrix.
-Sources: Xeno-canto, BirdWeather, USA-NPN, Allen Coral Atlas, NSIDC sea ice,
-USF Sargassum, Kelp Watch, NASA LP DAAC NDVI (or NOAA ERDDAP VIIRS NDVI),
-Global Forest Watch, USGS NWIS, NOAA GLERL, Columbia DART, WastewaterSCAN,
-USDA APHIS HPAI, Reef Life Survey, Whale Safe, BirdCast, eBird (browser read),
-Protected Planet, OBIS-SEAMAP. Each row: licence as read, URL, conditions,
-attribution string, `v1 / v2 / no`. Un-fetchable = "could not fetch", never guessed.
+## Wave 0 — repair the shipped patterns (no new sources)
 
-## Wave 1 — zero-credential rasters (rasters.json rows only)
+| Item                                                                                                                                                                                                                                                                                                                                  | Why (verified)                                             | Status                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------- |
+| Occurrences provenance: keep `publishingOrgKey`/publisher name, `datasetKey`, DOI, `coordinateUncertaintyInMeters`; show the real licence string, not "CC-BY" for everything; register a GBIF derived-dataset DOI or cite per publisher (we use the search API, the ledger claims a download DOI)                                     | `occurrences.py:86-96`, `occurrences.js:43`, matrix row    | pending                   |
+| `truncated: true` per taxon when the 600 cap bites (3 taxa sit at exactly 600)                                                                                                                                                                                                                                                        | `occurrences.py:60`                                        | pending                   |
+| Drapes: explicit class/nodata mask per product replacing most-frequent-colour heuristic; deterministic z-order + one-drape-at-a-time picker; on-map discrete legend; bleaching row labelled **legacy 0–4** (CRW site now runs Alert Levels 1–5, ERDDAP var still 0–4)                                                                 | `raster.py:14`, `rasterDrape.js:51,70`, `rasters.json:6`   | pending (absorbs task #4) |
+| Raster archive: keep dated PNGs + manifest history for products that should replay (needed before any "pairs with slider" claim)                                                                                                                                                                                                      | `raster.py` writes one PNG per product                     | pending                   |
+| Shared **observed-time selector** `{instantUTC, window, playing, speed}` that layers sample: birds map to nearest archive frame (particles stay wall-clock), tracks interpolate inside segments, rasters pick acquisition, occurrences age from selected time. Not the birds widget lifted out; rockets' mission clock stays separate | `birds.js:204-207, 337, 399-470`, `rocketLaunches.js:1888` | pending                   |
+| Birds manifest memoised for page life + `range.max` frozen → open session never sees new frames                                                                                                                                                                                                                                       | `birds.js:400, 452`                                        | pending                   |
+| Storage policy: tracked `occurrences.geojson` (1.5 MB) rewritten daily; decide gitignore-all-output + seed-on-clone before Waves 2–3 multiply it                                                                                                                                                                                      | `.gitignore`                                               | pending                   |
 
-| Source                                                                    | Product                        | Why                                                 | Status                        |
-| ------------------------------------------------------------------------- | ------------------------------ | --------------------------------------------------- | ----------------------------- |
-| NOAA CRW                                                                  | Degree Heating Weeks + HotSpot | same ERDDAP as bleaching; two legend-clear products | pending                       |
-| NOAA/NASA VIIRS NDVI (ERDDAP `nesdisVHNnoaaSNPPnoaa20...NDVI` or similar) | greening wave                  | pairs with replay slider                            | pending, verify dataset id    |
-| NSIDC / NOAA sea-ice concentration (ERDDAP)                               | polar habitat                  | context for polar-bear sightings                    | pending                       |
-| NOAA HAB forecast grids (where gridded)                                   | blooms                         | Gulf/Lake Erie                                      | pending, may be bulletin-only |
+## Gate 0 — per-product verification (runs alongside Wave 0)
 
-Also in this wave: **on-map colour legend for drapes** (task #4) — bleaching needs
-the discrete 4-step palette; do it once for all drapes before adding four more.
+Per product, not one global blocker: licence as read (URL + date), endpoint,
+sample payload, temporal coverage, projection, redistribution right,
+attribution string, `v1 / v2 / no`. Start the human-latency asks now: NEFSC email
+for RWSAS; Movebank account is optional (see Wave 2). Already verified live
+2026-09-11: USA-NPN CC BY 4.0; iNat-via-GBIF per-record CC0/CC-BY (3.4 M records
+in 2026); EOD (eBird) via GBIF CC-BY but ends 2024-12-31; Xeno-canto API needs
+key; NEON API needs token; WastewaterSCAN CC BY-NC + contact gate; ATN ERDDAP
+live with "may be used and redistributed" licence text; NCEI NDVI THREDDS has WMS.
+Still to read: Allen Coral Atlas FAQ/terms, OBIS-SEAMAP terms, KelpWatch (ODbL?),
+USF Sargassum, Whale Safe, Columbia DART, APHIS ArcGIS service, CDC NWSS, PhenoCam,
+Reef Life Survey, GFW per-layer.
 
-## Wave 2 — track feed (new shape; Movebank first)
+## Wave 1 — gridded fields, zero credential
 
-1. User creates a Movebank account; credentials to `pipeline/.env` (gitignored).
-2. `pipeline/tracks.py`: list public-download studies with licence CC0/CC-BY,
-   pull last N days per individual, downsample to ≤1 pt/h, write
-   `public/data/tracks.geojson` (LineString per individual + `times[]`).
-3. `src/data/tracks.js`: polyline + current-position marker, species chips,
-   time-slider integration with the existing replay controller (birds layer owns it
-   today — extract a shared `replayClock` first if coupling is ugly).
-4. Reuse for **OTN detections** (CC-BY; retry ERDDAP), which are sparse
-   detections not GPS — render as receiver-hop segments.
-5. v2 candidates for the same shape once terms are read: OCEARCH, seaturtle.org.
+| Product                                    | Notes                                                                                                                                                                                                                  | Status          |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| CRW `CRW_DHW`, `CRW_HOTSPOT`, `CRW_SEAICE` | same `NOAA_DHW` griddap as shipped BAA (variables verified); continuous fields → need the Wave 0 mask, not mode-colour                                                                                                 | after Wave 0    |
+| NDVI (NOAA CDR, VIIRS daily)               | `ncei.noaa.gov/thredds/.../cdr/ndvi/<year>/` exposes **WMS**; probe `GetMap` once — if it renders, it is a `rasters.json` row; else needs a netCDF→PNG mode. Not on CoastWatch ERDDAP. Replay needs the raster archive | after WMS probe |
+| Sea ice                                    | use `CRW_SEAICE`; the NSIDC ERDDAP product is EPSG:3411 metres and cannot be draped as a lat/lon rectangle                                                                                                             | with CRW row    |
+| NOAA HAB                                   | split into named regional products (Gulf of Mexico, Lake Erie) after Gate 0; bulletin-only ones go to polygons or drop                                                                                                 | Gate 0          |
 
-## Wave 3 — point feeds (occurrences pattern)
+## Wave 2 — track contract (ATN first, then Movebank)
 
-| Source                               | Notes                                            | Status       |
-| ------------------------------------ | ------------------------------------------------ | ------------ |
-| Xeno-canto                           | per-recording CC; add audio play in the info box | after Gate 0 |
-| USA-NPN phenology observations       | leaf-out/bloom points; monarch/milkweed          | after Gate 0 |
-| BirdWeather station detections       | live acoustic bird IDs                           | after Gate 0 |
-| Reef Life Survey                     | CC-BY download, not API — snapshot pipeline      | after Gate 0 |
-| USDA APHIS HPAI wild-bird detections | county-level, table scrape                       | after Gate 0 |
-| WastewaterSCAN / NWSS                | site points with pathogen trend                  | after Gate 0 |
-| NOAA RWSAS right whales              | only after NEFSC email reply                     | blocked      |
-| Columbia DART / ADF&G salmon counts  | site points with daily count                     | after Gate 0 |
-| USGS NWIS water temp / GLERL buoys   | sensor points; context, low priority             | after Gate 0 |
+1. **IOOS ATN DAC ERDDAP** (`atn.ioos.us/erddap`, tabledap per deployment, US-gov,
+   no login, no handshake): enumerate `*_trajectory_*` datasets, verify per-dataset
+   licence text, build `tracks.py` + `tracks.js` against it. Archival data, so the
+   observed-time selector is exercised from day one.
+2. **Movebank, curated pilot** (1–3 public studies with explicit CC0/CC-BY
+   `license_type` + citation; allowlist reviewed by hand): public JSON endpoint
+   works unauthenticated; fetch **serially** (1 concurrent request per IP — never
+   copy `ThreadPoolExecutor(4)`); no offset paging — partition by individual ×
+   UTC window, dedupe boundaries, never use `max_events_per_individual` as a page;
+   handle `license-md5` + cookie handshake and reject HTML bodies; key on
+   `(study_id, individual_local_identifier, deployment)`; filter `visible=false`;
+   segment on gaps/deployment changes/impossible speeds; split at ±180 for export;
+   drop or point-fallback individuals with <2 fixes; sampling budget preserves
+   endpoints/turns (≤1 pt/h is a display budget, not a rule); publication lag +
+   sensitive-taxon exclusion; per-study citation into `dataCredits.js`.
+3. **OTN detections** (CC-BY; ERDDAP public): render as **detection events at
+   receivers** with optional dashed inferred links — never solid paths.
+4. v2 shelf for the same contract once terms are read: seaturtle.org. OCEARCH
+   declined (personal-use tracker, no API).
 
-Do these as **one config-driven `pointFeed` pipeline** (`pipeline/pointfeeds.json`
-→ `pipeline/pointfeed.py`), each source a normaliser function, one GeoJSON per
-source, one `createPointFeedLayer(cfg)` factory. Occurrences stays as is.
+## Wave 3 — occurrence adapters, site series, polygons
 
-## Wave 4 — credentialed rasters
+**Occurrence adapters** (shared runner + per-source adapter with schema + fixture,
+not a declarative JSON normaliser): USA-NPN observations (CC BY 4.0, citation
+string); iNaturalist CC0/CC-BY subset via GBIF `datasetKey` (media excluded);
+EOD-via-GBIF as a **historical** bird layer (ends 2024) if wanted; Reef Life
+Survey as effort-aware survey records after Gate 0; NOAA RWSAS after NEFSC reply.
 
-- **Copernicus Marine** BGC (chl, O2, pH): registration, credentials server-side;
-  adds global coverage the NOAA VIIRS product lacks in cloudy regions.
-- **NASA CyAN** freshwater cyanobacteria: Earthdata login.
-- **Global Forest Watch** GLAD alerts: key; tree-cover loss as disturbance.
-- **Allen Coral Atlas** benthic tiles: CC-BY, tile service — likely an imagery
-  provider, not a PNG drape.
+**Site-series contract** (new): NEON (CC BY 4.0, token → credentials server-side)
+as the reference source, then Columbia DART / ADF&G salmon counts, USGS NWIS +
+GLERL (context only), PhenoCam, CDC NWSS (separately assessed from WastewaterSCAN).
 
-## Wave 5 — v2 / non-commercial shelf
+**Polygon contract** (new): USDA APHIS HPAI wild-bird detections from their ArcGIS
+service (county polygons, not centroids, not an HTML scrape); RESOLVE ecoregions
+(CC-BY) as a biome skeleton if wanted.
 
-iNaturalist, Global Fishing Watch, OBIS-SEAMAP NC datasets, Protected Planet,
-IUCN ranges, BirdCast images, eBird. Build only under an explicit NC release
-policy decision; never mixed into the v1 ledger.
+## Wave 4 — credentialed
 
-## Declined (do not revisit without new terms)
+Xeno-canto (API key; per-recording CC0/CC-BY only, SA/NC/ND out; hotlink audio,
+attribute recordist); NEON token (above); Copernicus Marine **O₂ / pH only** —
+the chlorophyll-coverage rationale was wrong, our VIIRS product is already DINEOF
+gap-filled — and its custom licence needs an explicit policy exception or it is
+out; NASA CyAN (Earthdata); Global Forest Watch split per layer (CC-BY ones only);
+Allen Coral Atlas benthic/geomorphic classes only via a tile provider, mosaic is
+NC-SA, and the site's automated-retrieval / whole-dataset consent clause must be
+cleared first.
 
+## Shelf (v2 / policy decision) and declined
+
+Shelf: GFW NC layers, OBIS-SEAMAP non-CC0 datasets (site terms restrict
+redistribution even of CC-BY downloads — panel-cited, unread by me), KelpWatch
+(ODbL — panel-cited, unread), BirdCast images, IUCN ranges.
+Declined: eBird API channel (personal NC, no bulk cache), BirdWeather (rights
+granted to Scribe, users personal-NC), WastewaterSCAN (CC BY-NC + contact gate),
+Protected Planet (redistribution ban, not an NC question), Whale Safe, OCEARCH,
 Motus, Happywhale, GISAID, ProMED/HealthMap, Wildlife Insights, Argos portals.
+Not biological, dropped: Argo.
 
-## Ordering rationale
+## Definition of done, per wave
 
-Gate 0 first because the survey's licence claims are unverified and the last pass
-found two "obvious" sources (eBird, RWSAS) un-shippable. Wave 1 is cheapest and
-ships the legend fix everyone needs. Wave 2 is the only new mechanism and the
-biggest visible gap (nothing moves yet). Wave 3 is volume. Wave 4 needs accounts.
-
-## Per-wave definition of done
-
-tests green (JS + pipeline), `npx vite build`, cron line installed and **run once
-under `env -i PATH=/usr/bin:/bin`**, update() driven over the live file, ledger
-row + credit + voice alias, `docs/CURRENT-STATE.md` layer count bumped.
+JS + pipeline tests green; `npx vite build`; cron wrapper run once under
+`env -i PATH=/usr/bin:/bin HOME=$HOME` (wrappers pin miniconda); layer `update()`
+driven over the live file in node; browser smoke of enable/disable/replay;
+source-age + last-good behaviour visible; payload budget stated; ledger row in
+`DATA_SOURCES.md` with terms URL + date; credit + voice alias; `docs/CURRENT-STATE.md`
+layer count.
