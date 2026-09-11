@@ -27,3 +27,6 @@ pipeline/cron_rasters.log
 pipeline/cron_occurrences.log
 public/data/rasters/
 public/data/rasters.json
+public/data/birds.geojson
+public/data/aloft.geojson
+public/data/occurrences.geojson

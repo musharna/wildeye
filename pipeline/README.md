@@ -88,3 +88,13 @@ CONUS only (20 eastern-flyway sites in `sites.json`; 143 exist). Signal is
 nocturnal and seasonal; daytime shows near-zero density, which the layer
 labels "Quiet". vol2bird's biological filter is not perfect: heavy rain or
 insects can leak through.
+
+## Storage policy (2026-09-11)
+Live outputs in `public/data/` (`birds.geojson`, `aloft.geojson`, `occurrences.geojson`,
+`rasters/`, `rasters.json`, `birds_field.*`, `birds_ppi/`, `birds_archive/`) are rewritten by
+cron and **gitignored** — a 1.9 MB file rewritten daily must not enter git history. Small
+seed snapshots live in `public/data/seed/` (birds, aloft, a 40-per-taxon occurrences subset)
+and `pipeline/seed.sh` copies any missing live file into place, so a fresh clone still shows
+data before the first cron run. Refresh a seed deliberately (`cp` + commit), never by cron.
+Budget: a tracked seed stays under ~100 KB; new feeds (tracks, site series) follow the same
+split and state a payload cap in their README section.
