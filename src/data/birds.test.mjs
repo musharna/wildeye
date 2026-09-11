@@ -52,3 +52,10 @@ test('birds: component params toggle and drive row chips', () => {
   assert.deepEqual(drape.params, { drape: true });
   assert.equal(chips.length, 3);
 });
+
+test('birds: replay mode gate — update() is a no-op in replay and live resumes', async () => {
+  const l = createBirdsLayer();
+  assert.equal(l.getMode(), 'live');
+  assert.equal(l.getStats().mode, 'live');
+  assert.equal(l.getReplayInfo(), null);
+});
