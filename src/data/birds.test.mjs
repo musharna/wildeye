@@ -59,3 +59,26 @@ test('birds: replay mode gate — update() is a no-op in replay and live resumes
   assert.equal(l.getStats().mode, 'live');
   assert.equal(l.getReplayInfo(), null);
 });
+
+test('birds: manifest is re-read on live update so new archive frames reach the slider', async () => {
+  const l = createBirdsLayer();
+  const frames = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`2026-09-11T0${i}`, { dir: `d${i}` }]));
+  let manifest = { frames: frames(2) };
+  const saved = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('manifest.json')) return { ok: true, json: async () => JSON.parse(JSON.stringify(manifest)) };
+    if (String(url).includes('birds.geojson')) return { ok: true, json: async () => ({ features: [], generated_at: 'x' }) };
+    return { ok: false, status: 404 };
+  };
+  try {
+    l.init({ dataSources: { add() {}, remove() {} }, scene: {} });
+    assert.equal((await l._loadManifest()).ids.length, 2);
+    manifest = { frames: frames(3) };            // cron appended an hour
+    assert.equal((await l._loadManifest()).ids.length, 2, 'plain call stays memoised');
+    assert.equal(await l.update(), true);
+    assert.equal(l.getReplayInfo().frames, 3, 'live update refreshes the manifest');
+    // failure keeps the last good manifest rather than blanking it
+    globalThis.fetch = async () => ({ ok: false, status: 500 });
+    assert.equal((await l._loadManifest(true)).ids.length, 3);
+  } finally { globalThis.fetch = saved; l.destroy({ dataSources: { remove() {} }, scene: {} }); }
+});

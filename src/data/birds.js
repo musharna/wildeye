@@ -344,6 +344,7 @@ export function createBirdsLayer() {
         _count = this._renderColumns(gj);
         _generatedAt = gj.generated_at ?? null;
         await this._updateField();
+        if (_manifest !== null) await this._loadManifest(true); // pick up frames the cron added since load
         _lastUpdate = Date.now();
         _lastError = null;
         console.log(`[Data:Birds] Updated: ${_count} radars, generated ${_generatedAt}`);
@@ -396,15 +397,28 @@ export function createBirdsLayer() {
       reseed();
     },
 
-    async _loadManifest() {
-      if (_manifest !== null) return _manifest;
+    /**
+     * Fetch the archive manifest. `refresh=true` re-reads it (the cron appends a
+     * frame every hour; a memoised manifest froze the slider for the page's life —
+     * panel audit 2026-09-11). New frames sort after existing ones, so replay
+     * indices stay valid; the slider range is widened in place.
+     */
+    async _loadManifest(refresh = false) {
+      if (_manifest !== null && !refresh) return _manifest;
       try {
         const res = await fetch(`${MANIFEST_URL}?t=${Date.now()}`);
-        if (!res.ok) { _manifest = false; return false; }
+        if (!res.ok) { if (_manifest === null) _manifest = false; return _manifest; }
         const m = await res.json();
         m.ids = Object.keys(m.frames || {}).sort();
-        _manifest = m.ids.length ? m : false;
-      } catch { _manifest = false; }
+        if (!m.ids.length) { if (_manifest === null) _manifest = false; return _manifest; }
+        const wasAtEnd = _replay && _manifest && _replay.index === _manifest.ids.length - 1;
+        _manifest = m;
+        if (_replay?.ui) {
+          const last = m.ids.length - 1;
+          _replay.ui.range.max = String(last);
+          if (_mode === 'live' || wasAtEnd) { _replay.index = last; _replay.ui.range.value = String(last); }
+        }
+      } catch { if (_manifest === null) _manifest = false; }
       return _manifest;
     },
 
