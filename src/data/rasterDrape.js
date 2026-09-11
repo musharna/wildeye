@@ -84,3 +84,6 @@ export const crwBleachingLayer = createRasterDrapeLayer({
 export const oisstLayer = createRasterDrapeLayer({
   id: 'oisst', name: 'Sea surface temperature', icon: '🌡️', source: 'NOAA OISST v2.1', alpha: 0.5,
 });
+export const chlorALayer = createRasterDrapeLayer({
+  id: 'chlor-a', name: 'Chlorophyll-a / algal blooms', icon: '🦠', source: 'NOAA CoastWatch VIIRS', alpha: 0.6,
+});

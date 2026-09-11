@@ -23,15 +23,21 @@ def mode_color_to_alpha(rgba: np.ndarray) -> np.ndarray:
     out[hit, 3] = 0
     return out
 
+UA = {"User-Agent": "wildeye/0.1 (raster sync; +https://github.com/musharna)"}
+
+def _open(url: str, timeout: int):
+    # coastwatch.noaa.gov (ERDDAP redirect target) returns 403 to the default Python-urllib agent
+    return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout)
+
 def fetch_png(url: str, timeout: int = 180) -> np.ndarray:
-    with urllib.request.urlopen(url, timeout=timeout) as r:
+    with _open(url, timeout) as r:
         data = r.read()
     return np.asarray(Image.open(io.BytesIO(data)).convert("RGBA"))
 
 def fetch_time(url: str | None) -> str | None:
     if not url:
         return None
-    with urllib.request.urlopen(url, timeout=60) as r:
+    with _open(url, 60) as r:
         d = json.load(r)
     return d["table"]["rows"][0][0]
 
@@ -59,7 +65,9 @@ def main(argv=None):
         keep = set(a.only.split(",")); products = [p for p in products if p["id"] in keep]
     manifest_path = a.out / "rasters.json"
     prev = {e["id"]: e for e in (json.loads(manifest_path.read_text()) if manifest_path.exists() else {"products": []})["products"]}
-    entries, failures = {}, {}
+    # products not selected this run keep their previous manifest entry untouched
+    entries = {k: v for k, v in prev.items() if k not in {p["id"] for p in products}}
+    failures = {}
     for p in products:
         t0 = time.time()
         try:
@@ -71,8 +79,8 @@ def main(argv=None):
                 entries[p["id"]] = prev[p["id"]] | {"stale": True}
     write_atomic(manifest_path, {"generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
                                  "failures": failures, "products": [entries[k] for k in sorted(entries)]})
-    if not entries:
-        raise SystemExit("every raster failed")
+    if failures and len(failures) == len(products):
+        raise SystemExit(f"every selected raster failed: {failures}")
 
 if __name__ == "__main__":
     main()

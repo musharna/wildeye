@@ -1,0 +1,90 @@
+[
+  {
+    "id": "humpback",
+    "name": "Humpback whale",
+    "sci": "Megaptera novaeangliae",
+    "gbif_key": 5220086,
+    "group": "whales",
+    "icon": "🐋"
+  },
+  {
+    "id": "right-whale",
+    "name": "N. Atlantic right whale",
+    "sci": "Eubalaena glacialis",
+    "gbif_key": 2440339,
+    "group": "whales",
+    "icon": "🐋"
+  },
+  {
+    "id": "blue-whale",
+    "name": "Blue whale",
+    "sci": "Balaenoptera musculus",
+    "gbif_key": 2440735,
+    "group": "whales",
+    "icon": "🐋"
+  },
+  {
+    "id": "orca",
+    "name": "Orca",
+    "sci": "Orcinus orca",
+    "gbif_key": 2440483,
+    "group": "whales",
+    "icon": "🐳"
+  },
+  {
+    "id": "white-shark",
+    "name": "Great white shark",
+    "sci": "Carcharodon carcharias",
+    "gbif_key": 2420694,
+    "group": "sharks",
+    "icon": "🦈"
+  },
+  {
+    "id": "whale-shark",
+    "name": "Whale shark",
+    "sci": "Rhincodon typus",
+    "gbif_key": 2417522,
+    "group": "sharks",
+    "icon": "🦈"
+  },
+  {
+    "id": "leatherback",
+    "name": "Leatherback turtle",
+    "sci": "Dermochelys coriacea",
+    "gbif_key": 9789983,
+    "group": "turtles",
+    "icon": "🐢"
+  },
+  {
+    "id": "green-turtle",
+    "name": "Green turtle",
+    "sci": "Chelonia mydas",
+    "gbif_key": 2442225,
+    "group": "turtles",
+    "icon": "🐢"
+  },
+  {
+    "id": "monarch",
+    "name": "Monarch butterfly",
+    "sci": "Danaus plexippus",
+    "gbif_key": 5133088,
+    "group": "insects",
+    "icon": "🦋"
+  },
+  {
+    "id": "polar-bear",
+    "name": "Polar bear",
+    "sci": "Ursus maritimus",
+    "gbif_key": 2433451,
+    "group": "mammals",
+    "icon": "🐻‍❄️"
+  },
+  {
+    "id": "manta",
+    "name": "Giant manta ray",
+    "sci": "Mobula birostris",
+    "gbif_key": 9548142,
+    "group": "sharks",
+    "icon": "🐟"
+  }
+]

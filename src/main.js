@@ -7,7 +7,8 @@ import militaryFlightsLayer from './data/militaryFlights.js';
 import earthquakesLayer from './data/earthquakes.js';
 import birdsLayer from './data/birds.js';
 import aloftLayer from './data/aloft.js';
-import { crwBleachingLayer, oisstLayer } from './data/rasterDrape.js';
+import occurrencesLayer from './data/occurrences.js';
+import { crwBleachingLayer, oisstLayer, chlorALayer } from './data/rasterDrape.js';
 import satellitesLayer from './data/satellites.js';
 import rocketLaunchesLayer from './data/rocketLaunches.js';
 import trafficLayer from './data/traffic.js';
@@ -217,6 +218,8 @@ async function init() {
     dataManager.register(aloftLayer);
     dataManager.register(crwBleachingLayer);
     dataManager.register(oisstLayer);
+    dataManager.register(chlorALayer);
+    dataManager.register(occurrencesLayer);
     dataManager.register(satellitesLayer);
     dataManager.register(rocketLaunchesLayer);
     rocketLaunchesLayer.attachDataManager(dataManager);

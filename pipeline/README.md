@@ -53,7 +53,21 @@ Products in `pipeline/rasters.json`: an ERDDAP `transparentPng` URL, bounds, an 
 legend and credit. Writes `public/data/rasters/<id>.png` + `rasters.json` (last-good kept per
 product, marked `stale`). Measured 2026-09-11: ~209 s per product (ERDDAP redirect is slow).
 Products: `crw-bleaching` (NOAA CRW Bleaching Alert Area, daily) · `oisst` (NOAA OISST v2.1; the
-ERDDAP aggregation lags ~2 weeks).
+ERDDAP aggregation lags ~2 weeks) · `chlor-a` (NOAA VIIRS gap-filled chlorophyll-a, log scale, daily NRT).
+Requests carry a wildeye User-Agent: the ERDDAP redirect target (coastwatch.noaa.gov) returns 403 to Python-urllib.
+`--only X` leaves the other products' manifest entries untouched.
+
+## Wildlife sightings: GBIF + OBIS (CC0 / CC-BY records only)
+```bash
+python3 -m pipeline.occurrences --out public/data/occurrences.geojson --days 120 --workers 4   # cron daily 06:50
+```
+Taxa in `pipeline/taxa.json` (id, name, GBIF taxonKey, scientific name for OBIS, group, icon). GBIF is
+filtered server-side (`license=CC0_1_0,CC_BY_4_0`, coordinates, no geospatial issues, ≤600/taxon);
+OBIS is filtered here on the per-record `license` (NC/SA/all-rights-reserved dropped). Same taxon +
+day + 0.001° cell is deduped across sources. Output: FeatureCollection with `generated_at`, `window_days`,
+`counts` per taxon, `failures`, `taxa`. Lookback is 120 d because OBIS ingestion lags months (0 humpback
+records in the last 30 d, 2368 in 120 d). Measured 2026-09-11: 3364 records, 11 taxa, 21 s, 1.5 MB.
+Right whale = 0 (NOAA sightings are email-only, not in GBIF/OBIS).
 
 ## Replay archive (M5)
 ```bash

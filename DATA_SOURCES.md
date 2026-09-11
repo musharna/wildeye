@@ -140,6 +140,8 @@ The required Google Maps / Cesium credit renders on the on-globe credit line (`#
 | Bird migration (Europe, radar profiles) | Aloft / BALTRAD_VPTS daily CSV (`aloftdata` S3 bucket) | CC0 (doi:10.5281/zenodo.14711024) |
 | Coral bleaching alert | NOAA Coral Reef Watch 5 km BAA via CoastWatch ERDDAP | US public domain; credit "NOAA Coral Reef Watch" |
 | Sea surface temperature | NOAA/NCEI OISST v2.1 via CoastWatch ERDDAP | US public domain; cite Huang et al. 2020 |
+| Chlorophyll-a / algal blooms | NOAA CoastWatch VIIRS S-NPP/NOAA-20 gap-filled daily 4 km via ERDDAP | US public domain ("may be used and redistributed for free") |
+| Wildlife sightings | GBIF + OBIS occurrence APIs, `pipeline/taxa.json` | per-record CC0 / CC-BY only (NC, SA, © dropped in pipeline); publisher named per record |
 
 ## wildeye licence matrix (read 2026-09-11, live pages; "could not fetch" = not verified)
 
@@ -155,10 +157,10 @@ is non-commercial; sources below are graded for that policy.
 | OTN detections (ERDDAP) | **yes-cond** | CC-BY 4.0 | keep per-row citation; notify otndc@dal.ca | per-row citation + "Ocean Tracking Network, CC-BY 4.0" | erddap.oceantrack.org info; members.oceantrack.org/data/policies |
 | NOAA Coral Reef Watch 5 km | **yes** | freely available, credit CRW | none | "Courtesy NOAA Coral Reef Watch" | coralreefwatch.noaa.gov citation page |
 | NOAA OISST v2.1 | **yes** | US-gov, open directory | attribution | "NOAA/NCEI OISST v2.1 (Huang et al. 2020)" | ncei.noaa.gov OISST pages |
-| GBIF occurrences | yes-cond | per-dataset CC0/CC-BY/CC-BY-NC (terms page 403) | filter `license=CC0_1_0,CC_BY_4_0`; per-record licence + dataset DOI | "GBIF.org (DATE) Occurrence Download doi:…" | search only |
-| OBIS | yes-cond | per-dataset CC0/CC-BY/CC-BY-NC | per-dataset filter + attribution | "OBIS (2026) IOC-UNESCO obis.org + dataset" | manual.obis.org/policy |
+| GBIF occurrences | **shipped** (occurrences layer) | per-dataset CC0/CC-BY/CC-BY-NC (terms page 403) | filter `license=CC0_1_0,CC_BY_4_0`; per-record licence + dataset DOI | "GBIF.org (DATE) Occurrence Download doi:…" | search only |
+| OBIS | **shipped** (occurrences layer; Happywhale records arrive CC0 via OBIS) | per-dataset CC0/CC-BY/CC-BY-NC | per-dataset filter + attribution | "OBIS (2026) IOC-UNESCO obis.org + dataset" | manual.obis.org/policy |
 | Movebank | yes-cond | per-study CC0/CC-BY/CC-BY-NC; public-download only | only public-download or Data Repository DOI studies | repository citation | movebank terms + data-policy |
-| Copernicus Marine BGC | yes-cond | free licence, redistribution + derivatives allowed | registration; credentials server-side only | "Generated using E.U. Copernicus Marine Service Information; DOI …" | marine.copernicus.eu licence; help art. 4444611 |
+| Copernicus Marine BGC | deferred (NOAA VIIRS chlorophyll shipped instead, no credentials needed) | free licence, redistribution + derivatives allowed | registration; credentials server-side only | "Generated using E.U. Copernicus Marine Service Information; DOI …" | marine.copernicus.eu licence; help art. 4444611 |
 | NASA OB.DAAC / CyAN | yes-cond | CC0 unless marked | Earthdata login server-side | "NASA OB.DAAC (CC0), product DOI" | earthdata data-use-guidance |
 | iNaturalist | v2 | default CC-BY-NC per observation; some ARR | filter licence; never de-obscure | "© observers via iNaturalist, licence per record" | help.inaturalist.org |
 | Global Fishing Watch | v2 | CC-BY-NC; token; 50k req/day | server-side token | "Powered by Global Fishing Watch" | gfw license-rate-limits |

@@ -78,6 +78,17 @@ export const DATA_CREDITS = [
     html: 'Coral bleaching alerts: Courtesy <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (daily 5 km Bleaching Alert Area v3.1)',
   },
   {
+    key: 'gbif-obis',
+    html:
+      'Wildlife sightings: <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF</a> and ' +
+      '<a href="https://obis.org" target="_blank" rel="noopener">OBIS</a> occurrence records ' +
+      '(CC0 / CC-BY records only; publisher named per record)',
+  },
+  {
+    key: 'noaa-viirs-chl',
+    html: 'Chlorophyll-a: <a href="https://coastwatch.noaa.gov" target="_blank" rel="noopener">NOAA CoastWatch</a> VIIRS S-NPP/NOAA-20 gap-filled daily 4 km',
+  },
+  {
     key: 'noaa-oisst',
     html: 'Sea surface temperature: <a href="https://www.ncei.noaa.gov/products/optimum-interpolation-sst" target="_blank" rel="noopener">NOAA/NCEI OISST v2.1</a> (Huang et al. 2020)',
   },

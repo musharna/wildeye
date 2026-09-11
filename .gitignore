@@ -24,5 +24,6 @@ public/data/birds_field.json
 public/data/birds_archive/
 pipeline/cron_aloft.log
 pipeline/cron_rasters.log
+pipeline/cron_occurrences.log
 public/data/rasters/
 public/data/rasters.json
