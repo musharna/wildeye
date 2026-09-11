@@ -44,6 +44,17 @@ takes the latest profile with data, and reduces it with the same reducer as NEXR
 no file this year (decommissioned) are listed in `failures`. Measured 2026-09-11: 144/187 in 26 s.
 No drape for Europe: raw OPERA volumes are not redistributable; profiles are.
 
+## Raster drapes (config-driven)
+```bash
+python3 -m pipeline.raster --out public/data        # cron daily 06:40; --only crw-bleaching,oisst
+```
+Products in `pipeline/rasters.json`: an ERDDAP `transparentPng` URL, bounds, an optional
+`mode_color` post-process (makes the dominant opaque colour transparent, e.g. bleaching level 0),
+legend and credit. Writes `public/data/rasters/<id>.png` + `rasters.json` (last-good kept per
+product, marked `stale`). Measured 2026-09-11: ~209 s per product (ERDDAP redirect is slow).
+Products: `crw-bleaching` (NOAA CRW Bleaching Alert Area, daily) · `oisst` (NOAA OISST v2.1; the
+ERDDAP aggregation lags ~2 weeks).
+
 ## Replay archive (M5)
 ```bash
 python3 -m pipeline.build_archive --start 2026-08-12 --end 2026-09-10 --hours 0-12 --workers 10

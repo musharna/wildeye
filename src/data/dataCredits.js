@@ -74,6 +74,14 @@ export const DATA_CREDITS = [
       '(CC0, doi:10.5281/zenodo.14711024)',
   },
   {
+    key: 'noaa-crw',
+    html: 'Coral bleaching alerts: Courtesy <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (daily 5 km Bleaching Alert Area v3.1)',
+  },
+  {
+    key: 'noaa-oisst',
+    html: 'Sea surface temperature: <a href="https://www.ncei.noaa.gov/products/optimum-interpolation-sst" target="_blank" rel="noopener">NOAA/NCEI OISST v2.1</a> (Huang et al. 2020)',
+  },
+  {
     key: 'nexrad-vol2bird',
     html:
       'Bird migration: NOAA NEXRAD Level II (AWS Open Data) processed with ' +
