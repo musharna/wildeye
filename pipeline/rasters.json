@@ -1,7 +1,7 @@
 [
   {
     "id": "crw-bleaching",
-    "name": "Coral bleaching alert (NOAA CRW)",
+    "name": "Coral bleaching alert (NOAA CRW, legacy 0–4 scale)",
     "icon": "🪸",
     "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.transparentPng?CRW_BAA%5B(last)%5D%5B(-60):(60)%5D%5B(-180):(180)%5D&.size=1440%7C480&.colorBar=KT_thermal%7C%7C%7C0%7C4%7C5",
     "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.json?time%5B(last)%5D",
@@ -11,10 +11,62 @@
       "east": 180,
       "north": 60
     },
-    "transparent": "mode_color",
-    "legend": "Bleaching Alert Area: 0 none (hidden) · 1 watch · 2 warning · 3 alert 1 · 4 alert 2",
+    "transparent": {
+      "rgb": [
+        4,
+        35,
+        51
+      ],
+      "tolerance": 0
+    },
+    "legend": "ERDDAP serves the legacy 0–4 Bleaching Alert Area; NOAA's site now grades Alert Levels 1–5 (since 2023-12-15)",
     "credit_key": "noaa-crw",
-    "credit": "Courtesy NOAA Coral Reef Watch (daily 5 km Bleaching Alert Area, v3.1)"
+    "credit": "Courtesy NOAA Coral Reef Watch (daily 5 km Bleaching Alert Area v3.1, legacy 0–4 categories)",
+    "kind": "classes",
+    "zrank": 90,
+    "classes": [
+      {
+        "label": "no stress",
+        "rgb": [
+          4,
+          35,
+          51
+        ],
+        "hidden": true
+      },
+      {
+        "label": "watch",
+        "rgb": [
+          82,
+          59,
+          154
+        ]
+      },
+      {
+        "label": "warning",
+        "rgb": [
+          176,
+          95,
+          124
+        ]
+      },
+      {
+        "label": "alert 1",
+        "rgb": [
+          242,
+          151,
+          72
+        ]
+      },
+      {
+        "label": "alert 2",
+        "rgb": [
+          232,
+          250,
+          91
+        ]
+      }
+    ]
   },
   {
     "id": "oisst",
@@ -29,9 +81,43 @@
       "north": 90
     },
     "transparent": "none",
-    "legend": "SST −2 to 32 °C, thermal ramp",
+    "legend": "sea surface temperature, thermal ramp",
     "credit_key": "noaa-oisst",
-    "credit": "NOAA/NCEI OISST v2.1 (Huang et al. 2020)"
+    "credit": "NOAA/NCEI OISST v2.1 (Huang et al. 2020)",
+    "kind": "ramp",
+    "zrank": 10,
+    "ramp": {
+      "min": -2,
+      "max": 32,
+      "unit": " °C",
+      "stops": [
+        [
+          4,
+          35,
+          51
+        ],
+        [
+          82,
+          59,
+          154
+        ],
+        [
+          176,
+          95,
+          124
+        ],
+        [
+          242,
+          151,
+          72
+        ],
+        [
+          232,
+          250,
+          91
+        ]
+      ]
+    }
   },
   {
     "id": "chlor-a",
@@ -46,8 +132,43 @@
       "north": 90
     },
     "transparent": "none",
-    "legend": "Chlorophyll-a 0.05–20 mg/m³, log scale: dark = clear water · bright green/yellow = bloom",
+    "legend": "chlorophyll-a, log scale: dark = clear water · pale green = bloom",
     "credit_key": "noaa-viirs-chl",
-    "credit": "NOAA CoastWatch VIIRS S-NPP/NOAA-20 gap-filled (DINEOF) chlorophyll-a, NRT daily 4 km"
+    "credit": "NOAA CoastWatch VIIRS S-NPP/NOAA-20 gap-filled (DINEOF) chlorophyll-a, NRT daily 4 km",
+    "kind": "ramp",
+    "zrank": 20,
+    "ramp": {
+      "min": 0.05,
+      "max": 20,
+      "unit": " mg/m³",
+      "log": true,
+      "stops": [
+        [
+          24,
+          58,
+          37
+        ],
+        [
+          21,
+          102,
+          65
+        ],
+        [
+          18,
+          148,
+          80
+        ],
+        [
+          114,
+          187,
+          108
+        ],
+        [
+          184,
+          227,
+          172
+        ]
+      ]
+    }
   }
 ]
