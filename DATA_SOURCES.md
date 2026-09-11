@@ -137,6 +137,7 @@ The required Google Maps / Cesium credit renders on the on-globe credit line (`#
 |---|---|---|
 | Bird migration (radar) | NOAA NEXRAD Level II via AWS Open Data (`unidata-nexrad-level2`) | US public domain |
 | (processing) | vol2bird, Dokter et al. | MIT (LICENSE file read 2026-09-11) |
+| Bird migration (Europe, radar profiles) | Aloft / BALTRAD_VPTS daily CSV (`aloftdata` S3 bucket) | CC0 (doi:10.5281/zenodo.14711024) |
 
 ## wildeye licence matrix (read 2026-09-11, live pages; "could not fetch" = not verified)
 

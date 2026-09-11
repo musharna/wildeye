@@ -67,6 +67,13 @@ export const DATA_CREDITS = [
     html: 'Earthquakes: Data courtesy of the U.S. Geological Survey',
   },
   {
+    key: 'aloft-baltrad',
+    html:
+      'European bird migration profiles: ' +
+      '<a href="https://aloftdata.eu" target="_blank" rel="noopener">Aloft / BALTRAD_VPTS</a> ' +
+      '(CC0, doi:10.5281/zenodo.14711024)',
+  },
+  {
     key: 'nexrad-vol2bird',
     html:
       'Bird migration: NOAA NEXRAD Level II (AWS Open Data) processed with ' +

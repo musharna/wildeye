@@ -61,7 +61,29 @@ export function mapBirdRecord(raw, index = 0) {
   };
 }
 
-function describe(p, h) {
+/** Build the Cesium entity options for one radar column (shared with the Aloft layer). */
+export function columnEntity(f, idPrefix = 'birds', describeFn = describe) {
+  const [lon, lat] = f.geometry.coordinates;
+  const p = f.properties || {};
+  const h = birdColumn(p.density_birds_km3);
+  const color = headingColor(p.heading_deg).withAlpha(p.stale ? 0.25 : 0.6);
+  return {
+    id: `${idPrefix}:${p.site}`,
+    position: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(h, 500) / 2),
+    cylinder: {
+      length: Math.max(h, 500),
+      topRadius: BASE_RADIUS_M,
+      bottomRadius: BASE_RADIUS_M,
+      material: new Cesium.ColorMaterialProperty(color),
+      outline: true,
+      outlineColor: color.withAlpha(0.9),
+    },
+    description: describeFn(p, h),
+    properties: { ...p, lat, lon },
+  };
+}
+
+export function describe(p, h) {
   const head = `<b>${p.name ?? p.site}</b> (${p.site})<br>`;
   const body = h > 0
     ? `${Number(p.density_birds_km3).toFixed(1)} birds/km³, heading ${Math.round(p.heading_deg)}°, ` +
@@ -306,25 +328,8 @@ export function createBirdsLayer() {
         _dataSource.entities.removeAll();
         let count = 0;
         for (const f of gj.features) {
-          const [lon, lat] = f.geometry.coordinates;
-          const p = f.properties || {};
-          const h = birdColumn(p.density_birds_km3);
-          const color = headingColor(p.heading_deg).withAlpha(p.stale ? 0.25 : 0.6);
           count++;
-          _dataSource.entities.add({
-            id: `birds:${p.site}`,
-            position: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(h, 500) / 2),
-            cylinder: {
-              length: Math.max(h, 500),
-              topRadius: BASE_RADIUS_M,
-              bottomRadius: BASE_RADIUS_M,
-              material: new Cesium.ColorMaterialProperty(color),
-              outline: true,
-              outlineColor: color.withAlpha(0.9),
-            },
-            description: describe(p, h),
-            properties: { ...p, lat, lon },
-          });
+          _dataSource.entities.add(columnEntity(f, 'birds'));
         }
         return count;
     },

@@ -35,6 +35,15 @@ Top level: `generated_at`, `site_count`, `fresh_count`, `failures` (site → err
   per-site `u_ms`/`v_ms`; the globe seeds 4,000 ensemble particles from it.
   These are gitignored (regenerated every 10 min).
 
+## Europe: Aloft / BALTRAD profiles (CC0)
+```bash
+python3 -m pipeline.aloft --out public/data/aloft.geojson --workers 12   # cron daily 06:20
+```
+Lists the 187 radar prefixes in the Aloft bucket, downloads each radar's newest daily VPTS CSV,
+takes the latest profile with data, and reduces it with the same reducer as NEXRAD. Radars with
+no file this year (decommissioned) are listed in `failures`. Measured 2026-09-11: 144/187 in 26 s.
+No drape for Europe: raw OPERA volumes are not redistributable; profiles are.
+
 ## Replay archive (M5)
 ```bash
 python3 -m pipeline.build_archive --start 2026-08-12 --end 2026-09-10 --hours 0-12 --workers 10
