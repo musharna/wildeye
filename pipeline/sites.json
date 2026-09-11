@@ -1,0 +1,22 @@
+[
+ {"id":"KOKX","name":"Upton NY","lat":40.8655,"lon":-72.8639},
+ {"id":"KBOX","name":"Boston MA","lat":41.9558,"lon":-71.1369},
+ {"id":"KDIX","name":"Philadelphia PA","lat":39.9470,"lon":-74.4108},
+ {"id":"KLWX","name":"Sterling VA","lat":38.9753,"lon":-77.4778},
+ {"id":"KAKQ","name":"Wakefield VA","lat":36.9840,"lon":-77.0073},
+ {"id":"KRAX","name":"Raleigh NC","lat":35.6655,"lon":-78.4899},
+ {"id":"KMHX","name":"Morehead City NC","lat":34.7759,"lon":-76.8762},
+ {"id":"KLTX","name":"Wilmington NC","lat":33.9892,"lon":-78.4292},
+ {"id":"KCLX","name":"Charleston SC","lat":32.6555,"lon":-81.0423},
+ {"id":"KJAX","name":"Jacksonville FL","lat":30.4846,"lon":-81.7019},
+ {"id":"KMLB","name":"Melbourne FL","lat":28.1133,"lon":-80.6542},
+ {"id":"KTBW","name":"Tampa FL","lat":27.7055,"lon":-82.4017},
+ {"id":"KBUF","name":"Buffalo NY","lat":42.9489,"lon":-78.7369},
+ {"id":"KCLE","name":"Cleveland OH","lat":41.4131,"lon":-81.8597},
+ {"id":"KPBZ","name":"Pittsburgh PA","lat":40.5317,"lon":-80.2183},
+ {"id":"KILN","name":"Wilmington OH","lat":39.4203,"lon":-83.8217},
+ {"id":"KLOT","name":"Chicago IL","lat":41.6045,"lon":-88.0847},
+ {"id":"KGRR","name":"Grand Rapids MI","lat":42.8939,"lon":-85.5449},
+ {"id":"KOHX","name":"Nashville TN","lat":36.2472,"lon":-86.5625},
+ {"id":"KFFC","name":"Atlanta GA","lat":33.3636,"lon":-84.5658}
+]
