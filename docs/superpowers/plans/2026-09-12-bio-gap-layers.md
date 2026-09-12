@@ -21,3 +21,15 @@
 Rules: builders touch only their own files (pipeline/<id>.py, tests, run_<id>.sh, src/data/<id>.js + test, seed); wiring (layerState, main.js, credits, voice, seed.sh, .gitignore, cron, DATA_SOURCES.md) done centrally after each delivery. Email-gated sources are declined. Licence read live before shipping.
 
 Status: dispatched 2026-09-12.
+## Outcome (2026-09-12)
+- **Wired + live-run + real-app smoke (10/10):** arbonet `ar`, phenology `ph`, neon-vectors `nv`, cetaceans `ce`, drought `dr`, h5n1 `h5`, fires `fi`, ecoregions `ec`, rivers `rv` → 44 layers.
+- **Built, not wired (token needed):** fishing `fs` (needs a Global Fishing Watch token; `GFW_API_KEY` is the Forest Watch key), IUCN badge (needs `IUCN_TOKEN`; seed limited to category/year/citation/url/scope).
+- **Declined:** protected-areas (WDPA terms forbid downloadable redistribution; permission is email-gated). H5N1 GISAID-fed builds declined; open USDA/GenBank builds used (US only).
+- **Substitutions:** arbonet is state-level weekly NNDSS (no current-year county data); rivers uses the modern USGS OGC API (legacy WaterServices decommissioning).
+- **Bugs caught by the real-app smoke + independent visual critic (not by unit tests):**
+  1. rivers: negative tidal discharge → `log10(q+1)` NaN pixelSize → Cesium render loop stopped. Fixed: size by magnitude.
+  2. all bio point layers: `disableDepthTestDistance: Infinity` drew far-side markers through the globe (Africa's fires over the Pacific). Fixed: 50 km, guard test across 10 layers.
+  3. arbonet: zero-case states were omitted → bare imagery (AK/MT/VT/WV). Fixed: every state shape drawn, grey when zero.
+  4. first smoke screenshots were worthless (street-level camera + first-run dialog); critic caught it before I trusted a 9/9 PASS.
+- Model switch mid-run: all 12 Fable builders died at the usage limit; relaunched on Opus 5 as resume-from-partial briefs.
+
