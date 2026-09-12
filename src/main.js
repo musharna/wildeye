@@ -12,6 +12,7 @@ import tracksLayer from './data/tracks.js';
 import wastewaterLayer from './data/wastewater.js';
 import otnLayer from './data/otn.js';
 import hpaiLayer from './data/hpai.js';
+import neonLayer from './data/neon.js';
 import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer } from './data/rasterDrape.js';
 import { installDrapeExclusivity } from './data/drapeExclusive.js';
 import { createObservedTime, attachObservedTime, installObservedTimeUi } from './observedTime.js';
@@ -236,9 +237,10 @@ async function init() {
     dataManager.register(wastewaterLayer);
     dataManager.register(otnLayer);
     dataManager.register(hpaiLayer);
+    dataManager.register(neonLayer);
     // Shared observed-time selector: one bar, every bio layer samples its own data at the instant.
     const observedTime = createObservedTime({ domainDays: 30 });
-    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer];
+    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer];
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
     dataManager.register(satellitesLayer);

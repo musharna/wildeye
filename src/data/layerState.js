@@ -300,6 +300,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'military-awareness', token: 'g', disposition: 'enabled-only' }),
   Object.freeze({ id: 'military-installations', token: 'i', disposition: 'enabled-only' }),
   Object.freeze({ id: 'ndvi', token: '0', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'neon', token: '5', disposition: 'enabled-only' }),
   Object.freeze({ id: 'occurrences', token: 'o', disposition: 'enabled-only' }),
   Object.freeze({ id: 'oisst', token: 'j', disposition: 'enabled-only' }),
   Object.freeze({ id: 'otn', token: '3', disposition: 'enabled-only' }),

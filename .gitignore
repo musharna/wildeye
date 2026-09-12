@@ -34,6 +34,8 @@ public/data/tracks.geojson
 public/data/wastewater.geojson
 public/data/otn.geojson
 public/data/hpai.geojson
+public/data/neon.geojson
+pipeline/cron_neon.log
 pipeline/cron_hpai.log
 pipeline/cron_otn.log
 pipeline/cron_wastewater.log

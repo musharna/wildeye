@@ -102,6 +102,10 @@ export const DATA_CREDITS = [
     html: 'Sound recordings: <a href="https://xeno-canto.org" target="_blank" rel="noopener">xeno-canto</a> (CC0 / CC BY recordings only; each record names its recordist and links to the recording — audio is never rehosted)',
   },
   {
+    key: 'neon',
+    html: 'Small mammals: <a href="https://data.neonscience.org/data-products/DP1.10072.001" target="_blank" rel="noopener">NSF NEON small mammal box trapping (DP1.10072.001)</a>, provisional and released data, CC BY 4.0. NEON (National Ecological Observatory Network) is funded by the U.S. National Science Foundation.',
+  },
+  {
     key: 'cdc-nwss',
     html: 'Wastewater virus trend: <a href="https://www.cdc.gov/wastewater" target="_blank" rel="noopener">CDC National Wastewater Surveillance System</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.',
   },

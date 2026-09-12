@@ -100,7 +100,7 @@ string); iNaturalist CC0/CC-BY subset via GBIF `datasetKey` (media excluded);
 EOD-via-GBIF as a **historical** bird layer (ends 2024) if wanted; Reef Life
 Survey as effort-aware survey records after Gate 0; NOAA RWSAS after NEFSC reply.
 
-**Site-series contract** (new): NEON (CC BY 4.0, token → credentials server-side)
+**Site-series contract**: NEON **shipped** (small mammal trapping, `pipeline/neon.py`, token `5`; OTN receivers were the first site-series source, 515b949)
 as the reference source, then Columbia DART / ADF&G salmon counts, USGS NWIS +
 GLERL (context only), PhenoCam, CDC NWSS (separately assessed from WastewaterSCAN).
 

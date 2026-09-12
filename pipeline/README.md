@@ -134,6 +134,19 @@ path. The study's `license_type` is read from Movebank on every run and anything
 display names, `default_species` covers individuals with no taxon. Measured 2026-09-11:
 3 studies, 32 individuals, 78 segments, 20 s.
 
+## Small mammals: NSF NEON (site-series contract)
+```bash
+python3 -m pipeline.neon --out public/data/neon.geojson                  # cron weekly Mon 07:30 (NEON releases provisional data monthly)
+python3 -m pipeline.neon --limit 3 --months 3 --out /tmp/n.geojson        # smoke, ~5 s
+```
+Needs `NEON_TOKEN` (`run_neon.sh` sources `~/.config/wildeye/env`; 2,000 requests/hour with a
+token). `/sites` lists which months of DP1.10072.001 each site has; for each site-month in the
+last `--months` the basic `mam_pertrapnight` CSV is downloaded (one row per trap per night).
+Trap-nights = rows with status 2–6 (status 1 = trap not set is not effort), captures = status 5,
+distinct `tagID` = individuals, species from `scientificName`. One Point per site with a monthly
+series; sites are only ever compared with their own history. Licence CC BY 4.0 (NEON changed
+from CC0 on 2026-06-30). Measured 2026-09-12: 41 sites, 106 site-months, 112 s.
+
 ## Sound recordings: xeno-canto (occurrence adapter)
 Runs inside `pipeline.occurrences` when `XENO_CANTO_KEY` is set (`run_occurrences.sh` sources
 `~/.config/wildeye/env`; without a key the adapter logs a warning and contributes nothing).
