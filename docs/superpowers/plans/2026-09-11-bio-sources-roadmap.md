@@ -92,7 +92,7 @@ Reef Life Survey, GFW per-layer.
 
 ## Wave 3 — occurrence adapters, site series, polygons
 
-**Status 2026-09-11:** USA-NPN **shipped 673c9de**; iNaturalist CC0/CC-BY subset already flows via GBIF (ledger). Site-series and polygon contracts not started: NEON needs a token; DART/APHIS need replies; CDC NWSS (county-level, US-gov) is the next credential-free candidate but needs the polygon contract first.
+**Status 2026-09-11:** USA-NPN **shipped 673c9de**; iNaturalist CC0/CC-BY subset already flows via GBIF (ledger). Site-series and polygon contracts not started: NEON needs a token; DART/APHIS need replies; **Polygon contract shipped with CDC NWSS** (`pipeline/wastewater.py` + `src/data/wastewater.js`, token `2`): 778 counties, per-site 15-day median-log trend rolled up by population; the ledger's 2ew6-ywp6 was archived 2025-09-12, successor j9g8-acpt carries an explicit US-gov licence. APHIS HPAI can reuse the same county shapes once their service is confirmed.
 
 **Occurrence adapters** (shared runner + per-source adapter with schema + fixture,
 not a declarative JSON normaliser): USA-NPN observations (CC BY 4.0, citation

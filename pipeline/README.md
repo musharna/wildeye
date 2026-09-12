@@ -122,3 +122,21 @@ one fix per `min_gap_s` plus endpoints, segments split on gaps > `segment_gap_h`
 antimeridian (crossing point inserted at ±180). One LineString per segment with a parallel
 `times[]` (length validated). Per-deployment `license`, `citation`, `institution`, `url`
 ride into the info box. Measured 2026-09-11: ~2 s per deployment.
+
+## Wastewater virus trend: CDC NWSS (polygon contract)
+```bash
+python3 -m pipeline.wastewater --out public/data/wastewater.geojson          # cron weekly Sat 07:10 (CDC publishes Fridays)
+python3 -m pipeline.wastewater --weeks 2 --today 2026-09-11 --out /tmp/w.geojson   # smoke
+```
+Pulls SARS-CoV-2 sample rows from `data.cdc.gov` j9g8-acpt (Public Domain U.S. Government;
+2ew6-ywp6 in the ledger was archived 2025-09-12), server-side excluding `source = WastewaterSCAN`
+(CC BY-NC). CDC's own footnote says concentrations are not comparable across sites, so each site
+gets a trend against **its own** history: difference of the median log10(c+1) over the 15 days
+ending at each week end and the 15 days before, clamped to ±2 (means gave ±6 artefacts from
+non-detect zeros and unit slips). Counties take the population-weighted mean of their sites'
+trends; a site listing several counties counts in each. Eight weekly values per county feed the
+shared observed-time bar. Polygons come from the Census 2021 1:20m boundary zip (cached in
+`$WILDEYE_CACHE`, default `~/.cache/wildeye`; 2022+ vintages replaced Connecticut's counties with
+planning regions CDC does not use), coordinates rounded to 3 dp, only counties with data emitted.
+Needs `pyshp` (imported lazily; module import stays stdlib). Measured 2026-09-11: 17.8k rows,
+1135 sites, 778 counties, 0.6 MB, ~2 s.

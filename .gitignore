@@ -31,4 +31,6 @@ public/data/birds.geojson
 public/data/aloft.geojson
 public/data/occurrences.geojson
 public/data/tracks.geojson
+public/data/wastewater.geojson
+pipeline/cron_wastewater.log
 pipeline/cron_tracks.log
