@@ -123,6 +123,17 @@ antimeridian (crossing point inserted at ±180). One LineString per segment with
 `times[]` (length validated). Per-deployment `license`, `citation`, `institution`, `url`
 ride into the info box. Measured 2026-09-11: ~2 s per deployment.
 
+**Movebank** (`kind: "movebank"` source in `tracks.json`, `pipeline/movebank.py`): curated
+public studies only. Credentials come from `MOVEBANK_USER` / `MOVEBANK_PASS`, which
+`run_tracks.sh` sources from `~/.config/wildeye/env` (mode 600, outside the repo). Per study:
+metadata, individuals → taxon, visible GPS events since `days` (60) ago; one dataset per
+individual (`mb:<study>:<individual>`) through the same clean / lag / downsample / segment
+path. The study's `license_type` is read from Movebank on every run and anything but `CC_0`
+/ `CC_BY` is refused even if listed. A licence page in place of CSV is accepted once via the
+`license-md5` re-request; a second licence page is an error. `common` maps canonical taxa to
+display names, `default_species` covers individuals with no taxon. Measured 2026-09-11:
+3 studies, 32 individuals, 78 segments, 20 s.
+
 ## Acoustic detections: Ocean Tracking Network (site-series contract)
 ```bash
 python3 -m pipeline.otn --out public/data/otn.geojson                 # cron weekly Sun 07:20

@@ -94,6 +94,10 @@ export const DATA_CREDITS = [
     html: 'Avian influenza in wild birds: <a href="https://www.aphis.usda.gov/livestock-poultry-disease/avian/avian-influenza/hpai-detections/wild-birds" target="_blank" rel="noopener">USDA APHIS</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau)',
   },
   {
+    key: 'movebank',
+    html: 'Animal tracks: <a href="https://www.movebank.org" target="_blank" rel="noopener">Movebank</a> curated public studies (CC0 / CC BY only) — each track carries its study citation and licence in the info box',
+  },
+  {
     key: 'cdc-nwss',
     html: 'Wastewater virus trend: <a href="https://www.cdc.gov/wastewater" target="_blank" rel="noopener">CDC National Wastewater Surveillance System</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.',
   },

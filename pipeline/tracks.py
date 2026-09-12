@@ -298,6 +298,21 @@ def main(argv=None):
     t0 = time.time()
     features, per_dataset, failures = [], {}, {}
     for src in sources:
+        if src.get("kind") == "movebank":
+            from .movebank import process_study
+
+            for study in src["studies"][: a.limit] if a.limit else src["studies"]:
+                key = f"mb:{study['id']}"
+                try:
+                    feats, st = process_study(src, study)
+                    features += feats
+                    per_dataset[key] = st
+                    log.info("%s %s", key, st)
+                except Exception as e:  # noqa: BLE001
+                    failures[key] = repr(e)
+                    log.error("%s FAILED: %r", key, e)
+                time.sleep(a.sleep)
+            continue
         ids = select_datasets(
             list_erddap_datasets(src["base"], src["match"]),
             int(src["max_per_species"]),

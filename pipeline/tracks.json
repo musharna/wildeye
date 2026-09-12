@@ -10,8 +10,55 @@
     "min_gap_s": 3600,
     "segment_gap_h": 24,
     "max_speed_ms": 10,
-    "drop_location_classes": ["Z"],
+    "drop_location_classes": [
+      "Z"
+    ],
     "exclude_species": [],
     "min_age_days": 7
+  },
+  {
+    "id": "movebank",
+    "kind": "movebank",
+    "name": "Movebank (curated public studies)",
+    "base": "https://www.movebank.org/movebank/service/direct-read",
+    "match": "",
+    "max_per_species": 0,
+    "min_fixes": 5,
+    "min_gap_s": 3600,
+    "segment_gap_h": 24,
+    "max_speed_ms": 50,
+    "min_age_days": 7,
+    "days": 60,
+    "studies": [
+      {
+        "id": 481458,
+        "note": "Vultures Acopian Center USA GPS (CC BY)",
+        "common": {
+          "Cathartes aura": "turkey vulture",
+          "Coragyps atratus": "black vulture"
+        }
+      },
+      {
+        "id": 21231406,
+        "note": "LifeTrack White Stork SW Germany (CC BY)",
+        "common": {
+          "Ciconia ciconia": "white stork"
+        },
+        "default_species": "white stork"
+      },
+      {
+        "id": 2928116,
+        "note": "Galapagos Tortoise Movement Ecology Programme (CC BY)",
+        "common": {
+          "Chelonoidis hoodensis": "Española giant tortoise",
+          "Chelonoidis porteri": "Santa Cruz giant tortoise",
+          "Chelonoidis donfaustoi": "eastern Santa Cruz giant tortoise",
+          "Chelonoidis vandenburghi": "Alcedo giant tortoise",
+          "Chelonoidis darwini": "Santiago giant tortoise",
+          "Chelonoidis": "Galápagos giant tortoise"
+        },
+        "default_species": "Galápagos giant tortoise"
+      }
+    ]
   }
 ]
