@@ -138,3 +138,7 @@ driven over the live file in node; browser smoke of enable/disable/replay;
 source-age + last-good behaviour visible; payload budget stated; ledger row in
 `DATA_SOURCES.md` with terms URL + date; credit + voice alias; `docs/CURRENT-STATE.md`
 layer count.
+
+## Hosting (2026-09-12)
+
+Private repo **github.com/musharna/wildeye** (branch `main-wildeye`, SSH remote `origin`; pushed in chunks — an 82 MB pack over HTTPS hung up). GitHub Pages is **not available on a free-plan private repo**, and `dist/` is 467 MB because `public/data/birds_archive` (424 MB, 30 nights of replay frames) and `public/data/rasters` history are bundled. A deploy therefore needs (a) a host that takes a private source, and (b) a build that ships only the current data files plus a bounded replay window. Candidates: Cloudflare Pages direct upload (free, 25 MB/file, 20k files), a homelab box behind Tailscale, or going public (gated by the inherited non-commercial layers). Undecided.
