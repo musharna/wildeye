@@ -96,5 +96,85 @@
     "group": "plants",
     "icon": "🌱",
     "npn_species_id": 199
+  },
+  {
+    "id": "peregrine",
+    "name": "Peregrine falcon",
+    "sci": "Falco peregrinus",
+    "gbif_key": 2481047,
+    "group": "birds",
+    "icon": "🦅"
+  },
+  {
+    "id": "sandhill-crane",
+    "name": "Sandhill crane",
+    "sci": "Antigone canadensis",
+    "gbif_key": 9036008,
+    "group": "birds",
+    "icon": "🪶"
+  },
+  {
+    "id": "arctic-tern",
+    "name": "Arctic tern",
+    "sci": "Sterna paradisaea",
+    "gbif_key": 5229230,
+    "group": "birds",
+    "icon": "🐦"
+  },
+  {
+    "id": "spotted-salamander",
+    "name": "Spotted salamander",
+    "sci": "Ambystoma maculatum",
+    "gbif_key": 2431951,
+    "group": "amphibians",
+    "icon": "🦎"
+  },
+  {
+    "id": "wood-frog",
+    "name": "Wood frog",
+    "sci": "Lithobates sylvaticus",
+    "gbif_key": 2427072,
+    "group": "amphibians",
+    "icon": "🐸"
+  },
+  {
+    "id": "bumblebees",
+    "name": "Bumblebees (genus Bombus)",
+    "sci": "Bombus",
+    "gbif_key": 1340278,
+    "group": "insects",
+    "icon": "🐝"
+  },
+  {
+    "id": "loggerhead",
+    "name": "Loggerhead sea turtle",
+    "sci": "Caretta caretta",
+    "gbif_key": 8894817,
+    "group": "turtles",
+    "icon": "🐢"
+  },
+  {
+    "id": "hawksbill",
+    "name": "Hawksbill sea turtle",
+    "sci": "Eretmochelys imbricata",
+    "gbif_key": 8841716,
+    "group": "turtles",
+    "icon": "🐢"
+  },
+  {
+    "id": "hoary-bat",
+    "name": "Hoary bat",
+    "sci": "Lasiurus cinereus",
+    "gbif_key": 5218544,
+    "group": "mammals",
+    "icon": "🦇"
+  },
+  {
+    "id": "ladys-slipper",
+    "name": "Lady's-slipper orchids (Cypripedium)",
+    "sci": "Cypripedium",
+    "gbif_key": 2820318,
+    "group": "plants",
+    "icon": "🌸"
   }
 ]

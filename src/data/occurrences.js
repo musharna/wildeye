@@ -9,6 +9,8 @@ const DATA_URL = "data/occurrences.geojson";
 
 export const GROUP_COLORS = Object.freeze({
   whales: "#4fc3f7",
+  birds: "#64b5f6",
+  amphibians: "#a5d6a7",
   sharks: "#ff8a65",
   turtles: "#aed581",
   insects: "#ffd54f",
@@ -20,6 +22,8 @@ export const GROUP_COLORS = Object.freeze({
 });
 const GROUP_LABELS = Object.freeze({
   whales: "WHALES",
+  birds: "BIRDS",
+  amphibians: "AMPHIBIANS",
   sharks: "SHARKS & RAYS",
   turtles: "TURTLES",
   insects: "INSECTS",
