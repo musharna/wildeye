@@ -86,6 +86,10 @@ export const DATA_CREDITS = [
     html: 'Animal tracks: <a href="https://atn.ioos.us" target="_blank" rel="noopener">IOOS Animal Telemetry Network</a> — each deployment carries its own citation and licence in the info box',
   },
   {
+    key: 'otn',
+    html: 'Acoustic detections: <a href="https://oceantrack.org" target="_blank" rel="noopener">Ocean Tracking Network</a> (CC BY 4.0; each receiver carries its project citation in the info box)',
+  },
+  {
     key: 'cdc-nwss',
     html: 'Wastewater virus trend: <a href="https://www.cdc.gov/wastewater" target="_blank" rel="noopener">CDC National Wastewater Surveillance System</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.',
   },

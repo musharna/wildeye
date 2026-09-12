@@ -68,7 +68,7 @@ Reef Life Survey, GFW per-layer.
 | NOAA HAB                                   | split into named regional products (Gulf of Mexico, Lake Erie) after Gate 0; bulletin-only ones go to polygons or drop                                                                                                 | open: named regional products not yet identified |
 ## Wave 2 — track contract (ATN first, then Movebank)
 
-**Status 2026-09-11:** ATN **shipped 6adbb55** (572 segments / 62 deployments / 7 species). Movebank pilot **needs an account** to read `license_type` (study list is 401 unauthenticated). OTN **parked**: species needs a three-table join and the ERDDAP timed out on aggregate queries.
+**Status 2026-09-11:** ATN **shipped 6adbb55** (572 segments / 62 deployments / 7 species). Movebank pilot **needs an account** to read `license_type` (study list is 401 unauthenticated). OTN **shipped** (site-series contract, `pipeline/otn.py` + `src/data/otn.js`, token `3`): detections × tag releases join on transmitter name gives species (2 tables suffice; `otn_aat_animals` adds nothing the release view lacks), one point per receiver with 52 weekly per-species bins; public record ended 2025-07-30 at build time (embargo), so the legend states the end date and the observed-time bar only lights it for weeks inside the record. Aggregate `distinct()` queries 504; the gateway 503'd for ~an hour on 2026-09-11 and the seed was built from that day's successful pull.
 
 1. **IOOS ATN DAC ERDDAP** (`atn.ioos.us/erddap`, tabledap per deployment, US-gov,
    no login, no handshake): enumerate `*_trajectory_*` datasets, verify per-dataset

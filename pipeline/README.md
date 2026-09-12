@@ -123,6 +123,25 @@ antimeridian (crossing point inserted at ±180). One LineString per segment with
 `times[]` (length validated). Per-deployment `license`, `citation`, `institution`, `url`
 ride into the info box. Measured 2026-09-11: ~2 s per deployment.
 
+## Acoustic detections: Ocean Tracking Network (site-series contract)
+```bash
+python3 -m pipeline.otn --out public/data/otn.geojson                 # cron weekly Sun 07:20
+python3 -m pipeline.otn --weeks 8 --lookback-days 400 --out /tmp/o.geojson   # smaller pull
+```
+Pulls every public detection since `--lookback-days` from `erddap.oceantrack.org`
+(`view_otn_aat_detections_stations_projects`, six narrow columns — the licence/citation
+strings are ~700 B per row and are fetched once per project instead) plus the whole tag-release
+view (`transmittername → species`, ~12 MB). Species is the join on transmitter name; detections
+whose transmitter has no public release are dropped and counted (`counts.unjoined`, 2 % on
+2026-09-11). One Point per receiver station (project + platform name + 4-dp position) with up to
+`--weeks` 7-day bins ending on the newest public detection: `{w, n:{species:count}, a:animals}`.
+Never issue an aggregate query (`distinct()`, `orderBy…`) against the detections view: the
+gateway 504s. The gateway also returns 503 for stretches; `_get_json` retries 5xx four times
+with 30/60/120 s backoff. Public data end about a year before today (collaborator embargo);
+`data_end` is in the file and the client states it. Measured 2026-09-11: 112 k rows / 80 MB
+before column trimming, ~60 s for the detections query. Licence CC BY 4.0 (OTN Data Policy
+2024 §4a); OTN asks to be notified of data products.
+
 ## Wastewater virus trend: CDC NWSS (polygon contract)
 ```bash
 python3 -m pipeline.wastewater --out public/data/wastewater.geojson          # cron weekly Sat 07:10 (CDC publishes Fridays)
