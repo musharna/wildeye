@@ -208,3 +208,28 @@ def test_xc_adapter_keeps_cc_by_only_within_recording_window_and_pages(monkeypat
     f = to_feature(recs[0], {**XC_TAXON, "id": recs[0]["taxon"], "name": recs[0]["name"], "sci": recs[0]["sci"]})
     assert f["properties"]["group"] == "sounds" and f["properties"]["license_label"] == "CC BY 4.0"
     assert resolve_datasets(recs)[XC_DATASET_KEY]["publisher"] == "Xeno-canto Foundation"
+
+
+def test_nas_adapter_pages_each_year_and_keeps_only_dated_located_rows_in_window(monkeypatch):
+    import datetime as dt
+    from pipeline.occurrences import nas_records, normalise_nas, resolve_datasets, NAS_DATASET_KEY, NAS_TAXON, to_feature
+    rec = lambda **k: {"key": 1, "scientificName": "Dreissena polymorpha", "commonName": "zebra mussel", "group": "Mollusks-Bivalves", "year": 2026, "month": 8, "day": 20,
+                       "decimalLatitude": 41.9, "decimalLongitude": -80.8, "state": "Ohio", "county": "Ashtabula", "status": "established", "recordType": "NAS sighting report", "speciesID": 5, **k}
+    pages = {("2025", "0"): {"endOfRecords": "true", "results": [rec(year=2025, month=12, day=30)]},
+             ("2026", "0"): {"endOfRecords": "false", "results": [rec(), rec(month=None), rec(decimalLatitude=None), rec(year=2026, month=9, day=30)]},
+             ("2026", "2000"): {"endOfRecords": "true", "results": [rec(key=2, scientificName="Pterois volitans/miles", commonName="lionfish", month=8, day=21)]}}
+    seen = []
+    def fetch(url, timeout=300):
+        seen.append(url); q = dict(x.split("=") for x in url.split("?")[1].split("&")); return pages[(q["year"], q["offset"])]
+    monkeypatch.setattr("pipeline.occurrences.time.sleep", lambda s: None)
+    recs, trunc = nas_records(dt.date(2025, 12, 1), dt.date(2026, 9, 12), fetch)
+    assert [r["date"] for r in recs] == ["2025-12-30", "2026-08-20", "2026-08-21"], "no month, no coords and a future date are dropped"
+    assert trunc is False and len(seen) == 3 and "year=2025" in seen[0] and "offset=2000" in seen[2]
+    assert recs[2]["taxon"] == "nas:pterois-volitans-miles" and recs[1]["basis"] == "Mollusks-Bivalves · NAS sighting report · established · Ohio, Ashtabula County"
+    assert recs[1]["url"].endswith("SpeciesID=5") and recs[1]["license"].startswith("Public Domain")
+    _, t2 = nas_records(dt.date(2026, 1, 1), dt.date(2026, 9, 12), fetch, page_limit=1)
+    assert t2 is True, "page limit reports truncation"
+    assert normalise_nas(rec(scientificName=""), dt.date(2026, 1, 1), dt.date(2026, 12, 31)) is None
+    f = to_feature(recs[1], {**NAS_TAXON, "id": recs[1]["taxon"], "name": recs[1]["name"], "sci": recs[1]["sci"]})
+    assert f["properties"]["group"] == "invasives" and f["properties"]["icon"] == "🦞"
+    assert resolve_datasets(recs)[NAS_DATASET_KEY]["publisher"] == "U.S. Geological Survey"

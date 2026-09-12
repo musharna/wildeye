@@ -172,6 +172,15 @@ distinct `tagID` = individuals, species from `scientificName`. One Point per sit
 series; sites are only ever compared with their own history. Licence CC BY 4.0 (NEON changed
 from CC0 on 2026-06-30). Measured 2026-09-12: 41 sites, 106 site-months, 112 s.
 
+## Invasive aquatic species: USGS NAS (occurrence adapter)
+Runs inside `pipeline.occurrences` with no credentials. `nas.er.usgs.gov/api/v2/occurrence/search`
+filters by calendar `year` only, so every year the window touches is paged (`limit=2000`,
+`offset`, until `endOfRecords`) and the full record date (`year`/`month`/`day`) is re-checked
+against the window; rows without a full date, coordinates or a scientific name are dropped.
+Group `invasives`, taxon id `nas:<scientific-name>`, basis carries the NAS group, record type,
+population status and county; the record links to the species fact sheet. Public domain.
+Measured 2026-09-12: 336 rows for 2026 in one 9 s page.
+
 ## Sound recordings: xeno-canto (occurrence adapter)
 Runs inside `pipeline.occurrences` when `XENO_CANTO_KEY` is set (`run_occurrences.sh` sources
 `~/.config/wildeye/env`; without a key the adapter logs a warning and contributes nothing).

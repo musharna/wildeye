@@ -214,6 +214,9 @@ def resolve_datasets(records: list[dict], fetch_gbif=gbif_dataset_meta, fetch_ob
             if r["source"] == "xc":
                 out[k] = dict(XC_META)
                 continue
+            if r["source"] == "nas":
+                out[k] = dict(NAS_META)
+                continue
             out[k] = fetch_gbif(k) if r["source"] == "gbif" else fetch_obis(k)
         except Exception as e:  # noqa: BLE001
             log.warning("dataset meta %s failed: %r", k, e)
@@ -342,6 +345,75 @@ def normalise_xc(r: dict, since: dt.date, until: dt.date) -> dict | None:
     }
 
 
+NAS = "https://nas.er.usgs.gov/api/v2/occurrence/search"
+NAS_DATASET_KEY = "usgs-nas"
+NAS_META = {
+    "source": "nas",
+    "title": "USGS Nonindigenous Aquatic Species Database",
+    "doi": None,
+    "publisher": "U.S. Geological Survey",
+    "citation": "U.S. Geological Survey, Nonindigenous Aquatic Species Database, Gainesville, Florida (accessed via the NAS API).",
+    "license": "Public Domain U.S. Government",
+    "url": "https://nas.er.usgs.gov",
+}
+NAS_TAXON = {"group": "invasives", "icon": "🦞"}
+
+
+def nas_records(since: dt.date, until: dt.date, fetch=None, page: int = 2000, page_limit: int = 20) -> tuple[list[dict], bool]:
+    """USGS NAS occurrences (public domain) with a full date inside the window. The API filters by
+    calendar `year` only, so every year the window touches is paged (`limit`/`offset` until
+    `endOfRecords`) and the date is re-checked here. Truncated when a year exceeds page_limit pages."""
+    out, truncated = [], False
+    for year in range(since.year, until.year + 1):
+        offset, pages = 0, 0
+        while True:
+            q = urllib.parse.urlencode({"year": year, "limit": page, "offset": offset})
+            d = (fetch or _get_json)(f"{NAS}?{q}", timeout=300)
+            rows = d.get("results") or []
+            for r in rows:
+                n = normalise_nas(r, since, until)
+                if n:
+                    out.append(n)
+            pages += 1
+            if str(d.get("endOfRecords", "true")).lower() == "true" or not rows:
+                break
+            if pages >= page_limit:
+                truncated = True
+                break
+            offset += page
+            time.sleep(1.0)
+    return out, truncated
+
+
+def normalise_nas(r: dict, since: dt.date, until: dt.date) -> dict | None:
+    try:
+        date = dt.date(int(r["year"]), int(r["month"]), int(r["day"])).isoformat()
+        lat, lon = float(r["decimalLatitude"]), float(r["decimalLongitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not (since.isoformat() <= date <= until.isoformat()):
+        return None
+    sci = (r.get("scientificName") or "").strip()
+    if not sci:
+        return None
+    status = (r.get("status") or "").strip()
+    return {
+        "taxon": f"nas:{sci.lower().replace(' ', '-').replace('/', '-')}",
+        "name": (r.get("commonName") or sci).strip(),
+        "sci": sci,
+        "date": date,
+        "lat": lat,
+        "lon": lon,
+        "source": "nas",
+        "dataset": NAS_META["title"],
+        "dataset_key": NAS_DATASET_KEY,
+        "license": NAS_META["license"],
+        "uncertainty_m": None,
+        "basis": f"{r.get('group') or 'nonindigenous species'} · {r.get('recordType') or 'record'}" + (f" · {status}" if status else "") + (f" · {r.get('state')}, {r.get('county')} County" if r.get("county") else ""),
+        "url": f"https://nas.er.usgs.gov/queries/FactSheet.aspx?SpeciesID={r.get('speciesID')}" if r.get("speciesID") else NAS_META["url"],
+    }
+
+
 def dedupe(records: list[dict]) -> list[dict]:
     """Same taxon, same day, same ~100 m cell → one record (GBIF and OBIS overlap heavily)."""
     seen, out = set(), []
@@ -449,6 +521,16 @@ def main(argv=None):
     except Exception as e:
         failures["xeno-canto"] = repr(e)
         log.error("xeno-canto FAILED: %r", e)
+    try:
+        nas, nas_trunc = nas_records(since, until)
+        nas = dedupe(nas)
+        features += [to_feature(r, {**NAS_TAXON, "id": r["taxon"], "name": r["name"], "sci": r["sci"]}) for r in nas]
+        all_recs += nas
+        counts["usgs-nas"] = {"gbif": 0, "obis": 0, "npn": 0, "nas": len(nas), "kept": len(nas), "truncated": nas_trunc}
+        log.info("usgs-nas kept=%d truncated=%s", len(nas), nas_trunc)
+    except Exception as e:
+        failures["usgs-nas"] = repr(e)
+        log.error("usgs-nas FAILED: %r", e)
     datasets = resolve_datasets(all_recs)
     write_atomic(
         a.out,

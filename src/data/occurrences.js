@@ -15,6 +15,7 @@ export const GROUP_COLORS = Object.freeze({
   mammals: "#f8bbd0",
   plants: "#81c784",
   sounds: "#ce93d8",
+  invasives: "#ef5350",
   other: "#b0bec5",
 });
 const GROUP_LABELS = Object.freeze({
@@ -25,6 +26,7 @@ const GROUP_LABELS = Object.freeze({
   mammals: "MAMMALS",
   plants: "PLANTS (PHENOLOGY)",
   sounds: "SOUNDS (XENO-CANTO)",
+  invasives: "INVASIVE AQUATICS (USGS)",
   other: "OTHER",
 });
 
@@ -58,7 +60,7 @@ export const basisText = (b) => (/^[A-Z_]+$/.test(String(b || "")) ? String(b).t
 
 /** @param p feature properties  @param ds optional datasets map from the GeoJSON (dataset_key → meta) */
 export function describeOccurrence(p, ds = {}) {
-  const src = p.source === "obis" ? "OBIS" : p.source === "npn" ? "USA-NPN" : p.source === "xc" ? "xeno-canto" : "GBIF";
+  const src = p.source === "obis" ? "OBIS" : p.source === "npn" ? "USA-NPN" : p.source === "xc" ? "xeno-canto" : p.source === "nas" ? "USGS NAS" : "GBIF";
   const lic = p.license_label || licenceLabel(p.license);
   const meta = (p.dataset_key && ds[p.dataset_key]) || {};
   const link = p.url

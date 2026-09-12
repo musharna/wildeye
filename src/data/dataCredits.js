@@ -118,6 +118,10 @@ export const DATA_CREDITS = [
     html: 'Wildlife die-offs and disease events: <a href="https://whispers.usgs.gov" target="_blank" rel="noopener">USGS WHISPers</a>, National Wildlife Health Center (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to USGS data does not imply endorsement.',
   },
   {
+    key: 'usgs-nas',
+    html: 'Invasive aquatic species: <a href="https://nas.er.usgs.gov" target="_blank" rel="noopener">USGS Nonindigenous Aquatic Species Database</a> (Public Domain U.S. Government). Reference to USGS data does not imply endorsement.',
+  },
+  {
     key: 'cdc-nwss',
     html: 'Wastewater virus trend: <a href="https://www.cdc.gov/wastewater" target="_blank" rel="noopener">CDC National Wastewater Surveillance System</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.',
   },
