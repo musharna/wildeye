@@ -96,7 +96,7 @@ test("layer: contract, MultiPolygon parts, observed-time recolour, disease chips
     assert.equal(ds.entities.values.length, 3, "one entity per polygon part");
     assert.deepEqual(l.getStats().classes, { surge: 1, none: 1 });
     assert.deepEqual(l.getStats().diseases, { wnv: 25, den: 2 });
-    assert.ok(ds.entities.getById("arbonet:12:1").polygon.material.getValue().color.alpha < 0.3, "Florida faded live");
+    assert.equal(ds.entities.getById("arbonet:12:1").polygon.material.getValue().color.alpha, 0.35, "Florida: zero cases live → visible grey (0.15 read as bare imagery)");
     // observed time in May: Texas 1 WNV case, Florida 3 dengue
     assert.equal(l.setObservedTime("2026-05-12T00:00:00Z"), true);
     assert.deepEqual(l.getStats().classes, { one: 1, few: 1 });

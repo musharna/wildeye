@@ -13,6 +13,9 @@ import { binsAt, LIVE_WEEKS } from "./hpai.js";
  */
 const DATA_URL = "data/arbonet.geojson";
 const FILL_ALPHA = 0.55;
+// A reported-zero area must read as FILLED grey, not as bare imagery: 0.15 was indistinguishable
+// from no polygon at all in the real-app screenshots (2026-09-12 visual critic).
+export const EMPTY_ALPHA = 0.35;
 
 export const CASE_CLASSES = Object.freeze([
   { key: "one", label: "1 case", color: "#99f6e4", test: (n) => n <= 1 },
@@ -92,7 +95,7 @@ export function stateEntities(f, observedIso, today, ctx = {}) {
   const sum = sumBins(scope.bins, ctx.visible || {});
   const cls = caseClass(sum.n);
   const color = Cesium.Color.fromCssColorString(cls.color).withAlpha(
-    sum.n > 0 ? FILL_ALPHA : 0.15,
+    sum.n > 0 ? FILL_ALPHA : EMPTY_ALPHA,
   );
   const polys =
     f.geometry.type === "MultiPolygon"

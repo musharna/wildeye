@@ -10,6 +10,9 @@ import * as Cesium from "cesium";
  */
 const DATA_URL = "data/hpai.geojson";
 const FILL_ALPHA = 0.55;
+// A reported-zero area must read as FILLED grey, not as bare imagery: 0.15 was indistinguishable
+// from no polygon at all in the real-app screenshots (2026-09-12 visual critic).
+export const EMPTY_ALPHA = 0.35;
 const DAY_MS = 86_400_000;
 export const LIVE_WEEKS = 8;
 
@@ -123,7 +126,7 @@ export function countyEntities(f, observedIso, today, source = {}) {
   const sum = sumBins(scope.bins);
   const cls = countClass(sum.n);
   const color = Cesium.Color.fromCssColorString(cls.color).withAlpha(
-    sum.n > 0 ? FILL_ALPHA : 0.15,
+    sum.n > 0 ? FILL_ALPHA : EMPTY_ALPHA,
   );
   const polys =
     f.geometry.type === "MultiPolygon"

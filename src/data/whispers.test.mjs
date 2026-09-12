@@ -46,7 +46,7 @@ test('layer: contract, observed-time recolour, legend counts, records', async ()
     assert.equal(await l.update(), true);
     assert.equal(ds.entities.values.length, 3);
     assert.deepEqual(l.getStats().classes, { several: 1, none: 1 });
-    assert.ok(ds.entities.getById('whispers:06029:1').polygon.material.getValue().color.alpha < 0.3);
+    assert.equal(ds.entities.getById('whispers:06029:1').polygon.material.getValue().color.alpha, 0.35, 'no events → visible grey (0.15 read as bare imagery)');
     assert.equal(l.setObservedTime('2026-04-01T00:00:00Z'), true);
     assert.deepEqual(l.getStats().classes, { cluster: 2 });
     const legend = l.getRowControls().legend;

@@ -44,7 +44,7 @@ test('layer: contract, MultiPolygon parts, observed-time recolour, legend counts
     assert.equal(await l.update(), true);
     assert.equal(ds.entities.values.length, 3, 'one polygon + two MultiPolygon parts');
     assert.deepEqual(l.getStats().classes, { few: 1, none: 1 }, 'live: Quitman 3, St. Tammany only an April bin');
-    assert.ok(ds.entities.getById('hpai:22103:1').polygon.material.getValue().color.alpha < 0.3, 'none in scope fades');
+    assert.equal(ds.entities.getById('hpai:22103:1').polygon.material.getValue().color.alpha, 0.35, 'none in scope → visible grey (0.15 read as bare imagery)');
     assert.equal(l.setObservedTime('2026-04-01T00:00:00Z'), true);
     assert.deepEqual(l.getStats().classes, { outbreak: 1, many: 1 });
     const legend = l.getRowControls().legend;
