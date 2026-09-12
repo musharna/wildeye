@@ -146,6 +146,10 @@ export const DATA_CREDITS = [
     html: "Ecoregions and biomes: <a href=\"https://ecoregions.appspot.com/\" target=\"_blank\" rel=\"noopener\">RESOLVE Ecoregions 2017</a> (CC BY 4.0), Dinerstein et al. 2017, <i>BioScience</i> 67(6):534\u2013545, <a href=\"https://doi.org/10.1093/biosci/bix014\" target=\"_blank\" rel=\"noopener\">doi:10.1093/biosci/bix014</a>. Boundaries simplified for display.",
   },
   {
+    key: 'rivers',
+    html: "River temperature and flow: <a href=\"https://waterdata.usgs.gov\" target=\"_blank\" rel=\"noopener\">U.S. Geological Survey</a> Water Data APIs (public domain; provisional data subject to revision). Any use of trade, firm, or product names is for descriptive purposes only and does not imply endorsement by the U.S. Government.",
+  },
+  {
     key: 'whispers',
     html: 'Wildlife die-offs and disease events: <a href="https://whispers.usgs.gov" target="_blank" rel="noopener">USGS WHISPers</a>, National Wildlife Health Center (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to USGS data does not imply endorsement.',
   },
