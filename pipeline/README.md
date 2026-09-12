@@ -264,3 +264,24 @@ shared observed-time bar. Polygons come from the Census 2021 1:20m boundary zip 
 planning regions CDC does not use), coordinates rounded to 3 dp, only counties with data emitted.
 Needs `pyshp` (imported lazily; module import stays stdlib). Measured 2026-09-11: 17.8k rows,
 1135 sites, 778 counties, 0.6 MB, ~2 s.
+
+## Biology gap layers (2026-09-12)
+Each writes `public/data/<id>.geojson` (gitignored) and has a committed seed under `public/data/seed/`.
+Licences and caveats per source are in `DATA_SOURCES.md`; `node scripts/qa-gap-layers.mjs --url <preview>` smokes all nine in the real app.
+
+| id | module / runner | cron | source | key |
+|----|-----------------|------|--------|-----|
+| `arbonet` | `pipeline.arbonet` | daily 07:25 | CDC NNDSS weekly (data.cdc.gov `x9gk-5huc`), per state | none |
+| `phenology` | `pipeline.phenology` | daily 07:35 | USA-NPN status & intensity, 6 requests/run | none |
+| `neon-vectors` | `pipeline.neon_vectors` | Mon 06:05 (~4.5 min) | NEON DP1.10093 ticks + DP1.10043 mosquitoes | `NEON_TOKEN` |
+| `cetaceans` | `pipeline.cetaceans` | Sun 07:30 | NOAA PACM static `detections.csv` per species theme | none |
+| `drought` | `pipeline.drought` | Thu 07:10 | U.S. Drought Monitor weekly GeoJSON, 5 releases | none |
+| `h5n1` | `pipeline.h5n1` | Mon 06:55 | Nextstrain open builds (USDA/GenBank), US only; GISAID builds declined | none |
+| `fires` | `pipeline.fires` | 01/07/13/19:15 | FIRMS VIIRS global 7-day CSVs, 0.5° × 6 h | none |
+| `ecoregions` | `pipeline.ecoregions` | 1st of month 06:00 | RESOLVE 2017 zip cached in `~/.cache/wildeye` | none |
+| `rivers` | `pipeline.rivers` | daily 06:45 | USGS OGC API `daily` (not legacy WaterServices) | optional `USGS_WATER_API_KEY` |
+| `fishing` (not wired) | `pipeline.fishing` | — | GFW 4Wings effort | `GFW_FISHING_TOKEN` (not `GFW_API_KEY`) |
+| `iucn` (badge, dormant) | `pipeline.iucn` | — | IUCN Red List v4 | `IUCN_TOKEN` |
+
+Rivers sizes markers by flow magnitude: tidal gages report negative daily discharge, and an unguarded
+`log10(q + 1)` produced a NaN point size that stopped Cesium's render loop (found by the real-app smoke).
