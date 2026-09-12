@@ -122,6 +122,18 @@ export const DATA_CREDITS = [
     html: "Phenology: Data were provided by the <a href=\"https://www.usanpn.org/data/observational\" target=\"_blank\" rel=\"noopener\">USA National Phenology Network</a> and the many participants who contribute to its Nature's Notebook program (CC BY 4.0, doi:10.5066/F78S4N1V).",
   },
   {
+    key: 'neon-vectors',
+    html: "Ticks and mosquitoes: <a href=\"https://data.neonscience.org/data-products/DP1.10093.001\" target=\"_blank\" rel=\"noopener\">NSF NEON ticks sampled using drag cloths (DP1.10093.001)</a> and <a href=\"https://data.neonscience.org/data-products/DP1.10043.001\" target=\"_blank\" rel=\"noopener\">mosquitoes sampled from CO2 traps (DP1.10043.001)</a>, provisional and released data, CC BY 4.0. NEON (National Ecological Observatory Network) is funded by the U.S. National Science Foundation.",
+  },
+  {
+    key: 'cetaceans',
+    html: "Whale detections: <a href=\"https://passiveacoustics.fisheries.noaa.gov/pacm/\" target=\"_blank\" rel=\"noopener\">NOAA NEFSC Passive Acoustic Cetacean Map</a> (Public Domain U.S. Government; Courtesy: National Oceanic and Atmospheric Administration; PACM and contributor citations in the info box).",
+  },
+  {
+    key: 'drought',
+    html: "Drought: <a href=\"https://droughtmonitor.unl.edu/\" target=\"_blank\" rel=\"noopener\">U.S. Drought Monitor</a>. The U.S. Drought Monitor is jointly produced by the National Drought Mitigation Center at the University of Nebraska-Lincoln, the United States Department of Agriculture, the National Oceanic and Atmospheric Administration and the National Aeronautics and Space Administration. Map courtesy of NDMC.",
+  },
+  {
     key: 'whispers',
     html: 'Wildlife die-offs and disease events: <a href="https://whispers.usgs.gov" target="_blank" rel="noopener">USGS WHISPers</a>, National Wildlife Health Center (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to USGS data does not imply endorsement.',
   },
