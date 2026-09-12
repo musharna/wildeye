@@ -37,6 +37,25 @@ if man.exists():
     print(f"birds archive: kept {len(m['frames'])} frames over {len(keep_nights)} nights, dropped {len(dropped)}")
 PYEOF
 touch dist/.nojekyll
+# vite-plugin-cesium 1.2.23 (latest on npm, 2024) copies Cesium to outDir + base + "cesium/", i.e.
+# dist/wildeye/cesium, while the page asks for /wildeye/cesium/ — which on a project Pages site is
+# dist/cesium. Every deploy before 2026-09-12 shipped a site whose Cesium.js 404'd ("Cesium is not
+# defined", stuck on the loader) while this script printed "pushed".
+REL="${BASE#/}"; REL="${REL%/}"
+if [ -n "$REL" ] && [ -d "dist/$REL/cesium" ]; then
+  rm -rf dist/cesium && mv "dist/$REL/cesium" dist/cesium && rmdir "dist/$REL" 2>/dev/null || true
+fi
+# Every same-origin src/href in index.html must exist in dist, or the deploy fails before pushing.
+"$PY" - "$BASE" <<'PYEOF'
+import pathlib, re, sys
+base = sys.argv[1]
+html = pathlib.Path("dist/index.html").read_text()
+refs = sorted({m for m in re.findall(r'(?:src|href)="([^"#?]+)', html) if m.startswith(base)})
+missing = [r for r in refs if not (pathlib.Path("dist") / r[len(base):]).exists()]
+if not refs or missing:
+    sys.exit(f"index.html references missing from dist: {missing or 'no same-origin refs found'}")
+print(f"index.html: {len(refs)} same-origin refs resolve in dist")
+PYEOF
 echo "dist size: $(du -sh dist | cut -f1)"
 
 SRC="$(git rev-parse --short HEAD)"
