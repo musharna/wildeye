@@ -37,6 +37,7 @@ public/data/hpai.geojson
 public/data/neon.geojson
 public/data/gfw.geojson
 pipeline/cron_gfw.log
+pipeline/cron_deploy.log
 pipeline/cron_neon.log
 pipeline/cron_hpai.log
 pipeline/cron_otn.log
