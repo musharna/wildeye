@@ -179,3 +179,32 @@ def test_npn_adapter_keeps_only_observed_phenophases_and_carries_cc_by():
     assert normalise_npn({"phenophase_status": 1, "observation_date": "2026-08-01", "latitude": None, "longitude": 1}, taxon) is None
     ds = resolve_datasets(recs, fetch_gbif=lambda k: 1 / 0, fetch_obis=lambda k: 1 / 0)
     assert ds[NPN_DATASET_KEY]["publisher"] == "USA National Phenology Network" and "Nature's Notebook" in ds[NPN_DATASET_KEY]["citation"]
+
+
+def test_xc_adapter_keeps_cc_by_only_within_recording_window_and_pages(monkeypatch):
+    import datetime as dt
+    from pipeline.occurrences import xc_records, normalise_xc, resolve_datasets, XC_DATASET_KEY, XC_TAXON, to_feature
+    rec = lambda **k: {"id": "1", "gen": "Hirundo", "sp": "rustica", "en": "Barn Swallow", "lat": "48.0", "lon": "11.0", "date": "2026-08-20", "lic": "https://creativecommons.org/licenses/by/4.0/", "rec": "A. Recordist", "q": "A", "grp": "birds", "type": "song", **k}
+    pages = {1: {"numPages": 2, "recordings": [rec(), rec(id="2", lic="https://creativecommons.org/licenses/by-nc-sa/4.0/"), rec(id="3", date="2024-08-25"), rec(id="4", lat=None)]},
+             2: {"numPages": 2, "recordings": [rec(id="5", lic="https://creativecommons.org/publicdomain/zero/1.0/")]}}
+    seen = []
+    def fetch(url, timeout=120):
+        seen.append(url); return pages[int(url.rsplit("page=", 1)[1])]
+    monkeypatch.setattr("pipeline.occurrences.time.sleep", lambda s: None)
+    recs, trunc = xc_records(dt.date(2026, 8, 1), dt.date(2026, 9, 1), "k", fetch)
+    assert [r["url"] for r in recs] == ["https://xeno-canto.org/1", "https://xeno-canto.org/5"], "NC-SA, out-of-window date and missing lat dropped"
+    assert trunc is False and len(seen) == 2 and "lic%3Aby" in seen[0] and "key=k" in seen[0]
+    assert recs[0]["taxon"] == "xc:hirundo-rustica" and recs[0]["basis"] == "birds song by A. Recordist (quality A)"
+    # no key → nothing, no call
+    assert xc_records(dt.date(2026, 8, 1), dt.date(2026, 9, 1), None, lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not call"))) == ([], False)
+    # API error surfaces
+    try:
+        xc_records(dt.date(2026, 8, 1), dt.date(2026, 9, 1), "k", lambda u, timeout=120: {"error": "unauthorized"}); assert False
+    except RuntimeError as e:
+        assert "unauthorized" in str(e)
+    # positive control: page limit marks truncation
+    _, t2 = xc_records(dt.date(2026, 8, 1), dt.date(2026, 9, 1), "k", fetch, page_limit=1)
+    assert t2 is True
+    f = to_feature(recs[0], {**XC_TAXON, "id": recs[0]["taxon"], "name": recs[0]["name"], "sci": recs[0]["sci"]})
+    assert f["properties"]["group"] == "sounds" and f["properties"]["license_label"] == "CC BY 4.0"
+    assert resolve_datasets(recs)[XC_DATASET_KEY]["publisher"] == "Xeno-canto Foundation"

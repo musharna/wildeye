@@ -98,6 +98,10 @@ export const DATA_CREDITS = [
     html: 'Animal tracks: <a href="https://www.movebank.org" target="_blank" rel="noopener">Movebank</a> curated public studies (CC0 / CC BY only) — each track carries its study citation and licence in the info box',
   },
   {
+    key: 'xeno-canto',
+    html: 'Sound recordings: <a href="https://xeno-canto.org" target="_blank" rel="noopener">xeno-canto</a> (CC0 / CC BY recordings only; each record names its recordist and links to the recording — audio is never rehosted)',
+  },
+  {
     key: 'cdc-nwss',
     html: 'Wastewater virus trend: <a href="https://www.cdc.gov/wastewater" target="_blank" rel="noopener">CDC National Wastewater Surveillance System</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.',
   },

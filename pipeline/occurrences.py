@@ -11,6 +11,7 @@ import argparse
 import datetime as dt
 import json
 import logging
+import os
 import re
 import time
 import urllib.parse
@@ -210,6 +211,9 @@ def resolve_datasets(records: list[dict], fetch_gbif=gbif_dataset_meta, fetch_ob
             if r["source"] == "npn":
                 out[k] = dict(NPN_META)
                 continue
+            if r["source"] == "xc":
+                out[k] = dict(XC_META)
+                continue
             out[k] = fetch_gbif(k) if r["source"] == "gbif" else fetch_obis(k)
         except Exception as e:  # noqa: BLE001
             log.warning("dataset meta %s failed: %r", k, e)
@@ -268,6 +272,73 @@ def normalise_npn(r: dict, taxon: dict) -> dict | None:
         "uncertainty_m": None,
         "basis": f"phenophase: {r.get('phenophase_description') or 'observed'}",
         "url": "https://www.usanpn.org/data/observational",
+    }
+
+
+XC = "https://xeno-canto.org/api/3/recordings"
+XC_DATASET_KEY = "xeno-canto"
+XC_META = {
+    "source": "xc",
+    "title": "xeno-canto bird and wildlife sound recordings",
+    "doi": None,
+    "publisher": "Xeno-canto Foundation",
+    "citation": "Recordings © their recordists, via xeno-canto.org; each record names the recordist.",
+    "license": "per recording (CC0 / CC BY only kept)",
+    "url": "https://xeno-canto.org",
+}
+XC_TAXON = {"group": "sounds", "icon": "🔊"}
+
+
+def xc_records(since: dt.date, until: dt.date, key: str | None, fetch=None, page_limit: int = 20) -> tuple[list[dict], bool]:
+    """All xeno-canto recordings uploaded since `since` under CC0 / CC BY (server-side `lic:`
+    filter, re-checked per record with licence_ok), with a location and a recording date inside
+    the window. `since:` on the API is the UPLOAD date, so old recordings uploaded recently are
+    dropped here by date. Without a key the adapter returns nothing and logs a warning (the API
+    answers 401 unauthenticated). Truncated when more than `page_limit` pages exist."""
+    if not key:
+        log.warning("xeno-canto skipped: XENO_CANTO_KEY not set")
+        return [], False
+    out, page, pages = [], 1, 1
+    while page <= pages and page <= page_limit:
+        q = urllib.parse.urlencode({"query": f"since:{since.isoformat()} lic:by", "key": key, "page": page}, quote_via=urllib.parse.quote)
+        d = (fetch or _get_json)(f"{XC}?{q}", timeout=120)
+        if d.get("error"):
+            raise RuntimeError(f"xeno-canto: {d.get('error')} {d.get('message', '')}")
+        pages = int(d.get("numPages") or 1)
+        for r in d.get("recordings") or []:
+            n = normalise_xc(r, since, until)
+            if n:
+                out.append(n)
+        page += 1
+        time.sleep(1.0)
+    return out, pages > page_limit
+
+
+def normalise_xc(r: dict, since: dt.date, until: dt.date) -> dict | None:
+    if not licence_ok(r.get("lic")):
+        return None
+    date = _iso_date(r.get("date"))
+    try:
+        lat, lon = float(r.get("lat")), float(r.get("lon"))  # v3 field is `lon` (v2 was `lng`)
+    except (TypeError, ValueError):
+        return None
+    if date is None or not (since.isoformat() <= date <= until.isoformat()):
+        return None
+    sci = f"{r.get('gen', '')} {r.get('sp', '')}".strip()
+    return {
+        "taxon": f"xc:{sci.lower().replace(' ', '-') or 'unknown'}",
+        "name": r.get("en") or sci or "unknown",
+        "sci": sci,
+        "date": date,
+        "lat": lat,
+        "lon": lon,
+        "source": "xc",
+        "dataset": XC_META["title"],
+        "dataset_key": XC_DATASET_KEY,
+        "license": r.get("lic"),
+        "uncertainty_m": None,
+        "basis": f"{r.get('grp') or 'sound'} {r.get('type') or 'recording'} by {r.get('rec') or 'unknown'} (quality {r.get('q') or '?'})",
+        "url": f"https://xeno-canto.org/{r.get('id')}",
     }
 
 
@@ -368,6 +439,16 @@ def main(argv=None):
                 log.error("%s FAILED: %r", t["id"], e)
     if not features:
         raise SystemExit("no occurrences fetched")
+    try:
+        xc, xc_trunc = xc_records(since, until, os.environ.get("XENO_CANTO_KEY"))
+        xc = dedupe(xc)
+        features += [to_feature(r, {**XC_TAXON, "id": r["taxon"], "name": r["name"], "sci": r["sci"]}) for r in xc]
+        all_recs += xc
+        counts["xeno-canto"] = {"gbif": 0, "obis": 0, "npn": 0, "xc": len(xc), "kept": len(xc), "truncated": xc_trunc}
+        log.info("xeno-canto kept=%d truncated=%s", len(xc), xc_trunc)
+    except Exception as e:
+        failures["xeno-canto"] = repr(e)
+        log.error("xeno-canto FAILED: %r", e)
     datasets = resolve_datasets(all_recs)
     write_atomic(
         a.out,

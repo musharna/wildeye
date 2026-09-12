@@ -134,6 +134,15 @@ path. The study's `license_type` is read from Movebank on every run and anything
 display names, `default_species` covers individuals with no taxon. Measured 2026-09-11:
 3 studies, 32 individuals, 78 segments, 20 s.
 
+## Sound recordings: xeno-canto (occurrence adapter)
+Runs inside `pipeline.occurrences` when `XENO_CANTO_KEY` is set (`run_occurrences.sh` sources
+`~/.config/wildeye/env`; without a key the adapter logs a warning and contributes nothing).
+Query `since:<window start> lic:by`, paged (≤ 20 pages, 1 s apart), every record re-checked
+with `licence_ok` (CC0 / CC BY only — 0 CC0 and ~240 CC BY uploads per 120 d on 2026-09-12;
+NC/SA/ND are the bulk and are dropped). `since:` is the upload date, so the recording date is
+filtered to the window too. Group `sounds`, taxon id `xc:<genus>-<species>`, record links to the
+xeno-canto page; audio is never rehosted.
+
 ## GBIF derived-dataset DOI (sightings layer)
 ```bash
 python3 -m pipeline.gbif_derived --source-url https://<hosted wildeye>/            # dry run: prints the payload

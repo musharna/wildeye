@@ -14,6 +14,7 @@ export const GROUP_COLORS = Object.freeze({
   insects: "#ffd54f",
   mammals: "#f8bbd0",
   plants: "#81c784",
+  sounds: "#ce93d8",
   other: "#b0bec5",
 });
 const GROUP_LABELS = Object.freeze({
@@ -23,6 +24,7 @@ const GROUP_LABELS = Object.freeze({
   insects: "INSECTS",
   mammals: "MAMMALS",
   plants: "PLANTS (PHENOLOGY)",
+  sounds: "SOUNDS (XENO-CANTO)",
   other: "OTHER",
 });
 
@@ -51,9 +53,12 @@ export function licenceLabel(text) {
 
 const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
+/** GBIF basis codes (HUMAN_OBSERVATION) read better lowercased; free text (a recordist's name) must keep its case. */
+export const basisText = (b) => (/^[A-Z_]+$/.test(String(b || "")) ? String(b).toLowerCase().replace(/_/g, " ") : String(b || ""));
+
 /** @param p feature properties  @param ds optional datasets map from the GeoJSON (dataset_key → meta) */
 export function describeOccurrence(p, ds = {}) {
-  const src = p.source === "obis" ? "OBIS" : p.source === "npn" ? "USA-NPN" : "GBIF";
+  const src = p.source === "obis" ? "OBIS" : p.source === "npn" ? "USA-NPN" : p.source === "xc" ? "xeno-canto" : "GBIF";
   const lic = p.license_label || licenceLabel(p.license);
   const meta = (p.dataset_key && ds[p.dataset_key]) || {};
   const link = p.url
@@ -66,7 +71,7 @@ export function describeOccurrence(p, ds = {}) {
   const unc = Number.isFinite(p.uncertainty_m) ? ` · ±${Math.round(p.uncertainty_m)} m` : "";
   return (
     `<b>${esc(p.icon ?? "")} ${esc(p.name)}</b> <i>${esc(p.sci)}</i><br>` +
-    `${esc(p.date)} · ${esc(String(p.basis || "").toLowerCase().replace(/_/g, " "))}${unc}<br>` +
+    `${esc(p.date)} · ${esc(basisText(p.basis))}${unc}<br>` +
     `${esc(meta.title || p.dataset || "dataset unknown")}${publisher}${doi}<br>${link} · ${esc(lic)}`
   );
 }

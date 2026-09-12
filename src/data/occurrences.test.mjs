@@ -89,3 +89,10 @@ test('occurrences: setObservedTime hides records after the instant and fades by 
     assert.equal(l.setObservedTime('bad'), false);
   } finally { globalThis.fetch = saved; }
 });
+
+test('basisText lowercases GBIF codes but keeps free text (recordist names) intact', async () => {
+  const { basisText } = await import('./occurrences.js');
+  assert.equal(basisText('HUMAN_OBSERVATION'), 'human observation');
+  assert.equal(basisText('birds song by Victor Aleksanov (quality A)'), 'birds song by Victor Aleksanov (quality A)');
+  assert.equal(basisText(undefined), '');
+});
