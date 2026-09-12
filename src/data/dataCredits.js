@@ -134,6 +134,10 @@ export const DATA_CREDITS = [
     html: "Drought: <a href=\"https://droughtmonitor.unl.edu/\" target=\"_blank\" rel=\"noopener\">U.S. Drought Monitor</a>. The U.S. Drought Monitor is jointly produced by the National Drought Mitigation Center at the University of Nebraska-Lincoln, the United States Department of Agriculture, the National Oceanic and Atmospheric Administration and the National Aeronautics and Space Administration. Map courtesy of NDMC.",
   },
   {
+    key: 'h5n1',
+    html: "H5N1 sampled spread: <a href=\"https://nextstrain.org/avian-flu\" target=\"_blank\" rel=\"noopener\">Nextstrain avian-flu</a> genome-focused H5N1 builds (Moncla lab and the Nextstrain team); sequences and metadata shared by USDA NVSL via NCBI GenBank and SRA (public domain). US only; aggregated counts, no sequences or per-sample data.",
+  },
+  {
     key: 'whispers',
     html: 'Wildlife die-offs and disease events: <a href="https://whispers.usgs.gov" target="_blank" rel="noopener">USGS WHISPers</a>, National Wildlife Health Center (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to USGS data does not imply endorsement.',
   },

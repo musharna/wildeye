@@ -15,6 +15,7 @@ import hpaiLayer from './data/hpai.js';
 import neonLayer from './data/neon.js';
 import gfwLayer from './data/gfw.js';
 import whispersLayer from './data/whispers.js';
+import h5n1Layer from './data/h5n1.js';
 import droughtLayer from './data/drought.js';
 import cetaceansLayer from './data/cetaceans.js';
 import neonVectorsLayer from './data/neon-vectors.js';
@@ -249,6 +250,7 @@ async function init() {
     dataManager.register(neonLayer);
     dataManager.register(gfwLayer);
     dataManager.register(whispersLayer);
+    dataManager.register(h5n1Layer);
     dataManager.register(droughtLayer);
     dataManager.register(cetaceansLayer);
     dataManager.register(neonVectorsLayer);
@@ -256,7 +258,7 @@ async function init() {
     dataManager.register(arbonetLayer);
     // Shared observed-time selector: one bar, every bio layer samples its own data at the instant.
     const observedTime = createObservedTime({ domainDays: 30 });
-    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer];
+    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer];
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
     dataManager.register(satellitesLayer);
