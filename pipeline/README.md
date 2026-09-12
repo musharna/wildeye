@@ -211,6 +211,19 @@ with 30/60/120 s backoff. Public data end about a year before today (collaborato
 before column trimming, ~60 s for the detections query. Licence CC BY 4.0 (OTN Data Policy
 2024 §4a); OTN asks to be notified of data products.
 
+## Wildlife die-offs: USGS WHISPers (polygon contract)
+```bash
+python3 -m pipeline.whispers --out public/data/whispers.geojson     # cron daily 07:15
+python3 -m pipeline.whispers --weeks 4 --today 2026-09-12 --out /tmp/w.geojson
+```
+Pages `https://whispers.usgs.gov/api/eventsummaries/` (public, no key) with `ordering=-start_date`,
+500 per page, until the first event older than the window; the API's date filters are ignored
+server-side and undated events sort first (skipped). Each event carries its counties (FIPS),
+species, diagnoses (suspect flag folded into the label) and `affected_count`. Per county: weekly
+bins `{w, n, affected, sp}`, top species and diagnoses, and the 12 newest events for the info box;
+an event spanning several counties counts in each. Shapes from the shared Census 2021 loader.
+Measured 2026-09-12: 177 events / 157 counties over 26 weeks, 14 s.
+
 ## Avian influenza in wild birds: USDA APHIS (polygon contract)
 ```bash
 python3 -m pipeline.hpai --out public/data/hpai.geojson            # cron daily 07:05 (APHIS updates the CSV weekly)
