@@ -146,3 +146,5 @@ Private repo **github.com/musharna/wildeye** (branch `main-wildeye`, SSH remote 
 **Decided 2026-09-12 (user: going public is fine for a fork):** repo public, **site live at https://musharna.github.io/wildeye/** (GitHub Pages from an orphan `gh-pages` branch; `pipeline/deploy_pages.sh` ships the live data with only the newest 2 replay nights — pushes above ~50 MB were dropped on this uplink; cron daily 07:50). GBIF derived dataset registered: doi:10.15468/dd.vugb55.
 
 **2026-09-12, user: "drop any that need email."** NOAA RWSAS (NEFSC) and Columbia DART (CBR) declined. OTN notification pending the user's call (keep layer + one email, or drop the layer).
+
+**2026-09-12, user:** Reef Life Survey and Kelp Watch terms reads (both sites block scripted access) are deferred, together with the OTN notice, until the repo has a few stars; `pipeline/check_stars.sh` flags all three at 2 stars. The 30-night birds archive stays on disk. Dependabot: 0 open (15 patched via overrides, 2 tooling-only dismissed).
