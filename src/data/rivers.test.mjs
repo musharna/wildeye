@@ -157,3 +157,16 @@ test('seed (public/data/seed/rivers.geojson): < 100 KB, gages > 0, subsampling s
   const s = await driveReal(gj);
   t.diagnostic(`seed: ${size} bytes, ${s.count} gages, ${s.active} reporting`);
 });
+
+test('gageEntity: negative (reverse, tidal) flow gets a finite size by magnitude and is explained in the info box', () => {
+  // Mutant seen failing: log10(q + 1) without Math.abs → NaN pixelSize → Cesium stops rendering (real-app smoke 2026-09-12).
+  const tidal = structuredClone(gage);
+  tidal.properties.q[1] = -12300; // same magnitude as the forward fixture's 12300 on that day
+  const both = { visible: { temperature: true, discharge: true }, source: {} };
+  const rev = gageEntity(tidal, '2026-08-14T00:00:00Z', both);
+  const fwd = gageEntity(gage, '2026-08-14T00:00:00Z', both);
+  assert.ok(Number.isFinite(rev.point.pixelSize), `pixelSize ${rev.point.pixelSize}`);
+  assert.equal(rev.point.pixelSize, fwd.point.pixelSize, 'same magnitude, same size');
+  assert.match(rev.description, /reverse flow/);
+  assert.doesNotMatch(fwd.description, /reverse flow/, 'positive control: forward flow carries no note');
+});

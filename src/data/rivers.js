@@ -116,7 +116,7 @@ export function describeGage(p, scope, source = {}) {
   const cls = tempClass(scope.t);
   return (
     `<b>${esc(p.name)}</b> · USGS ${esc(p.site)} (${esc(p.state)})${p.sensor ? ` · temperature sensor: ${esc(p.sensor)}` : ""}<br>` +
-    `${esc(scope.label)}: water <b>${scope.t === null ? "—" : `${scope.t.toFixed(1)} °C`}</b> (${esc(cls.label)}) · flow <b>${esc(fmtQ(scope.q))}</b><br>` +
+    `${esc(scope.label)}: water <b>${scope.t === null ? "—" : `${scope.t.toFixed(1)} °C`}</b> (${esc(cls.label)}) · flow <b>${esc(fmtQ(scope.q))}</b>${scope.q !== null && scope.q < 0 ? " (negative = reverse flow, typical of tidally affected gages)" : ""}<br>` +
     `<small>Daily means; provisional data are subject to revision. Temperature bands follow EPA (2003) salmonid thresholds, which are constant-exposure values.</small><br>` +
     `<a href="https://waterdata.usgs.gov/monitoring-location/${esc(p.site)}/" target="_blank" rel="noopener">${esc(source.name || "USGS Water Services")}</a> · ${esc(source.licence || "Public Domain U.S. Government")}. Reference to USGS data does not imply endorsement.`
   );
@@ -132,9 +132,12 @@ export function gageEntity(f, iso, ctx) {
   const cls = showT ? tempClass(scope.t) : NO_DATA;
   const hasData = (showT && scope.t !== null) || (showQ && scope.q !== null);
   const alpha = hasData ? 1 : FADED;
+  // Size encodes flow MAGNITUDE: tidally affected gages report negative daily means when the
+  // flow reverses (165 values on 2026-09-12), and log10 of a negative is NaN, which gave Cesium a
+  // NaN point size and stopped the whole render loop.
   const size =
     showQ && scope.q !== null
-      ? 4 + Math.min(14, 2.5 * Math.log10(scope.q + 1))
+      ? 4 + Math.min(14, 2.5 * Math.log10(Math.abs(scope.q) + 1))
       : 6;
   return {
     id: `rivers:${p.site}`,
