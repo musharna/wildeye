@@ -162,6 +162,14 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, LAYER_STATE_REGISTRY[0]]),
     /Duplicate layer-state id/,
   );
+  // Tokens may be one or two chars (36 one-char tokens ran out at 35 layers, 2026-09-12);
+  // three is out of grammar. Mutant seen failing: restoring /^[a-z0-9]$/ rejects 'zz'.
+  const twoChar = Object.freeze({ id: 'zz-layer', token: 'zz', disposition: 'enabled-only' });
+  assert.equal(validateLayerStateRegistry([...LAYER_STATE_REGISTRY, twoChar]), true);
+  assert.throws(
+    () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, { ...twoChar, token: 'zzz' }]),
+    /Invalid layer-state token/,
+  );
 
   const manager = new DataLayerManager({});
   manager.register(fakeLayer('earthquakes'));
