@@ -385,5 +385,113 @@
     "legend": "NDVI, one day of VIIRS: pale = bare/sparse · dark green = dense canopy; gaps = clouds, night, water",
     "credit_key": "noaa-ndvi-cdr",
     "credit": "NOAA Climate Data Record of NDVI, VIIRS daily 0.05°, served by NCEI THREDDS"
+  },
+  {
+    "id": "cmems-o2",
+    "name": "Dissolved oxygen at the surface (Copernicus Marine)",
+    "icon": "🫧",
+    "cmems": {
+      "dataset_id": "cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m",
+      "variable": "o2",
+      "max_depth": 1
+    },
+    "bounds": {
+      "west": -180,
+      "south": -80,
+      "east": 180,
+      "north": 90
+    },
+    "transparent": "none",
+    "kind": "ramp",
+    "zrank": 12,
+    "ramp": {
+      "min": 150,
+      "max": 400,
+      "unit": " mmol/m³",
+      "stops": [
+        [
+          127,
+          29,
+          29
+        ],
+        [
+          239,
+          138,
+          98
+        ],
+        [
+          247,
+          247,
+          247
+        ],
+        [
+          103,
+          169,
+          207
+        ],
+        [
+          5,
+          48,
+          97
+        ]
+      ]
+    },
+    "legend": "surface dissolved O₂, daily analysis: red = low (warm, stratified or hypoxic) · blue = high (cold, productive)",
+    "credit_key": "cmems",
+    "credit": "Generated using E.U. Copernicus Marine Service Information; Global Ocean Biogeochemistry Analysis and Forecast, https://doi.org/10.48670/moi-00015"
+  },
+  {
+    "id": "cmems-ph",
+    "name": "Surface ocean pH (Copernicus Marine)",
+    "icon": "🧪",
+    "cmems": {
+      "dataset_id": "cmems_mod_glo_bgc-car_anfc_0.25deg_P1D-m",
+      "variable": "ph",
+      "max_depth": 1
+    },
+    "bounds": {
+      "west": -180,
+      "south": -80,
+      "east": 180,
+      "north": 90
+    },
+    "transparent": "none",
+    "kind": "ramp",
+    "zrank": 13,
+    "ramp": {
+      "min": 7.8,
+      "max": 8.3,
+      "unit": "",
+      "stops": [
+        [
+          84,
+          48,
+          5
+        ],
+        [
+          223,
+          194,
+          125
+        ],
+        [
+          245,
+          245,
+          245
+        ],
+        [
+          128,
+          205,
+          193
+        ],
+        [
+          1,
+          102,
+          94
+        ]
+      ]
+    },
+    "legend": "surface pH (total scale), daily analysis: brown = more acidic · teal = more alkaline; global mean ~8.05",
+    "credit_key": "cmems",
+    "credit": "Generated using E.U. Copernicus Marine Service Information; Global Ocean Biogeochemistry Analysis and Forecast, https://doi.org/10.48670/moi-00015"
   }
 ]

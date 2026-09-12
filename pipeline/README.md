@@ -134,6 +134,16 @@ path. The study's `license_type` is read from Movebank on every run and anything
 display names, `default_species` covers individuals with no taxon. Measured 2026-09-11:
 3 studies, 32 individuals, 78 segments, 20 s.
 
+## Ocean oxygen and pH: Copernicus Marine (raster drapes)
+Two `cmems` rows in `rasters.json` (`cmems-o2` from `cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m`, `cmems-ph`
+from `…bgc-car…`). `pipeline.raster` opens the dataset lazily through the `copernicusmarine`
+toolbox with `CMEMS_USER` / `CMEMS_PASS` (`run_rasters.sh` sources `~/.config/wildeye/env`), takes
+the surface level of the newest day **at or before today** (the datasets run ~10 days into
+forecast), flips north-up and renders through the row's `ramp` (NaN = land → transparent). Same
+archive/history handling as the PNG products. Measured 2026-09-12: 19 s + 10 s. Credit line is the
+one Copernicus requires ("Generated using E.U. Copernicus Marine Service Information") plus the
+product DOI 10.48670/moi-00015.
+
 ## Deforestation alerts: Global Forest Watch (polygon contract)
 ```bash
 python3 -m pipeline.gfw --out public/data/gfw.geojson              # cron daily 07:40 (GFW versions the table daily)

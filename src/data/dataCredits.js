@@ -110,6 +110,10 @@ export const DATA_CREDITS = [
     html: 'Deforestation alerts: <a href="https://www.globalforestwatch.org" target="_blank" rel="noopener">Global Forest Watch</a> integrated alerts (GLAD-L, GLAD-S2, RADD; CC BY 4.0), aggregated by country; country shapes made with Natural Earth',
   },
   {
+    key: 'cmems',
+    html: 'Ocean oxygen and pH: Generated using E.U. Copernicus Marine Service Information; <a href="https://doi.org/10.48670/moi-00015" target="_blank" rel="noopener">Global Ocean Biogeochemistry Analysis and Forecast</a> (daily 0.25° surface analysis)',
+  },
+  {
     key: 'cdc-nwss',
     html: 'Wastewater virus trend: <a href="https://www.cdc.gov/wastewater" target="_blank" rel="noopener">CDC National Wastewater Surveillance System</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.',
   },

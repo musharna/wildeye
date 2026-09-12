@@ -68,9 +68,60 @@ def resolve_source(product: dict, catalog_xml: str | None = None) -> tuple[str, 
     return product["url_template"].format(file=f), when
 
 
+def ramp_rgba(values: np.ndarray, ramp: dict) -> np.ndarray:
+    """Map a 2-D float field to RGBA through `ramp` {min, max, stops:[[r,g,b],…]}; NaN → transparent."""
+    stops = np.asarray(ramp["stops"], dtype=float)
+    lo, hi = float(ramp["min"]), float(ramp["max"])
+    ok = ~np.isnan(values)
+    t = np.clip((np.where(ok, values, lo) - lo) / (hi - lo), 0.0, 1.0)
+    idx = t * (len(stops) - 1)
+    i0 = np.clip(np.floor(idx), 0, len(stops) - 2).astype(int)
+    f = (idx - i0)[..., None]
+    rgb = stops[i0] * (1 - f) + stops[i0 + 1] * f
+    out = np.zeros(values.shape + (4,), dtype=np.uint8)
+    out[..., :3] = np.clip(np.rint(rgb), 0, 255).astype(np.uint8)
+    out[..., 3] = np.where(ok, 255, 0).astype(np.uint8)
+    return out
+
+
+def fetch_cmems(product: dict, today: dt.date | None = None, open_dataset=None) -> tuple[np.ndarray, str]:
+    """Latest ANALYSIS day (≤ today; the datasets extend ~10 d into forecast) of one surface
+    variable from Copernicus Marine, rendered north-up through the product's ramp. Credentials
+    from CMEMS_USER / CMEMS_PASS (never in the browser). copernicusmarine is imported lazily so the
+    module stays importable without it."""
+    import os
+    c = product["cmems"]
+    if open_dataset is None:
+        import copernicusmarine as cm
+        user, pw = os.environ.get("CMEMS_USER"), os.environ.get("CMEMS_PASS")
+        if not user or not pw:
+            raise RuntimeError("CMEMS_USER / CMEMS_PASS not set (source ~/.config/wildeye/env)")
+        open_dataset = lambda **kw: cm.open_dataset(username=user, password=pw, **kw)  # noqa: E731
+    ds = open_dataset(dataset_id=c["dataset_id"], variables=[c["variable"]], minimum_depth=0, maximum_depth=float(c.get("max_depth", 1)))
+    today = today or dt.datetime.now(dt.UTC).date()
+    times = ds["time"].values
+    days = np.asarray(times, dtype="datetime64[D]")
+    eligible = np.nonzero(days <= np.datetime64(today))[0]
+    if not len(eligible):
+        raise RuntimeError(f"{product['id']}: no time step at or before {today}")
+    k = int(eligible[-1])
+    da = ds[c["variable"]].isel(time=k)
+    if "depth" in da.dims:
+        da = da.isel(depth=0)
+    vals = np.asarray(da.values, dtype=float)
+    lat = np.asarray(ds["latitude"].values)
+    if lat[0] < lat[-1]:
+        vals = vals[::-1]  # north-up
+    when = str(np.datetime_as_string(days[k], unit="D")) + "T00:00:00Z"
+    return ramp_rgba(vals, product["ramp"]), when
+
+
 def process(product: dict, out_dir: Path) -> dict:
-    url, when_from_name = resolve_source(product)
-    rgba = fetch_png(url)
+    if "cmems" in product:
+        rgba, when_from_name = fetch_cmems(product)
+    else:
+        url, when_from_name = resolve_source(product)
+        rgba = fetch_png(url)
     masked = 0.0
     t = product.get("transparent", "none")
     if isinstance(t, dict) and "rgb" in t:

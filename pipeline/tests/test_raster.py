@@ -83,3 +83,38 @@ def test_resolve_source_picks_newest_catalog_file_and_dates_it():
     import pytest
     with pytest.raises(RuntimeError, match="no file matching"):
         resolve_source(prod, "<catalog/>")
+
+
+def test_ramp_rgba_and_fetch_cmems_pick_latest_analysis_day_and_flip_north_up():
+    import datetime as dt
+    import numpy as np
+    from pipeline.raster import ramp_rgba, fetch_cmems
+
+    ramp = {"min": 0, "max": 10, "stops": [[0, 0, 0], [255, 255, 255]]}
+    out = ramp_rgba(np.array([[0.0, 5.0, 10.0, np.nan, 20.0]]), ramp)
+    assert out[0, 0].tolist() == [0, 0, 0, 255] and out[0, 1].tolist() == [128, 128, 128, 255]
+    assert out[0, 2].tolist() == [255, 255, 255, 255] and out[0, 3, 3] == 0, "NaN is transparent"
+    assert out[0, 4].tolist() == [255, 255, 255, 255], "above max clamps"
+
+    class DA:
+        def __init__(self, arr, dims): self.values, self.dims = arr, dims
+        def isel(self, **kw):
+            a = self.values
+            if "time" in kw: a = a[kw["time"]]
+            if "depth" in kw: a = a[kw["depth"]]
+            return DA(a, tuple(d for d in self.dims if d not in kw))
+    times = np.array(["2026-09-10", "2026-09-11", "2026-09-12", "2026-09-13"], dtype="datetime64[ns]")
+    field = np.zeros((4, 1, 2, 3)); field[2, 0] = [[1, 2, 3], [7, 8, 9]]  # day index 2 = 2026-09-12; row 0 = south
+    ds = {"o2": DA(field, ("time", "depth", "latitude", "longitude")), "time": DA(times, ("time",)), "latitude": DA(np.array([-80.0, 90.0]), ("latitude",))}
+    seen = {}
+    def open_dataset(**kw):
+        seen.update(kw); return ds
+    product = {"id": "cmems-o2", "cmems": {"dataset_id": "d", "variable": "o2", "max_depth": 1}, "ramp": ramp}
+    rgba, when = fetch_cmems(product, today=dt.date(2026, 9, 12), open_dataset=open_dataset)
+    assert when == "2026-09-12T00:00:00Z", "the forecast day (13th) is skipped"
+    assert seen["dataset_id"] == "d" and seen["variables"] == ["o2"]
+    assert rgba.shape == (2, 3, 4) and rgba[0, 0, 0] > rgba[1, 0, 0], "north row first: values 7–9 on top of 1–3"
+    try:
+        fetch_cmems(product, today=dt.date(2026, 9, 1), open_dataset=open_dataset); assert False
+    except RuntimeError as e:
+        assert "no time step" in str(e)
