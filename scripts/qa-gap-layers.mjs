@@ -34,8 +34,18 @@ const browser = await puppeteer.launch({
 });
 const page = await browser.newPage();
 let pageErrors = [];
+// Attribute only what a data layer can cause: uncaught exceptions (e.g. Cesium's render loop
+// stopping) and failed requests for data files. The inherited app also calls dev-proxy /api/*
+// endpoints that a static Pages host answers 404/405; those are logged separately, not blamed on a layer.
+const inheritedApiErrors = new Map();
 page.on('pageerror', (e) => pageErrors.push(String(e?.message || e)));
-page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(`console: ${m.text()}`); });
+page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) pageErrors.push(`console: ${m.text()}`); });
+page.on('response', (r) => {
+  if (r.status() < 400) return;
+  const u = r.url().replace(/[?].*$/, '');
+  if (/\/data\//.test(u)) pageErrors.push(`HTTP ${r.status()} ${u}`);
+  else inheritedApiErrors.set(`${r.status()} ${u}`, (inheritedApiErrors.get(`${r.status()} ${u}`) || 0) + 1);
+});
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
 await new Promise((r) => setTimeout(r, 12000)); // boot flyTo + deferred init
@@ -97,5 +107,6 @@ for (const shot of IDS) {
   await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, false), id);
 }
 await browser.close();
+if (inheritedApiErrors.size) console.log(`not attributed (inherited non-data endpoints): ${[...inheritedApiErrors].map(([k, v]) => `${v}× ${k}`).join('; ')}`);
 console.log(`${IDS.length - failures}/${IDS.length} passed`);
 process.exit(failures ? 1 : 0);

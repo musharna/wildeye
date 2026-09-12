@@ -33,3 +33,5 @@ Status: dispatched 2026-09-12.
   4. first smoke screenshots were worthless (street-level camera + first-run dialog); critic caught it before I trusted a 9/9 PASS.
 - Model switch mid-run: all 12 Fable builders died at the usage limit; relaunched on Opus 5 as resume-from-partial briefs.
 
+
+- **Deploy incident:** the live site had never booted (Cesium.js 404 from vite-plugin-cesium's base handling); fixed in `8e68ee2` with an index-ref gate. Inherited `/api/*` calls and root-relative icons still 404/405 on Pages.
