@@ -147,10 +147,10 @@ def county_index(rows: list[dict], today: dt.date, weeks: int = DEFAULT_WEEKS) -
     return counties
 
 
-def load_county_shapes(zip_path: Path, wanted: set[str], fetch_bytes=None) -> dict[str, dict]:
-    """fips → {name, st, geometry} for the wanted counties from the Census 1:20m boundary zip
-    (downloaded once into `zip_path`). pyshp is imported here so importing this module needs
-    only the stdlib."""
+def load_county_shapes(zip_path: Path, wanted: set[str] | None, fetch_bytes=None) -> dict[str, dict]:
+    """fips → {name, st, state_name, geometry} for the wanted counties (None = every county)
+    from the Census 1:20m boundary zip (downloaded once into `zip_path`). pyshp is imported
+    here so importing this module needs only the stdlib. Shared with pipeline/hpai.py."""
     import shapefile  # pyshp
     if not zip_path.exists():
         zip_path.parent.mkdir(parents=True, exist_ok=True)
@@ -170,10 +170,10 @@ def load_county_shapes(zip_path: Path, wanted: set[str], fetch_bytes=None) -> di
 
     for sr in rd.iterShapeRecords():
         rec = sr.record.as_dict()
-        if rec["GEOID"] not in wanted:
+        if wanted is not None and rec["GEOID"] not in wanted:
             continue
         g = sr.shape.__geo_interface__
-        out[rec["GEOID"]] = {"name": rec["NAME"], "st": rec["STUSPS"],
+        out[rec["GEOID"]] = {"name": rec["NAME"], "st": rec["STUSPS"], "state_name": rec["STATE_NAME"],
                              "geometry": {"type": g["type"], "coordinates": rnd(g["coordinates"])}}
     return out
 

@@ -90,6 +90,10 @@ export const DATA_CREDITS = [
     html: 'Acoustic detections: <a href="https://oceantrack.org" target="_blank" rel="noopener">Ocean Tracking Network</a> (CC BY 4.0; each receiver carries its project citation in the info box)',
   },
   {
+    key: 'aphis-hpai',
+    html: 'Avian influenza in wild birds: <a href="https://www.aphis.usda.gov/livestock-poultry-disease/avian/avian-influenza/hpai-detections/wild-birds" target="_blank" rel="noopener">USDA APHIS</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau)',
+  },
+  {
     key: 'cdc-nwss',
     html: 'Wastewater virus trend: <a href="https://www.cdc.gov/wastewater" target="_blank" rel="noopener">CDC National Wastewater Surveillance System</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.',
   },

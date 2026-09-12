@@ -33,6 +33,8 @@ public/data/occurrences.geojson
 public/data/tracks.geojson
 public/data/wastewater.geojson
 public/data/otn.geojson
+public/data/hpai.geojson
+pipeline/cron_hpai.log
 pipeline/cron_otn.log
 pipeline/cron_wastewater.log
 pipeline/cron_tracks.log

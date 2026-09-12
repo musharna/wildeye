@@ -142,6 +142,20 @@ with 30/60/120 s backoff. Public data end about a year before today (collaborato
 before column trimming, ~60 s for the detections query. Licence CC BY 4.0 (OTN Data Policy
 2024 §4a); OTN asks to be notified of data products.
 
+## Avian influenza in wild birds: USDA APHIS (polygon contract)
+```bash
+python3 -m pipeline.hpai --out public/data/hpai.geojson            # cron daily 07:05 (APHIS updates the CSV weekly)
+python3 -m pipeline.hpai --csv /tmp/hpai-wild-birds.csv --today 2026-09-11 --weeks 4 --out /tmp/h.geojson   # offline smoke
+```
+Downloads the CSV the APHIS wild-bird page embeds (`data-csv-url`; ~2 MB, one row per confirmed
+detection since 2022 with state, county, dates, strain, species, WOAH class, sampling method).
+Counties are matched by normalised (state name, county name) against the Census 2021 boundary
+file shared with `wastewater.py` (`load_county_shapes(zip, None)` loads every county);
+unmatched names are counted and logged, never guessed ("Unknown" county rows and Alaska's
+dissolved Valdez-Cordova, 0.7 % on 2026-09-11). One polygon per county with ≥ 1 detection in
+the last `--weeks` 7-day bins ending today: `weeks:[{w, n, captive, sp}]` plus `n_all` and
+top species since 2022. Public domain (U.S. Government work).
+
 ## Wastewater virus trend: CDC NWSS (polygon contract)
 ```bash
 python3 -m pipeline.wastewater --out public/data/wastewater.geojson          # cron weekly Sat 07:10 (CDC publishes Fridays)
