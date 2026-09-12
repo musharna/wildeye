@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { loadIucn, iucnBadge } from "./iucn.js";
 
 /**
  * Recent wildlife sightings from GBIF + OBIS (CC0 / CC-BY records only),
@@ -76,7 +77,7 @@ export function describeOccurrence(p, ds = {}) {
   const publisher = meta.publisher ? ` — ${esc(meta.publisher)}` : "";
   const unc = Number.isFinite(p.uncertainty_m) ? ` · ±${Math.round(p.uncertainty_m)} m` : "";
   return (
-    `<b>${esc(p.icon ?? "")} ${esc(p.name)}</b> <i>${esc(p.sci)}</i><br>` +
+    `<b>${esc(p.icon ?? "")} ${esc(p.name)}</b> <i>${esc(p.sci)}</i>${iucnBadge(p.taxon) ? ` · ${iucnBadge(p.taxon)}` : ""}<br>` +
     `${esc(p.date)} · ${esc(basisText(p.basis))}${unc}<br>` +
     `${esc(meta.title || p.dataset || "dataset unknown")}${publisher}${doi}<br>${link} · ${esc(lic)}`
   );
@@ -174,6 +175,8 @@ export function createOccurrencesLayer() {
 
     async update() {
       try {
+        // Red List badge is an enrichment: a broken iucn.json must not blank the sightings, but it is logged.
+        await loadIucn().catch((e) => console.warn("[Data:Occurrences] IUCN badge data unavailable:", e));
         const res = await fetch(`${DATA_URL}?t=${Date.now()}`);
         if (!res.ok) {
           _lastError = `occurrences.geojson HTTP ${res.status}`;

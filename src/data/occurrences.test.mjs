@@ -96,3 +96,14 @@ test('basisText lowercases GBIF codes but keeps free text (recordist names) inta
   assert.equal(basisText('birds song by Victor Aleksanov (quality A)'), 'birds song by Victor Aleksanov (quality A)');
   assert.equal(basisText(undefined), '');
 });
+
+test('IUCN badge appears in the sightings info box only for taxa with a category', async () => {
+  const { _resetIucn } = await import('./iucn.js');
+  const { describeOccurrence } = await import('./occurrences.js');
+  const base = { icon: '🐧', name: 'Puffin', sci: 'Fratercula arctica', date: '2026-09-01', basis: 'HUMAN_OBSERVATION', source: 'gbif' };
+  _resetIucn({ puffin: { category: 'EN', year: 2021, citation: 'c', url: 'https://www.iucnredlist.org/species/1/2' } });
+  try {
+    assert.match(describeOccurrence({ ...base, taxon: 'puffin' }), /Fratercula arctica<\/i> · <a href="https:\/\/www\.iucnredlist\.org\/species\/1\/2".*>EN<\/span><\/a> IUCN Endangered 2021<br>/);
+    assert.doesNotMatch(describeOccurrence({ ...base, taxon: 'orca' }), /IUCN/, 'positive control above; no entry → no badge');
+  } finally { _resetIucn({}); }
+});
