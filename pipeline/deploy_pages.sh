@@ -41,11 +41,17 @@ echo "dist size: $(du -sh dist | cut -f1)"
 
 SRC="$(git rev-parse --short HEAD)"
 git worktree add --detach "$WT" HEAD >/dev/null 2>&1
-( cd "$WT" && git checkout -q --orphan "$BRANCH" && git rm -rfq . >/dev/null 2>&1 || true )
+# a local $BRANCH left by an earlier run makes `checkout --orphan` fail; the first version of this script
+# swallowed that and force-pushed the STALE branch while printing "pushed" (2026-09-12)
+git branch -D "$BRANCH" >/dev/null 2>&1 || true
+( cd "$WT" && git checkout -q --orphan "$BRANCH" && { git rm -rfq . >/dev/null 2>&1 || true; } )
 cp -a dist/. "$WT"/
 ( cd "$WT" && git add -A >/dev/null && git -c user.name="wildeye deploy" -c user.email="deploy@wildeye.local" commit -qm "deploy $(date -u +%Y-%m-%dT%H:%MZ) from $SRC" )
 for attempt in 1 2 3; do
   if ( cd "$WT" && git push -q --force origin "$BRANCH" ); then break; fi
   echo "push attempt $attempt failed" >&2; [ "$attempt" = 3 ] && exit 1; sleep 10
 done
-echo "pushed $BRANCH from $SRC"
+LOCAL="$(git rev-parse "$BRANCH")"
+REMOTE="$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)"
+[ "$LOCAL" = "$REMOTE" ] || { echo "remote $BRANCH is $REMOTE, expected $LOCAL" >&2; exit 1; }
+echo "pushed $BRANCH ${LOCAL:0:7} from $SRC"
