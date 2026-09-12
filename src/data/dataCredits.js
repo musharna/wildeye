@@ -118,7 +118,8 @@ export const DATA_CREDITS = [
     html:
       'Wildlife sightings: <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF</a> and ' +
       '<a href="https://obis.org" target="_blank" rel="noopener">OBIS</a> occurrence records ' +
-      '(CC0 / CC-BY records only; publisher named per record)',
+      '(CC0 / CC-BY records only; publisher named per record). GBIF subset registered as derived dataset ' +
+      '<a href="https://doi.org/10.15468/dd.vugb55" target="_blank" rel="noopener">doi:10.15468/dd.vugb55</a>',
   },
   {
     key: 'noaa-viirs-chl',
