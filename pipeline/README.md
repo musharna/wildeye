@@ -134,6 +134,17 @@ path. The study's `license_type` is read from Movebank on every run and anything
 display names, `default_species` covers individuals with no taxon. Measured 2026-09-11:
 3 studies, 32 individuals, 78 segments, 20 s.
 
+## GBIF derived-dataset DOI (sightings layer)
+```bash
+python3 -m pipeline.gbif_derived --source-url https://<hosted wildeye>/            # dry run: prints the payload
+set -a; . ~/.config/gbif/credentials; set +a; GBIF_USER=$username GBIF_PASS=$password \
+  python3 -m pipeline.gbif_derived --source-url https://<hosted wildeye>/ --register   # mints the DOI, appends public/data/seed/gbif_derived.json
+```
+Registers the GBIF subset of `occurrences.geojson` (every `dataset_key` with its record count) as
+a derived dataset so contributing datasets get credit. **Not yet registered**: the record needs a
+public `sourceUrl`, so it waits for the hosting decision. Re-register when the taxon set changes,
+not on every daily refresh.
+
 ## Acoustic detections: Ocean Tracking Network (site-series contract)
 ```bash
 python3 -m pipeline.otn --out public/data/otn.geojson                 # cron weekly Sun 07:20
