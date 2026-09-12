@@ -284,6 +284,7 @@ export const SHARE_TRACKING_RESTORE_POLICIES = Object.freeze({
 export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'ais-live-vessels', token: 'a', disposition: 'enabled-only' }),
   Object.freeze({ id: 'aloft', token: 'k', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'arbonet', token: 'ar', disposition: 'enabled-only' }),
   Object.freeze({ id: 'bikeshare', token: 'b', disposition: 'enabled-only' }),
   Object.freeze({ id: 'birds', token: 'n', disposition: 'enabled+options', optionOwner: 'birds' }),
   Object.freeze({ id: 'cctv', token: 'c', disposition: 'enabled+options', optionOwner: 'cctv' }),
@@ -309,6 +310,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'occurrences', token: 'o', disposition: 'enabled-only' }),
   Object.freeze({ id: 'oisst', token: 'j', disposition: 'enabled-only' }),
   Object.freeze({ id: 'otn', token: '3', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'phenology', token: 'ph', disposition: 'enabled-only' }),
   Object.freeze({ id: 'radio', token: 'r', disposition: 'enabled+options', optionOwner: 'radio' }),
   Object.freeze({ id: 'rocket-launches', token: 'x', disposition: 'enabled-only' }),
   Object.freeze({ id: 'satellites', token: 's', disposition: 'enabled+options', optionOwner: 'satellites' }),

@@ -114,6 +114,14 @@ export const DATA_CREDITS = [
     html: 'Ocean oxygen and pH: Generated using E.U. Copernicus Marine Service Information; <a href="https://doi.org/10.48670/moi-00015" target="_blank" rel="noopener">Global Ocean Biogeochemistry Analysis and Forecast</a> (daily 0.25° surface analysis)',
   },
   {
+    key: 'arbonet',
+    html: "Arboviral disease cases: <a href=\"https://data.cdc.gov/NNDSS/NNDSS-Weekly-Data/x9gk-5huc\" target=\"_blank\" rel=\"noopener\">CDC NNDSS Weekly Data</a> (ArboNET-fed), Public Domain U.S. Government; state boundaries from the U.S. Census Bureau. Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.",
+  },
+  {
+    key: 'phenology',
+    html: "Phenology: Data were provided by the <a href=\"https://www.usanpn.org/data/observational\" target=\"_blank\" rel=\"noopener\">USA National Phenology Network</a> and the many participants who contribute to its Nature's Notebook program (CC BY 4.0, doi:10.5066/F78S4N1V).",
+  },
+  {
     key: 'whispers',
     html: 'Wildlife die-offs and disease events: <a href="https://whispers.usgs.gov" target="_blank" rel="noopener">USGS WHISPers</a>, National Wildlife Health Center (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to USGS data does not imply endorsement.',
   },
