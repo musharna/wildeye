@@ -106,6 +106,10 @@ export const DATA_CREDITS = [
     html: 'Small mammals: <a href="https://data.neonscience.org/data-products/DP1.10072.001" target="_blank" rel="noopener">NSF NEON small mammal box trapping (DP1.10072.001)</a>, provisional and released data, CC BY 4.0. NEON (National Ecological Observatory Network) is funded by the U.S. National Science Foundation.',
   },
   {
+    key: 'gfw',
+    html: 'Deforestation alerts: <a href="https://www.globalforestwatch.org" target="_blank" rel="noopener">Global Forest Watch</a> integrated alerts (GLAD-L, GLAD-S2, RADD; CC BY 4.0), aggregated by country; country shapes made with Natural Earth',
+  },
+  {
     key: 'cdc-nwss',
     html: 'Wastewater virus trend: <a href="https://www.cdc.gov/wastewater" target="_blank" rel="noopener">CDC National Wastewater Surveillance System</a> (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.',
   },

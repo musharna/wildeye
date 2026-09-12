@@ -134,6 +134,21 @@ path. The study's `license_type` is read from Movebank on every run and anything
 display names, `default_species` covers individuals with no taxon. Measured 2026-09-11:
 3 studies, 32 individuals, 78 segments, 20 s.
 
+## Deforestation alerts: Global Forest Watch (polygon contract)
+```bash
+python3 -m pipeline.gfw --out public/data/gfw.geojson              # cron daily 07:40 (GFW versions the table daily)
+python3 -m pipeline.gfw --weeks 4 --today 2026-09-12 --out /tmp/g.geojson
+```
+Needs `GFW_API_KEY` (`run_gfw.sh` sources `~/.config/wildeye/env`). Resolves the newest version
+of `gadm__integrated_alerts__iso_daily_alerts` from the dataset metadata (never `latest`: its
+307 redirect drops the key), then one SQL aggregate per week (`SUM(alert__count)`,
+`SUM(alert_area__ha)` by `iso`, confidence != low). Two gateway traps: the `x-api-key` header
+is matched case-sensitively and urllib capitalises it, so the key travels as a query parameter;
+and unaliased `SUM()`s collapse into one `sum` key. Country shapes: Natural Earth 110m admin-0
+(public domain, cached in `$WILDEYE_CACHE`), ISO3 from `ISO_A3` or `ADM0_A3` when -99; 36 small
+island states have no 110m shape and are logged. Fill = alert area per 10,000 km² per week.
+Measured 2026-09-12: 114 countries, 12 weeks, 15 s.
+
 ## Small mammals: NSF NEON (site-series contract)
 ```bash
 python3 -m pipeline.neon --out public/data/neon.geojson                  # cron weekly Mon 07:30 (NEON releases provisional data monthly)

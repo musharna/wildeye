@@ -114,7 +114,7 @@ Xeno-canto (API key; per-recording CC0/CC-BY only, SA/NC/ND out; hotlink audio,
 attribute recordist); NEON token (above); Copernicus Marine **O₂ / pH only** —
 the chlorophyll-coverage rationale was wrong, our VIIRS product is already DINEOF
 gap-filled — and its custom licence needs an explicit policy exception or it is
-out; NASA CyAN (Earthdata); Global Forest Watch split per layer (CC-BY ones only);
+out; NASA CyAN (Earthdata, **blocked on the user's 2FA**); Global Forest Watch **shipped** (integrated alerts by country, CC BY, token `6`; other GFW layers stay on the shelf per licence);
 Allen Coral Atlas benthic/geomorphic classes only via a tile provider, mosaic is
 NC-SA, and the site's automated-retrieval / whole-dataset consent clause must be
 cleared first.
