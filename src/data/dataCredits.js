@@ -138,6 +138,10 @@ export const DATA_CREDITS = [
     html: "H5N1 sampled spread: <a href=\"https://nextstrain.org/avian-flu\" target=\"_blank\" rel=\"noopener\">Nextstrain avian-flu</a> genome-focused H5N1 builds (Moncla lab and the Nextstrain team); sequences and metadata shared by USDA NVSL via NCBI GenBank and SRA (public domain). US only; aggregated counts, no sequences or per-sample data.",
   },
   {
+    key: 'fires',
+    html: "Active fires (gridded): <a href=\"https://firms.modaps.eosdis.nasa.gov/\" target=\"_blank\" rel=\"noopener\">NASA FIRMS</a> VIIRS 375 m (Suomi-NPP, NOAA-20, NOAA-21), part of NASA's ESDIS/LANCE; full and open sharing, provided \"as is\".",
+  },
+  {
     key: 'whispers',
     html: 'Wildlife die-offs and disease events: <a href="https://whispers.usgs.gov" target="_blank" rel="noopener">USGS WHISPers</a>, National Wildlife Health Center (Public Domain U.S. Government; county boundaries from the U.S. Census Bureau). Reference to USGS data does not imply endorsement.',
   },
