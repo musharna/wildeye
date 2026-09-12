@@ -15,6 +15,7 @@ import hpaiLayer from './data/hpai.js';
 import neonLayer from './data/neon.js';
 import gfwLayer from './data/gfw.js';
 import whispersLayer from './data/whispers.js';
+import ecoregionsLayer from './data/ecoregions.js';
 import firesLayer from './data/fires.js';
 import h5n1Layer from './data/h5n1.js';
 import droughtLayer from './data/drought.js';
@@ -251,6 +252,7 @@ async function init() {
     dataManager.register(neonLayer);
     dataManager.register(gfwLayer);
     dataManager.register(whispersLayer);
+    dataManager.register(ecoregionsLayer);
     dataManager.register(firesLayer);
     dataManager.register(h5n1Layer);
     dataManager.register(droughtLayer);
