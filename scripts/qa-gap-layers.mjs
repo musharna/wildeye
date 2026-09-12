@@ -16,7 +16,14 @@ const SHOTS = path.join(REPO, 'qa-shots', 'gap-layers');
 const argv = process.argv.slice(2);
 const opt = (n, d) => { const i = argv.indexOf(n); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 const URL = opt('--url', 'http://localhost:4455');
-const IDS = opt('--ids', 'arbonet,phenology,neon-vectors,cetaceans,drought,h5n1,fires,ecoregions,rivers').split(',');
+const IDS = opt('--ids', 'arbonet,phenology,neon-vectors,cetaceans,drought,h5n1,fires,fires@pacific,ecoregions,rivers').split(',');
+// Camera per shot [lon, lat, height m]: each layer's own region, straight down, so the data is in frame.
+// `fires@pacific` looks at a hemisphere with few fires: any dense markers there are drawn THROUGH the globe.
+const VIEWS = {
+  arbonet: [-97, 39, 7.0e6], phenology: [-97, 39, 7.0e6], 'neon-vectors': [-97, 39, 7.0e6], drought: [-97, 39, 7.0e6],
+  h5n1: [-97, 39, 7.0e6], rivers: [-97, 39, 7.0e6], cetaceans: [-68, 42, 2.2e6],
+  fires: [20, 2, 1.3e7], 'fires@pacific': [-150, 0, 1.3e7], ecoregions: [20, 10, 1.6e7],
+};
 fs.mkdirSync(SHOTS, { recursive: true });
 
 const browser = await puppeteer.launch({
@@ -31,13 +38,28 @@ page.on('pageerror', (e) => pageErrors.push(String(e?.message || e)));
 page.on('console', (m) => { if (m.type() === 'error') pageErrors.push(`console: ${m.text()}`); });
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
+await new Promise((r) => setTimeout(r, 12000)); // boot flyTo + deferred init
+// Dismiss the first-run launcher so it does not cover the frame.
+await page.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
+await page.keyboard.press('Escape');
+await new Promise((r) => setTimeout(r, 800));
+const launcherOpen = await page.evaluate(() => !!document.querySelector('[data-first-run-choice]')?.offsetParent);
+if (launcherOpen) { console.log('FAIL first-run launcher still visible; screenshots would be covered'); process.exit(1); }
 const baselineErrors = pageErrors.length;
 console.log(`app ready; ${baselineErrors} console/page errors before any gap layer (not attributed)`);
 pageErrors = [];
 
 let failures = 0;
-for (const id of IDS) {
+for (const shot of IDS) {
+  const id = shot.split('@')[0];
   pageErrors = [];
+  await page.evaluate(([lon, lat, h]) => {
+    const v = window.__godsEyeView.viewer; v.camera.cancelFlight();
+    v.camera.setView({
+      destination: v.scene.globe.ellipsoid.cartographicToCartesian({ longitude: lon * Math.PI / 180, latitude: lat * Math.PI / 180, height: h }),
+      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+    });
+  }, VIEWS[shot] || [-97, 39, 7e6]);
   const t0 = Date.now();
   const res = await page.evaluate(async (id) => {
     const g = window.__godsEyeView; const dm = g.dataManager;
@@ -59,8 +81,8 @@ for (const id of IDS) {
     g.requestRender?.();
     return { stats: s, dataSources: ds };
   }, id);
-  await new Promise((r) => setTimeout(r, 3000));
-  await page.screenshot({ path: path.join(SHOTS, `${id}.png`) });
+  await new Promise((r) => setTimeout(r, 8000)); // imagery tiles settle at the new view
+  await page.screenshot({ path: path.join(SHOTS, `${shot.replace('@', '-')}.png`) });
   const s = res.stats || {};
   const ents = (res.dataSources || []).filter(([n]) => n === id || n.startsWith(id)).reduce((a, [, n]) => a + n, 0);
   const problems = [];
