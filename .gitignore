@@ -38,6 +38,8 @@ public/data/neon.geojson
 public/data/gfw.geojson
 pipeline/cron_gfw.log
 pipeline/cron_deploy.log
+pipeline/cron_stars.log
+pipeline/NOTIFY_OTN_DUE
 pipeline/cron_neon.log
 pipeline/cron_hpai.log
 pipeline/cron_otn.log
