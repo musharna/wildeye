@@ -320,13 +320,17 @@ def load_state_shapes(zip_path: Path, fetch_bytes=None) -> dict[str, dict]:
     return out
 
 
+EMPTY_STATE = {"n": 0, "by": {}, "ytd": {}, "prev_ytd": {}, "asof": None, "weeks": []}
+
+
 def to_features(states: dict, shapes: dict) -> tuple[list[dict], list[str]]:
-    feats, missing = [], []
-    for name in sorted(states):
-        sh = shapes.get(name)
-        if not sh:
-            missing.append(name)
-            continue
+    """One feature per state SHAPE: a state with no cases in the window is drawn grey ("no cases"),
+    not left as bare imagery (AK, MT, VT, WV vanished that way on 2026-09-12). `missing` lists
+    indexed states that have no shape."""
+    feats = []
+    missing = sorted(n for n in states if n not in shapes)
+    for name in sorted(shapes):
+        sh = shapes[name]
         feats.append(
             {
                 "type": "Feature",
@@ -335,7 +339,7 @@ def to_features(states: dict, shapes: dict) -> tuple[list[dict], list[str]]:
                     "fips": sh["fips"],
                     "name": name,
                     "st": sh["st"],
-                    **states[name],
+                    **(states.get(name) or EMPTY_STATE),
                 },
             }
         )
@@ -383,9 +387,10 @@ def main(argv=None):
         log.warning(
             "%d reporting areas without a Census state shape: %s", len(missing), missing
         )
-    if not feats:
+    # every shape is a feature now, so the empty-run guard must look at the index, not the features
+    if not states:
         raise SystemExit("no states with cases")
-    newest = max((f["properties"]["asof"] for f in feats), default=None)
+    newest = max((f["properties"]["asof"] for f in feats if f["properties"]["asof"]), default=None)
     write_atomic(
         a.out,
         {

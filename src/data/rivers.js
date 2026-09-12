@@ -147,7 +147,7 @@ export function gageEntity(f, iso, ctx) {
       color: Cesium.Color.fromCssColorString(cls.color).withAlpha(alpha),
       outlineColor: Cesium.Color.BLACK.withAlpha(0.7 * alpha),
       outlineWidth: 1,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      disableDepthTestDistance: 50_000,
       scaleByDistance: new Cesium.NearFarScalar(2.0e5, 1.5, 1.5e7, 0.6),
     },
     description: describeGage(p, scope, ctx.source),

@@ -280,9 +280,16 @@ def test_state_index_lists_only_nonzero_weeks_within_the_window_with_ytd_and_las
     }
     assert "Florida" not in idx, "no cases in the window → no feature"
     feats, missing = to_features(
-        idx, {"Texas": {"fips": "48", "st": "TX", "geometry": SQ}}
+        idx, {"Texas": {"fips": "48", "st": "TX", "geometry": SQ}, "Florida": {"fips": "12", "st": "FL", "geometry": SQ}}
     )
-    assert [f["properties"]["st"] for f in feats] == ["TX"] and missing == []
+    # Every shape is drawn; a zero-case state is a grey feature with n=0 (mutant: iterating the index
+    # instead of the shapes drops Florida, which is how AK/MT/VT/WV vanished from the map).
+    assert [f["properties"]["st"] for f in feats] == ["FL", "TX"] and missing == []
+    fl = feats[0]["properties"]
+    assert fl["n"] == 0 and fl["weeks"] == [] and fl["asof"] is None
+    assert feats[1]["properties"]["n"] == 51, "positive control: the state with cases keeps its data"
+    _, miss2 = to_features({"Guam": {"n": 1}}, {})
+    assert miss2 == ["Guam"]
     idx3, _ = state_index(weekly, dt.date(2026, 5, 20), weeks=1)
     assert idx3["Florida"]["weeks"] == [{"w": "2026-05-23", "n": {"den": 3}}], "severe dengue counts with dengue"
     idx2, _ = state_index(weekly, dt.date(2026, 3, 12), weeks=2)

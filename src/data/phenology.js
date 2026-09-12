@@ -111,7 +111,7 @@ export function siteEntity(f, index, iso, ctx) {
       color,
       outlineColor: Cesium.Color.BLACK.withAlpha(0.7 * alpha),
       outlineWidth: 1,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      disableDepthTestDistance: 50_000,
       scaleByDistance: new Cesium.NearFarScalar(2.0e5, 1.5, 1.5e7, 0.6),
     },
     description: describeSite(p, scope, sum, ctx.source),

@@ -137,7 +137,7 @@ export function cellEntity(f, index, observedIso, ctx) {
       color,
       outlineColor: Cesium.Color.BLACK.withAlpha(active ? 0.6 : 0.1),
       outlineWidth: 1,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      disableDepthTestDistance: 50_000,
       scaleByDistance: new Cesium.NearFarScalar(2.0e5, 1.4, 1.5e7, 0.5),
     },
     description: describeCell(p, lon, lat, scope, sum, ctx.source),

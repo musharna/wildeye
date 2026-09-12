@@ -218,7 +218,7 @@ export function createBirdsLayer() {
     if (!_points || !_field || _field.total <= 0) return;
     while (_points.length < PARTICLE_COUNT) {
       _points.add({ id: `birds-particle:${_points.length}`, pixelSize: PARTICLE_PX, show: false,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY });
+        disableDepthTestDistance: 50_000 });
     }
     for (let i = 0; i < PARTICLE_COUNT; i++) spawn(i);
   }
