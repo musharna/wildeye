@@ -9570,15 +9570,18 @@ body.scene-playback-mode #key-setup {
 body.ui-clean-view #bio-card,
 body.recording-mode #bio-card { display: none !important; }
 /* ── SPECIES panel (src/bio/speciesPanel.js) ── */
-#left-panel-stack > #species-panel {
+/* Width at one ID, like #scene-panel: #species-panel.collapsed and the phone rule's #left-panel-stack > #species-panel then win. */
+#species-panel {
   --panel-expanded-width: 320px;
+  width: var(--panel-expanded-width);
+}
+#left-panel-stack > #species-panel {
   position: relative;
   top: auto;
   right: auto;
   bottom: auto;
   left: auto;
   z-index: auto;
-  width: var(--panel-expanded-width);
   max-height: none;
   flex: 0 0 auto;
   min-height: 0;
@@ -9642,7 +9645,3 @@ body.recording-mode #bio-card { display: none !important; }
 body.cockpit-mode #left-panel-stack > #species-panel { display: none !important; }
 body.ui-clean-view #species-panel,
 body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
-/* Phones: the max-width 720px rule lists #species-panel, but the #species-panel width rule above sits later in the file and wins on source order, so the phone width is repeated here. */
-@media (max-width: 720px) {
-  #left-panel-stack > #species-panel { width: 100%; }
-}

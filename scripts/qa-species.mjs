@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks card,search,here,portal] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,card,search,here,portal] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -51,6 +51,55 @@ await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 1
 await sleep(12000);
 await page.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
 await page.keyboard.press('Escape');
+
+if (CHECKS.has('panel-layout')) {
+  // CSS regex pins cannot see cascade results, so measure the stack panels in the page (R-6e): collapsed SPECIES is
+  // the same pill as collapsed SCENES, expanded SPECIES is its --panel-expanded-width, and on a 400px phone it fits.
+  const setOpen = (id, open) => page.evaluate((id, open) => {
+    const panel = document.getElementById(id);
+    if (panel && panel.classList.contains('collapsed') === open) panel.querySelector(`[data-collapse-target="${id}"]`)?.click();
+  }, id, open);
+  const measure = () => page.evaluate(() => {
+    const info = (id) => {
+      const el = document.getElementById(id);
+      const r = el.getBoundingClientRect();
+      return { collapsed: el.classList.contains('collapsed'), width: r.width, left: r.left, right: r.right, expandedVar: getComputedStyle(el).getPropertyValue('--panel-expanded-width').trim() };
+    };
+    return { viewport: window.innerWidth, species: info('species-panel'), scene: info('scene-panel') };
+  });
+  const initial = await page.evaluate(() => ({ species: document.getElementById('species-panel').classList.contains('collapsed'), scene: document.getElementById('scene-panel').classList.contains('collapsed') }));
+  await setOpen('species-panel', false);
+  await setOpen('scene-panel', false);
+  await sleep(1000);
+  const collapsed = await measure();
+  await setOpen('species-panel', true);
+  await sleep(1000);
+  const expanded = await measure();
+  await page.setViewport({ width: 400, height: 800 });
+  await sleep(2000);
+  await setOpen('species-panel', true);
+  await sleep(1000);
+  const phone = await measure();
+  await shot('panel-layout-phone');
+  await page.setViewport({ width: 1400, height: 900 });
+  await sleep(2000);
+  await setOpen('species-panel', !initial.species);
+  await setOpen('scene-panel', !initial.scene);
+  await sleep(800);
+  const restored = await measure();
+  const near = (a, b) => Math.abs(a - b) < 0.5;
+  const collapsedOk = collapsed.species.collapsed && collapsed.scene.collapsed && collapsed.species.width > 0 && collapsed.scene.width > 0 && near(collapsed.species.width, collapsed.scene.width);
+  const expandedOk = !expanded.species.collapsed && near(expanded.species.width, Number.parseFloat(expanded.species.expandedVar));
+  const phoneOk = !phone.species.collapsed && phone.species.right <= phone.viewport && phone.species.width >= 300;
+  const restoredOk = restored.viewport === 1400 && restored.species.collapsed === initial.species && restored.scene.collapsed === initial.scene;
+  report('panel-layout', collapsedOk && expandedOk && phoneOk && restoredOk, {
+    collapsed: { species: collapsed.species.width, scene: collapsed.scene.width },
+    expanded: { species: expanded.species.width, speciesExpandedVar: expanded.species.expandedVar },
+    phone: { viewport: phone.viewport, speciesWidth: phone.species.width, speciesLeft: phone.species.left, speciesRight: phone.species.right },
+    restored: { viewport: restored.viewport, speciesCollapsed: restored.species.collapsed, sceneCollapsed: restored.scene.collapsed },
+    collapsedOk, expandedOk, phoneOk, restoredOk,
+  });
+}
 
 if (CHECKS.has('card')) {
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', true, { origin: 'user' }));
