@@ -43,10 +43,13 @@ function checkPoint(lat, lon, radiusKm) {
   if (!RADII_KM.includes(radiusKm)) throw new Error(`bad radius ${radiusKm} km (allowed: ${RADII_KM.join(', ')})`);
 }
 
-/** Cesium URL template for GBIF hexagon tiles of one taxon. `adhoc`, because `density` ignores `license=`. */
+/**
+ * Cesium URL template for GBIF hexagon tiles of one taxon. `adhoc`, because `density` ignores `license=`. `srs=EPSG:3857`,
+ * because `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator.
+ */
 export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`densityTileTemplate: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: 'classic.poly', bin: 'hex', hexPerTile: '30' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: 'classic.poly', bin: 'hex', hexPerTile: '30', srs: 'EPSG:3857' });
   appendRecordFilters(params, years, now);
   return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }

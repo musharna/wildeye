@@ -140,16 +140,18 @@ if (CHECKS.has('search')) {
   await flyTo(-90, 30, 12_000_000);
   await sleep(6000);
   const tiles = requests.filter((u) => u.includes('/v2/map/occurrence/'));
+  // A tile counts only with both licences, the taxon and srs=EPSG:3857: without srs GBIF serves EPSG:4326 tiles, which
+  // Cesium's Web Mercator provider draws in the wrong place.
   const filtered = tiles.filter((u) => {
     const q = new URL(u).searchParams;
-    return u.includes('/v2/map/occurrence/adhoc/') && q.getAll('license').includes('CC0_1_0') && q.getAll('license').includes('CC_BY_4_0') && q.get('taxonKey') === '5133088';
+    return u.includes('/v2/map/occurrence/adhoc/') && q.getAll('license').includes('CC0_1_0') && q.getAll('license').includes('CC_BY_4_0') && q.get('taxonKey') === '5133088' && q.get('srs') === 'EPSG:3857';
   });
   const params = await page.evaluate(() => window.__godsEyeView.dataManager.getLayerParams('species'));
   // Ruling R-2a: the species layer counts only real HTTP/network tile errors (GBIF answers empty tiles with 204),
   // so after the tiles load its status must carry no error.
   const stats = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('species')?.module?.getStats() ?? null);
   await shot('search');
-  report('search', first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && stats?.error === null, { first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, sample: tiles[0] || null });
+  report('search', first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && stats?.error === null, { first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, srs: tiles[0] ? new URL(tiles[0]).searchParams.get('srs') : null, sample: tiles[0] || null });
 }
 
 let hereLink = null;
