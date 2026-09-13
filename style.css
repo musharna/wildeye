@@ -9626,7 +9626,9 @@ body.recording-mode #bio-card { display: none !important; }
 .species-label { color: var(--text-secondary); font: 9px var(--font-mono); letter-spacing: 1.2px; }
 #species-search { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: var(--text-primary); padding: 6px 8px; font: 12px var(--font-sans); }
 #species-search:focus { outline: none; border-color: var(--accent); }
-.species-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+/* About five one-line rows, then the list scrolls on its own, so the chips and the action below stay in view. */
+.species-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; max-height: 150px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.35) transparent; }
+.species-suggestions > li { flex: 0 0 auto; }
 .species-suggestions[hidden] { display: none; }
 .species-suggestion { width: 100%; text-align: left; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans); padding: 5px 8px; }
 .species-suggestion:hover, .species-suggestion:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }

@@ -162,12 +162,24 @@ test('parseSpeciesNear reads the total and the SPECIES_KEY facet; no count is an
 
 test('name parsers keep the fields the panel shows', () => {
   assert.deepEqual(
-    parseInatSuggest({ results: [{ id: 1001, name: 'Danaus plexippus', rank: 'species', preferred_common_name: 'Monarch', observations_count: 541746 }, { id: 2, rank: 'genus' }] }),
-    [{ id: 1001, gbifKey: null, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' }],
+    // names and matched_term as iNaturalist answered q=hump on 2026-09-13 (ids illustrative); a result may carry no matched_term
+    parseInatSuggest({ results: [
+      { id: 1001, name: 'Danaus plexippus', rank: 'species', preferred_common_name: 'Monarch', observations_count: 541746, matched_term: 'Monarch' },
+      { id: 11, name: 'Megaptera novaeangliae', rank: 'species', preferred_common_name: 'Humpback Whale', matched_term: 'Hump Whale' },
+      { id: 12, name: 'Neotibicen tibicen', rank: 'species', preferred_common_name: 'Swamp Cicada', matched_term: '' },
+      { id: 13, name: 'Danaus plexaure', rank: 'species', preferred_common_name: 'Soldier' },
+      { id: 2, rank: 'genus' },
+    ] }),
+    [
+      { id: 1001, gbifKey: null, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species', matchedTerm: 'Monarch' },
+      { id: 11, gbifKey: null, scientificName: 'Megaptera novaeangliae', commonName: 'Humpback Whale', rank: 'species', matchedTerm: 'Hump Whale' },
+      { id: 12, gbifKey: null, scientificName: 'Neotibicen tibicen', commonName: 'Swamp Cicada', rank: 'species', matchedTerm: null },
+      { id: 13, gbifKey: null, scientificName: 'Danaus plexaure', commonName: 'Soldier', rank: 'species', matchedTerm: null },
+    ],
   );
   assert.deepEqual(
     parseGbifSuggest([{ key: 6223161, canonicalName: 'Danaus plexaure', scientificName: 'Danaus plexaure (Godart)', rank: 'SPECIES' }]),
-    [{ id: null, gbifKey: 6223161, scientificName: 'Danaus plexaure', commonName: null, rank: 'species' }],
+    [{ id: null, gbifKey: 6223161, scientificName: 'Danaus plexaure', commonName: null, rank: 'species', matchedTerm: null }],
   );
   // live 2026-09-13: strict match on the synonym Megaptera nodosa → accepted key 5220086
   assert.equal(parseGbifMatch({ usageKey: 5220089, matchType: 'EXACT', status: 'SYNONYM', acceptedUsageKey: 5220086 }), 5220086);

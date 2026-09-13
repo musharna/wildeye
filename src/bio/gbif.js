@@ -159,7 +159,8 @@ export function inatSuggestUrl(q) {
 export function parseInatSuggest(json) {
   return (json?.results || [])
     .filter((r) => r && typeof r.name === 'string' && r.name && typeof r.rank === 'string')
-    .map((r) => ({ id: r.id ?? null, gbifKey: null, scientificName: r.name, commonName: r.preferred_common_name || null, rank: r.rank }));
+    // matched_term is the name iNaturalist matched, which can be another common name ("Hump-back Cicada" for Swamp Cicada)
+    .map((r) => ({ id: r.id ?? null, gbifKey: null, scientificName: r.name, commonName: r.preferred_common_name || null, rank: r.rank, matchedTerm: typeof r.matched_term === 'string' && r.matched_term ? r.matched_term : null }));
 }
 
 export function gbifSuggestUrl(q) {
@@ -169,7 +170,7 @@ export function gbifSuggestUrl(q) {
 export function parseGbifSuggest(json) {
   return (Array.isArray(json) ? json : [])
     .filter((r) => r && Number.isInteger(r.key))
-    .map((r) => ({ id: null, gbifKey: r.key, scientificName: r.canonicalName || r.scientificName, commonName: null, rank: String(r.rank || '').toLowerCase() }));
+    .map((r) => ({ id: null, gbifKey: r.key, scientificName: r.canonicalName || r.scientificName, commonName: null, rank: String(r.rank || '').toLowerCase(), matchedTerm: null }));
 }
 
 export function gbifMatchUrl(name) {

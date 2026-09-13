@@ -71,6 +71,22 @@ test('suggestion text puts the common name first', () => {
   assert.equal(suggestionText({ commonName: null, scientificName: 'Danaus plexaure', rank: 'species' }), 'Danaus plexaure (species)');
 });
 
+// iNaturalist also matches other common names (q=hump, 2026-09-13: Swamp Cicada matched "Hump-back Cicada"), so a row
+// says what matched when that is not a name the row already shows.
+test('suggestion text names the matched term only when it differs from the common and the scientific name', () => {
+  const cases = [
+    [{ commonName: 'Swamp Cicada', scientificName: 'Neotibicen tibicen', rank: 'species', matchedTerm: 'Hump-back Cicada' }, 'Swamp Cicada · Neotibicen tibicen (species) — matched "Hump-back Cicada"'],
+    [{ commonName: 'Humpback Whale', scientificName: 'Megaptera novaeangliae', rank: 'species', matchedTerm: 'Hump Whale' }, 'Humpback Whale · Megaptera novaeangliae (species) — matched "Hump Whale"'],
+    [{ commonName: 'Humpback Whales', scientificName: 'Megaptera', rank: 'genus', matchedTerm: 'Humpback Whales' }, 'Humpback Whales · Megaptera (genus)'],
+    [{ commonName: 'Humpback Whales', scientificName: 'Megaptera', rank: 'genus', matchedTerm: 'humpback WHALES' }, 'Humpback Whales · Megaptera (genus)'],
+    [{ commonName: 'Monarch', scientificName: 'Danaus plexippus', rank: 'species', matchedTerm: 'danaus plexippus' }, 'Monarch · Danaus plexippus (species)'],
+    [{ commonName: null, scientificName: 'Danaus plexaure', rank: 'species', matchedTerm: 'Danaus plexaure' }, 'Danaus plexaure (species)'],
+    [{ commonName: null, scientificName: 'Danaus plexaure', rank: 'species', matchedTerm: null }, 'Danaus plexaure (species)'],
+    [{ commonName: null, scientificName: 'Danaus plexaure', rank: 'species', matchedTerm: 'Soldier' }, 'Danaus plexaure (species) — matched "Soldier"'],
+  ];
+  assert.deepEqual(cases.map(([item]) => suggestionText(item)), cases.map(([, text]) => text));
+});
+
 test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits are in place', () => {
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');

@@ -5,8 +5,13 @@
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
 
+/** "Common · Scientific (rank)", plus the term iNaturalist matched when it is neither name (it matches other common names too). */
 export function suggestionText(item) {
-  return `${item.commonName ? `${item.commonName} · ` : ''}${item.scientificName} (${item.rank})`;
+  const text = `${item.commonName ? `${item.commonName} · ` : ''}${item.scientificName} (${item.rank})`;
+  const term = item.matchedTerm;
+  if (!term) return text;
+  const isTerm = (name) => typeof name === 'string' && name.toLowerCase() === term.toLowerCase();
+  return isTerm(item.commonName) || isTerm(item.scientificName) ? text : `${text} — matched "${term}"`;
 }
 
 export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, client, whatLivesHere, setTimer = setTimeout, clearTimer = clearTimeout }) {
