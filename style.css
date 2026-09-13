@@ -9634,12 +9634,26 @@ body.recording-mode #bio-card { display: none !important; }
 .species-suggestion:hover, .species-suggestion:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }
 .species-status { color: var(--text-secondary); font-size: 11px; }
 .species-status:empty { display: none; }
-.species-chosen { display: flex; align-items: center; gap: 8px; }
+.species-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .species-chosen[hidden] { display: none; }
 .species-chosen-name { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Hexagon colours: GBIF's classic.poly classes (github.com/gbif/maps, mapnik-server cartocss/classic-poly.mss: up to 10, 100,
+   1,000, 10,000, 100,000 and more records per hexagon), the same colours as pixels sampled from monarch tiles on 2026-09-13. */
+.species-legend { flex: 1 0 100%; display: flex; align-items: center; gap: 8px; color: rgba(232, 234, 237, 0.78); font-size: 11px; }
+.species-legend[hidden] { display: none; }
+.species-legend-ramp { flex: 0 0 72px; height: 8px; border-radius: 2px; background: linear-gradient(90deg, #ffff00, #ffcc00, #ff9900, #ff6600, #d60a00, #c2002d); }
 .species-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
-.species-chip[aria-pressed="true"], .species-action[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-.species-credit { margin: 0; color: var(--text-dim); font-size: 10px; }
+/* .scene-btn:hover paints exactly the pressed look, so a hovered chip (a resting pointer, a sticky touch hover) read as pressed:
+   at 400x800 the pointer sat on ALL YEARS. Hover on an unpressed chip only lightens it; a pressed chip stays pressed under hover. */
+.species-chip:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.38); background: rgba(255, 255, 255, 0.09); }
+.species-chip[aria-pressed="true"], .species-chip[aria-pressed="true"]:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+/* The action is not a toggle: a full-width accent pill at rest, filled while armed (aria-pressed="true"). */
+.species-action { flex: 0 0 auto; border-radius: 999px; color: var(--accent); border-color: rgba(0, 212, 255, 0.75); background: rgba(0, 212, 255, 0.06); font-size: 10px; font-weight: 700; letter-spacing: 1.6px; padding: 8px 12px; }
+.species-action:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.species-action[aria-pressed="true"], .species-action[aria-pressed="true"]:hover:not(:disabled) { color: #03141b; border-color: var(--accent); background: var(--accent); }
+/* The two credits break between each other, never inside one. */
+.species-credit { margin: 0; color: rgba(232, 234, 237, 0.78); font-size: 11px; line-height: 1.4; }
+.species-credit > span { white-space: nowrap; }
 #species-panel.collapsed { width: var(--left-collapsed-width); }
 #species-panel.collapsed .species-body { display: none !important; }
 #species-panel.collapsed .panel-title { font-size: 8px; letter-spacing: 1.8px; }

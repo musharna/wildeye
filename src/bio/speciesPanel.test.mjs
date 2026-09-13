@@ -17,7 +17,7 @@ function fakeElement() {
   };
 }
 
-const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-years', 'species-radius', 'species-what-lives-here'];
+const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-years', 'species-radius', 'species-what-lives-here'];
 
 function panelRig({ match = async () => 5133088 } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
@@ -87,6 +87,18 @@ test('suggestion text names the matched term only when it differs from the commo
   assert.deepEqual(cases.map(([item]) => suggestionText(item)), cases.map(([, text]) => text));
 });
 
+test('the colour legend shows only while the map is on', async () => {
+  const { panel, els } = panelRig();
+  assert.equal(els['species-legend'].hidden, true, 'no species chosen, map off');
+  await panel.choose({ gbifKey: 5133088, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' });
+  assert.equal(els['species-toggle'].textContent, 'MAP ON');
+  assert.equal(els['species-legend'].hidden, false, 'map on');
+  els['species-toggle'].listeners.click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(els['species-toggle'].textContent, 'MAP OFF');
+  assert.equal(els['species-legend'].hidden, true, 'map off again');
+});
+
 test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits are in place', () => {
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
@@ -97,6 +109,15 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   for (const id of PANEL_IDS) assert.match(stack, new RegExp(`id="${id}"`), id);
   assert.match(stack, /data-collapse-target="species-panel"/);
   assert.doesNotMatch(stack.slice(stack.indexOf('id="species-panel"')), /data-requires-backend/, 'species search works on the static host');
+  // The action sits directly after the chosen-species block (its legend inside it), before the chips, so a squeezed
+  // panel still shows it; the credit line is last.
+  const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
+  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<div id="species-legend"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"/);
+  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-legend"', 'id="species-what-lives-here"', 'id="species-years"', 'id="species-radius"', 'class="species-credit"'];
+  const positions = order.map((marker) => panelHtml.indexOf(marker));
+  assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);
+  assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'markup order');
+  assert.doesNotMatch(panelHtml.slice(panelHtml.indexOf('class="species-credit"')), /<button|<input|id="species-/, 'nothing after the credit line');
   assert.match(css, /#left-panel-stack > #species-panel \{[^}]*order: 5;/);
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);

@@ -697,7 +697,9 @@
         <div id="species-chosen" class="species-chosen" hidden>
           <span id="species-chosen-name" class="species-chosen-name"></span>
           <button type="button" id="species-toggle" class="scene-btn species-chip" aria-pressed="false">MAP OFF</button>
+          <div id="species-legend" class="species-legend" hidden><span class="species-legend-ramp" aria-hidden="true"></span><span class="species-legend-text">fewer → more records</span></div>
         </div>
+        <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">WHAT LIVES HERE</button>
         <div id="species-years" class="species-chip-row" role="group" aria-label="Years">
           <button type="button" class="scene-btn species-chip" data-years="recent" aria-pressed="true">LAST 10 YEARS</button>
           <button type="button" class="scene-btn species-chip" data-years="all" aria-pressed="false">ALL YEARS</button>
@@ -707,8 +709,7 @@
           <button type="button" class="scene-btn species-chip" data-radius="10" aria-pressed="true">10 KM</button>
           <button type="button" class="scene-btn species-chip" data-radius="50" aria-pressed="false">50 KM</button>
         </div>
-        <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">WHAT LIVES HERE</button>
-        <p class="species-credit">Names: iNaturalist · Records: GBIF.org (CC0 and CC BY only)</p>
+        <p class="species-credit"><span>Names: iNaturalist ·</span> <span>Records: GBIF.org, CC0/CC BY</span></p>
       </div>
     </div>
   </div>

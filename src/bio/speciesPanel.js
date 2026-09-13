@@ -1,6 +1,6 @@
 /**
  * SPECIES panel (spec: docs/superpowers/specs/2026-09-13-species-search-design.md): name search with
- * suggestions, the chosen species with a map switch, year and radius chips, and the "What lives here" button.
+ * suggestions, the chosen species with a map switch and a colour legend, the "What lives here" button, and year and radius chips.
  */
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
@@ -26,6 +26,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
   const chosen = el('species-chosen');
   const chosenName = el('species-chosen-name');
   const toggle = el('species-toggle');
+  const legend = el('species-legend');
   const yearChips = el('species-years');
   const radiusChips = el('species-radius');
   const armButton = el('species-what-lives-here');
@@ -56,6 +57,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
     }
     toggle.textContent = on ? 'MAP ON' : 'MAP OFF';
     toggle.setAttribute('aria-pressed', String(on));
+    legend.hidden = !on;
     for (const chip of yearChips.querySelectorAll('[data-years]')) chip.setAttribute('aria-pressed', String(chip.dataset.years === p.years));
     for (const chip of radiusChips.querySelectorAll('[data-radius]')) chip.setAttribute('aria-pressed', String(Number(chip.dataset.radius) === p.radiusKm));
     const stats = speciesLayer.getStats();
