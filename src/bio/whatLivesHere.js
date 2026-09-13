@@ -100,6 +100,7 @@ export function createWhatLivesHere({
   return {
     get armed() { return armed; },
     arm() {
+      controller?.abort(); // a search still in flight must not replace the prompt or leave a Retry for the old spot
       setArmed(true);
       card.showStatus({ heading: HEADING, message: 'Click a spot on the globe. Esc cancels.' });
     },
