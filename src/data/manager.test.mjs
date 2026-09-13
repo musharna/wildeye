@@ -64,6 +64,34 @@ test('a static host (no /api server) hides requiresBackend layers from the panel
   assert.deepEqual(build(true), { flights: true, drought: true }, 'positive control: with a backend both are offered');
 });
 
+test('a static host refuses enabling requiresBackend layers from any entry point, not only the panel', async () => {
+  // Context modes, scenes and share links call setEnabled directly; hiding the toggle alone let CONTACTS
+  // switch Live Flights on and fire /api/opensky 404s on GitHub Pages (2026-09-13).
+  const build = (hasBackend) => {
+    const mgr = new DataLayerManager({}, { hasBackend });
+    const live = makeSlowLayer('flights', { updateInterval: 0 });
+    live.module.requiresBackend = true;
+    const bio = makeSlowLayer('drought', { updateInterval: 0 });
+    mgr.register(live.module);
+    mgr.register(bio.module);
+    return { mgr, live, bio };
+  };
+  const stat = build(false);
+  const dev = build(true);
+  try {
+    assert.equal(await stat.mgr.setEnabled('flights', true, { origin: 'user' }), false);
+    assert.equal(stat.mgr.isEnabled('flights'), false);
+    assert.equal(stat.live.calls.init, 0, 'refused before lifecycle work, so no /api request starts');
+    assert.notEqual(await stat.mgr.setEnabled('drought', true, { origin: 'user' }), false, 'positive control: a static layer still enables');
+    assert.equal(stat.mgr.isEnabled('drought'), true);
+    await dev.mgr.setEnabled('flights', true, { origin: 'user' });
+    assert.equal(dev.mgr.isEnabled('flights'), true, 'positive control: with a backend the server layer enables');
+  } finally {
+    await stat.mgr.destroyAll();
+    await dev.mgr.destroyAll();
+  }
+});
+
 test('adopts direct layer params without re-entering the layer setter', () => {
   let params = { selectedFlightsTrackingId: 'flight-a' };
   let setterCalls = 0;

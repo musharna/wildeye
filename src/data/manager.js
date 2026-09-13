@@ -125,6 +125,15 @@ export class DataLayerManager {
     this._visibilityRequestListeners = new Set();
     this._beforeDestroyListeners = new Set();
     this._visibilityGuards = new Set();
+    // A static host (GitHub Pages) cannot serve the /api proxies requiresBackend layers read. Hiding their
+    // toggles is not enough: Context modes, scenes and share links call setEnabled directly, so refuse here.
+    if (!this._hasBackend) {
+      this._visibilityGuards.add(({ layerId, enabled }) => (
+        enabled && this.layers.get(layerId)?.module?.requiresBackend
+          ? 'Needs the local server (not available on the hosted site)'
+          : null
+      ));
+    }
     this._registrationsFinalized = false;
     this._registrationDispositions = null;
     this._allowQaRegistration = allowQaRegistration === true;
