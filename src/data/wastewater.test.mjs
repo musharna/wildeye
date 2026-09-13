@@ -43,7 +43,7 @@ test('layer: contract, MultiPolygon parts, observed-time recolour, legend counts
     // observed instant inside the 09-04 gap → A falls back to 08-28 (falling), B has no value that week
     assert.equal(l.setObservedTime('2026-09-06T00:00:00Z'), true);
     assert.deepEqual(l.getStats().classes, { falling: 1, none: 1 });
-    assert.equal(ds.entities.getById('ww:01003:0').polygon.material.getValue().color.alpha < 0.3, true, 'no-data county fades');
+    assert.equal(ds.entities.getById('ww:01003:0').polygon.material.getValue().color.alpha, 0.35, 'no-data county → visible grey (0.18 read as bare imagery)');
     const legend = l.getRowControls().legend;
     assert.equal(legend.find((i) => /^falling/.test(i.label)).count, 1);
     assert.equal(legend.find((i) => i.label === NO_DATA.label).count, 1);

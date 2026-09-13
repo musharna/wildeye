@@ -10,6 +10,9 @@ import * as Cesium from "cesium";
  */
 const DATA_URL = "data/gfw.geojson";
 const FILL_ALPHA = 0.5;
+// A no-data area must read as FILLED grey, not bare imagery: 0.12–0.18 was indistinguishable from no polygon
+// in the real-app screenshots (2026-09-12); arbonet, hpai and whispers use the same value.
+export const EMPTY_ALPHA = 0.35;
 const DAY_MS = 86_400_000;
 export const LIVE_WEEKS = 4;
 
@@ -115,7 +118,7 @@ export function countryEntities(f, observedIso, today, source = {}) {
   const d = density(scope.bins, scope.span, p.area_km2);
   const cls = densityClass(d);
   const color = Cesium.Color.fromCssColorString(cls.color).withAlpha(
-    cls === NO_DATA ? 0.12 : FILL_ALPHA,
+    cls === NO_DATA ? EMPTY_ALPHA : FILL_ALPHA,
   );
   const polys =
     f.geometry.type === "MultiPolygon"

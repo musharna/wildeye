@@ -42,6 +42,21 @@ def fetch_png(url: str, timeout: int = 180) -> np.ndarray:
         data = r.read()
     return np.asarray(Image.open(io.BytesIO(data)).convert("RGBA"))
 
+def fill_empty_right_edge(rgba: np.ndarray) -> np.ndarray:
+    """ERDDAP's transparentPng leaves the LAST pixel column empty for a whole-globe request, whatever
+    longitude range is asked for (NOAA_DHW and the VIIRS chlorophyll set, probed 2026-09-12). Drawn
+    over -180..180 that empty column is a visible seam along the antimeridian. When the last column is
+    fully transparent and its neighbour has data, repeat the neighbour (0.25° at 1440 px wide).
+    Anything else — data in the last column, or nothing next to it either — is left as it is."""
+    if rgba.ndim != 3 or rgba.shape[1] < 2 or rgba.shape[2] != 4:
+        return rgba
+    if rgba[:, -1, 3].any() or not rgba[:, -2, 3].any():
+        return rgba
+    out = rgba.copy()
+    out[:, -1] = rgba[:, -2]
+    return out
+
+
 def fetch_time(url: str | None) -> str | None:
     if not url:
         return None
@@ -121,7 +136,7 @@ def process(product: dict, out_dir: Path) -> dict:
         rgba, when_from_name = fetch_cmems(product)
     else:
         url, when_from_name = resolve_source(product)
-        rgba = fetch_png(url)
+        rgba = fill_empty_right_edge(fetch_png(url))
     masked = 0.0
     t = product.get("transparent", "none")
     if isinstance(t, dict) and "rgb" in t:

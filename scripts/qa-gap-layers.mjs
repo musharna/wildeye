@@ -107,7 +107,7 @@ for (const shot of IDS) {
       if (d.show && d.entities?.values?.length) ds.push([d.name, d.entities.values.length]);
     }
     g.requestRender?.();
-    return { stats: s, dataSources: ds, imageryAdded: g.viewer.imageryLayers.length - imagery0 };
+    return { stats: s, dataSources: ds, imageryAdded: g.viewer.imageryLayers.length - imagery0, imageryTotal: g.viewer.imageryLayers.length };
   }, id);
   await new Promise((r) => setTimeout(r, 8000)); // imagery tiles settle at the new view
   await page.screenshot({ path: path.join(SHOTS, `${shot.replace('@', '-')}.png`) });
@@ -122,7 +122,7 @@ for (const shot of IDS) {
   const drawn = ents > 0 || res.imageryAdded > 0 || s.drapes > 0 || s.particles > 0;
   if (!drawn) problems.push(`nothing drawn: entities=${ents} imageryAdded=${res.imageryAdded} (shown sources: ${JSON.stringify(res.dataSources)})`);
   if (pageErrors.length) problems.push(`page errors: ${pageErrors.slice(0, 3).join(' | ')}`);
-  console.log(`${problems.length ? 'FAIL' : 'PASS'} ${shot}: count=${s.count} entities=${ents} imagery+${res.imageryAdded ?? 0} ${Date.now() - t0}ms${problems.length ? ' — ' + problems.join('; ') : ''}`);
+  console.log(`${problems.length ? 'FAIL' : 'PASS'} ${shot}: count=${s.count} entities=${ents} imagery+${res.imageryAdded ?? 0} shown=[${(res.dataSources || []).map(([n, c]) => `${n}:${c}`).join(' ')}] imageryTotal=${res.imageryTotal ?? '?'} ${Date.now() - t0}ms${problems.length ? ' — ' + problems.join('; ') : ''}`);
   if (problems.length) failures++;
   await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, false), id);
 }

@@ -10,6 +10,9 @@ import * as Cesium from "cesium";
  */
 const DATA_URL = "data/wastewater.geojson";
 const FILL_ALPHA = 0.55;
+// A no-data area must read as FILLED grey, not bare imagery: 0.12–0.18 was indistinguishable from no polygon
+// in the real-app screenshots (2026-09-12); arbonet, hpai and whispers use the same value.
+export const EMPTY_ALPHA = 0.35;
 
 export const TREND_CLASSES = Object.freeze([
   { key: "falling", label: "falling (< −0.15 log₁₀, below ~70% of prior 15 d)", color: "#3b82f6", test: (t) => t < -0.15 },
@@ -59,7 +62,7 @@ export function countyEntities(f, observedIso, source = {}) {
   const p = f.properties || {};
   const week = trendAtOrBefore(p.weeks, observedIso);
   const cls = trendClass(week?.t);
-  const color = Cesium.Color.fromCssColorString(cls.color).withAlpha(week ? FILL_ALPHA : 0.18);
+  const color = Cesium.Color.fromCssColorString(cls.color).withAlpha(week ? FILL_ALPHA : EMPTY_ALPHA);
   const polys = f.geometry.type === "MultiPolygon" ? f.geometry.coordinates : [f.geometry.coordinates];
   return polys.map((poly, k) => ({
     id: `ww:${p.fips}:${k}`,

@@ -49,7 +49,7 @@ test('layer: contract, MultiPolygon parts, observed-time recolour, legend counts
     assert.equal(await l.update(), true);
     assert.equal(ds.entities.values.length, 3);
     assert.deepEqual(l.getStats().classes, { high: 1, none: 1 }, 'live: A = 75.25/week, B has only a June week');
-    assert.ok(ds.entities.getById('gfw:BBB:1').polygon.material.getValue().color.alpha < 0.2);
+    assert.equal(ds.entities.getById('gfw:BBB:1').polygon.material.getValue().color.alpha, 0.35, 'no alerts → visible grey (0.12 read as bare imagery)');
     assert.equal(l.setObservedTime('2026-06-03T00:00:00Z'), true);
     assert.deepEqual(l.getStats().classes, { severe: 1, trace: 1 });
     const legend = l.getRowControls().legend;

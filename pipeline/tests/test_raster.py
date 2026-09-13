@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from pipeline.raster import color_to_alpha, PaletteChanged
+from pipeline.raster import color_to_alpha, PaletteChanged, fill_empty_right_edge
 
 
 def test_pinned_colour_becomes_transparent_others_survive_and_fraction_reported():
@@ -118,3 +118,18 @@ def test_ramp_rgba_and_fetch_cmems_pick_latest_analysis_day_and_flip_north_up():
         fetch_cmems(product, today=dt.date(2026, 9, 1), open_dataset=open_dataset); assert False
     except RuntimeError as e:
         assert "no time step" in str(e)
+
+
+def test_fill_empty_right_edge_closes_the_antimeridian_seam_only_when_erddap_left_it_empty():
+    """Mutant seen failing: returning the image unchanged (the seam stays). Positive controls: an image
+    with data in its last column, and one with nothing beside an empty last column, are untouched."""
+    img = np.zeros((3, 4, 4), dtype=np.uint8)
+    img[:, :3] = [10, 20, 30, 255]          # data everywhere except the last column (ERDDAP's output)
+    fixed = fill_empty_right_edge(img)
+    assert (fixed[:, -1] == [10, 20, 30, 255]).all()
+    assert (img[:, -1, 3] == 0).all(), "input not modified in place"
+    full = np.full((3, 4, 4), 200, dtype=np.uint8)
+    assert fill_empty_right_edge(full) is full
+    land = np.zeros((3, 4, 4), dtype=np.uint8)
+    land[:, :2] = [1, 2, 3, 255]            # last two columns empty (e.g. land/no data) → leave the gap
+    assert fill_empty_right_edge(land) is land
