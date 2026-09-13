@@ -18,6 +18,7 @@ import gfwLayer from './data/gfw.js';
 import whispersLayer from './data/whispers.js';
 import riversLayer from './data/rivers.js';
 import ecoregionsLayer from './data/ecoregions.js';
+import speciesLayer from './data/species.js';
 import firesLayer from './data/fires.js';
 import h5n1Layer from './data/h5n1.js';
 import droughtLayer from './data/drought.js';
@@ -265,6 +266,7 @@ async function init() {
     dataManager.register(neonVectorsLayer);
     dataManager.register(phenologyLayer);
     dataManager.register(arbonetLayer);
+    dataManager.register(speciesLayer);
     // Shared observed-time selector: one bar, every bio layer samples its own data at the instant.
     const observedTime = createObservedTime({ domainDays: 30 });
     const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer];

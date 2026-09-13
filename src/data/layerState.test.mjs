@@ -155,8 +155,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 44);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 44);
+  assert.equal(REGISTERED_LAYER_IDS.length, 45);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 45);
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.throws(
     () => validateLayerStateRegistry([...LAYER_STATE_REGISTRY, LAYER_STATE_REGISTRY[0]]),
@@ -1601,4 +1601,26 @@ test('the owner layer going away revokes the pending watch at any origin', async
     );
     f.coordinator.destroy();
   }
+});
+
+test('species options round-trip through a share link: taxon key, all years, 50 km', () => {
+  const state = normalizeLayerState({
+    enabledLayerIds: ['species'],
+    options: { species: { taxonKey: 5133088, years: 'all', radiusKm: 50 } },
+  });
+  const query = encode(state);
+  assert.match(query, /(^|&)l=sp(&|$)/);
+  const decoded = decodeLayerStateParams(new URLSearchParams(query));
+  assert.deepEqual(decoded.enabledLayerIds, ['species']);
+  assert.deepEqual(decoded.options.species, { taxonKey: 5133088, years: 'all', radiusKm: 50 });
+});
+
+test('species defaults stay out of the URL and invalid species values decode to the defaults', () => {
+  const state = normalizeLayerState({
+    enabledLayerIds: ['species'],
+    options: { species: { taxonKey: null, years: 'recent', radiusKm: 10 } },
+  });
+  assert.doesNotMatch(encode(state), /sp\./);
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=sp&lo=sp.k.-4_sp.y.z_sp.r.7'));
+  assert.deepEqual(decoded.options.species, { taxonKey: null, years: 'recent', radiusKm: 10 });
 });

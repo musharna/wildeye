@@ -248,6 +248,23 @@ const OPTION_GROUPS = Object.freeze({
       decode: (value) => (/^\d{1,3}$/.test(value) ? normalizeVolume(Number(value) / 100) : null),
     }),
   ]),
+  species: Object.freeze([
+    integerOption('taxonKey', 'k', null),
+    enumOption('years', 'y', 'recent', ['recent', 'all'], { recent: 'r', all: 'a' }),
+    Object.freeze({
+      key: 'radiusKm',
+      token: 'r',
+      defaultValue: 10,
+      // Numeric, so not enumOption: its reverse map would decode '50' as the string '50', which the
+      // enum then rejects, silently turning every shared 50 km link into 10 km.
+      normalize: (value) => ([1, 10, 50].includes(value) ? value : null),
+      encode: (value) => String(value),
+      decode: (value) => {
+        const km = Number(value);
+        return [1, 10, 50].includes(km) ? km : null;
+      },
+    }),
+  ]),
 });
 
 const TRACKING_OPTION_KEY_BY_LAYER = Object.freeze({
@@ -321,6 +338,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'rivers', token: 'rv', disposition: 'enabled-only' }),
   Object.freeze({ id: 'rocket-launches', token: 'x', disposition: 'enabled-only' }),
   Object.freeze({ id: 'satellites', token: 's', disposition: 'enabled+options', optionOwner: 'satellites' }),
+  Object.freeze({ id: 'species', token: 'sp', disposition: 'enabled+options', optionOwner: 'species' }),
   Object.freeze({ id: 'telegeography-submarine-cables', token: 'u', disposition: 'enabled-only' }),
   Object.freeze({ id: 'tracks', token: '1', disposition: 'enabled-only' }),
   Object.freeze({ id: 'traffic', token: 't', disposition: 'enabled-only' }),
