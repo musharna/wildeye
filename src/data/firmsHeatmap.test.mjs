@@ -3,7 +3,7 @@
 // Pure function — no viewer/DOM needed; imported directly.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapAnalystRecord } from './firmsHeatmap.js';
+import { mapAnalystRecord, createFirmsHeatmapLayer } from './firmsHeatmap.js';
 
 const FULL_FIRE = {
   index: 7,
@@ -56,4 +56,10 @@ test('firms analyst record: output is JSON-safe (no Cesium types leak)', () => {
   const r = mapAnalystRecord({ ...FULL_FIRE, contextEntity: {}, position: { x: 1 } });
   assert.deepEqual(JSON.parse(JSON.stringify(r)), r);
   assert.equal('position' in r, false);
+});
+
+test('createFirmsHeatmapLayer carries requiresBackend so a static host hides the /api/firms layer', () => {
+  // Mutant seen failing: omitting `requiresBackend` from the returned layer object (the factory used to drop it).
+  assert.equal(createFirmsHeatmapLayer({ id: 'local-firms', name: 'F', requiresBackend: true }).requiresBackend, true);
+  assert.equal(createFirmsHeatmapLayer({ id: 'x', name: 'F' }).requiresBackend, false, 'positive control: default is no backend needed');
 });

@@ -3880,6 +3880,7 @@ function _focusEvidenceSnapshot() {
  */
 const flightsLayer = {
   id: 'flights',
+  requiresBackend: true,
   name: 'Live Flights',
   icon: '✈️',
   source: 'OpenSky Network',

@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { HAS_BACKEND } from './backend.js';
 import { StyleManager } from './ui.js';
 import { flyToAustin } from './camera.js';
 import { DataLayerManager } from './data/manager.js';
@@ -327,7 +328,7 @@ async function init() {
     // Provider Settings (the POWER UP chip + dialog). Fire-and-forget: the
     // module removes its own surface when the dev-server endpoint is absent
     // (prod builds, non-local visitors), so this costs prod exactly nothing.
-    void initKeySetup();
+    if (HAS_BACKEND) void initKeySetup();
 
     // Expose for debugging
     // Idle render governor: flips the scene into requestRenderMode whenever
@@ -383,7 +384,8 @@ async function init() {
       getRenderGovernorDiagnostics,
       requestRender: governorRequestRender,
     };
-    window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
+    // The voice agent needs the server's OpenAI Realtime session proxy; a static host has none.
+    if (HAS_BACKEND) window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
 
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);

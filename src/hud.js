@@ -1,3 +1,4 @@
+import { HAS_BACKEND } from './backend.js';
 /**
  * @module hud
  * @description Intelligence HUD Overlay — NRO/NGA Satellite Aesthetic.
@@ -655,6 +656,10 @@ export class IntelHUD {
     if (force) this._setSummaryText(fallbackText, false);
     this._summaryDirty = false;
     this._lastSummarySignature = signature;
+    if (!HAS_BACKEND) {
+      this._setSummaryText(fallbackText, animate);
+      return;
+    }
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 5000);
     this._summaryRequest = controller;

@@ -2583,6 +2583,7 @@ function removeInteraction() {
 /** Radio layer lifecycle implementation. */
 export const radioLayer = {
   id: 'radio',
+  requiresBackend: true,
   name: 'Radio',
   icon: '◉',
   source: 'Radio Browser',

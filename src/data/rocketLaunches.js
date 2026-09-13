@@ -3404,6 +3404,7 @@ function requestMissionUpdate() {
 
 const rocketLaunchesLayer = {
   id: 'rocket-launches',
+  requiresBackend: true,
   name: 'Space Missions (30d)',
   icon: '🚀',
   source: 'Launch Library 2',

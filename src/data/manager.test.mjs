@@ -50,6 +50,20 @@ test('keeps panel-hidden coordinator layers registered and addressable', () => {
   assert.equal(mgr.isEnabled('military-awareness'), false);
 });
 
+test('a static host (no /api server) hides requiresBackend layers from the panel, keeps them registered', () => {
+  // Mutant seen failing: dropping `&& !this._hasBackend` hides server layers in dev too.
+  const build = (hasBackend) => {
+    const mgr = new DataLayerManager({}, { hasBackend });
+    const live = makeSlowLayer('flights', { updateInterval: -1 });
+    live.module.requiresBackend = true;
+    mgr.register(live.module);
+    mgr.register(makeSlowLayer('drought', { updateInterval: -1 }).module);
+    return Object.fromEntries(mgr.getAll().map(({ id, showInTogglePanel }) => [id, showInTogglePanel]));
+  };
+  assert.deepEqual(build(false), { flights: false, drought: true }, 'static host: server layer hidden, static layer offered');
+  assert.deepEqual(build(true), { flights: true, drought: true }, 'positive control: with a backend both are offered');
+});
+
 test('adopts direct layer params without re-entering the layer setter', () => {
   let params = { selectedFlightsTrackingId: 'flight-a' };
   let setterCalls = 0;

@@ -337,6 +337,7 @@ const shipIconCache = new Map();
 
 const aisLiveVesselsLayer = {
   id: 'ais-live-vessels',
+  requiresBackend: true,
   name: 'Live AIS Vessels',
   icon: '◭',
   source: 'AISStream',

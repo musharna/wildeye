@@ -1517,6 +1517,7 @@ export function applySatellitePointFocusDeemphasis({
 
 const satellitesLayer = {
   id: 'satellites',
+  requiresBackend: true,
   name: 'Satellites',
   icon: '🛰️',
   source: 'CelesTrak',

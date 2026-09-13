@@ -1,3 +1,4 @@
+import { HAS_BACKEND } from '../backend.js';
 import { governorRequestRender } from '../renderGovernor.js';
 import { markDetectionSourcesChanged } from './detection.js';
 function cloneLayerParams(value) {
@@ -116,8 +117,9 @@ export function layerFeedState(stats = {}) {
  * for real-time data overlays on the CesiumJS globe.
  */
 export class DataLayerManager {
-  constructor(viewer, { allowQaRegistration = false } = {}) {
+  constructor(viewer, { allowQaRegistration = false, hasBackend = HAS_BACKEND } = {}) {
     this.viewer = viewer;
+    this._hasBackend = hasBackend !== false;
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
     this._listeners = new Set();
     this._visibilityRequestListeners = new Set();
@@ -1922,7 +1924,8 @@ export class DataLayerManager {
         name: entry.module.name,
         icon: entry.module.icon,
         source: entry.module.source,
-        showInTogglePanel: entry.module.showInTogglePanel !== false,
+        // `requiresBackend` layers read /api/* proxies that a static host (GitHub Pages) cannot serve.
+        showInTogglePanel: entry.module.showInTogglePanel !== false && !(entry.module.requiresBackend && !this._hasBackend),
         enabled: entry.enabled,
         lifecycleState: entry.lifecycleState,
         lifecycleUncertain: entry.lifecycleUncertain,

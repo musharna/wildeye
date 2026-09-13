@@ -544,6 +544,7 @@ async function loadInstallations() {
 
 const militaryInstallationsLayer = {
   id: LAYER_ID,
+  requiresBackend: true,
   name: 'Mapped Installations',
   icon: '⌖',
   source: 'OpenStreetMap + optional Google Maps Places',

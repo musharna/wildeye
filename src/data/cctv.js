@@ -4164,6 +4164,7 @@ async function syncHealthState(force = false) {
  */
 const cctvLayer = {
   id: 'cctv',
+  requiresBackend: true,
   name: 'CCTV',
   icon: '📹',
   source: 'CCTV + Street View fallback',

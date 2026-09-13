@@ -2601,6 +2601,7 @@ export function mapAnalystRecord(icao24, info) {
  */
 const militaryFlightsLayer = {
   id: 'military',
+  requiresBackend: true,
   name: 'Military Flights',
   icon: '🎖️',
   source: 'adsb.lol',

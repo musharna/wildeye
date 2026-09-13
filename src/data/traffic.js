@@ -2171,6 +2171,7 @@ function clearDots() {
  */
 const trafficLayer = {
   id: 'traffic',
+  requiresBackend: true,
   name: 'Street Traffic',
   icon: '🚗',
   source: 'OpenStreetMap',

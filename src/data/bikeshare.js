@@ -1451,6 +1451,7 @@ function onCameraChanged() {
  */
 const bikeshareLayer = {
   id: 'bikeshare',
+  requiresBackend: true,
   name: 'Bikeshare',
   icon: '🚲',
   source: 'GBFS',

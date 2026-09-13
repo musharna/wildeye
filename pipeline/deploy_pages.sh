@@ -13,7 +13,8 @@ BRANCH=gh-pages
 WT="$(mktemp -d "${TMPDIR:-/tmp}/wildeye-pages.XXXXXX")"
 trap 'git worktree remove --force "$WT" >/dev/null 2>&1 || true; git worktree prune' EXIT
 
-npx vite build --base="$BASE" >/dev/null
+# VITE_STATIC_HOST=1: no /api/* server on Pages, so server-backed features stay off (src/backend.js)
+VITE_STATIC_HOST=1 npx vite build --base="$BASE" >/dev/null
 [ -f dist/index.html ] || { echo "build produced no dist/index.html" >&2; exit 1; }
 "$PY" - "$KEEP_NIGHTS" <<'PYEOF'
 import json, shutil, sys, pathlib
