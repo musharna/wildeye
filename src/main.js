@@ -19,6 +19,7 @@ import whispersLayer from './data/whispers.js';
 import riversLayer from './data/rivers.js';
 import ecoregionsLayer from './data/ecoregions.js';
 import speciesLayer from './data/species.js';
+import { createDetailsCard } from './bio/detailsCard.js';
 import firesLayer from './data/fires.js';
 import h5n1Layer from './data/h5n1.js';
 import droughtLayer from './data/drought.js';
@@ -300,6 +301,9 @@ async function init() {
     }
     dataManager.buildTogglePanel(document.getElementById('data-toggles'));
     styleManager.attachDataManager(dataManager);
+    // Biology details card: Cesium's info box is off, so this is where biology markers show their details.
+    const bioCard = createDetailsCard({ viewer, layerName: (id) => dataManager.layers.get(id)?.module?.name || id });
+    document.body.appendChild(bioCard.element);
 
     // Initialize deterministic scene playback for social clip capture
     const sceneDirector = new SceneDirector(viewer, styleManager, dataManager);

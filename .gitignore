@@ -70,3 +70,4 @@ pipeline/cron_fires.log
 pipeline/cron_rivers.log
 pipeline/cron_drought.log
 pipeline/cron_iucn.log
+.qa-static/
