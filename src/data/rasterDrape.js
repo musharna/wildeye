@@ -22,6 +22,12 @@ export function restackDrapes(imageryLayers) {
   return order.map(([id]) => id);
 }
 export function _drapeStackForTest() { return _stack; }
+/** Put a non-drape ImageryLayer into the shared stack at `zrank` (or take it out with null), then restack. */
+export function setStackedImagery(imageryLayers, id, layer, zrank = 50) {
+  if (layer) _stack.set(id, { layer, zrank });
+  else _stack.delete(id);
+  return restackDrapes(imageryLayers);
+}
 
 const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
 /** Legend items (label + colour) from the manifest entry: discrete classes or a continuous ramp. */
