@@ -1,10 +1,62 @@
 # wildeye
 
-A biology spin-off of [God's Eye View](https://github.com/bilawalsidhu/gods-eye-view):
-the same live photorealistic globe, pointed at living things. First layer:
-**Bird migration (radar)** — nocturnal migration density per NEXRAD radar,
-derived with [vol2bird](https://github.com/adokter/vol2bird) every 10 minutes
-(see `pipeline/README.md`). Upstream layers are kept intact; upstream README follows.
+wildeye is a fork of [God's Eye View](https://github.com/bilawalsidhu/gods-eye-view), a Cesium globe that draws live data over photorealistic 3D tiles. This fork adds biological and environmental data layers.
+
+Live site: https://musharna.github.io/wildeye/
+
+## Layers added in this fork
+
+**Animals**
+- Bird migration (radar): nocturnal migration density per US NEXRAD radar, computed with [vol2bird](https://github.com/adokter/vol2bird) every 10 minutes, with a replay of recent nights
+- Bird migration (Europe): radar vertical profiles from Aloft
+- Wildlife sightings: GBIF, OBIS and USA-NPN records for 22 taxa, xeno-canto sound recordings, and invasive aquatic species from USGS NAS
+- Animal tracks: IOOS Animal Telemetry Network deployments and Movebank studies published under CC0 or CC BY
+- Acoustic fish detections at Ocean Tracking Network receivers
+- Whale detections from NOAA passive acoustic monitoring
+- Small mammals, and ticks and mosquitoes, at NEON field sites
+
+**Disease**
+- Avian influenza detections in wild birds by county (USDA APHIS)
+- Wildlife die-offs and disease events by county (USGS WHISPers)
+- H5N1 sequenced samples by state, from Nextstrain builds that use open USDA and GenBank data (United States only)
+- Mosquito- and tick-borne disease cases by state (CDC)
+- Wastewater virus trend by county (CDC NWSS)
+
+**Plants and land**
+- Phenology: leaf, flower, fruit and insect observations (USA-NPN)
+- Vegetation greenness (NDVI)
+- Deforestation alerts by country (Global Forest Watch)
+- Active fires (NASA FIRMS)
+- Drought (U.S. Drought Monitor)
+- Ecoregions and biomes (RESOLVE 2017)
+
+**Water and ocean**
+- River temperature and flow at USGS gages
+- Sea surface temperature, chlorophyll-a and sea ice
+- Coral bleaching alerts and coral heat stress (NOAA Coral Reef Watch)
+- Surface dissolved oxygen and pH (Copernicus Marine Service)
+
+Most of these layers follow a shared time bar covering the last 30 days.
+
+## Where the data comes from
+
+The scripts in `pipeline/` run on a schedule, download each source, and write plain data files to `public/data/`. API keys stay on the machine running the pipelines and never reach the browser. `pipeline/README.md` lists each script and its schedule. A fresh clone shows data without running anything, because `pipeline/seed.sh` copies small committed snapshots into place.
+
+A source is included only if its terms allow the data to be redisplayed. `DATA_SOURCES.md` records the licence and required credit for each source, and lists the sources that were left out and why (for example the World Database on Protected Areas, and the GISAID-based H5N1 builds). The GBIF records in the sightings layer are registered as derived dataset [doi:10.15468/dd.vugb55](https://doi.org/10.15468/dd.vugb55).
+
+## The hosted site
+
+GitHub Pages serves a static build, so features that need the local server are turned off there: live flights and military flights, vessels, satellites, rocket launches, traffic, traffic cameras, radio, bikeshare, military installations, the FIRMS heatmap, the voice agent and the AI summary in the HUD. They all work when you run the app locally (see below).
+
+## Tests
+
+```bash
+npm test                                   # JavaScript
+python -m pytest pipeline/tests            # pipelines
+node scripts/qa-gap-layers.mjs --url <url> # headless browser check of the newer layers
+```
+
+The upstream God's Eye View README follows.
 
 ---
 

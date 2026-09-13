@@ -5,7 +5,31 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ## [Unreleased]
 
+### Added
+
+- wildeye: biological and environmental data layers. Animals: bird migration
+  (US radar and European radar profiles), wildlife sightings, animal tracks,
+  acoustic fish detections, whale detections, NEON small mammals, and NEON
+  ticks and mosquitoes. Disease: avian influenza in wild birds, wildlife
+  die-offs, H5N1 sequenced samples, mosquito- and tick-borne disease cases, and
+  wastewater virus trend. Plants and land: phenology, NDVI, deforestation
+  alerts, active fires, drought, and ecoregions. Water and ocean: river
+  temperature and flow, sea surface temperature, chlorophyll-a, sea ice, coral
+  heat stress and bleaching alerts, and surface oxygen and pH.
+- wildeye: a shared 30-day time bar that most of these layers follow.
+- wildeye: scheduled pipelines under `pipeline/`, a licence ledger in
+  `DATA_SOURCES.md`, and a GitHub Pages deploy script.
+
 ### Fixed
+
+- wildeye: the GitHub Pages build could not load Cesium because
+  `vite-plugin-cesium` copied it under the base path twice. The deploy now moves
+  it into place and fails if any file referenced by `index.html` is missing.
+- wildeye: on the static Pages build, features that need the local server are
+  hidden or skipped instead of failing on every page load, and the logo and
+  microphone icons load from the correct path.
+- wildeye: map markers no longer show through the globe, and river gages with
+  negative tidal flow no longer stop rendering.
 
 - Mapped-site outages show their scheduled retry countdown and distinguish
   known Overpass rate limits, timeouts, and query failures. Search feedback no
