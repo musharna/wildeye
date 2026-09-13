@@ -162,3 +162,45 @@ test('speciesName caches per key and forgets a failure so a retry can succeed', 
   await client.speciesName(7);
   assert.equal(calls, 2);
 });
+
+test('speciesName shares one lookup per key, but an abort rejects only the caller whose signal aborted', async () => {
+  const calls = new Map();
+  const releases = new Map();
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+  // Behaves like fetch: rejects with the signal's reason on abort, including a signal that is already aborted.
+  const fetchImpl = (url, { signal }) => new Promise((resolve, reject) => {
+    const key = Number(url.split('/').pop());
+    calls.set(key, (calls.get(key) || 0) + 1);
+    releases.set(key, () => resolve(ok({ key, canonicalName: `Name ${key}` })));
+    if (signal.aborted) { reject(signal.reason); return; }
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  });
+  const client = createBioClient({ fetchImpl });
+  const settle = (p) => p.then((value) => ({ value }), (error) => ({ error: error.name }));
+  const ABORTED = { error: 'AbortError' };
+  const name = (key) => ({ value: { key, scientificName: `Name ${key}`, commonName: null, className: null } });
+
+  // (a) caller A aborts, then caller B immediately asks for the same key with a live signal
+  const callerA1 = new AbortController();
+  const a1 = settle(client.speciesName(8, { signal: callerA1.signal }));
+  callerA1.abort();
+  const b1 = settle(client.speciesName(8, { signal: new AbortController().signal }));
+  while (!releases.has(8)) await tick();
+  releases.get(8)();
+
+  // (b) callers A and B both wait on key 9; A aborts while the lookup is in flight
+  const callerA2 = new AbortController();
+  const a2 = settle(client.speciesName(9, { signal: callerA2.signal }));
+  const b2 = settle(client.speciesName(9, { signal: new AbortController().signal }));
+  while (!releases.has(9)) await tick();
+  callerA2.abort();
+  releases.get(9)();
+
+  assert.deepEqual(
+    { abortThenReask: { A: await a1, B: await b1, fetches: calls.get(8) }, twoLiveCallers: { A: await a2, B: await b2, fetches: calls.get(9) } },
+    { abortThenReask: { A: ABORTED, B: name(8), fetches: 1 }, twoLiveCallers: { A: ABORTED, B: name(9), fetches: 1 } },
+  );
+  // a signal that is already aborted rejects at once, even for a cached key, and sends nothing
+  assert.deepEqual(await settle(client.speciesName(9, { signal: AbortSignal.abort() })), ABORTED);
+  assert.equal(calls.get(9), 1);
+});

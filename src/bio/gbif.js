@@ -177,6 +177,21 @@ export async function fetchJson(url, { signal = null, timeoutMs = REQUEST_TIMEOU
   }
 }
 
+function abortError(signal) {
+  return signal.reason?.name === 'AbortError' ? signal.reason : new DOMException('This operation was aborted', 'AbortError');
+}
+
+/** Settle with `shared`, unless this caller's `signal` aborts first; the shared work carries on for every other caller. */
+function untilCallerAborts(shared, signal) {
+  if (!signal) return shared;
+  if (signal.aborted) return Promise.reject(abortError(signal));
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(abortError(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+    shared.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+  });
+}
+
 export function createBioClient({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
@@ -213,14 +228,17 @@ export function createBioClient({
     async speciesNear(args, { signal = null } = {}) {
       return parseSpeciesNear(await get(speciesNearUrl(args), signal));
     },
-    /** Cached per key for the session; a failed lookup is forgotten so a retry can succeed. */
+    /**
+     * Cached per key for the session and shared by every caller; a failed lookup is forgotten so a retry can succeed.
+     * The shared lookup carries no caller signal (timeout only), so one caller's abort rejects only that caller.
+     */
     speciesName(key, { signal = null } = {}) {
       if (!names.has(key)) {
-        const pending = pool.run(() => get(speciesUrl(key), signal)).then(parseSpeciesName);
+        const pending = pool.run(() => get(speciesUrl(key), null)).then(parseSpeciesName);
         names.set(key, pending);
         pending.catch(() => names.delete(key));
       }
-      return names.get(key);
+      return untilCallerAborts(names.get(key), signal);
     },
   };
 }
