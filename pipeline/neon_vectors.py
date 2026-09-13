@@ -232,11 +232,23 @@ def mosquito_summary(tables: dict[str, str]) -> dict | None:
     }
     if "mos_expertTaxonomistIDProcessed" not in tables:
         return out
+    sorting = _rows(tables.get("mos_sorting"))
     prop = {
         r["subsampleID"]: _num(r.get("proportionIdentified")) or 1.0
-        for r in _rows(tables.get("mos_sorting"))
+        for r in sorting
         if r.get("subsampleID")
     }
+    # Each subsample is scaled by its own proportionIdentified. That is right only while every field
+    # sample has ONE sorted subsample (true for all 688 samples across 46 sites, checked 2026-09-12);
+    # split samples would each be scaled up to the whole sample and over-count, so say so loudly.
+    per_sample = collections.Counter(r.get("sampleID") for r in sorting if r.get("sampleID"))
+    split = sorted(k for k, v in per_sample.items() if v > 1)
+    if split:
+        log.warning(
+            "%d mosquito samples have more than one sorted subsample (per-subsample scaling may over-count): %s",
+            len(split),
+            split[:5],
+        )
     genera: collections.Counter = collections.Counter()
     total = 0.0
     for r in _rows(tables["mos_expertTaxonomistIDProcessed"]):

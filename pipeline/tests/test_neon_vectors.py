@@ -431,3 +431,20 @@ def test_get_retries_transport_and_5xx_but_not_4xx(monkeypatch):
         assert False, "404 must raise"
     except urllib.error.HTTPError as e:
         assert e.code == 404 and calls == ["https://x/c"], "no retry on 4xx"
+
+
+def test_mosquito_summary_warns_when_a_sample_is_split_into_several_subsamples(caplog):
+    """Mutant seen failing: removing the split-sample warning. Positive control: the real one-subsample fixture is silent."""
+    import logging
+
+    tables = {"mos_trapping": MOS_TRAP, "mos_sorting": MOS_SORT, "mos_expertTaxonomistIDProcessed": MOS_TAXO}
+    with caplog.at_level(logging.WARNING, logger="neon_vectors"):
+        mosquito_summary(tables)
+    assert not [r for r in caplog.records if "more than one sorted subsample" in r.getMessage()]
+    split_row = MOS_SORT.strip().splitlines()[1].replace('"s1"', '"s2"').replace(".S.01", ".S.02")
+    split = {**tables, "mos_sorting": MOS_SORT + split_row + "\n"}
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="neon_vectors"):
+        mosquito_summary(split)
+    msgs = [r.getMessage() for r in caplog.records if "more than one sorted subsample" in r.getMessage()]
+    assert len(msgs) == 1 and "HARV_077.20260624.0609" in msgs[0]

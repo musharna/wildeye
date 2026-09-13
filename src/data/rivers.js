@@ -53,6 +53,30 @@ export const NO_DATA = {
   color: "#9ca3af",
 };
 
+/** A daily mean that departs by more than SPIKE_C °C from the median of up to three valid days on each
+ *  side is a suspect reading (sensor out of water, logger fault), not a real temperature: river daily
+ *  means move a few °C a day. A fixed ceiling cannot do this job — Boiling River (YNP) really is 52 °C,
+ *  while the St. Louis River near Skibo, MN read 17.8 → 41.0 → 16.8 on 2026-09-10 (live data). */
+export const SPIKE_C = 8;
+export const SUSPECT = {
+  key: "suspect",
+  label: "suspect reading (spike vs neighbouring days)",
+  color: "#a78bfa",
+};
+
+export function isSpike(series, i) {
+  const v = series?.[i];
+  if (typeof v !== "number" || !Number.isFinite(v)) return false;
+  const nb = [...series.slice(Math.max(0, i - 3), i), ...series.slice(i + 1, i + 4)].filter(
+    (x) => typeof x === "number" && Number.isFinite(x),
+  );
+  if (nb.length < 2) return false;
+  const s = nb.sort((a, b) => a - b);
+  const mid = s.length >> 1;
+  const median = s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+  return Math.abs(v - median) > SPIKE_C;
+}
+
 export function tempClass(t) {
   if (typeof t !== "number" || !Number.isFinite(t)) return NO_DATA;
   return TEMP_CLASSES.find((c) => t < c.max);
@@ -81,17 +105,18 @@ export function dayAt(p, iso) {
   const q = p.q || [];
   if (!iso) {
     const l = p.latest;
-    return l
-      ? {
-          d: l.d,
-          t: l.t ?? null,
-          q: l.q ?? null,
-          label: `latest daily mean, ${l.d}`,
-        }
-      : { d: null, t: null, q: null, label: "no data" };
+    if (!l) return { d: null, t: null, q: null, suspect: false, label: "no data" };
+    const li = dayIndex(p.d0, t.length, `${l.d}T12:00:00Z`);
+    return {
+      d: l.d,
+      t: l.t ?? null,
+      q: l.q ?? null,
+      suspect: li >= 0 && isSpike(t, li),
+      label: `latest daily mean, ${l.d}`,
+    };
   }
   if (!Number.isFinite(Date.parse(iso)))
-    return { d: null, t: null, q: null, label: "invalid time" };
+    return { d: null, t: null, q: null, suspect: false, label: "invalid time" };
   const i = dayIndex(p.d0, Math.max(t.length, q.length), iso);
   const day = iso.slice(0, 10);
   if (i < 0)
@@ -99,12 +124,13 @@ export function dayAt(p, iso) {
       d: null,
       t: null,
       q: null,
+      suspect: false,
       label: `no record for ${day} in the 30-day window`,
     };
   const d = new Date(Date.parse(`${p.d0}T00:00:00Z`) + i * DAY_MS)
     .toISOString()
     .slice(0, 10);
-  return { d, t: t[i] ?? null, q: q[i] ?? null, label: `daily mean, ${d}` };
+  return { d, t: t[i] ?? null, q: q[i] ?? null, suspect: isSpike(t, i), label: `daily mean, ${d}` };
 }
 
 const fmtQ = (q) =>
@@ -113,10 +139,10 @@ const fmtQ = (q) =>
     : `${q.toLocaleString("en-US", { maximumFractionDigits: q < 10 ? 2 : 0 })} ft³/s`;
 
 export function describeGage(p, scope, source = {}) {
-  const cls = tempClass(scope.t);
+  const cls = scope.suspect ? SUSPECT : tempClass(scope.t);
   return (
     `<b>${esc(p.name)}</b> · USGS ${esc(p.site)} (${esc(p.state)})${p.sensor ? ` · temperature sensor: ${esc(p.sensor)}` : ""}<br>` +
-    `${esc(scope.label)}: water <b>${scope.t === null ? "—" : `${scope.t.toFixed(1)} °C`}</b> (${esc(cls.label)}) · flow <b>${esc(fmtQ(scope.q))}</b>${scope.q !== null && scope.q < 0 ? " (negative = reverse flow, typical of tidally affected gages)" : ""}<br>` +
+    `${esc(scope.label)}: water <b>${scope.t === null ? "—" : `${scope.t.toFixed(1)} °C`}</b> (${esc(cls.label)})${scope.suspect ? " — excluded from the temperature bands; check the USGS record" : ""} · flow <b>${esc(fmtQ(scope.q))}</b>${scope.q !== null && scope.q < 0 ? " (negative = reverse flow, typical of tidally affected gages)" : ""}<br>` +
     `<small>Daily means; provisional data are subject to revision. Temperature bands follow EPA (2003) salmonid thresholds, which are constant-exposure values.</small><br>` +
     `<a href="https://waterdata.usgs.gov/monitoring-location/${esc(p.site)}/" target="_blank" rel="noopener">${esc(source.name || "USGS Water Services")}</a> · ${esc(source.licence || "Public Domain U.S. Government")}. Reference to USGS data does not imply endorsement.`
   );
@@ -129,7 +155,7 @@ export function gageEntity(f, iso, ctx) {
   const scope = dayAt(p, iso);
   const showT = ctx.visible.temperature !== false;
   const showQ = ctx.visible.discharge !== false;
-  const cls = showT ? tempClass(scope.t) : NO_DATA;
+  const cls = !showT ? NO_DATA : scope.suspect ? SUSPECT : tempClass(scope.t);
   const hasData = (showT && scope.t !== null) || (showQ && scope.q !== null);
   const alpha = hasData ? 1 : FADED;
   // Size encodes flow MAGNITUDE: tidally affected gages report negative daily means when the
@@ -317,6 +343,8 @@ export function createRiversLayer() {
               count: c[k.key] ?? 0,
             }))
           : [];
+      if (_visible.temperature !== false && c[SUSPECT.key])
+        legend.push({ label: SUSPECT.label, color: SUSPECT.color, count: c[SUSPECT.key] });
       legend.push({
         label: NO_DATA.label,
         color: NO_DATA.color,

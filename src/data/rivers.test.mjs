@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
-import { tempClass, dayAt, describeGage, gageEntity, createRiversLayer, TEMP_CLASSES, NO_DATA } from './rivers.js';
+import { tempClass, dayAt, describeGage, gageEntity, createRiversLayer, TEMP_CLASSES, NO_DATA, isSpike, SUSPECT } from './rivers.js';
 
 const HOT = '22–25 °C above adult salmonid lethal / migration-blockage 21–22 °C';
 const gage = {
@@ -35,9 +35,9 @@ test('tempClass: band edges are lower-inclusive (10 → cool, 18 → warm, 22 �
 
 test('dayAt: live = latest day with a temperature; instant = the day matching its UTC date; outside the window = no record', () => {
   // mutant: dayIndex uses Math.round instead of Math.floor → 23:00Z on 08-14 lands on 08-15 → fails
-  assert.deepEqual(dayAt(gage.properties, null), { d: '2026-09-10', t: 9.9, q: null, label: 'latest daily mean, 2026-09-10' });
-  assert.deepEqual(dayAt(gage.properties, '2026-08-14T23:00:00Z'), { d: '2026-08-14', t: 17.7, q: 12300, label: 'daily mean, 2026-08-14' });
-  assert.deepEqual(dayAt(gage.properties, '2026-08-17T00:00:00Z'), { d: '2026-08-17', t: 22.0, q: 5.5, label: 'daily mean, 2026-08-17' });
+  assert.deepEqual(dayAt(gage.properties, null), { d: '2026-09-10', t: 9.9, q: null, suspect: false, label: 'latest daily mean, 2026-09-10' });
+  assert.deepEqual(dayAt(gage.properties, '2026-08-14T23:00:00Z'), { d: '2026-08-14', t: 17.7, q: 12300, suspect: false, label: 'daily mean, 2026-08-14' });
+  assert.deepEqual(dayAt(gage.properties, '2026-08-17T00:00:00Z'), { d: '2026-08-17', t: 22.0, q: 5.5, suspect: false, label: 'daily mean, 2026-08-17' });
   assert.equal(dayAt(gage.properties, '2026-08-19T12:00:00Z').t, null, 'day inside window without a value → null, not undefined');
   assert.equal(dayAt(gage.properties, '2026-08-12T23:59:59Z').d, null);
   assert.match(dayAt(gage.properties, '2026-09-12T00:00:00Z').label, /no record for 2026-09-12/);
@@ -169,4 +169,24 @@ test('gageEntity: negative (reverse, tidal) flow gets a finite size by magnitude
   assert.equal(rev.point.pixelSize, fwd.point.pixelSize, 'same magnitude, same size');
   assert.match(rev.description, /reverse flow/);
   assert.doesNotMatch(fwd.description, /reverse flow/, 'positive control: forward flow carries no note');
+});
+
+test('isSpike: a one-day jump off its neighbours is suspect; steady hot water and heat waves are not', () => {
+  // Real series (USGS daily means, 2026-08-13..09-11). Mutant seen failing: a fixed ceiling (v > 35) flags Boiling River
+  // and misses nothing else; dropping the median (comparing with the previous day only) flags the day AFTER the spike too.
+  const skibo = [17.3, 16.5, 16.6, 17.1, 15.3, 16.0, 14.2, 15.1, 16.5, 16.0, 13.9, 13.2, 14.8, 16.3, 14.7, 13.8, 15.5, 16.3, 16.7, 15.6, 15.6, 15.2, 16.5, 16.5, 15.7, 17.6, 17.8, 16.8, 41.0, 16.8];
+  const boiling = [53.0, 53.0, 52.6, 52.6, 52.6, 52.6, 52.6, 52.6, 52.7, 52.7];
+  const cahaba = [30.6, 32.4, 32.8, 32.9, 33.5, 34.5, 34.0, 33.2, 32.7, 31.9];
+  assert.equal(isSpike(skibo, 28), true, 'St. Louis River 41.0 °C between 16.8 and 16.8');
+  assert.equal(isSpike(skibo, 29), false, 'the day after the spike is normal');
+  assert.equal(isSpike(skibo, 27), false, 'the day before the spike is normal');
+  assert.equal(boiling.some((_, i) => isSpike(boiling, i)), false, 'geothermal 52–53 °C is real, not suspect');
+  assert.equal(cahaba.some((_, i) => isSpike(cahaba, i)), false, 'a 34.5 °C heat-wave peak is not suspect');
+  assert.equal(isSpike([null, 20, null], 1), false, 'too few neighbours → no call');
+  const g = { type: 'Feature', geometry: { type: 'Point', coordinates: [-92, 47] }, properties: { site: '04015438', name: 'ST. LOUIS RIVER NEAR SKIBO, MN', state: 'Minnesota', d0: '2026-08-13', t: skibo, q: skibo.map(() => 100), latest: { d: '2026-09-10', t: 41.0, q: 100 } } };
+  const e = gageEntity(g, null, { visible: { temperature: true, discharge: true }, source: {} });
+  assert.equal(e.properties.cls, SUSPECT.key);
+  assert.match(e.description, /suspect reading.*excluded from the temperature bands/);
+  const normal = gageEntity(g, '2026-09-09T12:00:00Z', { visible: { temperature: true, discharge: true }, source: {} });
+  assert.equal(normal.properties.cls, 'cool', 'positive control: a normal day keeps its band');
 });
