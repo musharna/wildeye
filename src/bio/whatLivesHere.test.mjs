@@ -286,3 +286,27 @@ test('a failed name lookup falls back to the taxon key and logs the key; the oth
   assert.match(logged[0][0], /name lookup failed/);
   assert.equal(logged[0][1].key, 2480528);
 });
+
+// R-6b: the card was dismissed while it said "Searching GBIF…"; the search must not reopen it.
+test('cancel() aborts the search in flight and disarms; the settled search calls the card nothing', async () => {
+  const pending = pendingNear();
+  const r = rig({ speciesNear: pending.speciesNear });
+  r.controller.arm();
+  const search = r.controller.handleClick(CLICK);
+  assert.equal(r.calls.card.at(-1).message, 'Searching GBIF within 10 km…');
+  const cardCallsAtCancel = r.calls.card.length;
+  const logged = await captureConsoleError(async () => {
+    r.controller.cancel();
+    pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }] });
+    await search;
+  });
+  assert.equal(pending.searches[0].signal.aborted, true, 'cancel aborted the search');
+  assert.deepEqual(r.calls.card.slice(cardCallsAtCancel), [], 'no card call after cancel');
+  assert.equal(r.controller.armed, false);
+  assert.deepEqual(logged, [], 'a cancelled search logs nothing');
+  r.controller.arm();
+  r.controller.cancel();
+  assert.equal(r.controller.armed, false, 'cancel disarms an armed controller');
+  assert.equal(r.viewer.scene.canvas.style.cursor, '');
+  assert.deepEqual(r.calls.armed, [true, false, true, false]);
+});

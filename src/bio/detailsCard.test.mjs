@@ -152,3 +152,27 @@ test('status content replacing a detail card clears the selection, so the same m
   assert.equal(card.element.hidden, false, 'the same marker opens the card again');
   assert.equal(card.mode, 'detail', 'and it is a detail card');
 });
+
+// R-6b: dismissing the card tells its owner, so a "what lives here" search the card was waiting for is cancelled
+// and cannot reopen the card when it settles.
+test('Escape and the close button each call onDismiss once; a card that is already hidden calls nothing', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const dismissed = [];
+  const card = createDetailsCard({ viewer, doc, sanitize: (html) => html, onDismiss: () => dismissed.push(card.element.hidden) });
+  doc.listeners.keydown({ key: 'Escape' });
+  card.element.querySelector('.bio-card-close').listeners.click();
+  assert.deepEqual(dismissed, [], 'nothing to dismiss while the card is hidden');
+  card.showStatus({ heading: 'What lives here', message: 'Searching GBIF within 10 km…' });
+  doc.listeners.keydown({ key: 'Escape' });
+  assert.deepEqual(dismissed, [true], 'Escape calls onDismiss once, after the card is hidden');
+  doc.listeners.keydown({ key: 'Escape' });
+  assert.equal(dismissed.length, 1, 'a second Escape on the hidden card calls nothing');
+  viewer.selectedEntity = entityIn('occurrences', '<b>Blue whale</b>');
+  assert.equal(card.element.hidden, false, 'a marker opens the card');
+  card.element.querySelector('.bio-card-close').listeners.click();
+  assert.deepEqual(dismissed, [true, true], 'the close button calls onDismiss once, after the card is hidden');
+  assert.equal(viewer.selectedEntity, undefined, 'the close button still deselects');
+  card.element.querySelector('.bio-card-close').listeners.click();
+  assert.equal(dismissed.length, 2, 'the close button on the hidden card calls nothing');
+});

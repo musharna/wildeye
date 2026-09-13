@@ -105,6 +105,8 @@ export function createWhatLivesHere({
       card.showStatus({ heading: HEADING, message: 'Click a spot on the globe. Esc cancels.' });
     },
     disarm() { setArmed(false); },
+    /** The card was dismissed: abort the search it was waiting for (aborted searches are silent) and disarm. */
+    cancel() { controller?.abort(); setArmed(false); },
     handleClick,
     destroy() { handler.destroy(); controller?.abort(); },
   };

@@ -92,7 +92,7 @@ export function renderListInto(container, rows, doc, onRow) {
   }
 }
 
-export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc) }) {
+export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {} }) {
   const root = doc.createElement('aside');
   root.id = 'bio-card';
   root.className = 'bio-card';
@@ -131,10 +131,14 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   });
   // Closing a detail card also clears the selection: Cesium raises selectedEntityChanged only when the value
   // changes, so a card closed with its marker still selected could not be reopened by clicking that marker.
+  // A visible card that is dismissed tells its owner (onDismiss), so a search the card was waiting for is cancelled
+  // and cannot reopen it (R-6b).
   const dismiss = () => {
+    const wasVisible = !root.hidden;
     const wasDetail = mode === 'detail';
     close();
     if (wasDetail && viewer.selectedEntity) viewer.selectedEntity = undefined;
+    if (wasVisible) onDismiss();
   };
   root.querySelector('.bio-card-close').addEventListener('click', dismiss);
   // Status or list content replacing a detail card clears the selection too (R-4d), so the card and the selection
