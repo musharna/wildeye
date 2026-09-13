@@ -71,10 +71,14 @@ export function createSpeciesLayer({
     const provider = providerFor(densityTileTemplate({ taxonKey: _params.taxonKey, years: _params.years, now: now() }));
     provider.errorEvent.addEventListener((tileError) => {
       if (generation !== _generation) return;
+      const error = tileError?.error ?? tileError;
+      // GBIF answers empty tiles with HTTP 204 and no body, which Cesium rejects as a RuntimeError ("contained no
+      // content"). Only HTTP and network failures, which Cesium reports as RequestErrorEvent, count as failures.
+      if (!(error instanceof Cesium.RequestErrorEvent)) return;
       _tileFailures += 1;
       if (_tileFailures === TILE_FAILURE_LIMIT) {
         _lastError = 'map tiles failing';
-        console.error('[Data:species] GBIF tiles failing', { taxonKey: _params.taxonKey, years: _params.years, error: tileError?.error ?? tileError });
+        console.error('[Data:species] GBIF tiles failing', { taxonKey: _params.taxonKey, years: _params.years, error });
         notify();
       }
     });
