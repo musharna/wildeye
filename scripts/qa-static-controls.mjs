@@ -10,12 +10,16 @@ const argv = process.argv.slice(2);
 const URL = argv[argv.indexOf('--url') + 1] || 'https://musharna.github.io/wildeye/';
 const ONLY = argv.includes('--sections') ? new RegExp(argv[argv.indexOf('--sections') + 1], 'i') : null;
 const WITH_LOCATION = !argv.includes('--no-location');
+const VERBOSE = argv.includes('--verbose');
 const b = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-dev-shm-usage', '--window-size=1400,900'], defaultViewport: { width: 1400, height: 900 } });
 const p = await b.newPage();
 let events = [];
 p.on('response', (r) => { if (r.status() >= 400) events.push(`${r.status()} ${r.request().method()} ${r.url().replace(/[?].*$/, '').replace(/^https?:\/\/[^/]+/, '')}`); });
 p.on('requestfailed', (r) => { const u = r.url(); if (!/google|gstatic|cesium\.com|tile/.test(u)) events.push(`REQFAIL ${u.replace(/[?].*$/, '').replace(/^https?:\/\/[^/]+/, '')} ${r.failure()?.errorText}`); });
 p.on('pageerror', (e) => events.push(`PAGEERROR ${String(e?.message || e).slice(0, 140)}`));
+// A confirm()/alert() blocks the page's JS thread, so every later evaluate times out; record and dismiss it.
+const dialogs = [];
+p.on('dialog', (d) => { dialogs.push(`${d.type()} "${d.message().slice(0, 100)}"`); d.dismiss().catch(() => {}); });
 const ready = async () => {
   await p.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
   await new Promise((r) => setTimeout(r, 12000));
@@ -76,6 +80,7 @@ const probeInside = async (section) => {
     clicked.add(c.key);
     try {
       const fresh = (await visibleControls()).find((x) => x.key === c.key);
+      if (VERBOSE) console.log(`  click [${section}] ${c.id ? '#' + c.id + ' ' : ''}"${c.label}" t=${Math.round(performance.now() / 1000)}s`);
       if (!fresh || !(await clickIdx(fresh.idx))) continue;
       total++;
       await new Promise((r) => setTimeout(r, 2500));
@@ -139,5 +144,6 @@ if (hasSearch) {
   const msg = await p.evaluate(() => [...document.querySelectorAll('[role="status"], .toast, .search-status, .location-status')].map((e) => e.textContent.trim()).filter(Boolean).slice(0, 3).join(' / '));
   console.log(`SEARCH "Yellowstone National Park" → ${ev.join(' | ') || 'no failed requests'}${msg ? ` · UI: ${msg.slice(0, 160)}` : ''}`);
 } else if (WITH_LOCATION) console.log('SEARCH input not visible');
+if (dialogs.length) console.log(`dismissed ${dialogs.length} dialogs (not failures): ${[...new Set(dialogs)].join(' · ')}`);
 console.log(`${bad.length} controls produced failed requests or errors; ${navigators.length} reloaded or navigated the page: ${navigators.join(' · ') || 'none'}`);
 await b.close();
