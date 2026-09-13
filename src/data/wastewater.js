@@ -16,7 +16,9 @@ export const EMPTY_ALPHA = 0.35;
 
 export const TREND_CLASSES = Object.freeze([
   { key: "falling", label: "falling (< −0.15 log₁₀, below ~70% of prior 15 d)", color: "#3b82f6", test: (t) => t < -0.15 },
-  { key: "stable", label: "stable (−0.15 … +0.15)", color: "#9ca3af", test: (t) => t <= 0.15 },
+  // Light midpoint of the blue→orange diverging scale. It was grey #9ca3af, which over terrain looked like the
+  // "no value" grey once that fill became visible (2026-09-12 visual critic).
+  { key: "stable", label: "stable (−0.15 … +0.15)", color: "#fde68a", test: (t) => t <= 0.15 },
   { key: "rising", label: "rising (+0.15 … +0.5, up to ~3×)", color: "#f97316", test: (t) => t <= 0.5 },
   { key: "surging", label: "surging (> +0.5 log₁₀, more than ~3×)", color: "#dc2626", test: () => true },
 ]);

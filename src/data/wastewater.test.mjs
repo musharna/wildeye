@@ -1,7 +1,7 @@
 // src/data/wastewater.test.mjs — polygon contract: trend classes, week selection, layer contract + observed time.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trendClass, trendAtOrBefore, describeCounty, countyEntities, createWastewaterLayer, NO_DATA } from './wastewater.js';
+import { trendClass, trendAtOrBefore, describeCounty, countyEntities, createWastewaterLayer, NO_DATA, TREND_CLASSES } from './wastewater.js';
 
 const weeks = [{ w: '2026-09-11', t: 0.3, n: 2 }, { w: '2026-09-04', t: null, n: 0 }, { w: '2026-08-28', t: -0.4, n: 1 }];
 
@@ -54,4 +54,14 @@ test('layer: contract, MultiPolygon parts, observed-time recolour, legend counts
     assert.equal(l.setObservedTime(null), true);
     assert.deepEqual(l.getStats().classes, { rising: 1, falling: 1 });
   } finally { globalThis.fetch = saved; }
+});
+
+test('stable and "no value" are clearly different colours (light midpoint vs dark grey)', () => {
+  // Mutant seen failing: stable back to grey #9ca3af, which read like the no-value grey over terrain.
+  const lum = (hex) => { const [r, g, b] = hex.match(/[0-9a-f]{2}/gi).map((h) => parseInt(h, 16) / 255); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const stable = TREND_CLASSES.find((c) => c.key === 'stable').color;
+  const sat = (hex) => { const v = hex.match(/[0-9a-f]{2}/gi).map((h) => parseInt(h, 16)); return (Math.max(...v) - Math.min(...v)) / 255; };
+  assert.ok(lum(stable) - lum(NO_DATA.color) > 0.35, `luminance gap ${lum(stable) - lum(NO_DATA.color)}`);
+  assert.ok(sat(stable) > 0.25, 'stable carries a hue, not another grey');
+  assert.ok(sat(NO_DATA.color) < 0.1, 'positive control: no-value stays neutral grey');
 });
