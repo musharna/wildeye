@@ -132,3 +132,23 @@ test('Escape and the close button both deselect, so the same marker opens the ca
   viewer.selectedEntity = whale;
   assert.equal(card.element.hidden, false, 'the same marker opens the card again after the close button');
 });
+
+// R-4d: the "what lives here" controller calls showStatus while a detail card may be open. Replacing the detail
+// must clear the selection too, or Escape hides the card with the marker still selected and it cannot reopen.
+test('status content replacing a detail card clears the selection, so the same marker opens the card again', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const card = createDetailsCard({ viewer, doc, sanitize: (html) => html });
+  const whale = entityIn('occurrences', '<b>Blue whale</b>');
+  viewer.selectedEntity = whale;
+  assert.equal(card.mode, 'detail', 'the marker opens a detail card');
+  card.showStatus({ heading: 'What lives here', message: 'Click a spot on the globe. Esc cancels.' });
+  assert.equal(viewer.selectedEntity, undefined, 'replacing the detail clears the selection');
+  assert.equal(card.element.hidden, false, 'the status card is visible');
+  assert.equal(card.mode, 'list', 'the card is in list mode');
+  doc.listeners.keydown({ key: 'Escape' });
+  assert.equal(card.element.hidden, true, 'Escape hides the status card');
+  viewer.selectedEntity = whale;
+  assert.equal(card.element.hidden, false, 'the same marker opens the card again');
+  assert.equal(card.mode, 'detail', 'and it is a detail card');
+});

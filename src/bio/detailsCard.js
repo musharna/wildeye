@@ -137,6 +137,15 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     if (wasDetail && viewer.selectedEntity) viewer.selectedEntity = undefined;
   };
   root.querySelector('.bio-card-close').addEventListener('click', dismiss);
+  // Status or list content replacing a detail card clears the selection too (R-4d), so the card and the selection
+  // stay in sync. Deselect first: that raises selectedEntityChanged, whose listener closes the detail card.
+  const showListContent = (heading, render) => {
+    if (mode === 'detail' && viewer.selectedEntity) viewer.selectedEntity = undefined;
+    reset(heading);
+    render();
+    mode = 'list';
+    root.hidden = false;
+  };
   doc.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !root.hidden) dismiss();
   });
@@ -146,34 +155,32 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     get mode() { return mode; },
     close,
     showStatus({ heading, message, retry = null }) {
-      reset(heading);
-      const text = doc.createElement('p');
-      text.className = 'bio-card-status';
-      text.textContent = message;
-      body.appendChild(text);
-      if (retry) {
-        const button = doc.createElement('button');
-        button.type = 'button';
-        button.className = 'bio-card-retry';
-        button.textContent = 'Retry';
-        button.addEventListener('click', () => retry());
-        body.appendChild(button);
-      }
-      mode = 'list';
-      root.hidden = false;
+      showListContent(heading, () => {
+        const text = doc.createElement('p');
+        text.className = 'bio-card-status';
+        text.textContent = message;
+        body.appendChild(text);
+        if (retry) {
+          const button = doc.createElement('button');
+          button.type = 'button';
+          button.className = 'bio-card-retry';
+          button.textContent = 'Retry';
+          button.addEventListener('click', () => retry());
+          body.appendChild(button);
+        }
+      });
     },
     showList({ heading, filterLine, entries, footer, footerHref, onRow }) {
-      reset(heading);
-      filter.textContent = filterLine;
-      renderListInto(body, listRows(entries), doc, onRow);
-      const link = doc.createElement('a');
-      link.href = footerHref;
-      link.target = '_blank';
-      link.rel = 'noopener';
-      link.textContent = footer;
-      foot.appendChild(link);
-      mode = 'list';
-      root.hidden = false;
+      showListContent(heading, () => {
+        filter.textContent = filterLine;
+        renderListInto(body, listRows(entries), doc, onRow);
+        const link = doc.createElement('a');
+        link.href = footerHref;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = footer;
+        foot.appendChild(link);
+      });
     },
   };
 }
