@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { HAS_BACKEND } from '../backend.js';
 import { CITY_POIS, findPoiByName, flyToGlobeView, flyToLandmark, flyToPOI, flyToPresetLocation, GLOBE_VIEW, searchAndFlyTo } from '../locations.js';
 import {
   getContextStore,
@@ -3158,6 +3159,9 @@ function summarizeViewportPlaces(places) {
 }
 
 async function fetchNearbyPlaces(latitude, longitude, cameraHeightM) {
+  // Google Places goes through the local /api proxy; a static host (GitHub Pages) has none, and the HUD's
+  // basemap label context calls this on its own timer, not only the voice agent.
+  if (!HAS_BACKEND) return [];
   const radiusM = nearbyPlacesRadiusM(cameraHeightM);
   const cacheKey = nearbyPlacesCacheKey(latitude, longitude, cameraHeightM);
   if (nearbyPlacesCache.has(cacheKey)) return nearbyPlacesCache.get(cacheKey);
