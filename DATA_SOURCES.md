@@ -139,7 +139,7 @@ The required Google Maps / Cesium credit renders on the on-globe credit line (`#
 | (processing) | vol2bird, Dokter et al. | MIT (LICENSE file read 2026-09-11) |
 | Bird migration (Europe, radar profiles) | Aloft / BALTRAD_VPTS daily CSV (`aloftdata` S3 bucket) | CC0 (doi:10.5281/zenodo.14711024) |
 | Coral bleaching alert | NOAA Coral Reef Watch 5 km BAA via CoastWatch ERDDAP — **legacy 0–4 categories** (ERDDAP variable `CRW_BAA`; NOAA's site grades Alert Levels 1–5 since 2023-12-15); class 0 masked by its pinned palette colour, palette drift fails the build | US public domain; credit "NOAA Coral Reef Watch" |
-| Sea surface temperature | NOAA/NCEI OISST v2.1 via CoastWatch ERDDAP | US public domain; cite Huang et al. 2020 |
+| Sea surface temperature | NOAA/NCEI OISST v2.1 **Preliminary** (`ncdcOisst21NrtAgg_LonPM180`) via CoastWatch ERDDAP — the Final aggregate lags ~2 weeks (it ended 2026-08-28 on 2026-09-12); same grid, variable and licence | US public domain ("may be used and redistributed for free"); cite Huang et al. 2020 |
 | Chlorophyll-a / algal blooms | NOAA CoastWatch VIIRS S-NPP/NOAA-20 gap-filled daily 4 km via ERDDAP | US public domain ("may be used and redistributed for free") |
 | Coral heat stress (DHW, HotSpot) + sea ice fraction | NOAA Coral Reef Watch 5 km via the same CoastWatch ERDDAP dataset (`CRW_DHW`, `CRW_HOTSPOT`, `CRW_SEAICE`) | US public domain; credit "NOAA Coral Reef Watch" |
 | Vegetation greenness (NDVI) | NOAA NDVI Climate Data Record, VIIRS daily 0.05°, NCEI THREDDS WMS GetMap (newest file resolved from catalog.xml) | US public domain (NOAA CDR); cite the CDR product page (read 2026-09-11) |

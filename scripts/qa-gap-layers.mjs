@@ -16,13 +16,27 @@ const SHOTS = path.join(REPO, 'qa-shots', 'gap-layers');
 const argv = process.argv.slice(2);
 const opt = (n, d) => { const i = argv.indexOf(n); return i >= 0 && argv[i + 1] ? argv[i + 1] : d; };
 const URL = opt('--url', 'http://localhost:4455');
-const IDS = opt('--ids', 'arbonet,phenology,neon-vectors,cetaceans,drought,h5n1,fires,fires@pacific,ecoregions,rivers').split(',');
+// --set new (default): the 2026-09-12 gap layers. --set old: the earlier biology layers, which never had a
+// framed real-app review. --set all: both. --ids overrides the set.
+const SETS = {
+  new: 'arbonet,phenology,neon-vectors,cetaceans,drought,h5n1,fires,fires@pacific,ecoregions,rivers',
+  old: 'occurrences,tracks,birds,aloft,otn,neon,hpai,wastewater,gfw,gfw@pacific,whispers,crw-bleaching,oisst,chlor-a,crw-dhw,crw-hotspot,crw-seaice,ndvi,cmems-o2,cmems-ph,occurrences@pacific',
+};
+SETS.all = `${SETS.new},${SETS.old}`;
+const IDS = opt('--ids', SETS[opt('--set', 'new')] || SETS.new).split(',');
 // Camera per shot [lon, lat, height m]: each layer's own region, straight down, so the data is in frame.
 // `fires@pacific` looks at a hemisphere with few fires: any dense markers there are drawn THROUGH the globe.
 const VIEWS = {
   arbonet: [-97, 39, 7.0e6], phenology: [-97, 39, 7.0e6], 'neon-vectors': [-97, 39, 7.0e6], drought: [-97, 39, 7.0e6],
   h5n1: [-97, 39, 7.0e6], rivers: [-97, 39, 7.0e6], cetaceans: [-68, 42, 2.2e6],
   fires: [20, 2, 1.3e7], 'fires@pacific': [-150, 0, 1.3e7], ecoregions: [20, 10, 1.6e7],
+  occurrences: [-40, 30, 1.6e7], 'occurrences@pacific': [-150, 0, 1.3e7], tracks: [-140, 35, 1.3e7],
+  birds: [-85, 38, 4.5e6], aloft: [10, 50, 4.5e6], otn: [-60, 42, 6.0e6], neon: [-97, 39, 7.0e6],
+  hpai: [-97, 39, 7.0e6], wastewater: [-97, 39, 7.0e6], whispers: [-97, 39, 7.0e6],
+  gfw: [-20, 0, 1.6e7], 'gfw@pacific': [-150, 0, 1.3e7],
+  'crw-bleaching': [150, -15, 1.3e7], oisst: [-150, 10, 1.6e7], 'chlor-a': [-60, 30, 1.3e7], 'crw-dhw': [150, -15, 1.3e7],
+  'crw-hotspot': [150, -15, 1.3e7], 'crw-seaice': [0, 80, 9.0e6], ndvi: [20, 10, 1.6e7], 'cmems-o2': [-150, -20, 1.6e7],
+  'cmems-ph': [-150, -20, 1.6e7],
 };
 fs.mkdirSync(SHOTS, { recursive: true });
 
@@ -78,6 +92,7 @@ for (const shot of IDS) {
     const g = window.__godsEyeView; const dm = g.dataManager;
     const known = dm.getAll().some((l) => l.id === id);
     if (!known) return { error: 'not registered' };
+    const imagery0 = g.viewer.imageryLayers.length;
     await dm.setEnabled(id, true);
     const deadline = Date.now() + 90000;
     let s;
@@ -92,7 +107,7 @@ for (const shot of IDS) {
       if (d.show && d.entities?.values?.length) ds.push([d.name, d.entities.values.length]);
     }
     g.requestRender?.();
-    return { stats: s, dataSources: ds };
+    return { stats: s, dataSources: ds, imageryAdded: g.viewer.imageryLayers.length - imagery0 };
   }, id);
   await new Promise((r) => setTimeout(r, 8000)); // imagery tiles settle at the new view
   await page.screenshot({ path: path.join(SHOTS, `${shot.replace('@', '-')}.png`) });
@@ -103,9 +118,11 @@ for (const shot of IDS) {
   if (s.error) problems.push(`stats.error=${s.error}`);
   if (!s.lastUpdate) problems.push('no lastUpdate');
   if (!(s.count > 0)) problems.push(`count=${s.count}`);
-  if (!(ents > 0)) problems.push(`entities=${ents} (shown sources: ${JSON.stringify(res.dataSources)})`);
+  // Drapes and the bird radar layer draw imagery / point primitives, not entities.
+  const drawn = ents > 0 || res.imageryAdded > 0 || s.drapes > 0 || s.particles > 0;
+  if (!drawn) problems.push(`nothing drawn: entities=${ents} imageryAdded=${res.imageryAdded} (shown sources: ${JSON.stringify(res.dataSources)})`);
   if (pageErrors.length) problems.push(`page errors: ${pageErrors.slice(0, 3).join(' | ')}`);
-  console.log(`${problems.length ? 'FAIL' : 'PASS'} ${id}: count=${s.count} entities=${ents} ${Date.now() - t0}ms${problems.length ? ' — ' + problems.join('; ') : ''}`);
+  console.log(`${problems.length ? 'FAIL' : 'PASS'} ${shot}: count=${s.count} entities=${ents} imagery+${res.imageryAdded ?? 0} ${Date.now() - t0}ms${problems.length ? ' — ' + problems.join('; ') : ''}`);
   if (problems.length) failures++;
   await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, false), id);
 }

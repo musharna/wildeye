@@ -72,8 +72,8 @@
     "id": "oisst",
     "name": "Sea surface temperature (NOAA OISST)",
     "icon": "🌡️",
-    "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21Agg_LonPM180.transparentPng?sst%5B(last)%5D%5B(0)%5D%5B(-90):(90)%5D%5B(-180):(180)%5D&.size=1440%7C720&.colorBar=KT_thermal%7C%7C%7C-2%7C32%7C%7C",
-    "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21Agg_LonPM180.json?time%5B(last)%5D",
+    "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg_LonPM180.transparentPng?sst%5B(last)%5D%5B(0)%5D%5B(-90):(90)%5D%5B(-180):(180)%5D&.size=1440%7C720&.colorBar=KT_thermal%7C%7C%7C-2%7C32%7C%7C",
+    "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/ncdcOisst21NrtAgg_LonPM180.json?time%5B(last)%5D",
     "bounds": {
       "west": -180,
       "south": -90,

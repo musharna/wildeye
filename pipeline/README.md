@@ -59,8 +59,8 @@ class overlays high), legend text and credit. Writes `public/data/rasters/<id>.p
 archives every new acquisition to `rasters/<id>/<stamp>.png` (`keep_days`, default 30) listed
 as `history` in the manifest — the frontend drape shows the archived acquisition at the shared
 observed time. Measured 2026-09-11: ~209 s per product (ERDDAP redirect is slow).
-Products: `crw-bleaching` (NOAA CRW Bleaching Alert Area, daily) · `oisst` (NOAA OISST v2.1; the
-ERDDAP aggregation lags ~2 weeks) · `chlor-a` (NOAA VIIRS gap-filled chlorophyll-a, log scale, daily NRT).
+Products: `crw-bleaching` (NOAA CRW Bleaching Alert Area, daily) · `oisst` (NOAA OISST v2.1 Preliminary,
+`ncdcOisst21NrtAgg_LonPM180`, ~1 day behind; the Final aggregate lags ~2 weeks) · `chlor-a` (NOAA VIIRS gap-filled chlorophyll-a, log scale, daily NRT).
 Requests carry a wildeye User-Agent: the ERDDAP redirect target (coastwatch.noaa.gov) returns 403 to Python-urllib.
 `--only X` leaves the other products' manifest entries untouched.
 
