@@ -2,11 +2,14 @@
 /**
  * qa-static-controls.mjs — on the static (GitHub Pages) build, click every visible control once and record
  * which ones trigger failed requests (4xx/5xx), request failures or page errors. Also submits a location search.
- * Run: node scripts/qa-static-controls.mjs --url https://musharna.github.io/wildeye/
+ * Run: node scripts/qa-static-controls.mjs --url https://musharna.github.io/wildeye/ [--sections <regex>] [--no-location]
+ * --sections limits the crawl to headers whose label matches; run one section per process when the renderer runs out of memory.
  */
 import puppeteer from 'puppeteer';
 const argv = process.argv.slice(2);
 const URL = argv[argv.indexOf('--url') + 1] || 'https://musharna.github.io/wildeye/';
+const ONLY = argv.includes('--sections') ? new RegExp(argv[argv.indexOf('--sections') + 1], 'i') : null;
+const WITH_LOCATION = !argv.includes('--no-location');
 const b = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-dev-shm-usage', '--window-size=1400,900'], defaultViewport: { width: 1400, height: 900 } });
 const p = await b.newPage();
 let events = [];
@@ -25,6 +28,11 @@ await p.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await ready();
 // Some controls reload or navigate the page (a detached frame crashed earlier runs silently). Record them and recover.
 const navigators = [];
+// Headless Chromium renders with SwiftShader (CPU); leaving every clicked layer on grows the renderer past this
+// shell's 14 GB cap and the page dies as a "detached Frame" (2026-09-13). Switch layers back off after each click.
+let pageCrashed = false;
+p.on('error', (e) => { pageCrashed = true; console.log(`PAGE CRASH (renderer): ${String(e?.message || e).slice(0, 120)}`); });
+const layersOff = () => p.evaluate(() => { const dm = window.__godsEyeView?.dataManager; return dm ? Promise.all(dm.getEnabledLayerIds().map((id) => dm.setEnabled(id, false))) : null; }).catch(() => null);
 const isNavError = (e) => /detached Frame|Execution context was destroyed|Target closed|Cannot find context/i.test(String(e?.message || e));
 const recover = async (label) => {
   navigators.push(label);
@@ -55,7 +63,7 @@ const visibleControls = () => p.evaluate(() => {
 const SKIP = /import|export|download|reset|clear|delete|copy share|collapse|close|pin /i;
 const clickIdx = (i) => p.evaluate((i) => { const el = document.querySelector(`[data-qa-idx="${i}"]`); if (!el || !el.offsetParent) return false; el.click(); return true; }, i).catch(() => false);
 const top = await visibleControls();
-const headers = top.filter((c) => /^Expand |^Open compact|toggle/i.test(c.label) || /toggle/i.test(c.id || ''));
+const headers = top.filter((c) => (/^Expand |^Open compact|toggle/i.test(c.label) || /toggle/i.test(c.id || '')) && (!ONLY || ONLY.test(c.label)));
 // Location tray lives behind a dock item; open it explicitly.
 await p.evaluate(() => document.getElementById('location-bar')?.classList.remove('collapsed'));
 console.log(`${top.length} top-level controls; opening ${headers.length} sections: ${headers.map((h) => h.label).join(' · ')}`);
@@ -72,10 +80,12 @@ const probeInside = async (section) => {
       total++;
       await new Promise((r) => setTimeout(r, 2500));
       await p.evaluate(() => 1); // throws if the click navigated
+      await layersOff();
       const ev = flush();
       if (ev.length) { bad.push({ section, ...c, ev }); console.log(`ISSUE [${section}] ${c.id ? '#' + c.id + ' ' : ''}"${c.label}" → ${ev.join(' | ')}`); }
     } catch (e) {
       if (!isNavError(e)) throw e;
+      if (pageCrashed) { console.log(`STOP: renderer crashed after "[${section}] ${c.label}" (test-host memory, not a navigation)`); process.exit(3); }
       await recover(`[${section}] ${c.label}`);
       flush();
       return { count: inner.length, navigated: true };
@@ -83,7 +93,11 @@ const probeInside = async (section) => {
   }
   return { count: inner.length, navigated: false };
 };
+let sectionNo = 0;
 for (const h of headers) {
+  // Fresh page per section: Visual Presets post-processing left on under SwiftShader plus one more layer
+  // crashed the renderer (Dams alone in a fresh page was fine, 2026-09-13), so no state carries over.
+  if (sectionNo++ > 0) { await p.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 }); await ready(); flush(); }
   const fresh = (await visibleControls()).find((x) => x.key === h.key);
   if (!fresh) continue;
   await clickIdx(fresh.idx);
@@ -103,14 +117,17 @@ for (const h of headers) {
   const again = (await visibleControls()).find((x) => x.key === h.key);
   if (again) { await clickIdx(again.idx); await new Promise((r) => setTimeout(r, 800)); flush(); }
 }
+if (WITH_LOCATION) {
+await p.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 }); await ready(); flush();
 const loc = await probeInside('location tray');
 console.log(`  location tray: ${loc.count} inner controls`);
+}
 console.log(`clicked ${total} inner controls`);
 const controls = top;
 // Location search: type and submit
 await p.evaluate(() => { document.getElementById('location-bar')?.classList.remove('collapsed'); document.getElementById('search-toggle')?.click(); });
 await new Promise((r) => setTimeout(r, 1000));
-const hasSearch = await p.evaluate(() => { const i = document.getElementById('location-search'); if (!i) return false; i.scrollIntoView(); return !!i.offsetParent; });
+const hasSearch = WITH_LOCATION && await p.evaluate(() => { const i = document.getElementById('location-search'); if (!i) return false; i.scrollIntoView(); return !!i.offsetParent; });
 if (hasSearch) {
   await p.evaluate(() => document.getElementById('search-toggle')?.click());
   await new Promise((r) => setTimeout(r, 800));
@@ -121,6 +138,6 @@ if (hasSearch) {
   const ev = flush();
   const msg = await p.evaluate(() => [...document.querySelectorAll('[role="status"], .toast, .search-status, .location-status')].map((e) => e.textContent.trim()).filter(Boolean).slice(0, 3).join(' / '));
   console.log(`SEARCH "Yellowstone National Park" → ${ev.join(' | ') || 'no failed requests'}${msg ? ` · UI: ${msg.slice(0, 160)}` : ''}`);
-} else console.log('SEARCH input not visible');
+} else if (WITH_LOCATION) console.log('SEARCH input not visible');
 console.log(`${bad.length} controls produced failed requests or errors; ${navigators.length} reloaded or navigated the page: ${navigators.join(' · ') || 'none'}`);
 await b.close();
