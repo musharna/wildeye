@@ -680,6 +680,39 @@
     </div>
   </div>
 
+  <!-- Species search: any GBIF species on the map, and what has been recorded around a clicked point -->
+  <div id="species-panel" class="panel-collapsible collapsed" data-panel-id="species-panel">
+    <div class="panel-glow"></div>
+    <div class="species-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title">SPECIES</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="species-panel" title="Collapse panel">+</button>
+      </div>
+      <div class="species-body">
+        <label class="species-label" for="species-search">Find a species</label>
+        <input type="search" id="species-search" placeholder="monarch, humpback, red maple…" autocomplete="off" spellcheck="false" />
+        <ul id="species-suggestions" class="species-suggestions" aria-label="Species suggestions" hidden></ul>
+        <div id="species-status" class="species-status" role="status" aria-live="polite"></div>
+        <div id="species-chosen" class="species-chosen" hidden>
+          <span id="species-chosen-name" class="species-chosen-name"></span>
+          <button type="button" id="species-toggle" class="scene-btn species-chip" aria-pressed="false">MAP OFF</button>
+        </div>
+        <div id="species-years" class="species-chip-row" role="group" aria-label="Years">
+          <button type="button" class="scene-btn species-chip" data-years="recent" aria-pressed="true">LAST 10 YEARS</button>
+          <button type="button" class="scene-btn species-chip" data-years="all" aria-pressed="false">ALL YEARS</button>
+        </div>
+        <div id="species-radius" class="species-chip-row" role="group" aria-label="Radius for what lives here">
+          <button type="button" class="scene-btn species-chip" data-radius="1" aria-pressed="false">1 KM</button>
+          <button type="button" class="scene-btn species-chip" data-radius="10" aria-pressed="true">10 KM</button>
+          <button type="button" class="scene-btn species-chip" data-radius="50" aria-pressed="false">50 KM</button>
+        </div>
+        <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">WHAT LIVES HERE</button>
+        <p class="species-credit">Names: iNaturalist · Records: GBIF.org (CC0 and CC BY only)</p>
+      </div>
+    </div>
+  </div>
+
   </div>
 
   <!-- Global Context is deliberately independent from the left layer accordion. -->

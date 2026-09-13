@@ -220,6 +220,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'pp-toggles',
   'global-context-panel',
   'radio-panel',
+  'species-panel',
 ]);
 /**
  * Position keys are versioned separately from collapsed-state keys so layout

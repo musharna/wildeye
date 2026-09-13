@@ -18,7 +18,10 @@ import gfwLayer from './data/gfw.js';
 import whispersLayer from './data/whispers.js';
 import riversLayer from './data/rivers.js';
 import ecoregionsLayer from './data/ecoregions.js';
-import speciesLayer from './data/species.js';
+import speciesLayer, { DEFAULT_SPECIES_PARAMS } from './data/species.js';
+import { createBioClient } from './bio/gbif.js';
+import { createWhatLivesHere } from './bio/whatLivesHere.js';
+import { createSpeciesPanel } from './bio/speciesPanel.js';
 import { createDetailsCard } from './bio/detailsCard.js';
 import firesLayer from './data/fires.js';
 import h5n1Layer from './data/h5n1.js';
@@ -304,6 +307,20 @@ async function init() {
     // Biology details card: Cesium's info box is off, so this is where biology markers show their details.
     const bioCard = createDetailsCard({ viewer, layerName: (id) => dataManager.layers.get(id)?.module?.name || id });
     document.body.appendChild(bioCard.element);
+    // Species search and "what lives here" (docs/superpowers/specs/2026-09-13-species-search-design.md).
+    const bioClient = createBioClient();
+    let speciesPanel = null;
+    const whatLivesHere = createWhatLivesHere({
+      viewer,
+      client: bioClient,
+      card: bioCard,
+      getParams: () => dataManager.getLayerParams('species') || DEFAULT_SPECIES_PARAMS,
+      onPickSpecies: ({ taxonKey, name }) => {
+        speciesPanel?.chooseTaxon({ taxonKey, name }).catch((error) => console.error('[species] could not map the picked species', { taxonKey, error }));
+      },
+      onArmedChange: () => speciesPanel?.render(),
+    });
+    speciesPanel = createSpeciesPanel({ dataManager, speciesLayer, client: bioClient, whatLivesHere });
 
     // Initialize deterministic scene playback for social clip capture
     const sceneDirector = new SceneDirector(viewer, styleManager, dataManager);

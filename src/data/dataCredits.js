@@ -146,6 +146,10 @@ export const DATA_CREDITS = [
     html: "Ecoregions and biomes: <a href=\"https://ecoregions.appspot.com/\" target=\"_blank\" rel=\"noopener\">RESOLVE Ecoregions 2017</a> (CC BY 4.0), Dinerstein et al. 2017, <i>BioScience</i> 67(6):534\u2013545, <a href=\"https://doi.org/10.1093/biosci/bix014\" target=\"_blank\" rel=\"noopener\">doi:10.1093/biosci/bix014</a>. Boundaries simplified for display.",
   },
   {
+    key: 'species',
+    html: 'Species maps and "what lives here": <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF.org</a> occurrence search and maps (CC0 and CC BY records only). Species names suggested by <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a>.',
+  },
+  {
     key: 'rivers',
     html: "River temperature and flow: <a href=\"https://waterdata.usgs.gov\" target=\"_blank\" rel=\"noopener\">U.S. Geological Survey</a> Water Data APIs (public domain; provisional data subject to revision). Any use of trade, firm, or product names is for descriptive purposes only and does not imply endorsement by the U.S. Government.",
   },
