@@ -12,16 +12,18 @@ import { binsAt, LIVE_WEEKS } from "./hpai.js";
  * level, and the info box says the counts are provisional report-week additions, not onsets.
  */
 const DATA_URL = "data/arbonet.geojson";
-const FILL_ALPHA = 0.55;
 // A reported-zero area must read as FILLED grey, not as bare imagery: 0.15 was indistinguishable
 // from no polygon at all in the real-app screenshots (2026-09-12 visual critic).
 export const EMPTY_ALPHA = 0.35;
 
+// Opacity rises with the class: at one shared 0.55 the dark end of the ramp washed out over satellite
+// imagery and read as the "no cases" grey (2026-09-12 visual critic), so the highest counts were the
+// least legible. Denser classes cover more of the imagery and keep their teal.
 export const CASE_CLASSES = Object.freeze([
-  { key: "one", label: "1 case", color: "#99f6e4", test: (n) => n <= 1 },
-  { key: "few", label: "2–4 cases", color: "#2dd4bf", test: (n) => n <= 4 },
-  { key: "many", label: "5–14 cases", color: "#0d9488", test: (n) => n <= 14 },
-  { key: "surge", label: "15+ cases", color: "#134e4a", test: () => true },
+  { key: "one", label: "1 case", color: "#99f6e4", alpha: 0.45, test: (n) => n <= 1 },
+  { key: "few", label: "2–4 cases", color: "#2dd4bf", alpha: 0.55, test: (n) => n <= 4 },
+  { key: "many", label: "5–14 cases", color: "#0d9488", alpha: 0.7, test: (n) => n <= 14 },
+  { key: "surge", label: "15+ cases", color: "#134e4a", alpha: 0.85, test: () => true },
 ]);
 export const NO_DATA = Object.freeze({
   key: "none",
@@ -95,7 +97,7 @@ export function stateEntities(f, observedIso, today, ctx = {}) {
   const sum = sumBins(scope.bins, ctx.visible || {});
   const cls = caseClass(sum.n);
   const color = Cesium.Color.fromCssColorString(cls.color).withAlpha(
-    sum.n > 0 ? FILL_ALPHA : EMPTY_ALPHA,
+    sum.n > 0 ? cls.alpha : EMPTY_ALPHA,
   );
   const polys =
     f.geometry.type === "MultiPolygon"

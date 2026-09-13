@@ -12,6 +12,7 @@ import {
   describeState,
   createArbonetLayer,
   NO_DATA,
+  CASE_CLASSES,
 } from "./arbonet.js";
 import { binsAt } from "./hpai.js";
 
@@ -128,4 +129,12 @@ test("layer: contract, MultiPolygon parts, observed-time recolour, disease chips
   } finally {
     globalThis.fetch = saved;
   }
+});
+
+test('case classes: opacity rises with count so the dark end stays teal over imagery, above the empty grey', () => {
+  // Mutant seen failing: one shared alpha for every class (the washed-out original).
+  const a = CASE_CLASSES.map((c) => c.alpha);
+  assert.ok(a.every((x, i) => i === 0 || x > a[i - 1]), `strictly increasing: ${a}`);
+  assert.ok(a[0] > 0.35, 'lightest class covers more than the zero-case grey (0.35)');
+  assert.ok(a.at(-1) <= 0.9, 'densest class leaves some imagery visible');
 });
