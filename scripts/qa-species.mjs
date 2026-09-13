@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,card,search,here,portal] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,card,search,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs';
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
-const CHECKS = new Set(arg('--checks', 'card,search,here,portal').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,card,search,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -214,10 +214,11 @@ if (CHECKS.has('search')) {
   report('search', first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && stats?.error === null, { first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, srs: tiles[0] ? new URL(tiles[0]).searchParams.get('srs') : null, sample: tiles[0] || null });
 }
 
-let hereLink = null;
-let hereTotal = null;
+let hereSearch = null;
+const isHereSearch = (url) => { let u; try { u = new URL(url); } catch { return false; } return u.hostname === 'api.gbif.org' && u.pathname === '/v1/occurrence/search' && u.searchParams.get('facet') === 'speciesKey'; };
 if (CHECKS.has('here')) {
   await flyTo(-110.83, 44.46, 40_000);
+  const hereRequestsFrom = requests.length;
   await page.click('#species-what-lives-here');
   const center = await page.evaluate(() => {
     const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect();
@@ -231,23 +232,43 @@ if (CHECKS.has('here')) {
     text: document.getElementById('bio-card').innerText.slice(0, 400),
     link: document.querySelector('#bio-card .bio-card-foot a')?.href || null,
   }));
-  hereLink = result.link;
-  hereTotal = Number((result.filter.match(/([\d,]+) records/) || [])[1]?.replace(/,/g, '') || Number.NaN);
+  hereSearch = requests.slice(hereRequestsFrom).filter(isHereSearch).at(-1) || null;
   await shot('what-lives-here');
   report('here', result.rows >= 1 && Boolean(result.link), result);
 }
 
-if (CHECKS.has('portal') && hereLink && Number.isFinite(hereTotal)) {
-  const portal = await browser.newPage();
-  await portal.goto(hereLink, { waitUntil: 'networkidle2', timeout: 90000 });
-  await sleep(5000);
-  const text = await portal.evaluate(() => document.body.innerText);
-  const expected = hereTotal.toLocaleString('en-US');
-  report('portal', text.includes(expected), { link: hereLink, expected, pageSample: text.slice(0, 300) });
-  await portal.close();
-} else if (CHECKS.has('portal')) {
-  // Never pass by skipping: portal needs the here check's footer link and its record total.
-  report('portal', false, { reason: hereLink ? 'the what-lives-here filter line had no parsable record total' : 'no what-lives-here link to open (run the here check first, and it must produce a footer link)', hereLink, hereTotal: Number.isFinite(hereTotal) ? hereTotal : null });
+if (CHECKS.has('portal-link')) {
+  // gbif.org answers scripts with a bot check, so the footer link is compared with the GBIF search the page really sent
+  // (R-7b): gbif.org's location filter is `geometry` and it drops `geo_distance`, so the link must carry the search's
+  // geometry exactly, with the same licences and years.
+  const href = await page.evaluate(() => document.querySelector('#bio-card .bio-card-foot a')?.getAttribute('href') ?? null);
+  const parse = (url) => { try { return new URL(url); } catch { return null; } };
+  const link = href ? parse(href) : null;
+  const sent = hereSearch ? parse(hereSearch) : null;
+  if (!link || !sent) {
+    // Never pass by skipping: portal-link needs the here check's GBIF request and its footer link.
+    report('portal-link', false, { reason: !sent ? 'no what-lives-here GBIF search request was captured (run the here check first)' : 'the what-lives-here card has no footer link', href, hereSearch });
+  } else {
+    const noDistance = (u) => !u.searchParams.has('geo_distance') && !u.searchParams.has('geoDistance');
+    const rawGeometry = (url) => (url.match(/[?&]geometry=([^&]*)/) || [])[1] ?? null;
+    const geometry = link.searchParams.get('geometry');
+    const licences = (u) => u.searchParams.getAll('license');
+    const checks = {
+      portalPath: link.origin + link.pathname === 'https://www.gbif.org/occurrence/search',
+      geometryIsPolygon: /^POLYGON\(\(/.test(geometry || ''),
+      geometryEqual: geometry !== null && geometry === sent.searchParams.get('geometry'),
+      licencesEqual: ['CC0_1_0', 'CC_BY_4_0'].every((l) => licences(sent).includes(l)) && JSON.stringify(licences(link)) === JSON.stringify(licences(sent)),
+      yearEqual: sent.searchParams.get('year') !== null && link.searchParams.get('year') === sent.searchParams.get('year'),
+      noDistanceParam: noDistance(link) && noDistance(sent),
+    };
+    report('portal-link', Object.values(checks).every(Boolean), {
+      ...checks,
+      rawGeometryEqual: rawGeometry(href) === rawGeometry(hereSearch),
+      geometryVertices: geometry ? geometry.split(',').length : null,
+      link: { length: href.length, params: [...link.searchParams.entries()] },
+      search: { length: hereSearch.length, params: [...sent.searchParams.entries()] },
+    });
+  }
 }
 
 report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10), upstreamTileErrors: upstreamTileErrors.slice(0, 10) });

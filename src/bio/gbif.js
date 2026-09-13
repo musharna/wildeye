@@ -43,6 +43,42 @@ function checkPoint(lat, lon, radiusKm) {
   if (!RADII_KM.includes(radiusKm)) throw new Error(`bad radius ${radiusKm} km (allowed: ${RADII_KM.join(', ')})`);
 }
 
+/** Mean earth radius (IUGG), km. */
+const EARTH_RADIUS_KM = 6371.0088;
+/** Nearer the poles the cos(latitude) longitude offset of circlePolygonWkt breaks down, so it refuses such points. */
+export const MAX_POLYGON_LAT = 85;
+
+/**
+ * The circle of `radiusKm` around a point as a WKT polygon: a closed counter-clockwise ring, longitude first, 5 decimals.
+ * gbif.org has no distance filter (its location filter is `geometry`), so the search and its gbif.org link both use this.
+ * Spherical earth: a vertex sits r·sinθ north and r·cosθ / cos(latitude) east of the point. The latitude is the mean of the
+ * point's and the vertex's, which keeps every 50 km vertex within 0.04% of the radius up to 85°. The point's latitude
+ * alone leaves them 0.6% short at 75° and 1.8% short at 85°.
+ */
+export function circlePolygonWkt({ lat, lon, radiusKm, vertices = 64 }) {
+  if (!Number.isFinite(lat) || Math.abs(lat) > MAX_POLYGON_LAT) {
+    throw new Error(`circlePolygonWkt: lat ${lat} is outside ±${MAX_POLYGON_LAT}° (the cos(latitude) longitude offset breaks down near the poles)`);
+  }
+  if (!Number.isFinite(lon) || lon < -180 || lon > 180) throw new Error(`circlePolygonWkt: bad lon ${lon}`);
+  if (!Number.isFinite(radiusKm) || radiusKm <= 0) throw new Error(`circlePolygonWkt: bad radius ${radiusKm} km`);
+  if (!Number.isInteger(vertices) || vertices < 3) throw new Error(`circlePolygonWkt: bad vertex count ${vertices}`);
+  const toRadians = Math.PI / 180;
+  const degrees = radiusKm / EARTH_RADIUS_KM / toRadians;
+  const fixed = (value) => String(Number(value.toFixed(5))); // no "-0", no trailing zeros
+  const ring = [];
+  for (let i = 0; i < vertices; i += 1) {
+    const theta = (2 * Math.PI * i) / vertices;
+    const vertexLat = lat + degrees * Math.sin(theta);
+    const vertexLon = lon + (degrees * Math.cos(theta)) / Math.cos(((lat + vertexLat) / 2) * toRadians);
+    if (vertexLon < -180 || vertexLon > 180) {
+      throw new Error(`circlePolygonWkt: the ${radiusKm} km circle around ${lat},${lon} crosses the antimeridian (vertex longitude ${vertexLon.toFixed(5)}); refusing to build a wrong polygon`);
+    }
+    ring.push(`${fixed(vertexLon)} ${fixed(vertexLat)}`);
+  }
+  ring.push(ring[0]);
+  return `POLYGON((${ring.join(',')}))`;
+}
+
 /**
  * Cesium URL template for GBIF hexagon tiles of one taxon. `adhoc`, because `density` ignores `license=`. `srs=EPSG:3857`,
  * because `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator.
@@ -54,11 +90,11 @@ export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }
 
-/** The 20 species with the most CC0 / CC BY records within `radiusKm` of a point. */
+/** The 20 species with the most CC0 / CC BY records within `radiusKm` of a point (the circlePolygonWkt polygon). */
 export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) {
   checkPoint(lat, lon, radiusKm);
   const params = new URLSearchParams({
-    geoDistance: `${lat.toFixed(4)},${lon.toFixed(4)},${radiusKm}km`,
+    geometry: circlePolygonWkt({ lat, lon, radiusKm }),
     hasCoordinate: 'true',
     hasGeospatialIssue: 'false',
     facet: 'speciesKey',
@@ -69,10 +105,13 @@ export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) 
   return `${GBIF_API}/v1/occurrence/search?${params}`;
 }
 
-/** The same filters on gbif.org, where a visitor can browse the records and request a citable download. */
+/**
+ * The same search on gbif.org, where a visitor can browse the records and request a citable download. It carries the
+ * search's own `geometry` value: gbif.org drops `geo_distance`, which would open the link with no location filter.
+ */
 export function gbifPortalUrl({ lat, lon, radiusKm, years, now = new Date() }) {
   checkPoint(lat, lon, radiusKm);
-  const params = new URLSearchParams({ geo_distance: `${lat.toFixed(4)},${lon.toFixed(4)},${radiusKm}km` });
+  const params = new URLSearchParams({ geometry: circlePolygonWkt({ lat, lon, radiusKm }) });
   appendRecordFilters(params, years, now);
   return `https://www.gbif.org/occurrence/search?${params}`;
 }

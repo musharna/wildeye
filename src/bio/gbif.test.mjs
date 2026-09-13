@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   LICENSES, yearRange, yearLabel, densityTileTemplate, speciesNearUrl, gbifPortalUrl, parseSpeciesNear,
   inatSuggestUrl, parseInatSuggest, gbifSuggestUrl, parseGbifSuggest, gbifMatchUrl, parseGbifMatch,
-  speciesUrl, parseSpeciesName, createRateLimiter, createPool, fetchJson, RequestError, createBioClient,
+  speciesUrl, parseSpeciesName, createRateLimiter, createPool, fetchJson, RequestError, createBioClient, circlePolygonWkt, RADII_KM,
 } from './gbif.js';
 
 const NOW = new Date('2026-09-13T12:00:00Z');
@@ -34,10 +34,12 @@ test('density tiles use the adhoc endpoint with both licence filters and the yea
   assert.throws(() => densityTileTemplate({ taxonKey: 0, years: 'all', now: NOW }), /taxonKey/);
 });
 
-test('species near a point: radius, both licences, years, clean coordinates, top-20 species facet', () => {
+test('species near a point: a polygon around it, both licences, years, clean coordinates, top-20 species facet', () => {
   const url = new URL(speciesNearUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'recent', now: NOW }));
   assert.equal(url.origin + url.pathname, 'https://api.gbif.org/v1/occurrence/search');
-  assert.equal(url.searchParams.get('geoDistance'), '44.4600,-110.8300,10km');
+  // gbif.org has no distance filter (its location filter is `geometry`), so the search uses the polygon the gbif.org link uses (R-7b).
+  assert.match(url.searchParams.get('geometry') ?? '', /^POLYGON\(\(-110\.\d+ 44\.\d+(,-?\d+(\.\d+)? -?\d+(\.\d+)?)+\)\)$/);
+  assert.equal(url.searchParams.has('geoDistance'), false);
   assert.deepEqual(url.searchParams.getAll('license'), LICENSES);
   assert.equal(url.searchParams.get('year'), '2017,2026');
   for (const [key, value] of [['hasCoordinate', 'true'], ['hasGeospatialIssue', 'false'], ['facet', 'speciesKey'], ['facetLimit', '20'], ['limit', '0']]) {
@@ -45,10 +47,75 @@ test('species near a point: radius, both licences, years, clean coordinates, top
   }
   assert.throws(() => speciesNearUrl({ lat: 44, lon: -110, radiusKm: 5, years: 'all', now: NOW }), /radius/);
   assert.throws(() => speciesNearUrl({ lat: Number.NaN, lon: -110, radiusKm: 10, years: 'all', now: NOW }), /lat/);
-  const portal = new URL(gbifPortalUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'recent', now: NOW }));
-  assert.equal(portal.origin + portal.pathname, 'https://www.gbif.org/occurrence/search');
-  assert.equal(portal.searchParams.get('geo_distance'), '44.4600,-110.8300,10km');
-  assert.deepEqual(portal.searchParams.getAll('license'), LICENSES);
+});
+
+test('the gbif.org link carries the search geometry byte for byte, both licences and the years, and no geo_distance', () => {
+  // gbif.org (gbif-web) keeps only its config fields; `geo_distance` is not one, so a link with it opens with no location filter.
+  const rawGeometry = (href) => (href.match(/[?&]geometry=([^&]*)/) || [])[1] ?? null;
+  // a rounded point and an unrounded one, as a Cesium click gives
+  for (const args of [{ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'recent', now: NOW }, { lat: 44.463728192, lon: -110.829104417, radiusKm: 50, years: 'recent', now: NOW }]) {
+    const searchHref = speciesNearUrl(args);
+    const portalHref = gbifPortalUrl(args);
+    const search = new URL(searchHref);
+    const portal = new URL(portalHref);
+    assert.equal(portal.origin + portal.pathname, 'https://www.gbif.org/occurrence/search');
+    assert.ok(search.searchParams.get('geometry'), 'the search sends a geometry');
+    assert.equal(portal.searchParams.get('geometry'), search.searchParams.get('geometry'));
+    assert.equal(rawGeometry(portalHref), rawGeometry(searchHref), 'encoded geometry values are byte-identical');
+    for (const key of ['geo_distance', 'geoDistance']) assert.equal(portal.searchParams.has(key), false, key);
+    assert.deepEqual(portal.searchParams.getAll('license'), LICENSES);
+    assert.equal(portal.searchParams.get('year'), '2017,2026');
+  }
+  assert.equal(new URL(gbifPortalUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'all', now: NOW })).searchParams.has('year'), false);
+});
+
+test('circlePolygonWkt: a closed counter-clockwise ring of 64 vertices on the circle, 5 decimals; no pole, no antimeridian', () => {
+  const R = 6371.0088;
+  const rad = Math.PI / 180;
+  const haversineKm = ([lon1, lat1], [lon2, lat2]) => {
+    const h = Math.sin(((lat2 - lat1) * rad) / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lon2 - lon1) * rad) / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  const ring = (wkt) => {
+    const body = wkt.match(/^POLYGON\(\((.*)\)\)$/)?.[1];
+    assert.ok(body, `not a WKT polygon: ${wkt.slice(0, 60)}`);
+    return body.split(',').map((pair) => {
+      const parts = pair.split(' ');
+      assert.equal(parts.length, 2, pair);
+      for (const part of parts) assert.match(part, /^-?\d+(\.\d{1,5})?$/, 'a plain decimal with at most 5 decimals');
+      return parts.map(Number);
+    });
+  };
+  // Yellowstone (the probe point), an unrounded click, the equator, the southern hemisphere, and the 85° limit both ways
+  for (const [lat, lon] of [[44.46, -110.83], [44.463728192, -110.829104417], [0, 0], [-33.92, 18.42], [85, 20], [-85, -20]]) {
+    for (const radiusKm of RADII_KM) {
+      const where = `${lat},${lon} ${radiusKm} km`;
+      const points = ring(circlePolygonWkt({ lat, lon, radiusKm }));
+      assert.equal(points.length, 65, where);
+      assert.deepEqual(points[64], points[0], `${where}: closed`);
+      const worst = Math.max(...points.slice(0, 64).map((p) => Math.abs(haversineKm([lon, lat], p) / radiusKm - 1)));
+      assert.ok(worst <= 0.005, `${where}: a vertex is ${(worst * 100).toFixed(3)}% off the radius`);
+      let twiceArea = 0; // shoelace in lon/lat, centred on the point
+      for (let i = 0; i < 64; i += 1) twiceArea += (points[i][0] - lon) * (points[i + 1][1] - lat) - (points[i + 1][0] - lon) * (points[i][1] - lat);
+      assert.ok(twiceArea > 0, `${where}: counter-clockwise`);
+    }
+  }
+  assert.equal(ring(circlePolygonWkt({ lat: 10, lon: 10, radiusKm: 10, vertices: 16 })).length, 17);
+  assert.equal(new URL(speciesNearUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'all', now: NOW })).searchParams.get('geometry'), circlePolygonWkt({ lat: 44.46, lon: -110.83, radiusKm: 10 }));
+
+  // The longitude offset divides by cos(latitude), which breaks down near the poles. The 85° limit lives in
+  // circlePolygonWkt, so both URLs refuse such a point too.
+  for (const lat of [85.001, -85.001, 89.9]) assert.throws(() => circlePolygonWkt({ lat, lon: 0, radiusKm: 10 }), /85/);
+  assert.throws(() => speciesNearUrl({ lat: 86, lon: 0, radiusKm: 10, years: 'all', now: NOW }), /85/);
+  assert.throws(() => gbifPortalUrl({ lat: -86, lon: 0, radiusKm: 10, years: 'all', now: NOW }), /85/);
+  // A ring with a longitude past ±180° would be a wrong polygon, so it throws; the same circle just inside is fine.
+  assert.throws(() => circlePolygonWkt({ lat: 0, lon: 179.9, radiusKm: 50 }), /antimeridian/);
+  assert.throws(() => circlePolygonWkt({ lat: 60, lon: -179.5, radiusKm: 50 }), /antimeridian/);
+  assert.throws(() => speciesNearUrl({ lat: 0, lon: 180, radiusKm: 1, years: 'all', now: NOW }), /antimeridian/);
+  assert.equal(ring(circlePolygonWkt({ lat: 0, lon: 179.5, radiusKm: 50 })).length, 65);
+  for (const bad of [{ radiusKm: 0 }, { radiusKm: Number.NaN }, { vertices: 2 }, { vertices: 6.5 }, { lon: 181 }]) {
+    assert.throws(() => circlePolygonWkt({ lat: 0, lon: 0, radiusKm: 10, ...bad }), /circlePolygonWkt/, JSON.stringify(bad));
+  }
 });
 
 test('parseSpeciesNear reads the total and the SPECIES_KEY facet; no count is an error', () => {
