@@ -67,11 +67,60 @@ if (CHECKS.has('card')) {
   await sleep(2500);
   const card = await page.evaluate(() => {
     const el = document.getElementById('bio-card');
-    return el ? { visible: !el.hidden && el.getBoundingClientRect().width > 0, text: el.innerText } : null;
+    return el ? { visible: !el.hidden && el.getBoundingClientRect().width > 0, text: el.innerText, links: [...el.querySelectorAll('.bio-card-body a')].map((a) => ({ href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel') })) } : null;
   });
   await shot('card');
-  report('card', Boolean(card?.visible) && card.text.includes(target.name) && /CC0|CC[ -]BY/i.test(card.text), { entity: target.id, name: target.name, card: card && { visible: card.visible, text: card.text.slice(0, 240) } });
+  // Positive control for the sanitizer: the layer's own https links (the DOI among them) survive, opening in a new tab with no opener.
+  const httpsLinks = (card?.links || []).filter((link) => /^https:\/\//.test(link.href || ''));
+  const doiLink = httpsLinks.find((link) => link.href.startsWith('https://doi.org/')) || null;
+  const linksOk = httpsLinks.length > 0 && httpsLinks.every((link) => link.target === '_blank' && /\bnoopener\b/.test(link.rel || ''));
+  report('card', Boolean(card?.visible) && card.text.includes(target.name) && /CC0|CC[ -]BY/i.test(card.text) && linksOk, { entity: target.id, name: target.name, doiLink, httpsLinks: httpsLinks.length, card: card && { visible: card.visible, text: card.text.slice(0, 240), links: card.links } });
+
+  // Escape must deselect as well as close: Cesium raises selectedEntityChanged only when the value changes, so a
+  // marker left selected could not reopen the card.
   await page.keyboard.press('Escape');
+  await sleep(500);
+  const afterEscape = await page.evaluate(() => ({ hidden: document.getElementById('bio-card')?.hidden ?? null, selected: window.__godsEyeView.viewer.selectedEntity?.id ?? null }));
+  await page.mouse.click(target.x, target.y);
+  await sleep(2500);
+  const reopened = await page.evaluate(() => {
+    const el = document.getElementById('bio-card');
+    return el ? { visible: !el.hidden && el.getBoundingClientRect().width > 0, text: el.innerText.slice(0, 120) } : null;
+  });
+  report('card-reopen', afterEscape.hidden === true && afterEscape.selected === null && Boolean(reopened?.visible) && reopened.text.includes(target.name), { afterEscape, reopened });
+  await page.keyboard.press('Escape');
+
+  // A hostile description on a real occurrences entity: DOMPurify must drop the img and the javascript: href, keep the
+  // https link (forced to a new tab with no opener), and nothing may run.
+  const HOSTILE = '<b>hostile-ok</b><img src=x onerror="window.__bioXss=1"><a href="javascript:window.__bioXss=2">js</a><a href="https://example.org/">safe</a>';
+  const sanitized = await page.evaluate(async (description) => {
+    const viewer = window.__godsEyeView.viewer;
+    let ds = null;
+    for (let i = 0; i < viewer.dataSources.length; i += 1) if (viewer.dataSources.get(i).name === 'occurrences') ds = viewer.dataSources.get(i);
+    delete window.__bioXss;
+    viewer.selectedEntity = undefined;
+    const entity = ds.entities.add({ id: 'qa-hostile-description', description });
+    viewer.selectedEntity = entity;
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const el = document.getElementById('bio-card');
+    const anchors = el ? [...el.querySelectorAll('.bio-card-body a')] : [];
+    const safe = anchors.find((a) => a.getAttribute('href') === 'https://example.org/');
+    const result = {
+      selected: viewer.selectedEntity?.id ?? null,
+      visible: Boolean(el) && !el.hidden && el.getBoundingClientRect().width > 0,
+      hasMarker: Boolean(el?.innerText.includes('hostile-ok')),
+      imgs: el ? el.querySelectorAll('img').length : null,
+      javascriptHrefs: el ? el.querySelectorAll('a[href^="javascript" i]').length : null,
+      disallowedHrefs: anchors.filter((a) => a.hasAttribute('href') && !/^(?:https?|mailto):/i.test(a.getAttribute('href'))).length,
+      safeLink: safe ? { target: safe.getAttribute('target'), rel: safe.getAttribute('rel') } : null,
+      xss: typeof window.__bioXss,
+      body: el?.querySelector('.bio-card-body')?.innerHTML.slice(0, 300) ?? null,
+    };
+    viewer.selectedEntity = undefined;
+    ds.entities.remove(entity);
+    return result;
+  }, HOSTILE);
+  report('card-sanitize', sanitized.visible && sanitized.hasMarker && sanitized.imgs === 0 && sanitized.javascriptHrefs === 0 && sanitized.disallowedHrefs === 0 && sanitized.safeLink?.target === '_blank' && /\bnoopener\b/.test(sanitized.safeLink?.rel || '') && sanitized.xss === 'undefined', sanitized);
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', false, { origin: 'user' }));
 }
 
@@ -134,6 +183,9 @@ if (CHECKS.has('portal') && hereLink && Number.isFinite(hereTotal)) {
   const expected = hereTotal.toLocaleString('en-US');
   report('portal', text.includes(expected), { link: hereLink, expected, pageSample: text.slice(0, 300) });
   await portal.close();
+} else if (CHECKS.has('portal')) {
+  // Never pass by skipping: portal needs the here check's footer link and its record total.
+  report('portal', false, { reason: hereLink ? 'the what-lives-here filter line had no parsable record total' : 'no what-lives-here link to open (run the here check first, and it must produce a footer link)', hereLink, hereTotal: Number.isFinite(hereTotal) ? hereTotal : null });
 }
 
 report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10) });

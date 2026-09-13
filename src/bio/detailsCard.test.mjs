@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { BIO_CARD_LAYER_IDS, cardDecision, listRows, renderListInto } from './detailsCard.js';
+import { BIO_CARD_LAYER_IDS, cardDecision, createDetailsCard, listRows, renderListInto } from './detailsCard.js';
 
 const entityIn = (layerId, description) => ({
   id: 'e1',
@@ -67,4 +67,68 @@ test('rows from GBIF render as text, never markup, and a click hands back the ro
   assert.equal(container.children[0].children[0].textContent, '<img src=x onerror=alert(1)>');
   container.children[0].listeners.click();
   assert.deepEqual(clicked, [9]);
+});
+
+// A stand-in for the browser pieces createDetailsCard touches: querySelector hands back one fake per selector.
+function cardDoc() {
+  const listeners = {};
+  const make = (tag) => {
+    const parts = {};
+    return {
+      tag, hidden: false, id: '', className: '', textContent: '', innerHTML: '', attributes: {}, children: [], listeners: {},
+      setAttribute(name, value) { this.attributes[name] = String(value); },
+      appendChild(child) { this.children.push(child); return child; },
+      replaceChildren(...kids) { this.children = kids; this.innerHTML = ''; },
+      addEventListener(type, fn) { this.listeners[type] = fn; },
+      querySelector(selector) { return (parts[selector] ||= make(selector)); },
+    };
+  };
+  return { listeners, createElement: make, addEventListener(type, fn) { listeners[type] = fn; } };
+}
+
+// Like Cesium's Viewer: selectedEntityChanged fires only when the selected value actually changes.
+function fakeViewer() {
+  const handlers = [];
+  let selected;
+  return {
+    clock: { currentTime: 'now' },
+    selectedEntityChanged: { addEventListener: (fn) => handlers.push(fn) },
+    get selectedEntity() { return selected; },
+    set selectedEntity(value) {
+      if (value === selected) return;
+      selected = value;
+      for (const fn of handlers) fn(value);
+    },
+  };
+}
+
+test('detail mode renders only what the sanitizer returns', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const seen = [];
+  const card = createDetailsCard({ viewer, doc, sanitize: (html) => { seen.push(html); return '<b>clean</b>'; } });
+  const raw = '<b>Blue whale</b><img src=x onerror="alert(1)">';
+  viewer.selectedEntity = entityIn('occurrences', raw);
+  assert.equal(card.element.hidden, false);
+  assert.deepEqual(seen, [raw], 'the layer description goes through the sanitizer');
+  assert.equal(card.element.querySelector('.bio-card-body').innerHTML, '<b>clean</b>', 'the body holds the sanitizer output, not the raw description');
+});
+
+test('Escape and the close button both deselect, so the same marker opens the card again', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const card = createDetailsCard({ viewer, doc, sanitize: (html) => html });
+  const whale = entityIn('occurrences', '<b>Blue whale</b>');
+  viewer.selectedEntity = whale;
+  assert.equal(card.element.hidden, false, 'first click opens the card');
+  doc.listeners.keydown({ key: 'Escape' });
+  assert.equal(card.element.hidden, true, 'Escape hides the card');
+  assert.equal(viewer.selectedEntity, undefined, 'Escape clears the selection');
+  viewer.selectedEntity = whale;
+  assert.equal(card.element.hidden, false, 'the same marker opens the card again after Escape');
+  card.element.querySelector('.bio-card-close').listeners.click();
+  assert.equal(card.element.hidden, true, 'close button hides the card');
+  assert.equal(viewer.selectedEntity, undefined, 'close button clears the selection');
+  viewer.selectedEntity = whale;
+  assert.equal(card.element.hidden, false, 'the same marker opens the card again after the close button');
 });

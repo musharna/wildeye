@@ -3,8 +3,10 @@
  * Cesium's info box is off (src/main.js `infoBox: false`), so until this card the details each biology layer
  * attaches to its entities, citation and licence included, never reached the screen (verified on the live
  * site 2026-09-13). Detail mode shows the clicked entity's description, which the layer builds with escaped
- * fields. List mode shows "what lives here"; GBIF and iNaturalist strings only ever go through textContent.
+ * fields and the card passes through DOMPurify (see sanitizeDescription). List mode shows "what lives here"; GBIF and iNaturalist strings only ever go through textContent.
  */
+import DOMPurify from 'dompurify';
+
 export const BIO_CARD_LAYER_IDS = new Set([
   'arbonet', 'birds', 'cetaceans', 'drought', 'ecoregions', 'fires', 'fishing', 'gfw', 'h5n1', 'hpai',
   'neon', 'neon-vectors', 'occurrences', 'otn', 'phenology', 'rivers', 'tracks', 'wastewater', 'whispers',
@@ -16,6 +18,44 @@ export function cardDecision(entity, time = undefined) {
   const html = entity.description?.getValue?.(time);
   if (typeof html !== 'string' || !html.trim()) return { open: false };
   return { open: true, layerId, html };
+}
+
+/**
+ * Layer descriptions were written for Cesium's InfoBox, which renders them in a sandboxed iframe; this card renders
+ * into the page itself, so they pass through DOMPurify first. The allow-lists are exactly what the biology layers
+ * emit (b, i, small, br, span, a; href, target, rel, style, class, title). Links must be absolute http, https or
+ * mailto (no relative, javascript: or data: URLs), and every surviving link opens in a new tab with no opener.
+ */
+export const DESCRIPTION_PURIFY_CONFIG = {
+  ALLOWED_TAGS: ['b', 'i', 'small', 'br', 'span', 'a'],
+  ALLOWED_ATTR: ['href', 'target', 'rel', 'style', 'class', 'title'],
+  ALLOWED_URI_REGEXP: /^(?:https?|mailto):/i,
+  ALLOW_DATA_ATTR: false,
+  ALLOW_ARIA_ATTR: false,
+};
+
+// DOMPurify tests target and rel against ALLOWED_URI_REGEXP too, so they are set here, after that check.
+function forceNewTabLinks(node) {
+  if (node.nodeName === 'A') {
+    node.setAttribute('target', '_blank');
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+}
+
+export function sanitizeDescription(html, purify) {
+  purify.addHook('afterSanitizeAttributes', forceNewTabLinks);
+  try {
+    return purify.sanitize(html, DESCRIPTION_PURIFY_CONFIG);
+  } finally {
+    purify.removeHook('afterSanitizeAttributes', forceNewTabLinks);
+  }
+}
+
+/** A DOMPurify instance of its own (so the hook touches no other user) bound to the window that owns doc. */
+function browserSanitizer(doc) {
+  const purify = DOMPurify(doc.defaultView ?? window);
+  if (!purify.isSupported) throw new Error('[bio-card] DOMPurify is not supported in this window; refusing to render layer HTML');
+  return (html) => sanitizeDescription(html, purify);
 }
 
 export function listRows(entries) {
@@ -52,7 +92,7 @@ export function renderListInto(container, rows, doc, onRow) {
   }
 }
 
-export function createDetailsCard({ viewer, layerName = (id) => id, doc = document }) {
+export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc) }) {
   const root = doc.createElement('aside');
   root.id = 'bio-card';
   root.className = 'bio-card';
@@ -82,20 +122,23 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         return;
       }
       reset(layerName(decision.layerId));
-      body.innerHTML = decision.html;
+      body.innerHTML = sanitize(decision.html);
       mode = 'detail';
       root.hidden = false;
     } catch (error) {
       console.error('[bio-card] could not render details', { layerId: entity?.entityCollection?.owner?.name ?? null, entityId: entity?.id ?? null, error });
     }
   });
-  root.querySelector('.bio-card-close').addEventListener('click', () => {
+  // Closing a detail card also clears the selection: Cesium raises selectedEntityChanged only when the value
+  // changes, so a card closed with its marker still selected could not be reopened by clicking that marker.
+  const dismiss = () => {
     const wasDetail = mode === 'detail';
     close();
     if (wasDetail && viewer.selectedEntity) viewer.selectedEntity = undefined;
-  });
+  };
+  root.querySelector('.bio-card-close').addEventListener('click', dismiss);
   doc.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !root.hidden) close();
+    if (event.key === 'Escape' && !root.hidden) dismiss();
   });
 
   return {
