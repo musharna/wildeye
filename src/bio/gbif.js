@@ -45,36 +45,50 @@ function checkPoint(lat, lon, radiusKm) {
 
 /** Mean earth radius (IUGG), km. */
 const EARTH_RADIUS_KM = 6371.0088;
-/** Nearer the poles the cos(latitude) longitude offset of circlePolygonWkt breaks down, so it refuses such points. */
+/**
+ * Polygons are built only below 85° latitude and away from ±180°: a ring near a pole or across the antimeridian cannot be
+ * expressed as a simple GBIF polygon. Such a circle is searched with geoDistance instead (see speciesNearUrl).
+ */
 export const MAX_POLYGON_LAT = 85;
+
+/** The circle's ring as [longitude, latitude] pairs, unchecked (circlePolygonWkt explains the offsets). */
+function ringVertices({ lat, lon, radiusKm, vertices }) {
+  const toRadians = Math.PI / 180;
+  const degrees = radiusKm / EARTH_RADIUS_KM / toRadians;
+  const ring = [];
+  for (let i = 0; i < vertices; i += 1) {
+    const theta = (2 * Math.PI * i) / vertices;
+    const vertexLat = lat + degrees * Math.sin(theta);
+    ring.push([lon + (degrees * Math.cos(theta)) / Math.cos(((lat + vertexLat) / 2) * toRadians), vertexLat]);
+  }
+  return ring;
+}
+
+/** Why the circle cannot be a simple GBIF polygon (beyond ±85° latitude, or across the antimeridian), or null when it can. */
+export function polygonRefusal({ lat, lon, radiusKm, vertices = 64 }) {
+  if (Math.abs(lat) > MAX_POLYGON_LAT) return `lat ${lat} is outside ±${MAX_POLYGON_LAT}° (a ring near a pole is not a simple GBIF polygon)`;
+  const across = ringVertices({ lat, lon, radiusKm, vertices }).find(([vertexLon]) => vertexLon < -180 || vertexLon > 180);
+  if (across) return `the ${radiusKm} km circle around ${lat},${lon} crosses the antimeridian (vertex longitude ${across[0].toFixed(5)})`;
+  return null;
+}
 
 /**
  * The circle of `radiusKm` around a point as a WKT polygon: a closed counter-clockwise ring, longitude first, 5 decimals.
- * gbif.org has no distance filter (its location filter is `geometry`), so the search and its gbif.org link both use this.
+ * gbif.org has no distance filter (its location filter is `geometry`), so the search and its gbif.org link both use this
+ * wherever polygonRefusal allows it.
  * Spherical earth: a vertex sits r·sinθ north and r·cosθ / cos(latitude) east of the point. The latitude is the mean of the
  * point's and the vertex's, which keeps every 50 km vertex within 0.04% of the radius up to 85°. The point's latitude
  * alone leaves them 0.6% short at 75° and 1.8% short at 85°.
  */
 export function circlePolygonWkt({ lat, lon, radiusKm, vertices = 64 }) {
-  if (!Number.isFinite(lat) || Math.abs(lat) > MAX_POLYGON_LAT) {
-    throw new Error(`circlePolygonWkt: lat ${lat} is outside ±${MAX_POLYGON_LAT}° (the cos(latitude) longitude offset breaks down near the poles)`);
-  }
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) throw new Error(`circlePolygonWkt: bad lat ${lat}`);
   if (!Number.isFinite(lon) || lon < -180 || lon > 180) throw new Error(`circlePolygonWkt: bad lon ${lon}`);
   if (!Number.isFinite(radiusKm) || radiusKm <= 0) throw new Error(`circlePolygonWkt: bad radius ${radiusKm} km`);
   if (!Number.isInteger(vertices) || vertices < 3) throw new Error(`circlePolygonWkt: bad vertex count ${vertices}`);
-  const toRadians = Math.PI / 180;
-  const degrees = radiusKm / EARTH_RADIUS_KM / toRadians;
+  const refusal = polygonRefusal({ lat, lon, radiusKm, vertices });
+  if (refusal) throw new Error(`circlePolygonWkt: ${refusal}; refusing to build a wrong polygon`);
   const fixed = (value) => String(Number(value.toFixed(5))); // no "-0", no trailing zeros
-  const ring = [];
-  for (let i = 0; i < vertices; i += 1) {
-    const theta = (2 * Math.PI * i) / vertices;
-    const vertexLat = lat + degrees * Math.sin(theta);
-    const vertexLon = lon + (degrees * Math.cos(theta)) / Math.cos(((lat + vertexLat) / 2) * toRadians);
-    if (vertexLon < -180 || vertexLon > 180) {
-      throw new Error(`circlePolygonWkt: the ${radiusKm} km circle around ${lat},${lon} crosses the antimeridian (vertex longitude ${vertexLon.toFixed(5)}); refusing to build a wrong polygon`);
-    }
-    ring.push(`${fixed(vertexLon)} ${fixed(vertexLat)}`);
-  }
+  const ring = ringVertices({ lat, lon, radiusKm, vertices }).map(([vertexLon, vertexLat]) => `${fixed(vertexLon)} ${fixed(vertexLat)}`);
   ring.push(ring[0]);
   return `POLYGON((${ring.join(',')}))`;
 }
@@ -90,11 +104,17 @@ export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }
 
-/** The 20 species with the most CC0 / CC BY records within `radiusKm` of a point (the circlePolygonWkt polygon). */
+/**
+ * The 20 species with the most CC0 / CC BY records within `radiusKm` of a point: the circlePolygonWkt polygon, or GBIF's
+ * geoDistance where the circle cannot be a polygon (polygonRefusal), as every search did before the polygon.
+ */
 export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) {
   checkPoint(lat, lon, radiusKm);
+  const area = polygonRefusal({ lat, lon, radiusKm }) === null
+    ? { geometry: circlePolygonWkt({ lat, lon, radiusKm }) }
+    : { geoDistance: `${lat.toFixed(4)},${lon.toFixed(4)},${radiusKm}km` };
   const params = new URLSearchParams({
-    geometry: circlePolygonWkt({ lat, lon, radiusKm }),
+    ...area,
     hasCoordinate: 'true',
     hasGeospatialIssue: 'false',
     facet: 'speciesKey',
@@ -112,6 +132,13 @@ export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) 
 export function gbifPortalUrl({ lat, lon, radiusKm, years, now = new Date() }) {
   checkPoint(lat, lon, radiusKm);
   const params = new URLSearchParams({ geometry: circlePolygonWkt({ lat, lon, radiusKm }) });
+  appendRecordFilters(params, years, now);
+  return `https://www.gbif.org/occurrence/search?${params}`;
+}
+
+/** gbif.org with the same licences and years and no location filter: the card's link where the circle cannot be a polygon. */
+export function gbifPortalAnyLocationUrl({ years, now = new Date() }) {
+  const params = new URLSearchParams();
   appendRecordFilters(params, years, now);
   return `https://www.gbif.org/occurrence/search?${params}`;
 }

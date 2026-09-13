@@ -5,19 +5,20 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { classifyClick, createWhatLivesHere, HEADING } from './whatLivesHere.js';
+import { createBioClient } from './gbif.js';
 
 const YELLOWSTONE = Cesium.Cartesian3.fromDegrees(-110.83, 44.46);
 const DENALI = Cesium.Cartesian3.fromDegrees(-151.0074, 63.0692);
 const CLICK = { position: { x: 1, y: 1 } };
 
-function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null } = {}) {
+function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, client: clientOverride = null } = {}) {
   const calls = { near: [], names: [], status: [], list: [], card: [], picked: [], armed: [] };
   const params = { years: 'recent', radiusKm: 10 };
   const viewer = {
     scene: { canvas: { style: {} }, pick: () => picked, pickPositionSupported: false, pickPosition: () => undefined, globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } },
     camera: { pickEllipsoid: () => ground },
   };
-  const client = {
+  const client = clientOverride || {
     speciesNear: async (args, options) => {
       calls.near.push(args);
       if (speciesNear) return speciesNear(args, options);
@@ -309,4 +310,38 @@ test('cancel() aborts the search in flight and disarms; the settled search calls
   assert.equal(r.controller.armed, false, 'cancel disarms an armed controller');
   assert.equal(r.viewer.scene.canvas.style.cursor, '');
   assert.deepEqual(r.calls.armed, [true, false, true, false]);
+});
+
+// F9: above 85° or across ±180° the polygon cannot be built. The search uses geoDistance as before, and the card says
+// gbif.org can't show the circle, linking the same filters with no location, instead of "GBIF search failed".
+test('a click where the circle cannot be a polygon lists species via geoDistance and links gbif.org without a location filter', async () => {
+  const species = { count: 4, facets: [{ field: 'SPECIES_KEY', counts: [{ name: '5232437', count: 4 }] }] };
+  const name = { key: 5232437, canonicalName: 'Branta canadensis', vernacularName: 'Canada Goose' };
+  for (const [where, ground, radiusKm] of [['north of 85°', Cesium.Cartesian3.fromDegrees(12.5, 86.2), 10], ['across the antimeridian', Cesium.Cartesian3.fromDegrees(179.8, -16.5), 50]]) {
+    const urls = [];
+    const client = createBioClient({ fetchImpl: async (url) => { urls.push(url); return { ok: true, status: 200, json: async () => (url.includes('/v1/occurrence/search') ? species : name) }; } });
+    const r = rig({ ground, client });
+    r.params.radiusKm = radiusKm;
+    r.controller.arm();
+    const logged = await captureConsoleError(() => r.controller.handleClick(CLICK));
+    assert.deepEqual(logged, [], `${where}: nothing logged`);
+    assert.equal(r.calls.card.some((c) => /failed/.test(c.message ?? '')), false, `${where}: no failure status`);
+    const search = urls.find((u) => u.includes('/v1/occurrence/search'));
+    assert.ok(search, `${where}: the GBIF search was sent`);
+    const sent = new URL(search);
+    assert.equal(sent.searchParams.has('geometry'), false, where);
+    assert.match(sent.searchParams.get('geoDistance') ?? '', new RegExp(`,${radiusKm}km$`), where);
+    const list = r.calls.list.at(-1);
+    assert.ok(list, `${where}: the list shows`);
+    assert.equal(list.footerNote, "gbif.org can't show this area as a circle", where);
+    assert.equal(list.footer, 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations', where);
+    const link = new URL(list.footerHref);
+    assert.equal(link.origin + link.pathname, 'https://www.gbif.org/occurrence/search', where);
+    assert.deepEqual([...link.searchParams.keys()], ['license', 'license', 'year'], `${where}: the licences and years, no location`);
+  }
+  const ordinary = rig();
+  ordinary.controller.arm();
+  await ordinary.controller.handleClick(CLICK);
+  assert.equal(ordinary.calls.list[0].footerNote ?? null, null, 'positive control: an ordinary point has no note');
+  assert.match(new URL(ordinary.calls.list[0].footerHref).searchParams.get('geometry') ?? '', /^POLYGON/, 'positive control: and the circle link');
 });

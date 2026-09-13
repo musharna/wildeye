@@ -174,10 +174,16 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         }
       });
     },
-    showList({ heading, filterLine, entries, footer, footerHref, onRow }) {
+    showList({ heading, filterLine, entries, footer, footerHref, footerNote = null, onRow }) {
       showListContent(heading, () => {
         filter.textContent = filterLine;
         renderListInto(body, listRows(entries), doc, onRow);
+        if (footerNote) {
+          const note = doc.createElement('span');
+          note.className = 'bio-card-foot-note';
+          note.textContent = footerNote;
+          foot.appendChild(note);
+        }
         const link = doc.createElement('a');
         link.href = footerHref;
         link.target = '_blank';

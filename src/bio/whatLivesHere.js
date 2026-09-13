@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { gbifPortalUrl, yearLabel } from './gbif.js';
+import { gbifPortalAnyLocationUrl, gbifPortalUrl, polygonRefusal, yearLabel } from './gbif.js';
 
 /**
  * "What lives here" (spec: docs/superpowers/specs/2026-09-13-species-search-design.md). The SPECIES panel
@@ -58,12 +58,16 @@ export function createWhatLivesHere({
         console.error('[what-lives-here] name lookup failed', { key: s.key, error });
         return { key: s.key, scientificName: `GBIF taxon ${s.key}`, commonName: null, error: error.message };
       })));
+      // gbif.org's location filter is a polygon. Where the circle cannot be one (the search used geoDistance), the card says
+      // so and links the same licences and years with no location filter.
+      const circleOnGbif = polygonRefusal({ lat, lon, radiusKm }) === null;
       card.showList({
         heading: HEADING,
         filterLine: `CC0 and CC BY records · ${yearLabel(years)} · within ${radiusKm} km · ${near.total.toLocaleString('en-US')} records`,
         entries: near.species.map((s, i) => ({ key: s.key, count: s.count, scientificName: names[i].scientificName, commonName: names[i].commonName, error: names[i].error })),
-        footer: 'Occurrence data: GBIF.org, CC0 and CC BY records only',
-        footerHref: gbifPortalUrl({ lat, lon, radiusKm, years }),
+        footer: circleOnGbif ? 'Occurrence data: GBIF.org, CC0 and CC BY records only' : 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations',
+        footerHref: circleOnGbif ? gbifPortalUrl({ lat, lon, radiusKm, years }) : gbifPortalAnyLocationUrl({ years }),
+        footerNote: circleOnGbif ? null : "gbif.org can't show this area as a circle",
         onRow: (row) => onPickSpecies({ taxonKey: row.key, name: row.primary }),
       });
       return near;

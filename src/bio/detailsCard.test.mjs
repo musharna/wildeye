@@ -176,3 +176,19 @@ test('Escape and the close button each call onDismiss once; a card that is alrea
   card.element.querySelector('.bio-card-close').listeners.click();
   assert.equal(dismissed.length, 2, 'the close button on the hidden card calls nothing');
 });
+
+// F9: where gbif.org cannot show the searched circle, the footer says so in plain text before its link.
+test('a list footer can carry a plain-text note before its link; without one the footer is just the link', () => {
+  const doc = cardDoc();
+  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html });
+  const foot = card.element.querySelector('.bio-card-foot');
+  const base = { heading: 'What lives here', filterLine: 'CC0 and CC BY records', entries: [], onRow: () => {} };
+  card.showList({ ...base, footer: 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations', footerHref: 'https://www.gbif.org/occurrence/search?license=CC0_1_0', footerNote: "gbif.org can't show this area as a circle" });
+  assert.deepEqual(foot.children.map((c) => [c.tag, c.className, c.textContent]), [
+    ['span', 'bio-card-foot-note', "gbif.org can't show this area as a circle"],
+    ['a', '', 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations'],
+  ]);
+  assert.equal(foot.children[1].href, 'https://www.gbif.org/occurrence/search?license=CC0_1_0');
+  card.showList({ ...base, footer: 'Occurrence data: GBIF.org, CC0 and CC BY records only', footerHref: 'https://www.gbif.org/occurrence/search?geometry=x' });
+  assert.deepEqual(foot.children.map((c) => c.tag), ['a'], 'no note, just the link');
+});

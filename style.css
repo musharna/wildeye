@@ -9567,6 +9567,7 @@ body.scene-playback-mode #key-setup {
 .bio-card-retry { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: var(--text-secondary); cursor: pointer; font: 9px var(--font-mono); letter-spacing: 1.2px; padding: 5px 9px; }
 .bio-card-foot { font-size: 11px; color: var(--text-secondary); border-top: 1px solid var(--glass-border); padding-top: 6px; }
 .bio-card-foot:empty { display: none; }
+.bio-card-foot-note { display: block; margin-bottom: 2px; }
 body.ui-clean-view #bio-card,
 body.recording-mode #bio-card { display: none !important; }
 /* ── SPECIES panel (src/bio/speciesPanel.js) ── */
