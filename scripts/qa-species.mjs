@@ -46,6 +46,14 @@ const flyTo = (lon, lat, height) => page.evaluate(async (lon, lat, height) => {
   await new Promise((resolve) => setTimeout(resolve, 5000));
 }, lon, lat, height);
 
+const openSpeciesPanel = async () => {
+  await page.evaluate(() => {
+    const panel = document.getElementById('species-panel');
+    if (panel?.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click();
+  });
+  await sleep(800);
+};
+
 await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
 await sleep(12000);
@@ -185,11 +193,7 @@ if (CHECKS.has('card')) {
 }
 
 if (CHECKS.has('search')) {
-  await page.evaluate(() => {
-    const panel = document.getElementById('species-panel');
-    if (panel?.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click();
-  });
-  await sleep(800);
+  await openSpeciesPanel();
   requests.length = 0;
   await page.click('#species-search');
   await page.type('#species-search', 'monarch', { delay: 40 });
@@ -216,7 +220,14 @@ if (CHECKS.has('search')) {
 
 let hereSearch = null;
 const isHereSearch = (url) => { let u; try { u = new URL(url); } catch { return false; } return u.hostname === 'api.gbif.org' && u.pathname === '/v1/occurrence/search' && u.searchParams.get('facet') === 'speciesKey'; };
+const AREA_OUTLINE_ROLE = 'what-lives-here-area'; // src/bio/whatLivesHere.js
+const countOutlines = () => page.evaluate((role) => {
+  const scene = window.__godsEyeView.viewer.scene;
+  const count = (collection) => { let n = 0; for (let i = 0; i < collection.length; i += 1) if (collection.get(i)?.wildeyeRole === role) n += 1; return n; };
+  return { groundPrimitives: count(scene.groundPrimitives), primitives: count(scene.primitives) };
+}, AREA_OUTLINE_ROLE);
 if (CHECKS.has('here')) {
+  await openSpeciesPanel(); // so the here check also runs on its own (--checks here)
   await flyTo(-110.83, 44.46, 40_000);
   const hereRequestsFrom = requests.length;
   await page.click('#species-what-lives-here');
@@ -233,8 +244,58 @@ if (CHECKS.has('here')) {
     link: document.querySelector('#bio-card .bio-card-foot a')?.href || null,
   }));
   hereSearch = requests.slice(hereRequestsFrom).filter(isHereSearch).at(-1) || null;
+  // The searched circle has one outline: a ground polyline that cannot be picked. The polygon vertices of the GBIF search lie
+  // on it, so the probe uses one that no page element covers. Positive control: a pickable clamped polyline entity along the
+  // same vertices is found by the same drillPick, so a miss on the outline is not a broken probe.
+  const geometry = hereSearch ? new URL(hereSearch).searchParams.get('geometry') : null;
+  const vertices = (geometry?.match(/^POLYGON\(\((.*)\)\)$/)?.[1] || '').split(',').filter(Boolean).map((pair) => pair.split(' ').map(Number));
+  const outline = await page.evaluate(async (role, vertices) => {
+    const viewer = window.__godsEyeView.viewer;
+    const scene = viewer.scene;
+    const Cartesian3 = viewer.camera.position.constructor;
+    const Cartographic = viewer.camera.positionCartographic.constructor;
+    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const found = [];
+    for (let i = 0; i < scene.groundPrimitives.length; i += 1) if (scene.groundPrimitives.get(i)?.wildeyeRole === role) found.push(scene.groundPrimitives.get(i));
+    const inPrimitives = [];
+    for (let i = 0; i < scene.primitives.length; i += 1) if (scene.primitives.get(i)?.wildeyeRole === role) inPrimitives.push(i);
+    if (found.length !== 1 || vertices.length < 4) return { count: found.length, inPrimitives: inPrimitives.length, vertices: vertices.length };
+    const primitive = found[0];
+    for (let t = 0; t < 100 && !primitive.ready; t += 1) await wait(100);
+    const rect = scene.canvas.getBoundingClientRect();
+    let probe = null;
+    let probeXY = null;
+    for (const [lon, lat] of vertices) {
+      const height = scene.globe.getHeight(Cartographic.fromDegrees(lon, lat)) ?? 0;
+      const xy = scene.cartesianToCanvasCoordinates(Cartesian3.fromDegrees(lon, lat, height));
+      if (!xy) continue;
+      const x = rect.left + xy.x;
+      const y = rect.top + xy.y;
+      if (document.elementFromPoint(x, y) === scene.canvas) { probe = { lon, lat, height, page: { x, y } }; probeXY = xy; break; }
+    }
+    if (!probe) return { count: 1, inPrimitives: inPrimitives.length, ready: primitive.ready, allowPicking: primitive.allowPicking, probe: null };
+    const picks = () => scene.drillPick(probeXY, 10, 9, 9);
+    const control = viewer.entities.add({ polyline: { positions: Cartesian3.fromDegreesArray(vertices.flat()), clampToGround: true, width: 4 } });
+    let controlHit = false;
+    for (let t = 0; t < 50 && !controlHit; t += 1) { await wait(200); controlHit = picks().some((picked) => picked?.id === control); }
+    viewer.entities.remove(control);
+    await wait(500);
+    const outlineHit = picks().some((picked) => picked?.primitive === primitive);
+    return { count: 1, inPrimitives: inPrimitives.length, ready: primitive.ready, allowPicking: primitive.allowPicking, probe, controlHit, outlineHit };
+  }, AREA_OUTLINE_ROLE, vertices);
+  // A real click on the outline changes neither the selection nor the card.
+  let click = null;
+  if (outline.probe) {
+    const cardState = () => page.evaluate(() => ({ selected: window.__godsEyeView.viewer.selectedEntity?.id ?? null, hidden: document.getElementById('bio-card').hidden, text: document.getElementById('bio-card').innerText }));
+    const before = await cardState();
+    await page.mouse.click(outline.probe.page.x, outline.probe.page.y);
+    await sleep(1500);
+    const after = await cardState();
+    click = { selectedBefore: before.selected, selectedAfter: after.selected, cardUnchanged: !after.hidden && after.text === before.text };
+  }
   await shot('what-lives-here');
-  report('here', result.rows >= 1 && Boolean(result.link), result);
+  const outlineOk = outline.count === 1 && outline.inPrimitives === 0 && outline.allowPicking === false && outline.controlHit === true && outline.outlineHit === false && click?.selectedAfter === null && click?.cardUnchanged === true;
+  report('here', result.rows >= 1 && Boolean(result.link) && outlineOk, { ...result, outline, click, outlineOk });
 }
 
 if (CHECKS.has('portal-link')) {
@@ -269,6 +330,16 @@ if (CHECKS.has('portal-link')) {
       search: { length: hereSearch.length, params: [...sent.searchParams.entries()] },
     });
   }
+}
+
+if (CHECKS.has('here')) {
+  // Dismissing the card (Escape → onDismiss → cancel) removes the outline.
+  const before = await countOutlines();
+  await page.keyboard.press('Escape');
+  await sleep(800);
+  const after = await countOutlines();
+  const cardHidden = await page.evaluate(() => document.getElementById('bio-card')?.hidden ?? null);
+  report('here-dismiss', before.groundPrimitives === 1 && after.groundPrimitives === 0 && after.primitives === 0 && cardHidden === true, { before, after, cardHidden });
 }
 
 report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10), upstreamTileErrors: upstreamTileErrors.slice(0, 10) });

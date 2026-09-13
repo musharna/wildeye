@@ -4,19 +4,26 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { classifyClick, createWhatLivesHere, HEADING } from './whatLivesHere.js';
+import { AREA_OUTLINE_ROLE, areaOutlinePrimitive, circleOutline, classifyClick, createWhatLivesHere, HEADING } from './whatLivesHere.js';
 import { createBioClient } from './gbif.js';
 
 const YELLOWSTONE = Cesium.Cartesian3.fromDegrees(-110.83, 44.46);
 const DENALI = Cesium.Cartesian3.fromDegrees(-151.0074, 63.0692);
 const CLICK = { position: { x: 1, y: 1 } };
 
-function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, client: clientOverride = null } = {}) {
+function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, client: clientOverride = null, defaultArea = false } = {}) {
   const calls = { near: [], names: [], status: [], list: [], card: [], picked: [], armed: [] };
   const params = { years: 'recent', radiusKm: 10 };
+  // groundPrimitives stands in for Cesium's collection, for the default outline; `areas` records the injected outline seam.
+  const groundPrimitives = { items: [], add(p) { this.items.push(p); return p; }, remove(p) { const i = this.items.indexOf(p); if (i >= 0) this.items.splice(i, 1); return i >= 0; } };
   const viewer = {
-    scene: { canvas: { style: {} }, pick: () => picked, pickPositionSupported: false, pickPosition: () => undefined, globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } },
+    scene: { canvas: { style: {} }, pick: () => picked, pickPositionSupported: false, pickPosition: () => undefined, globe: { ellipsoid: Cesium.Ellipsoid.WGS84 }, groundPrimitives, frameState: { context: { depthTexture: true } } },
     camera: { pickEllipsoid: () => ground },
+  };
+  const areas = { drawn: [], cleared: [] };
+  const areaSeam = defaultArea ? {} : {
+    drawArea: (area) => { const handle = { ...area }; areas.drawn.push(handle); return handle; },
+    clearArea: (handle) => { areas.cleared.push(handle); },
   };
   const client = clientOverride || {
     speciesNear: async (args, options) => {
@@ -51,8 +58,9 @@ function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, spec
     onArmedChange: (on) => calls.armed.push(on),
     handlerFor: () => ({ setInputAction() {}, destroy() {} }),
     doc,
+    ...areaSeam,
   });
-  return { controller, calls, viewer, doc, params };
+  return { controller, calls, viewer, doc, params, areas, groundPrimitives };
 }
 
 // A GBIF search that stays pending until the test settles it. Like fetch, it rejects with the abort reason as soon
@@ -345,3 +353,111 @@ test('a click where the circle cannot be a polygon lists species via geoDistance
   assert.equal(ordinary.calls.list[0].footerNote ?? null, null, 'positive control: an ordinary point has no note');
   assert.match(new URL(ordinary.calls.list[0].footerHref).searchParams.get('geometry') ?? '', /^POLYGON/, 'positive control: and the circle link');
 });
+
+// F5: the searched circle is outlined on the globe while its card describes it.
+test('a search outlines its circle from the start; a second search replaces the outline; dismissing the card and destroy remove it', async () => {
+  const pending = pendingNear();
+  const r = rig({ speciesNear: pending.speciesNear });
+  r.controller.arm();
+  assert.equal(r.areas.drawn.length, 0, 'arming draws nothing');
+  const first = r.controller.handleClick(CLICK);
+  assert.equal(r.areas.drawn.length, 1, 'drawn when the search starts, before GBIF answers');
+  const [a] = r.areas.drawn;
+  assert.ok(Math.abs(a.lat - 44.46) < 1e-6 && Math.abs(a.lon + 110.83) < 1e-6, 'at the clicked point');
+  assert.equal(a.radiusKm, 10);
+  pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }] });
+  await first;
+  assert.deepEqual(r.areas.cleared, [], 'the listed search keeps its outline');
+
+  r.params.radiusKm = 50;
+  r.controller.arm();
+  r.viewer.camera.pickEllipsoid = () => DENALI;
+  const second = r.controller.handleClick(CLICK);
+  assert.equal(r.areas.drawn.length, 2, 'the second search draws its own outline');
+  assert.equal(r.areas.cleared.length, 1, 'and removes the first one');
+  assert.equal(r.areas.cleared[0], a, 'the removed outline is the first one');
+  const b = r.areas.drawn[1];
+  assert.ok(Math.abs(b.lat - 63.0692) < 1e-6 && b.radiusKm === 50, 'the new outline is the second point and radius');
+
+  const logged = await captureConsoleError(async () => {
+    r.controller.cancel(); // what the card's onDismiss calls
+    await second;
+  });
+  assert.deepEqual(logged, []);
+  assert.equal(r.areas.cleared.length, 2, 'dismissing the card removes the outline');
+  assert.equal(r.areas.cleared[1], b);
+  r.controller.cancel();
+  assert.equal(r.areas.cleared.length, 2, 'a second dismissal has nothing to remove');
+
+  const d = rig();
+  d.controller.arm();
+  await d.controller.handleClick(CLICK);
+  d.controller.destroy();
+  assert.equal(d.areas.cleared.length, 1, 'destroy removes the outline');
+  assert.equal(d.areas.cleared[0], d.areas.drawn[0]);
+});
+
+test('a Retry replaces the failed search outline with its own', async () => {
+  let attempts = 0;
+  const r = rig({ speciesNear: async () => { attempts += 1; if (attempts === 1) throw new Error('HTTP 503'); return { total: 2, species: [{ key: 5232437, count: 2 }] }; } });
+  r.controller.arm();
+  await captureConsoleError(() => r.controller.handleClick(CLICK));
+  assert.equal(r.areas.drawn.length, 1, 'a failed search keeps the outline of the spot Retry would search');
+  assert.deepEqual(r.areas.cleared, []);
+  await r.calls.status.at(-1).retry();
+  assert.equal(r.areas.drawn.length, 2);
+  assert.equal(r.areas.cleared[0], r.areas.drawn[0]);
+});
+
+test('circleOutline: 64 points on the radius, longitudes within ±180°, also at a pole and across the antimeridian', () => {
+  const R = 6371.0088;
+  const rad = Math.PI / 180;
+  const haversineKm = (lon1, lat1, lon2, lat2) => {
+    const h = Math.sin(((lat2 - lat1) * rad) / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lon2 - lon1) * rad) / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  for (const [lat, lon, radiusKm] of [[44.46, -110.83, 10], [89.9, 0, 50], [-89.99, 120, 1], [-16.5, 179.8, 50], [0, -180, 10]]) {
+    const where = `${lat},${lon} ${radiusKm} km`;
+    const points = circleOutline({ lat, lon, radiusKm });
+    assert.equal(points.length, 64, where);
+    for (const p of points) {
+      assert.ok(p.lon >= -180 && p.lon <= 180 && p.lat >= -90 && p.lat <= 90, `${where}: ${p.lon},${p.lat} in range`);
+      assert.ok(Math.abs(haversineKm(lon, lat, p.lon, p.lat) / radiusKm - 1) < 1e-6, `${where}: ${p.lon},${p.lat} is on the circle`);
+    }
+  }
+  const across = circleOutline({ lat: -16.5, lon: 179.8, radiusKm: 50 });
+  assert.ok(across.some((p) => p.lon < 0) && across.some((p) => p.lon > 0), 'a circle across ±180° has points on both sides');
+});
+
+// Node has no WebGL context, so ContextLimits reports a line-width range of 0 and GroundPolylinePrimitive's render state
+// refuses width 1. The test sets the range a real context reports (1 to 1 at least) and restores it.
+async function withLineWidthLimits(fn) {
+  const saved = [Cesium.ContextLimits._minimumAliasedLineWidth, Cesium.ContextLimits._maximumAliasedLineWidth];
+  Cesium.ContextLimits._minimumAliasedLineWidth = 1;
+  Cesium.ContextLimits._maximumAliasedLineWidth = 1;
+  try {
+    await fn();
+  } finally {
+    [Cesium.ContextLimits._minimumAliasedLineWidth, Cesium.ContextLimits._maximumAliasedLineWidth] = saved;
+  }
+}
+
+test('the default outline is a ground polyline loop that cannot be picked, added to groundPrimitives and removed on dismiss', () => withLineWidthLimits(async () => {
+  const primitive = areaOutlinePrimitive({ lat: 44.46, lon: -110.83, radiusKm: 10 });
+  assert.ok(primitive instanceof Cesium.GroundPolylinePrimitive);
+  assert.equal(primitive.allowPicking, false, 'clicks on or near the outline fall through to the globe and markers');
+  assert.equal(primitive.wildeyeRole, AREA_OUTLINE_ROLE);
+  assert.equal(primitive.geometryInstances.geometry.loop, true);
+
+  const r = rig({ defaultArea: true });
+  r.controller.arm();
+  await r.controller.handleClick(CLICK);
+  assert.equal(r.groundPrimitives.items.length, 1, 'one outline while the list shows');
+  assert.equal(r.groundPrimitives.items[0].wildeyeRole, AREA_OUTLINE_ROLE);
+  assert.equal(r.groundPrimitives.items[0].allowPicking, false);
+  r.controller.arm();
+  await r.controller.handleClick(CLICK);
+  assert.equal(r.groundPrimitives.items.length, 1, 'a second search replaces it');
+  r.controller.cancel();
+  assert.equal(r.groundPrimitives.items.length, 0, 'dismissing the card removes it');
+}));

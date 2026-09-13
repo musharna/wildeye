@@ -44,7 +44,7 @@ function checkPoint(lat, lon, radiusKm) {
 }
 
 /** Mean earth radius (IUGG), km. */
-const EARTH_RADIUS_KM = 6371.0088;
+export const EARTH_RADIUS_KM = 6371.0088;
 /**
  * Polygons are built only below 85° latitude and away from ±180°: a ring near a pole or across the antimeridian cannot be
  * expressed as a simple GBIF polygon. Such a circle is searched with geoDistance instead (see speciesNearUrl).

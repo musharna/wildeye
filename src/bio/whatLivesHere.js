@@ -1,10 +1,11 @@
 import * as Cesium from 'cesium';
-import { gbifPortalAnyLocationUrl, gbifPortalUrl, polygonRefusal, yearLabel } from './gbif.js';
+import { EARTH_RADIUS_KM, gbifPortalAnyLocationUrl, gbifPortalUrl, polygonRefusal, yearLabel } from './gbif.js';
 
 /**
  * "What lives here" (spec: docs/superpowers/specs/2026-09-13-species-search-design.md). The SPECIES panel
  * arms a one-shot click. A click on the ground lists the 20 species with the most CC0 and CC BY GBIF records
- * within the chosen radius. A click on a marker is left to the normal click; a click on the sky stays armed.
+ * within the chosen radius. A click on a marker is left to the normal click; a click on the sky stays armed. The searched
+ * circle is outlined on the ground, not pickable, until the card is dismissed or another search replaces it.
  */
 export const HEADING = 'What lives here';
 
@@ -12,6 +13,44 @@ export function classifyClick({ picked, position }) {
   if (picked && picked.id !== undefined && picked.id !== null) return 'entity';
   if (!position) return 'sky';
   return 'ground';
+}
+
+/** Marks the outline primitive, so it can be found in scene.groundPrimitives (scripts/qa-species.mjs does). */
+export const AREA_OUTLINE_ROLE = 'what-lives-here-area';
+/** --accent in style.css */
+const OUTLINE_COLOR = '#00d4ff';
+
+/**
+ * `vertices` points on the circle of `radiusKm` around a point, by the spherical destination-point formula, so a circle at a
+ * pole or across ±180° works too. Longitudes are wrapped into [-180, 180).
+ */
+export function circleOutline({ lat, lon, radiusKm, vertices = 64 }) {
+  const rad = Math.PI / 180;
+  const delta = radiusKm / EARTH_RADIUS_KM;
+  const lat1 = lat * rad;
+  const points = [];
+  for (let i = 0; i < vertices; i += 1) {
+    const bearing = (2 * Math.PI * i) / vertices;
+    const lat2 = Math.asin(Math.sin(lat1) * Math.cos(delta) + Math.cos(lat1) * Math.sin(delta) * Math.cos(bearing));
+    const lon2 = lon * rad + Math.atan2(Math.sin(bearing) * Math.sin(delta) * Math.cos(lat1), Math.cos(delta) - Math.sin(lat1) * Math.sin(lat2));
+    points.push({ lon: ((((lon2 / rad + 180) % 360) + 360) % 360) - 180, lat: lat2 / rad });
+  }
+  return points;
+}
+
+/** The searched circle as a thin ground outline in the accent colour. allowPicking: false, so clicks on it reach the globe and markers. */
+export function areaOutlinePrimitive({ lat, lon, radiusKm }) {
+  const positions = Cesium.Cartesian3.fromDegreesArray(circleOutline({ lat, lon, radiusKm }).flatMap((p) => [p.lon, p.lat]));
+  const primitive = new Cesium.GroundPolylinePrimitive({
+    geometryInstances: new Cesium.GeometryInstance({
+      geometry: new Cesium.GroundPolylineGeometry({ positions, loop: true, width: 2 }),
+      attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.fromCssColorString(OUTLINE_COLOR)) },
+    }),
+    appearance: new Cesium.PolylineColorAppearance(),
+    allowPicking: false,
+  });
+  primitive.wildeyeRole = AREA_OUTLINE_ROLE;
+  return primitive;
 }
 
 export function createWhatLivesHere({
@@ -23,9 +62,25 @@ export function createWhatLivesHere({
   onArmedChange = () => {},
   handlerFor = (canvas) => new Cesium.ScreenSpaceEventHandler(canvas),
   doc = document,
+  // The outline seam: drawArea({ lat, lon, radiusKm }) returns a handle (null when nothing was drawn); clearArea(handle) removes it.
+  drawArea = (area) => {
+    if (!Cesium.GroundPolylinePrimitive.isSupported(viewer.scene)) {
+      console.error('[what-lives-here] cannot outline the searched circle: ground polylines need WEBGL_depth_texture', { area });
+      return null;
+    }
+    return viewer.scene.groundPrimitives.add(areaOutlinePrimitive(area));
+  },
+  clearArea = (primitive) => { viewer.scene.groundPrimitives.remove(primitive); },
 }) {
   let armed = false;
   let controller = null;
+  let area = null; // the outline of the circle the card describes
+
+  const removeArea = () => {
+    if (area === null) return;
+    clearArea(area);
+    area = null;
+  };
 
   const setArmed = (value) => {
     if (armed === value) return;
@@ -46,6 +101,8 @@ export function createWhatLivesHere({
     controller = new AbortController();
     const { signal } = controller;
     const { years, radiusKm } = getParams();
+    removeArea();
+    area = drawArea({ lat, lon, radiusKm });
     card.showStatus({ heading: HEADING, message: `Searching GBIF within ${radiusKm} km…` });
     try {
       const near = await client.speciesNear({ lat, lon, radiusKm, years }, { signal });
@@ -109,9 +166,9 @@ export function createWhatLivesHere({
       card.showStatus({ heading: HEADING, message: 'Click a spot on the globe. Esc cancels.' });
     },
     disarm() { setArmed(false); },
-    /** The card was dismissed: abort the search it was waiting for (aborted searches are silent) and disarm. */
-    cancel() { controller?.abort(); setArmed(false); },
+    /** The card was dismissed: abort the search it was waiting for (aborted searches are silent), disarm, remove the outline. */
+    cancel() { controller?.abort(); setArmed(false); removeArea(); },
     handleClick,
-    destroy() { handler.destroy(); controller?.abort(); },
+    destroy() { handler.destroy(); controller?.abort(); removeArea(); },
   };
 }
