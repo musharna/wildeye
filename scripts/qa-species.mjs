@@ -19,7 +19,18 @@ const page = await browser.newPage();
 const requests = [];
 const failed = [];
 page.on('request', (r) => requests.push(r.url()));
-page.on('response', (r) => { if (r.status() >= 400 && !/google|gstatic|cesium\.com/.test(r.url())) failed.push(`${r.status()} ${r.url()}`); });
+const upstreamTileErrors = [];
+// GBIF's maps backend sometimes fails one vector tile on its own side (seen: monarch adhoc/8/48/92 at EPSG:3857, a fast 503
+// every time while its neighbours load). GBIF marks those with an `x-error: Error from backend (vector tile)…` header, so a
+// 5xx map tile from api.gbif.org carrying that marker is reported under upstreamTileErrors instead of failing
+// no-failed-requests (R-6c). The search check's stats.error === null still catches a run of tile failures.
+const isUpstreamTileError = (url, status, xError) => { let u; try { u = new URL(url); } catch { return false; } return u.hostname === 'api.gbif.org' && u.pathname.startsWith('/v2/map/occurrence/') && status >= 500 && status <= 599 && typeof xError === 'string' && xError.startsWith('Error from backend'); };
+page.on('response', (r) => {
+  if (r.status() < 400 || /google|gstatic|cesium\.com/.test(r.url())) return;
+  const xError = r.headers()['x-error'];
+  if (isUpstreamTileError(r.url(), r.status(), xError)) upstreamTileErrors.push({ status: r.status(), url: r.url(), xError });
+  else failed.push(`${r.status()} ${r.url()}`);
+});
 page.on('requestfailed', (r) => { if (!/google|gstatic|cesium\.com|tile/.test(r.url())) failed.push(`REQFAIL ${r.url()} ${r.failure()?.errorText}`); });
 page.on('pageerror', (e) => failed.push(`PAGEERROR ${String(e?.message || e).slice(0, 160)}`));
 page.on('dialog', (d) => d.dismiss().catch(() => {}));
@@ -190,6 +201,6 @@ if (CHECKS.has('portal') && hereLink && Number.isFinite(hereTotal)) {
   report('portal', false, { reason: hereLink ? 'the what-lives-here filter line had no parsable record total' : 'no what-lives-here link to open (run the here check first, and it must produce a footer link)', hereLink, hereTotal: Number.isFinite(hereTotal) ? hereTotal : null });
 }
 
-report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10) });
+report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10), upstreamTileErrors: upstreamTileErrors.slice(0, 10) });
 await browser.close();
 process.exit(bad ? 1 : 0);
