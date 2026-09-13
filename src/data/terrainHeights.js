@@ -30,6 +30,7 @@
 //      from a fresh page load, a different camera batch, etc.) consistently
 //      hit the same warm proxy cache entry.
 import { ensureGeoidReady, geoidHeight } from './geoid.js';
+import { HAS_BACKEND } from '../backend.js';
 
 /** Max points per outgoing request to `/api/terrain/heights` (see file header, point 1). */
 const CHUNK_SIZE = 200;
@@ -97,6 +98,8 @@ export function cachedRealEllipsoidalGround(lat, lon) {
  * @returns {Promise<Map<string, number>>} key -> ellipsoid height (m)
  */
 async function fetchChunk(chunk) {
+  // No terrain proxy on a static host: callers take their existing geoid fallback without a doomed request.
+  if (!HAS_BACKEND) throw new Error('terrain heights proxy unavailable on a static host');
   // lon,lat order (matches the proxy's documented `points=lon,lat;…` contract
   // and Task 2's implementation).
   const pointsParam = chunk.map(({ lat, lon }) => `${lon.toFixed(5)},${lat.toFixed(5)}`).join(';');

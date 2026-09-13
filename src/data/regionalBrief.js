@@ -1,3 +1,4 @@
+import { HAS_BACKEND } from '../backend.js';
 const MAX_ARTICLES = 5;
 
 function cleanText(value, maxLength = 180) {
@@ -124,6 +125,8 @@ export function regionalDistanceM(from, to) {
 /** Fetch a bounded regional brief through the same-origin dev/preview proxy. */
 export async function fetchRegionalBrief(latitude, longitude, { signal } = {}) {
   if (![latitude, longitude].every(Number.isFinite)) throw new Error('Valid coordinates are required');
+  // The brief is assembled by the local server; on a static host the UI shows its unavailable state without a request.
+  if (!HAS_BACKEND) throw new Error('Regional brief needs the local server (not available on the hosted site)');
   const params = new URLSearchParams({ latitude: latitude.toFixed(5), longitude: longitude.toFixed(5) });
   const response = await fetch(`/api/regional-brief?${params}`, { signal });
   if (!response.ok) throw new Error(`Regional brief unavailable (${response.status})`);

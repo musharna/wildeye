@@ -1945,6 +1945,8 @@ body.ui-clean-view #scene-runtime.active {
   pointer-events: none;
 }
 #global-loading-status[hidden] { display: none; }
+/* GitHub Pages build (VITE_STATIC_HOST=1): surfaces whose data comes from the local /api server are not shown. */
+body.static-host [data-requires-backend] { display: none !important; }
 #global-loading-label {
   color: rgba(184, 244, 255, 0.92);
 }

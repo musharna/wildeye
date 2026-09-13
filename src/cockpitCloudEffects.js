@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { HAS_BACKEND } from './backend.js';
 import { deriveWeatherEffectProfile, weatherAltitudeFactors } from './weatherEffectsMath.js';
 
 const WEATHER_REFRESH_MS = 5 * 60_000;
@@ -351,7 +352,8 @@ export class CockpitCloudEffectsController {
   }
 
   async refresh() {
-    if (this.destroyed || !this.enabled || this.pending || this.suspended
+    // Weather comes from the local /api proxy; a static host (GitHub Pages) has none.
+    if (!HAS_BACKEND || this.destroyed || !this.enabled || this.pending || this.suspended
       || !document.body.classList.contains('cockpit-mode')) {
       return this.pending;
     }

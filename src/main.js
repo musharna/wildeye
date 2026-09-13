@@ -59,6 +59,8 @@ import { initKeySetup } from './keySetup.js';
 import { loadPhotorealisticTileset } from './mapStartup.js';
 
 initLogoGaze();
+// Static host (GitHub Pages): hide server-only surfaces marked data-requires-backend in index.html.
+if (!HAS_BACKEND) document.body.classList.add('static-host');
 
 /**
  * Extract a human-readable error message from any thrown value.
