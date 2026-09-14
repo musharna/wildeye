@@ -9555,6 +9555,18 @@ body.scene-playback-mode #key-setup {
 .bio-card-filter { color: var(--text-secondary); font-size: 11px; }
 .bio-card-filter:empty { display: none; }
 .bio-card-body { overflow-y: auto; min-height: 0; }
+/* A list longer than the card fades out at the bottom while more is below, like the species suggestions; with nothing to scroll the
+   timeline is inactive and the fade stays 0 px. */
+@property --bio-card-body-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes bio-card-body-fade { from { --bio-card-body-fade: 28px; } to { --bio-card-body-fade: 0px; } }
+@supports (animation-timeline: scroll()) {
+  .bio-card-body {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--bio-card-body-fade)), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--bio-card-body-fade)), transparent);
+    animation: bio-card-body-fade linear both;
+    animation-timeline: scroll(self);
+  }
+}
 .bio-card-body a, .bio-card-foot a { color: var(--accent); }
 .bio-card-row { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; width: 100%; text-align: left; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: inherit; padding: 5px 8px; margin-bottom: 3px; }
 .bio-card-row:hover, .bio-card-row:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }

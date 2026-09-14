@@ -196,7 +196,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
       showListContent(heading, () => {
         filter.textContent = filterLine;
         renderListInto(body, listRows(entries), doc, onRow);
-        if (datasets.length) foot.appendChild(createDatasetList(doc, datasets));
+        if (datasets.length) foot.appendChild(createDatasetList(doc, datasets, { heading: 'Top datasets in this area' }));
         if (footerNote) {
           const note = doc.createElement('span');
           note.className = 'bio-card-foot-note';

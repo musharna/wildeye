@@ -171,7 +171,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       link.textContent = years === 'all' ? 'All CC0/CC BY records on GBIF.org' : `All ${yearLabel(years)} CC0/CC BY records on GBIF.org`;
-      datasetsBox.replaceChildren(createDatasetList(doc, found), link);
+      datasetsBox.replaceChildren(createDatasetList(doc, found, { heading: 'Top datasets for this species' }), link);
       datasetsSettled = true;
     } catch (error) {
       if (error?.name === 'AbortError' || signal.aborted) return;

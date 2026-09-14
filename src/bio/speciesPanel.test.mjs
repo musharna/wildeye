@@ -186,6 +186,7 @@ test('the panel lists the top datasets of the mapped taxon with a gbif.org link 
   assert.deepEqual(calls.dataset, [INAT_RG, OTHER_DATASET], 'each listed dataset is looked up, in facet order');
   assert.equal(box.hidden, false);
   assert.deepEqual(box.children.map((child) => [child.tag, child.className]), [['div', 'dataset-list'], ['a', 'species-datasets-link']]);
+  assert.equal(box.children[0].children[0].textContent, 'Top datasets for this species', 'S3: the panel names whose datasets these are');
   assert.deepEqual(datasetRowsIn(box), [
     ['https://doi.org/10.15468/ab3s5x', 'iNaturalist Research-grade Observations', '41,111', null],
     [`https://www.gbif.org/dataset/${OTHER_DATASET}`, 'Dataset without a DOI', '306', null],

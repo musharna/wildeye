@@ -20,6 +20,14 @@ test('the card opens for a biology marker with details and stays shut for anythi
   assert.equal(cardDecision(undefined).open, false, 'selection cleared');
 });
 
+// S3: a species list longer than the card fades out at its bottom edge, the suggestion list's scroll cue: a scroll-driven mask that is 0 px
+// when nothing scrolls.
+test('the card body fades at the bottom while more of the list is below', () => {
+  const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+  assert.match(css, /@property --bio-card-body-fade \{[^}]*initial-value: 0px;/);
+  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-body \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-body-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
+});
+
 test('every card layer id is the name of a real data source', () => {
   const dir = new URL('../data/', import.meta.url);
   const names = new Set();
@@ -208,7 +216,7 @@ test('a list foot names the top datasets above the gbif.org link; with none it i
   card.showList({ ...base, datasets: [{ key: INAT_RG, count: 1179, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }, { key: OTHER_DATASET, count: 3, error: 'HTTP 503' }] });
   assert.deepEqual(foot.children.map((c) => [c.tag, c.className]), [['div', 'dataset-list'], ['a', '']]);
   const [heading, list] = foot.children[0].children;
-  assert.equal(heading.textContent, 'Top datasets');
+  assert.equal(heading.textContent, 'Top datasets in this area', 'S3: the card names whose datasets these are');
   assert.deepEqual(list.children.map((li) => li.children.map((c) => c.href || c.textContent)), [
     ['https://doi.org/10.15468/ab3s5x', '1,179'],
     [`https://www.gbif.org/dataset/${OTHER_DATASET}`, '3', 'dataset lookup failed: HTTP 503'],

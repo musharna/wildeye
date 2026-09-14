@@ -333,7 +333,7 @@ if (CHECKS.has('panel-datasets')) {
   const checks = {
     mapOn: state.enabled && Boolean(state.params?.taxonKey),
     rowsOk: datasetRowsOk(rows, 3),
-    visible: panel.visible && panel.heading === 'Top datasets',
+    visible: panel.visible && panel.heading === 'Top datasets for this species',
     searchOk: Boolean(sent) && sent.searchParams.get('taxonKey') === String(state.params?.taxonKey) && sent.searchParams.get('hasCoordinate') === 'true' && !sent.searchParams.has('hasGeospatialIssue') && sent.searchParams.get('datasetKey.facetLimit') === '3' && sent.searchParams.get('limit') === '0' && JSON.stringify(sent.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']),
     linkOk: Boolean(link) && link.origin + link.pathname === 'https://www.gbif.org/occurrence/search' && link.searchParams.get('taxon_key') === String(state.params?.taxonKey) && link.searchParams.get('has_coordinate') === 'true' && JSON.stringify(link.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']) && link.searchParams.get('year') === years && panel.link.target === '_blank' && /\bnoopener\b/.test(panel.link.rel || '') && /\bnoreferrer\b/.test(panel.link.rel || ''),
   };
@@ -366,6 +366,8 @@ if (CHECKS.has('here')) {
     text: document.getElementById('bio-card').innerText.slice(0, 400),
     link: document.querySelector('#bio-card .bio-card-foot > a')?.href || null,
     footRel: document.querySelector('#bio-card .bio-card-foot > a')?.getAttribute('rel') ?? null,
+    cardHeading: document.querySelector('#bio-card .bio-card-foot .dataset-list-heading')?.textContent ?? null,
+    body: (() => { const b = document.querySelector('#bio-card .bio-card-body'); return b ? { scrollHeight: b.scrollHeight, clientHeight: b.clientHeight, fade: getComputedStyle(b).getPropertyValue('--bio-card-body-fade').trim() } : null; })(),
     footOrder: [...(document.querySelector('#bio-card .bio-card-foot')?.children || [])].map((child) => child.className || child.tagName.toLowerCase()),
   }));
   const cardDatasets = await readDatasetRows('#bio-card .bio-card-foot .dataset-row');
@@ -429,7 +431,10 @@ if (CHECKS.has('here')) {
   const orderOk = result.footOrder.indexOf('dataset-list') === 0 && result.footOrder.at(-1) === 'a';
   // M3: the gbif.org link in the same foot opens with no opener and no referrer, like the dataset rows.
   const footRelOk = /\bnoopener\b/.test(result.footRel || '') && /\bnoreferrer\b/.test(result.footRel || '');
-  report('card-datasets', datasetRowsOk(cardDatasets, 5) && facetsOk && orderOk && footRelOk, { rows: cardDatasets, facetsOk, footOrder: result.footOrder, orderOk, footRel: result.footRel, footRelOk });
+  // S3: the heading says whose datasets these are, and a species list taller than the card shows the scroll fade.
+  const headingOk = result.cardHeading === 'Top datasets in this area';
+  const cueOk = Boolean(result.body) && (result.body.scrollHeight <= result.body.clientHeight ? result.body.fade === '0px' : result.body.fade !== '0px');
+  report('card-datasets', datasetRowsOk(cardDatasets, 5) && facetsOk && orderOk && footRelOk && headingOk && cueOk, { rows: cardDatasets, facetsOk, footOrder: result.footOrder, orderOk, footRel: result.footRel, footRelOk, cardHeading: result.cardHeading, headingOk, body: result.body, cueOk });
 }
 
 if (CHECKS.has('portal-link')) {
