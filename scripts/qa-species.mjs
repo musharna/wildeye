@@ -425,6 +425,7 @@ if (CHECKS.has('here')) {
     link: document.querySelector('#bio-card .bio-card-foot > a')?.href || null,
     footRel: document.querySelector('#bio-card .bio-card-foot > a')?.getAttribute('rel') ?? null,
     cardHeading: document.querySelector('#bio-card .bio-card-foot .dataset-list-heading')?.textContent ?? null,
+    filterBox: (() => { const f = document.querySelector('#bio-card .bio-card-filter'); if (!f) return null; const r = f.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, color: getComputedStyle(f).color }; })(),
     body: (() => { const b = document.querySelector('#bio-card .bio-card-body'); return b ? { scrollHeight: b.scrollHeight, clientHeight: b.clientHeight, fade: getComputedStyle(b).getPropertyValue('--bio-card-body-fade').trim() } : null; })(),
     footOrder: [...(document.querySelector('#bio-card .bio-card-foot')?.children || [])].map((child) => child.className || child.tagName.toLowerCase()),
   }));
