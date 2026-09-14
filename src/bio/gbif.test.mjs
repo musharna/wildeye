@@ -74,13 +74,15 @@ test('the species map legend is the record-count classes of the style the tiles 
   assert.equal(SPECIES_MAP_LEGEND.style, style, 'the legend describes the style the tiles are drawn with');
   assert.ok(Object.hasOwn(STYLE_CLASSES, style), `no class table for ${style}: read its .mss in github.com/gbif/maps`);
   assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.upTo, c.widthPx, c.fill, c.opacity, c.lineColor, c.lineWidthPx]), STYLE_CLASSES[style]);
-  // B2: each swatch is its class's circles as the globe draws them at the default 12,000 km view: the median rendered colour of lone
-  // circles over land, each circle's class read from its tile's own record count (scripts/species-legend-probe.mjs and
-  // scripts/species-legend-colours.py, 3 runs, 2026-09-14). The two highest classes had no circle to sample there and are predicted from
-  // the others (scripts/species-legend-fit.py), so they carry predicted: true.
-  assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.color, c.predicted]), [
-    ['#e4d9ac', false], ['#d5aa78', false], ['#cea878', false], ['#be8770', true], ['#ab7272', true],
+  // B2 / S4: each swatch is its class's circles as the globe draws them at the default 12,000 km view (camera straight down over lon -90,
+  // lat 30, 1400x900, Esri World Imagery), measured with scripts/species-legend-probe.mjs and species-legend-colours.py, each circle's class
+  // read from its tile's own record count: the three lowest classes in the default LAST 10 YEARS map ('centre' sampling, 3 runs), and the two
+  // highest, which have no circle there, in the ALL YEARS map ('single' sampling: the pixels no other circle covers, 2 runs). `years` names
+  // the map each colour was measured in; no colour is predicted any more.
+  assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.color, c.years]), [
+    ['#e4d9ac', 'recent'], ['#d5aa78', 'recent'], ['#cea878', 'recent'], ['#be7861', 'all'], ['#ad5466', 'all'],
   ]);
+  assert.ok(SPECIES_MAP_LEGEND.classes.every((c) => !Object.hasOwn(c, 'predicted')), 'no swatch is predicted');
   // Swatch sizes keep the style's order. I3: the caption says what was measured: the colours are as seen from far out, and closer up the
   // circles look stronger, not brighter (at the 1,700 km Upper Midwest view the <=100 and <=1k circles are about 10 L* darker and twice as
   // saturated as their swatches).

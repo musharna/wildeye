@@ -6,11 +6,14 @@
  * Run against a preview build:
  *   bash scripts/build-static-preview.sh
  *   npx vite preview --base /wildeye/ --outDir .qa-static --port 4488 --strictPort     (in another shell or a systemd unit)
- *   node scripts/species-legend-probe.mjs --view global --out /tmp/legend/run1 [--settle 60000] [--url http://localhost:4488/wildeye/]
- *   python3 scripts/species-legend-colours.py /tmp/legend/run1 global centre > /tmp/legend/run1.json
+ *   node scripts/species-legend-probe.mjs --view global --out /tmp/legend/run1 [--years recent|all] [--settle 60000] [--url http://localhost:4488/wildeye/]
+ *   python3 scripts/species-legend-colours.py /tmp/legend/run1 global '' centre > /tmp/legend/run1.json
  *   python3 scripts/species-legend-fit.py /tmp/legend/run1 [/tmp/legend/run2 ...]
+ * python3 must have numpy and Pillow (/usr/bin/python3 may not; miniconda's does). The third argument of species-legend-colours.py is the
+ * swatches JSON to compare against ('' for none), the fourth the sampling mode.
  * The legend colours were measured with --view global (camera straight down over lon -90, lat 30 at 12,000 km, 1400x900, Esri World
- * Imagery basemap) on three runs, 2026-09-14.
+ * Imagery basemap), 2026-09-14: the three lowest classes with --years recent (three runs, colours mode centre), the two highest with
+ * --years all (two runs, colours mode single, species-legend-fit.py --mode single).
  */
 // One page session per run, on the build's own species layer (monarch via the data manager):
 //   1. camera to the view, wait until the globe reports tiles loaded with no GBIF request pending, then settle --settle ms more;
@@ -19,7 +22,7 @@
 //   4. fetch each drawn (ready, not stand-in) tile's MVT with the layer's filters; each cell -> centre lon/lat, total, style class; the page
 //      projects every cell centre to canvas pixels (same camera) with screen px per tile px, and whether it faces the camera;
 //   5. --points "x,y;x,y": for each canvas point, its lon/lat, the drawn imagery tile covering it with its state and URL status.
-// Usage: node map-probe.mjs --view global|midwest|phone --out <dir> [--settle 60000] [--points "1150,780;1300,850"]
+// Usage: node scripts/species-legend-probe.mjs --view global|midwest|phone --out <dir> [--years recent|all] [--settle 60000] [--points "1150,780;1300,850"]
 import puppeteer from 'puppeteer';
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader as Pbf } from 'pbf';
@@ -31,6 +34,9 @@ const SITE = arg('--url', 'http://localhost:4488/wildeye/');
 const VIEW = arg('--view', 'global');
 const OUT = arg('--out', null);
 const SETTLE = Number(arg('--settle', '60000'));
+// The species layer's years: 'recent' (the last 10 years, the app's default) or 'all'. The two highest classes appear only in 'all' at the global view.
+const YEARS = arg('--years', 'recent');
+if (!['recent', 'all'].includes(YEARS)) throw new Error(`--years must be recent or all, got ${YEARS}`);
 const POINTS = (arg('--points', '') || '').split(';').filter(Boolean).map((p) => p.split(',').map(Number));
 if (!OUT) throw new Error('--out is required');
 mkdirSync(OUT, { recursive: true });
@@ -78,11 +84,11 @@ await page.evaluate((open) => {
   const panel = document.getElementById('species-panel');
   if (panel.classList.contains('collapsed') === open) panel.querySelector('[data-collapse-target="species-panel"]').click();
 }, cam.panel);
-await page.evaluate(async () => {
+await page.evaluate(async (years) => {
   const dm = window.__godsEyeView.dataManager;
-  if (!dm.setLayerParams('species', { taxonKey: 5133088, name: 'Monarch' }, { origin: 'user' })) throw new Error('species params rejected');
+  if (!dm.setLayerParams('species', { taxonKey: 5133088, name: 'Monarch', years }, { origin: 'user' })) throw new Error('species params rejected');
   await dm.setEnabled('species', true, { origin: 'user' });
-});
+}, YEARS);
 await page.evaluate(({ lon, lat, height }) => {
   const viewer = window.__godsEyeView.viewer;
   viewer.camera.setView({ destination: viewer.camera.position.constructor.fromDegrees(lon, lat, height), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
@@ -191,7 +197,7 @@ for (const [px, py] of POINTS) {
 const levels = {};
 for (const t of drawn.tiles) { const k = `ready z${t.ready?.level ?? '-'}${t.loading ? ` loading z${t.loading.level} state ${t.loading.state}` : ''}`; levels[k] = (levels[k] || 0) + 1; }
 const httpCounts = {}; for (const s of statusByUrl.values()) httpCounts[s] = (httpCounts[s] || 0) + 1;
-const record = { view: VIEW, camera: cam, settleMs: SETTLE, loadedAfterMs, stillPendingAfterSettle: stillPending, esri, template, tileWidth: drawn.tileWidth, levels, httpCounts, drawnTiles: drawn.tiles, cells: projected.length, points };
+const record = { view: VIEW, years: YEARS, camera: cam, settleMs: SETTLE, loadedAfterMs, stillPendingAfterSettle: stillPending, esri, template, tileWidth: drawn.tileWidth, levels, httpCounts, drawnTiles: drawn.tiles, cells: projected.length, points };
 writeFileSync(`${OUT}/${VIEW}__probe.json`, JSON.stringify(record, null, 1));
-log({ view: VIEW, loadedAfterMs, stillPending, esri, levels, httpCounts, cells: projected.length, points: points.map((p) => ({ canvas: p.canvas, lon: p.lon, lat: p.lat, covering: p.covering.map((t) => ({ terrain: t.terrain, ready: t.ready, loading: t.loading })) })) });
+log({ view: VIEW, years: YEARS, loadedAfterMs, stillPending, esri, levels, httpCounts, cells: projected.length, points: points.map((p) => ({ canvas: p.canvas, lon: p.lon, lat: p.lat, covering: p.covering.map((t) => ({ terrain: t.terrain, ready: t.ready, loading: t.loading })) })) });
 await browser.close();

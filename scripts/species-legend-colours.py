@@ -2,12 +2,16 @@
 """species-legend-colours.py: the rendered colour of each scaled.circles class at a species-legend-probe.mjs view (B2, 2026-09-14).
 Class comes from the tile's own data: each cell's `total` against the pinned style bounds (cells.json), never from colour.
 A circle is sampled when its centre faces the camera, lies in the frame, is species-painted over the black globe, lies on land (the off
-frame's basemap, analyse-compare.py's water rule), and no other cell's circle overlaps it (centre distance > sum of radii + 1 px, radius =
+frame's basemap, where water is a pixel whose blue is more than 15 above its red and at least its green minus 10), and no other cell's circle overlaps it (centre distance > sum of radii + 1 px, radius =
 style width / 2 x screen px per tile px). Its colour is the median of `on` frame pixels within half its radius (at least 1 px) of the
 centre. A class's colour is the median over its circles. dE76 and CIEDE2000 against given swatch colours.
 Mode 'centre' (4th argument) relaxes the overlap rule: another circle may touch the sampled circle but must not reach its sampled centre
 (centre distance > other radius + sample radius + 1 px). Each sampled circle also records its ground: the same pixels in the off frame.
-Usage: python3 scripts/species-legend-colours.py <probe dir> <view> [swatches json] [lone|centre]   (the legend used 'centre')
+Mode 'single' samples every pixel of the circle (within its radius less 1 px) that no other circle reaches (beyond each other circle's
+radius + 1 px) and that is species-painted land, when there are at least 4: the class's colour where it is the only circle, for classes
+whose circles always overlap others (the <=10k and >10k circles at the global view with --years all).
+Usage: python3 scripts/species-legend-colours.py <probe dir> <view> [swatches json] [lone|centre|single]   (the legend used 'centre' for the
+three lowest classes, --years recent, and 'single' for the two highest, --years all)
 Needs numpy and Pillow.
 """
 import json, signal, sys
@@ -29,18 +33,26 @@ cells = [c for c in json.load(open(f'{d}/{view}__cells.json')) if c['facing'] an
 for c in cells:
     c['r'] = WIDTHS[c['cls']] / 2 * c['screenPxPerTilePx']
 xy = np.array([[c['x'], c['y']] for c in cells]); rr = np.array([c['r'] for c in cells])
-per = {k: [] for k in range(5)}; ground = {k: [] for k in range(5)}; skipped = {'outside': 0, 'overlap': 0, 'notPainted': 0, 'water': 0}
+per = {k: [] for k in range(5)}; ground = {k: [] for k in range(5)}; skipped = {'outside': 0, 'overlap': 0, 'notPainted': 0, 'water': 0, 'fewSinglePixels': 0}
 for i, c in enumerate(cells):
     x, y, r = c['x'], c['y'], c['r']
     if not (r + 1 <= x < W - r - 1 and r + 1 <= y < H - r - 1): skipped['outside'] += 1; continue
     dist = np.hypot(xy[:, 0] - x, xy[:, 1] - y); dist[i] = np.inf
     s = max(1.0, 0.5 * r)
-    if np.any(dist <= (rr + r + 1 if MODE == 'lone' else rr + s + 1)): skipped['overlap'] += 1; continue
+    if MODE != 'single' and np.any(dist <= (rr + r + 1 if MODE == 'lone' else rr + s + 1)): skipped['overlap'] += 1; continue
     ix, iy = int(round(x)), int(round(y))
     if not species[iy, ix]: skipped['notPainted'] += 1; continue
     if not land[iy, ix]: skipped['water'] += 1; continue
-    yy, xx = np.mgrid[int(np.floor(y - s)):int(np.ceil(y + s)) + 1, int(np.floor(x - s)):int(np.ceil(x + s)) + 1]
-    m = np.hypot(xx - x, yy - y) <= s
+    if MODE == 'single':
+        yy, xx = np.mgrid[int(np.floor(y - r)):int(np.ceil(y + r)) + 1, int(np.floor(x - r)):int(np.ceil(x + r)) + 1]
+        m = np.hypot(xx - x, yy - y) <= r - 1
+        for j in np.where(dist <= rr + r + 1)[0]:
+            m &= np.hypot(xx - xy[j, 0], yy - xy[j, 1]) > rr[j] + 1
+        m &= species[yy, xx] & land[yy, xx]
+        if m.sum() < 4: skipped['fewSinglePixels'] += 1; continue
+    else:
+        yy, xx = np.mgrid[int(np.floor(y - s)):int(np.ceil(y + s)) + 1, int(np.floor(x - s)):int(np.ceil(x + s)) + 1]
+        m = np.hypot(xx - x, yy - y) <= s
     px = on[yy[m], xx[m]]
     per[c['cls']].append(np.median(px, axis=0)); ground[c['cls']].append(np.median(off[yy[m], xx[m]], axis=0))
 def lab(rgb):

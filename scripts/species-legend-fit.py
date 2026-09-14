@@ -2,7 +2,7 @@
 """species-legend-fit.py: legend swatch colours for SPECIES_MAP_LEGEND (src/bio/gbif.js) from species-legend-probe.mjs runs, and how far
 the committed colours are from them.
 
-For each probe dir it runs species-legend-colours.py in 'centre' mode (classes from the tiles' own record counts). Per sampled class k:
+For each probe dir it runs species-legend-colours.py in 'centre' mode, or the mode after --mode (classes from the tiles' own record counts). Per sampled class k:
 T_k = (median rendered - (1 - opacity_k) * median ground) / opacity_k, the colour an opaque fill would render as. A shared model
 T(v) = a * v + b_channel is fitted by least squares to the sampled (style fill, T_k) pairs and predicts the classes no run sampled:
 (1 - opacity) * ground + opacity * T(fill), ground = median ground over all sampled circles. A sampled class's colour is its median over
@@ -11,9 +11,9 @@ run's median.
 
 Run against a preview build (see scripts/species-legend-probe.mjs), with a Python that has numpy and Pillow (species-legend-colours.py needs
 both):
-  python3 scripts/species-legend-fit.py <probe dir> [<probe dir> ...]
-The committed colours came from three global runs on 2026-09-14: sampled classes #e4d9ac, #d5aa78, #cea878; predicted #be8770, #ab7272 from
-a = 0.595, b = (88.6, 93.6, 93.8), ground (127, 145, 110), largest residual 23.6.
+  python3 scripts/species-legend-fit.py [--mode centre|single] <probe dir> [<probe dir> ...]
+The committed colours (2026-09-14): #e4d9ac, #d5aa78, #cea878 from three global runs with --years recent (mode centre); #be7861 and
+#ad5466 from two global runs with --years all (--mode single). A predicted colour is for checking a class no run sampled, not a swatch.
 """
 import json, re, signal, subprocess, sys
 from pathlib import Path
@@ -22,8 +22,11 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 COLOURS = HERE / 'species-legend-colours.py'
 dirs = sys.argv[1:]
-if not dirs:
-    sys.exit('usage: species-legend-fit.py <probe dir> [<probe dir> ...]')
+MODE = 'centre'
+if dirs[:1] == ['--mode']:
+    MODE, dirs = dirs[1], dirs[2:]
+if MODE not in ('lone', 'centre', 'single') or not dirs:
+    sys.exit('usage: species-legend-fit.py [--mode centre|single] <probe dir> [<probe dir> ...]')
 FILLS = [(254, 217, 118), (253, 141, 60), (253, 141, 60), (240, 59, 32), (189, 0, 38)]
 OPAC = [1.0, 0.8, 0.7, 0.6, 0.6]
 LABELS = ['<=10', '<=100', '<=1k', '<=10k', '>10k']
@@ -36,7 +39,7 @@ src = COLOURS.read_text()
 exec(src[src.index('def lab('):src.index('LABELS = ')])  # lab() and de2000() from species-legend-colours.py
 runs = {}
 for d in dirs:
-    out = subprocess.run([sys.executable, str(COLOURS), d, 'global', '', 'centre'], capture_output=True, text=True, timeout=900)
+    out = subprocess.run([sys.executable, str(COLOURS), d, 'global', '', MODE], capture_output=True, text=True, timeout=900)
     if out.returncode != 0:
         sys.exit(f'species-legend-colours.py failed for {d}: {out.stderr[-500:]}')
     runs[d] = json.loads(out.stdout)
@@ -59,7 +62,7 @@ for k in range(5):
 sol, *_ = np.linalg.lstsq(np.array(A), np.array(y), rcond=None)
 a, b = sol[0], sol[1:]
 resid = max(float(np.abs((a * f + b) - T).max()) for f, T in pairs)
-result = {'runs': dirs, 'ground': [round(float(v)) for v in ground], 'model': {'a': round(float(a), 3), 'b': [round(float(v), 1) for v in b], 'maxResidual': round(resid, 1)}, 'classes': []}
+result = {'runs': dirs, 'mode': MODE, 'ground': [round(float(v)) for v in ground], 'model': {'a': round(float(a), 3), 'b': [round(float(v), 1) for v in b], 'maxResidual': round(resid, 1)}, 'classes': []}
 for k in range(5):
     if obs[k]:
         colour = [int(round(v)) for v in np.median(np.array([m for m, _ in obs[k]]), axis=0)]; source = 'sampled'

@@ -118,25 +118,26 @@ export function circlePolygonWkt({ lat, lon, radiusKm, vertices = SEARCH_POLYGON
  * line (width 0: no line). densityTileTemplate uses `style`; gbif.test.mjs pins the classes to the style.
  *
  * `color` is the legend swatch: the class as the globe draws it at the default view (camera straight down over lon -90, lat 30 at 12,000
- * km, 1400x900, over the Esri World Imagery basemap), the median rendered colour of lone circles over land, each circle's class read from
- * its tile's own record count (B2, three runs, 2026-09-14; scripts/species-legend-probe.mjs, species-legend-colours.py,
- * species-legend-fit.py). The style fills are semi-transparent above the lowest class and the globe tints the imagery, so a swatch in the
- * style fill showed colours the map never has. The two highest classes had no circle to sample at that view; their colours are predicted
- * (`predicted: true`) from the sampled classes by a fit of rendered = (1 - opacity) x ground + opacity x (0.595 x fill + (88.6, 93.6, 93.8)),
- * with ground (127, 145, 110), the median land under the sampled circles; its largest residual on the sampled classes is 23.6.
- * The colours hold at that distance only: at the 1,700 km Upper Midwest view the same classes draw brighter and more saturated (CIEDE2000
- * 11-13 from these swatches), which the caption says. Swatch widths stay the style's, so their order holds; on screen circles are only
- * roughly that size and change with zoom, as the caption also says.
+ * km, 1400x900, over the Esri World Imagery basemap), each circle's class read from its tile's own record count, and `years` is the map
+ * it was measured in (scripts/species-legend-probe.mjs --years, species-legend-colours.py, species-legend-fit.py; 2026-09-14). The three
+ * lowest classes are the median colour around the centres of circles whose centre no other circle reaches, in the default LAST 10 YEARS
+ * map ('centre', three runs). That map has no circle of the two highest classes, and their circles always overlap others, so they were
+ * measured in the ALL YEARS map from the pixels only their own circle covers ('single', two runs: 51 circles of <=10k, 2 of >10k). Where
+ * several >10k circles stack the globe draws a deeper magenta than the swatch. The style fills are semi-transparent above the lowest class
+ * and the globe tints the imagery, so a swatch in the style fill showed colours the map never has. The colours hold from far out only: at
+ * the 1,700 km Upper Midwest view the <=100 and <=1k circles look stronger, about 10 L* darker and twice as saturated (CIEDE2000 11-13 from
+ * these swatches), which the caption says. Swatch widths stay the style's, so their order holds; on screen circles are only roughly that
+ * size and change with zoom (spec: Implementation notes).
  */
 export const SPECIES_MAP_LEGEND = Object.freeze({
   style: 'scaled.circles',
   caption: 'Records per circle · colours as seen from far out; closer up they look stronger',
   classes: Object.freeze([
-    Object.freeze({ upTo: 10, widthPx: 6, fill: '#fed976', opacity: 1.0, lineColor: '#fe9724', lineWidthPx: 1, color: '#e4d9ac', predicted: false }),
-    Object.freeze({ upTo: 100, widthPx: 7, fill: '#fd8d3c', opacity: 0.8, lineColor: '#fd5b24', lineWidthPx: 0, color: '#d5aa78', predicted: false }),
-    Object.freeze({ upTo: 1000, widthPx: 10, fill: '#fd8d3c', opacity: 0.7, lineColor: '#fd471d', lineWidthPx: 0, color: '#cea878', predicted: false }),
-    Object.freeze({ upTo: 10000, widthPx: 16, fill: '#f03b20', opacity: 0.6, lineColor: '#f01129', lineWidthPx: 0, color: '#be8770', predicted: true }),
-    Object.freeze({ upTo: null, widthPx: 30, fill: '#bd0026', opacity: 0.6, lineColor: '#bd0047', lineWidthPx: 0, color: '#ab7272', predicted: true }),
+    Object.freeze({ upTo: 10, widthPx: 6, fill: '#fed976', opacity: 1.0, lineColor: '#fe9724', lineWidthPx: 1, color: '#e4d9ac', years: 'recent' }),
+    Object.freeze({ upTo: 100, widthPx: 7, fill: '#fd8d3c', opacity: 0.8, lineColor: '#fd5b24', lineWidthPx: 0, color: '#d5aa78', years: 'recent' }),
+    Object.freeze({ upTo: 1000, widthPx: 10, fill: '#fd8d3c', opacity: 0.7, lineColor: '#fd471d', lineWidthPx: 0, color: '#cea878', years: 'recent' }),
+    Object.freeze({ upTo: 10000, widthPx: 16, fill: '#f03b20', opacity: 0.6, lineColor: '#f01129', lineWidthPx: 0, color: '#be7861', years: 'all' }),
+    Object.freeze({ upTo: null, widthPx: 30, fill: '#bd0026', opacity: 0.6, lineColor: '#bd0047', lineWidthPx: 0, color: '#ad5466', years: 'all' }),
   ]),
 });
 

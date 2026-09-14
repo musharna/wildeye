@@ -158,8 +158,8 @@ test('the legend shows each GBIF record-count class as a circle at its style siz
     ['6px', '6px', '#e4d9ac', '', ''],
     ['7px', '7px', '#d5aa78', '', ''],
     ['10px', '10px', '#cea878', '', ''],
-    ['16px', '16px', '#be8770', '', ''],
-    ['30px', '30px', '#ab7272', '', ''],
+    ['16px', '16px', '#be7861', '', ''],
+    ['30px', '30px', '#ad5466', '', ''],
   ]);
   assert.ok(swatches.every((swatch) => swatch.attrs['aria-hidden'] === 'true' && swatch.textContent === ''), 'swatches are decoration only');
   assert.deepEqual(labels.map((label) => label.textContent), ['≤10', '≤100', '≤1k', '≤10k', '>10k']);
