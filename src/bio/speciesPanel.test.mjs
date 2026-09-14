@@ -230,15 +230,58 @@ test('new years or a new taxon abort the stale dataset search, and its late answ
   assert.deepEqual(pending[3].args, { taxonKey: 5220086, years: 'recent' });
 });
 
-test('a failed dataset search shows in the panel status; a failed dataset lookup is a row naming its error', async () => {
+// I1: a failed dataset search is shown inside the Top datasets block, with Retry, not in the shared status line, where a later message wiped
+// it and a later success left it standing. It hides with the block and clears when a search succeeds.
+test('a failed dataset search shows in the datasets block with Retry, survives a status message, and clears on success', async () => {
+  const answers = [];
   const logged = [];
   const original = console.error;
   console.error = (...args) => { logged.push(args); };
   try {
-    const failing = panelRig({ taxonDatasets: async () => { await settle(2); throw new Error('HTTP 503'); } });
-    await failing.panel.choose(MONARCH);
+    const { panel, els, calls } = panelRig({ taxonDatasets: async (args) => { await settle(2); const next = answers.shift(); if (next instanceof Error) throw next; return next; } });
+    const box = els['species-datasets'];
+    const failureIn = (node) => node.children.find((child) => child.className === 'species-datasets-error') ?? null;
+    answers.push(new Error('HTTP 503'));
+    await panel.choose(MONARCH);
     await settle();
-    assert.equal(failing.els['species-status'].textContent, 'GBIF dataset search failed (HTTP 503)');
+    const failure = failureIn(box);
+    assert.equal(failure?.children[0]?.textContent, 'GBIF dataset search failed (HTTP 503)');
+    const retry = failure.children[1];
+    assert.deepEqual([retry.tag, retry.type, retry.textContent], ['button', 'button', 'Retry']);
+    assert.equal(/failed/.test(els['species-status'].textContent), false, 'not in the shared status line');
+    els['species-status'].textContent = 'iNaturalist didn\'t answer (HTTP 500); showing GBIF scientific names';
+    panel.render();
+    await settle();
+    assert.equal(failureIn(box)?.children[0]?.textContent, 'GBIF dataset search failed (HTTP 503)', 'a status message does not wipe it, and a render does not resend');
+    assert.equal(calls.taxonDatasets.length, 1);
+    answers.push({ total: 306, datasets: [{ key: OTHER_DATASET, count: 306 }] });
+    retry.listeners.click();
+    await settle();
+    assert.equal(calls.taxonDatasets.length, 2, 'Retry sends one new search');
+    assert.equal(failureIn(box), null, 'a success clears the failure');
+    assert.deepEqual(datasetRowsIn(box).map((row) => row[1]), ['Dataset without a DOI']);
+    answers.push(new Error('HTTP 429'), { total: 1, datasets: [{ key: INAT_RG, count: 1 }] });
+    els['species-years'].listeners.click(yearsChip('all'));
+    await settle();
+    assert.equal(failureIn(box)?.children[0]?.textContent, 'GBIF dataset search failed (HTTP 429)');
+    els['species-years'].listeners.click(yearsChip('recent'));
+    await settle();
+    assert.equal(failureIn(box), null, 'a years change that succeeds shows no failure');
+    assert.equal([els['species-status'].textContent, ...box.children.map((child) => child.textContent)].some((text) => /failed/.test(text ?? '')), false, 'no failure text anywhere');
+    els['species-toggle'].listeners.click();
+    await settle();
+    assert.equal(box.hidden, true, 'the block, failure or list, hides with the legend');
+  } finally {
+    console.error = original;
+  }
+  assert.deepEqual(logged.map(([label]) => label), ['[species] dataset search failed', '[species] dataset search failed']);
+});
+
+test('a failed dataset lookup is a row naming its error', async () => {
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => { logged.push(args); };
+  try {
     const lookup = panelRig({ dataset: async (key) => { if (key === OTHER_DATASET) throw new Error('timeout'); return { key, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }; } });
     await lookup.panel.choose(MONARCH);
     await settle();
@@ -246,7 +289,7 @@ test('a failed dataset search shows in the panel status; a failed dataset lookup
   } finally {
     console.error = original;
   }
-  assert.deepEqual(logged.map(([label]) => label), ['[species] dataset search failed', '[species] dataset lookup failed']);
+  assert.deepEqual(logged.map(([label]) => label), ['[species] dataset lookup failed']);
 });
 
 test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits are in place', () => {

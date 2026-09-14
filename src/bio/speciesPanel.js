@@ -136,7 +136,8 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
   /**
    * R-7u: the 3 datasets with the most CC0 / CC BY records of the mapped taxon in the chosen years, named with DOI links, then a link to
    * those records on gbif.org. One search per taxon and years: a change aborts the search in flight, and an answer for anything but the
-   * current taxon and years is dropped. A failed search shows in the status line; a failed dataset lookup shows in its row.
+   * current taxon and years is dropped. A failed search shows inside the block with Retry (I1: the shared status line was wiped by later
+   * messages and kept a stale failure after a success); a failed dataset lookup shows in its row.
    */
   async function showDatasets({ taxonKey, years }) {
     const key = `${taxonKey}|${years}`;
@@ -175,8 +176,18 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
     } catch (error) {
       if (error?.name === 'AbortError' || signal.aborted) return;
       console.error('[species] dataset search failed', { taxonKey, years, error });
-      datasetsBox.replaceChildren();
-      status.textContent = `GBIF dataset search failed (${error.message})`;
+      const failure = doc.createElement('div');
+      failure.className = 'species-datasets-error';
+      const message = doc.createElement('span');
+      message.textContent = `GBIF dataset search failed (${error.message})`;
+      const retry = doc.createElement('button');
+      retry.type = 'button';
+      retry.className = 'scene-btn species-datasets-retry';
+      retry.textContent = 'Retry';
+      retry.addEventListener('click', () => { datasetsFor = null; render(); });
+      failure.appendChild(message);
+      failure.appendChild(retry);
+      datasetsBox.replaceChildren(failure);
       datasetsSettled = true;
       datasetsFailed = true;
     }
