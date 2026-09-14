@@ -118,13 +118,15 @@ if (CHECKS.has('panel-layout')) {
   // chip rows are whole inside the body's scroll viewport without scrolling, above its bottom fade, and are what the page hits at their
   // corners; when more content is below, the fade shows; the legend's ground is opaque. Then the body is scrolled to its end for the review
   // shots. The species is set through the data manager and cleared afterwards, so later checks start as before.
-  const fitAt = async (width, height, shotName) => {
+  const fitAt = async (width, height, shotName, { shotAtTop = false } = {}) => {
     await page.setViewport({ width, height });
     await sleep(2500);
     await setOpen('species-panel', true);
     await sleep(1000);
     await page.evaluate(() => { document.querySelector('#species-panel .species-body').scrollTop = 0; });
-    await page.waitForFunction(() => document.querySelectorAll('#species-datasets .dataset-row').length > 0 || document.querySelector('#species-datasets .species-datasets-error'), { timeout: 45000 }).catch(() => {});
+    // M-2: the datasets wait's outcome is recorded (a timeout or a failure in the block fails the fit), not discarded.
+    const datasetsWait = await page.waitForFunction(() => document.querySelectorAll('#species-datasets .dataset-row').length > 0 || document.querySelector('#species-datasets .species-datasets-error'), { timeout: 45000 }).then(() => 'settled', (error) => String(error).slice(0, 120));
+    const datasetsFailure = await page.evaluate(() => document.getElementById('species-datasets-status')?.textContent || null);
     await sleep(1500);
     const fit = await page.evaluate(() => {
       const body = document.querySelector('#species-panel .species-body');
@@ -147,16 +149,36 @@ if (CHECKS.has('panel-layout')) {
         action: whole(document.getElementById('species-what-lives-here')), years: whole(document.getElementById('species-years')), radius: whole(document.getElementById('species-radius')),
         legendHidden: legend.hidden, legendBg, legendOpaque: /^rgb\(/.test(legendBg) || /, 1\)$/.test(legendBg),
         datasetsHidden: document.getElementById('species-datasets').hidden,
+        // N4: the "more ↓" hint (wider screens only; content none on phones) at the top of the scroll range
+        more: getComputedStyle(body).getPropertyValue('--species-more').trim(),
+        hintAtTop: getComputedStyle(body, '::after').content === 'none' ? null : Number(parseFloat(getComputedStyle(body, '::after').opacity).toFixed(2)),
         // no chip or action text cut off inside its button
         clipped: [...document.querySelectorAll('#species-panel .species-chip, #species-what-lives-here')].filter((b) => b.scrollWidth > b.clientWidth + 0.5).map((b) => ({ text: b.textContent, scrollWidth: b.scrollWidth, clientWidth: b.clientWidth })),
       };
     });
+    if (shotAtTop) await shot(shotName);
     await page.evaluate(() => { const body = document.querySelector('#species-panel .species-body'); body.scrollTop = body.scrollHeight; });
     await sleep(1200);
-    await shot(shotName);
+    // At the end of the scroll: the hint has faded out, and the Top datasets heading is on screen above its links (it sticks while its list shows).
+    const end = await page.evaluate(() => {
+      const body = document.querySelector('#species-panel .species-body');
+      const b = body.getBoundingClientRect();
+      const view = { top: b.top + body.clientTop, bottom: b.top + body.clientTop + body.clientHeight };
+      const heading = document.querySelector('#species-datasets .dataset-list-heading');
+      const h = heading?.getBoundingClientRect();
+      const hit = h ? document.elementFromPoint(h.left + 6, (h.top + h.bottom) / 2) : null;
+      return {
+        scrollTop: body.scrollTop, more: getComputedStyle(body).getPropertyValue('--species-more').trim(),
+        hintAtEnd: getComputedStyle(body, '::after').content === 'none' ? null : Number(parseFloat(getComputedStyle(body, '::after').opacity).toFixed(2)),
+        heading: h ? { top: Math.round(h.top), bottom: Math.round(h.bottom), inView: h.top >= view.top - 0.5 && h.bottom <= view.bottom + 0.5, hit: Boolean(hit && (hit === heading || heading.contains(hit))) } : null,
+      };
+    });
+    if (!shotAtTop) await shot(shotName);
     await page.evaluate(() => { document.querySelector('#species-panel .species-body').scrollTop = 0; });
-    const ok = fit.scrollTop === 0 && ['action', 'years', 'radius'].every((k) => fit[k].inside && fit[k].corners) && (!fit.overflows || fit.fadeVar !== '0px') && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden && fit.clipped.length === 0;
-    return { ...fit, ok };
+    const hintOk = fit.hintAtTop === null || !fit.overflows || (fit.hintAtTop >= 0.9 && end.hintAtEnd !== null && end.hintAtEnd <= 0.1);
+    const headingOk = Boolean(end.heading?.inView && end.heading.hit);
+    const ok = datasetsWait === 'settled' && datasetsFailure === null && fit.scrollTop === 0 && ['action', 'years', 'radius'].every((k) => fit[k].inside && fit[k].corners) && (!fit.overflows || fit.fadeVar !== '0px') && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden && fit.clipped.length === 0 && hintOk && headingOk;
+    return { ...fit, datasetsWait, datasetsFailure, end, hintOk, headingOk, ok };
   };
   await page.evaluate(async () => {
     const dm = window.__godsEyeView.dataManager;
@@ -165,6 +187,8 @@ if (CHECKS.has('panel-layout')) {
   });
   const desktopFit = await fitAt(1400, 900, 'panel-scrolled-desktop');
   const phoneFit = await fitAt(400, 800, 'panel-scrolled-phone');
+  // M-4: a 375x667 phone, measured and shot at the top of the scroll; reported, not required (the brief's fit criterion is 400x800).
+  const smallPhoneFit = await fitAt(375, 667, 'panel-375x667', { shotAtTop: true });
   await page.setViewport({ width: 1400, height: 900 });
   await sleep(2000);
   await page.evaluate(async () => {
@@ -180,7 +204,7 @@ if (CHECKS.has('panel-layout')) {
     expanded: { species: expanded.species.width, speciesExpandedVar: expanded.species.expandedVar },
     phone: { viewport: phone.viewport, speciesWidth: phone.species.width, speciesLeft: phone.species.left, speciesRight: phone.species.right },
     restored: { viewport: restored.viewport, speciesCollapsed: restored.species.collapsed, sceneCollapsed: restored.scene.collapsed },
-    desktopFit, phoneFit,
+    desktopFit, phoneFit, smallPhoneFit,
     collapsedOk, expandedOk, phoneOk, restoredOk, fitOk,
   });
 }
@@ -385,7 +409,8 @@ if (CHECKS.has('panel-datasets')) {
   const state = await page.evaluate(() => ({ enabled: window.__godsEyeView.dataManager.isEnabled('species'), params: window.__godsEyeView.dataManager.getLayerParams('species') }));
   let waited = null;
   if (state.enabled && state.params?.taxonKey) {
-    waited = await page.waitForFunction(() => document.querySelectorAll('#species-datasets .dataset-row').length > 0 || /dataset search failed/.test(document.getElementById('species-status')?.textContent || ''), { timeout: 45000 }).then(() => 'settled', (error) => String(error).slice(0, 120));
+    // M-2: a failed search shows in the Top datasets block (its live region and Retry), so the wait ends on rows or on that failure.
+    waited = await page.waitForFunction(() => document.querySelectorAll('#species-datasets .dataset-row').length > 0 || document.querySelector('#species-datasets .species-datasets-error'), { timeout: 45000 }).then(() => 'settled', (error) => String(error).slice(0, 120));
   }
   const panel = await page.evaluate(() => {
     const box = document.getElementById('species-datasets');
@@ -393,18 +418,20 @@ if (CHECKS.has('panel-datasets')) {
     return { hidden: box?.hidden ?? null, visible: Boolean(box && !box.hidden && box.getBoundingClientRect().height > 0), heading: box?.querySelector('.dataset-list-heading')?.textContent ?? null, link: link ? { href: link.getAttribute('href'), target: link.getAttribute('target'), rel: link.getAttribute('rel'), text: link.textContent } : null, status: document.getElementById('species-status')?.textContent ?? '' };
   });
   const rows = await readDatasetRows('#species-datasets .dataset-row');
+  const failure = await page.evaluate(() => document.getElementById('species-datasets-status')?.textContent || null);
   const years = state.params?.years === 'all' ? null : `${new Date().getUTCFullYear() - 9},${new Date().getUTCFullYear()}`;
   const sent = datasetSearches.filter((u) => u.searchParams.get('taxonKey') === String(state.params?.taxonKey) && u.searchParams.get('year') === years).at(-1) || null;
   const link = panel.link ? new URL(panel.link.href) : null;
   const checks = {
     mapOn: state.enabled && Boolean(state.params?.taxonKey),
+    noFailure: failure === null,
     rowsOk: datasetRowsOk(rows, 3),
     visible: panel.visible && panel.heading === 'Top datasets for this species',
     searchOk: Boolean(sent) && sent.searchParams.get('taxonKey') === String(state.params?.taxonKey) && sent.searchParams.get('hasCoordinate') === 'true' && !sent.searchParams.has('hasGeospatialIssue') && sent.searchParams.get('datasetKey.facetLimit') === '3' && sent.searchParams.get('limit') === '0' && JSON.stringify(sent.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']),
     linkOk: Boolean(link) && link.origin + link.pathname === 'https://www.gbif.org/occurrence/search' && link.searchParams.get('taxon_key') === String(state.params?.taxonKey) && link.searchParams.get('has_coordinate') === 'true' && JSON.stringify(link.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']) && link.searchParams.get('year') === years && panel.link.target === '_blank' && /\bnoopener\b/.test(panel.link.rel || '') && /\bnoreferrer\b/.test(panel.link.rel || ''),
   };
   await shot('panel-datasets');
-  report('panel-datasets', Object.values(checks).every(Boolean), { ...checks, waited, state, panel, rows, sent: sent ? String(sent) : null });
+  report('panel-datasets', Object.values(checks).every(Boolean), { ...(failure ? { failure } : {}), ...checks, waited, state, panel, rows, sent: sent ? String(sent) : null });
 }
 
 let hereSearch = null;
