@@ -302,8 +302,9 @@ test('expanded right panels highlight the title divider without changing collaps
 });
 
 // A fake expanded panel for measureLeftPanelNaturalHeight: a glow, then an inner (14 px top and 12 px bottom padding, a 1 px bottom border)
-// holding a list and a 14 px cue row below it. Computed visibility is inherited, so a hidden panel gives every child hidden too.
-function fakeLeftPanel({ panelVisibility = 'visible', cueVisibility = panelVisibility, listScrollHeight }) {
+// holding a list and a 14 px cue row below it. Computed visibility is inherited, so a hidden panel gives every child hidden too. The panel's
+// getAnimations returns `animations`, fake CSS transitions with a transitionProperty and a playState.
+function fakeLeftPanel({ panelVisibility = 'visible', cueVisibility = panelVisibility, listScrollHeight, animations = [] }) {
   const styles = new Map();
   const node = ({ top, height, scrollHeight = 0, className = '', children = [] }, style) => {
     const element = { classList: { contains: (name) => name === className }, children, scrollHeight, getBoundingClientRect: () => ({ top, height }) };
@@ -315,6 +316,7 @@ function fakeLeftPanel({ panelVisibility = 'visible', cueVisibility = panelVisib
   const inner = node({ top: 100, height: 400, children: [list, cue] }, { paddingTop: '14px', paddingBottom: '12px', borderBottomWidth: '1px' });
   const glow = node({ top: 80, height: 440, className: 'panel-glow' }, {});
   const panel = node({ top: 100, height: 400, children: [glow, inner] }, {});
+  panel.getAnimations = () => animations;
   return { panel, getStyle: (element) => styles.get(element) };
 }
 
@@ -326,6 +328,19 @@ test('a hidden panel measures as its padding only; the same panel visible measur
   assert.equal(measureLeftPanelNaturalHeight(hidden.panel, { getStyle: hidden.getStyle }), 26);
   const visible = fakeLeftPanel({ panelVisibility: 'visible', listScrollHeight: 3000 });
   assert.equal(measureLeftPanelNaturalHeight(visible.panel, { getStyle: visible.getStyle }), 14 + 3000 + 12 + 1, 'positive control: the list\'s scroll extent and the bottom border');
+});
+
+// R10-I1: a panel being shown reads visibility: hidden as its visibility transition starts, so the class change's pass measured the data panel
+// as 26 px and it faded in crushed, with the SCENE and SPECIES pills beside it, until the transition ended. A hidden panel with a running
+// visibility transition is going to be visible and measures its content. A finished visibility transition or a running one of another
+// property leaves a hidden panel at its padding.
+test('a hidden panel with a running visibility transition is being shown and measures its content', () => {
+  const transition = (transitionProperty, playState) => ({ transitionProperty, playState });
+  const measure = (animations) => { const rig = fakeLeftPanel({ panelVisibility: 'hidden', listScrollHeight: 3000, animations }); return measureLeftPanelNaturalHeight(rig.panel, { getStyle: rig.getStyle }); };
+  assert.equal(measure([transition('opacity', 'running'), transition('visibility', 'running'), transition('transform', 'running')]), 14 + 3000 + 12 + 1, 'being shown');
+  for (const animations of [[transition('visibility', 'finished')], [transition('opacity', 'running'), transition('transform', 'running')], []]) {
+    assert.equal(measure(animations), 26, `still hidden with ${JSON.stringify(animations)}`);
+  }
 });
 
 // I2 (round 9): a visibility: hidden child of a visible panel still takes its layout space, like the SPECIES panel's scroll cue while

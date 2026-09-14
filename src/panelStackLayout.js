@@ -173,7 +173,13 @@ export function measureLeftPanelNaturalHeight(panel, { getStyle = (element) => g
   // R9-I1: a panel that is itself visibility: hidden (the data panel without .active, which the F key toggles; every panel in clean view)
   // draws nothing, and its children inherit hidden. It measures as its padding and wrapper chrome only, as before round 9: measured in
   // full, a hidden data panel took the whole left lane (3,286 px at 1400x900) and focus mode hid the collapsed SCENE and SPECIES pills.
-  if (panelStyle.visibility === 'hidden') return Math.ceil(contentBottom + paddingBottom + wrapperChrome);
+  // R10-I1: the lane measures a panel by the visibility it is going to. Computed visibility changes at a transition's visible end: a panel
+  // being shown reads hidden as its transition starts, when the class change's pass runs, and a hiding panel reads visible until its
+  // transition ends, when the transitionend pass runs. So a panel reading hidden with a running visibility transition is being shown and is
+  // measured in full; taken as hidden, the data panel faded in 26 px tall beside the SCENE and SPECIES pills, then snapped to full height.
+  const beingShown = panelStyle.visibility === 'hidden'
+    && panel.getAnimations().some((animation) => animation.transitionProperty === 'visibility' && animation.playState === 'running');
+  if (panelStyle.visibility === 'hidden' && !beingShown) return Math.ceil(contentBottom + paddingBottom + wrapperChrome);
 
   for (const child of inner.children) {
     const childStyle = getStyle(child);
