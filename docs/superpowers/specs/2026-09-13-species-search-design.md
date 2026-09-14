@@ -152,12 +152,13 @@ What the build changed from the design above, and why.
   tile zooms side by side. At the equator in the 400×800 phone view, where GBIF zoom 2 meets zoom 1, the median circle width goes from
   11.5 px to 39.5 px (3.4×), an edge in density that the records do not have.
 - "What lives here" searches a 32-vertex polygon (`geometry`), its gbif.org link carries the same polygon, because gbif.org ignores
-  `geo_distance`, and the outline drawn on the globe has the same 32 vertices, so the card's count, the link and the outline describe one
-  area. 32 comes from real-browser clicks on 2026-09-14, not from a documented limit: gbif.org opened area links of up to 1,253 characters
-  to records and a 1,508-character 64-vertex link to 0 results or an error, for a reason not found in gbif-web's source or in replayed
-  requests. At 32 vertices a 50 km circle gives a link of about 821 characters (850 at the longest coordinates), and a test keeps every
-  radius under 1,000. A circle centred beyond ±85° latitude, or one that would cross ±180°, is searched with `geoDistance` instead, and its
-  link carries only the licences and years.
+  `geo_distance`, and the search's `hasGeospatialIssue=false` (without it a 50 km link counted 222,689 records where the card said 217,508),
+  and the outline drawn on the globe has the same 32 vertices, so the card's count, the link and the outline describe one area. 32 comes
+  from real-browser clicks on 2026-09-14, not from a documented limit: gbif.org opened area links of up to 1,253 characters to records and a
+  1,508-character 64-vertex link to 0 results or an error, for a reason not found in gbif-web's source or in replayed requests. At 32
+  vertices a 50 km circle gives a link of about 846 characters (875 at the longest coordinates), and a test keeps every radius under 1,000.
+  A circle centred beyond ±85° latitude, or one that would cross ±180°, is searched with `geoDistance` instead, and its link carries only
+  the licences and years.
 - Datasets are credited by name, each linked to its DOI where GBIF has one and to its gbif.org dataset page otherwise, the user's choice on
   2026-09-14, because GBIF's data user agreement says "Users must publicly acknowledge ... the Data Publishers whose biodiversity data they
   have used, where appropriate through use of a Digital Object Identifier (DOI)". "What lives here" asks its one occurrence search for a
