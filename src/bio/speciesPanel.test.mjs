@@ -277,6 +277,45 @@ test('a failed dataset search shows in the datasets block with Retry, survives a
   assert.deepEqual(logged.map(([label]) => label), ['[species] dataset search failed', '[species] dataset search failed']);
 });
 
+// M2: both guards in showDatasets and the map-off abort, each with a client that ignores its signal, so only the panel's own checks can stop
+// a stale answer.
+test('an answer that lands after its search was superseded, while its dataset lookups were out, is never shown', async () => {
+  const lookups = [];
+  const searches = [];
+  const { panel, els } = panelRig({
+    taxonDatasets: (args) => new Promise((resolve) => { searches.push({ args, resolve }); }),
+    dataset: (key) => new Promise((resolve) => { lookups.push({ key, resolve }); }),
+  });
+  const box = els['species-datasets'];
+  await panel.choose(MONARCH);
+  await settle();
+  searches[0].resolve({ total: 41111, datasets: [{ key: INAT_RG, count: 41111 }] });
+  await settle();
+  assert.equal(lookups.length, 1, 'the first search is past its facet answer and waiting on its dataset lookup');
+  els['species-years'].listeners.click(yearsChip('all'));
+  await settle();
+  assert.equal(searches.length, 2, 'the years change sent a new search');
+  lookups[0].resolve({ key: INAT_RG, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' });
+  await settle();
+  assert.deepEqual(box.children.map((child) => child.className), ['species-datasets-loading'], 'the superseded answer is dropped; the new search is still loading');
+});
+
+test('turning the map off while a dataset search is out aborts it and empties the hidden block', async () => {
+  const searches = [];
+  const { panel, els } = panelRig({ taxonDatasets: (args, { signal }) => new Promise((resolve) => { searches.push({ args, signal, resolve }); }) });
+  const box = els['species-datasets'];
+  await panel.choose(MONARCH);
+  await settle();
+  assert.equal(searches.length, 1);
+  els['species-toggle'].listeners.click();
+  await settle();
+  assert.equal(box.hidden, true);
+  assert.equal(searches[0].signal.aborted, true, 'map off aborts the search in flight');
+  searches[0].resolve({ total: 1, datasets: [{ key: INAT_RG, count: 1 }] });
+  await settle();
+  assert.equal(box.children.length, 0, 'nothing fills the hidden block');
+});
+
 test('a failed dataset lookup is a row naming its error', async () => {
   const logged = [];
   const original = console.error;
