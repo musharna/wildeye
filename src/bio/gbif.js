@@ -118,16 +118,18 @@ export function circlePolygonWkt({ lat, lon, radiusKm, vertices = SEARCH_POLYGON
  * line (width 0: no line). densityTileTemplate uses `style`; gbif.test.mjs pins the classes to the style.
  *
  * `color` is the legend swatch: the class as the globe draws it at the default view (camera straight down over lon -90, lat 30 at 12,000
- * km, 1400x900, over the Esri World Imagery basemap), each circle's class read from its tile's own record count, and `years` is the map
- * it was measured in (scripts/species-legend-probe.mjs --years, species-legend-colours.py, species-legend-fit.py; 2026-09-14). The three
- * lowest classes are the median colour around the centres of circles whose centre no other circle reaches, in the default LAST 10 YEARS
- * map ('centre', three runs). That map has no circle of the two highest classes, and their circles always overlap others, so they were
- * measured in the ALL YEARS map from the pixels only their own circle covers ('single', two runs: 51 circles of <=10k, 2 of >10k). Where
- * several >10k circles stack the globe draws a deeper magenta than the swatch. The style fills are semi-transparent above the lowest class
- * and the globe tints the imagery, so a swatch in the style fill showed colours the map never has. The colours hold from far out only: at
- * the 1,700 km Upper Midwest view the <=100 and <=1k circles look stronger, about 10 L* darker and twice as saturated (CIEDE2000 11-13 from
- * these swatches), which the caption says. Swatch widths stay the style's, so their order holds; on screen circles are only roughly that
- * size and change with zoom (spec: Implementation notes).
+ * km, 1400x900, over the Esri World Imagery basemap), each circle's class read from its tile's own record count, and `years` is the map it
+ * was measured in (scripts/species-legend-probe.mjs --years, species-legend-colours.py, species-legend-fit.py; 2026-09-14). The three
+ * lowest classes are the median colour around the centres of circles whose centre no other circle reaches, in the default LAST 10 YEARS map
+ * ('centre', three runs). That map has no circle of the two highest classes, and their circles always overlap others, so they were measured
+ * in the ALL YEARS map from the pixels only their own circle covers ('single', two runs: 51 circles of <=10k, 2 of >10k). The >10k swatch
+ * matches a lone >10k circle. 94% of the pixels a >10k circle tops lie under 2 or more circles, and those mostly draw a lighter coral,
+ * nearer the <=10k swatch (#be7861) than the >10k swatch (#ad5466); a magenta tail is 8-11% of those stacked pixels (ALL YEARS map at the
+ * default view, run 1). The style fills are semi-transparent above the lowest class and the globe tints the imagery, so a swatch in the
+ * style fill showed colours the map never has. The colours hold from far out only: at the 1,700 km Upper Midwest view the <=100 and <=1k
+ * circles look stronger, about 10 L* darker and twice as saturated (CIEDE2000 11-13 from these swatches), which the caption says. Swatch
+ * widths stay the style's, so their order holds; on screen circles are only roughly that size and change with zoom (spec: Implementation
+ * notes).
  */
 export const SPECIES_MAP_LEGEND = Object.freeze({
   style: 'scaled.circles',

@@ -140,14 +140,16 @@ What the build changed from the design above, and why.
   default 12,000 km view over the Esri World Imagery basemap, each circle's class read from its tile's own record count. The three lowest
   classes were measured in the default LAST 10 YEARS map, around the centres of circles whose centre no other circle reaches (three runs).
   That map has no circle of the two highest classes, and their circles always overlap others, so they were measured in the ALL YEARS map
-  from the pixels only their own circle covers (two runs: 51 circles of up to 10,000 records, 2 above). Where several circles above 10,000
-  stack, the globe draws a deeper magenta than the swatch (visual critic 7 saw one): 472 of the 473 such pixels in that view lie under 2 to
-  5 circles. Solid style fills at their opacity on the dark panel showed colours the map never has (CIEDE2000 16.6–23.0 from the rendered
-  classes). The colours hold from far out only: at the 1,700 km Upper Midwest view the circles of up to 100 and up to 1,000 records look
-  stronger, about 10 L* darker and twice as saturated (CIEDE2000 11–13 from the swatches). The caption says "Records per circle · colours as
-  seen from far out; closer up they look stronger". `SPECIES_MAP_LEGEND` in `src/bio/gbif.js` holds the classes, their colours and the map
-  each colour was measured in, `src/bio/gbif.test.mjs` pins the classes to the style file, and `scripts/species-legend-probe.mjs`
-  (`--years`), `species-legend-colours.py` and `species-legend-fit.py` (`--mode`) re-measure them against a preview build.
+  from the pixels only their own circle covers (two runs: 51 circles of up to 10,000 records, 2 above). The swatch for more than 10,000
+  matches a lone circle of that class, but 94% of the pixels such a circle tops lie under 2 or more circles, and those mostly draw a lighter
+  coral, nearer the swatch for up to 10,000 (#be7861) than the one for more (#ad5466). A magenta tail, like the one visual critic 7 saw, is
+  8–11% of those stacked pixels. Solid style fills at their opacity on the dark panel showed colours the map never has (CIEDE2000 16.6–23.0
+  from the rendered classes). The colours hold from far out only: at the 1,700 km Upper Midwest view the circles of up to 100 and up to
+  1,000 records look stronger, about 10 L* darker and twice as saturated (CIEDE2000 11–13 from the swatches). The caption says "Records per
+  circle · colours as seen from far out; closer up they look stronger". `SPECIES_MAP_LEGEND` in `src/bio/gbif.js` holds the classes, their
+  colours and the map each colour was measured in, `src/bio/gbif.test.mjs` pins the classes to the style file, and
+  `scripts/species-legend-probe.mjs` (`--years`), `species-legend-colours.py` and `species-legend-fit.py` (`--mode`) re-measure them against
+  a preview build.
 - Limitation: circle size and count follow GBIF's cell size, which changes with tile zoom, so circles change size where Cesium draws two
   tile zooms side by side. At the equator in the 400×800 phone view, where GBIF zoom 2 meets zoom 1, the median circle width goes from
   11.5 px to 39.5 px (3.4×), an edge in density that the records do not have.
