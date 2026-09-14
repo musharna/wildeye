@@ -1,6 +1,6 @@
 # wildeye — Species search, "what lives here", and the biology details card
 
-Date: 2026-09-13. Status: DESIGN APPROVED (sections 1–3 approved in chat 2026-09-13); spec awaiting user review.
+Date: 2026-09-13. Status: DESIGN APPROVED (sections 1–3 approved in chat 2026-09-13); spec approved by the user on 2026-09-13.
 
 ## Goal
 Let a visitor ask the two questions the fixed 22-taxon sightings layer cannot answer: "where has this
