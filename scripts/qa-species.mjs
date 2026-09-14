@@ -342,6 +342,76 @@ if (CHECKS.has('here')) {
   report('here-dismiss', before.groundPrimitives === 1 && after.groundPrimitives === 0 && after.primitives === 0 && cardHidden === true, { before, after, cardHidden });
 }
 
+if (CHECKS.has('here')) {
+  // R-7e: the outline lives exactly as long as the card shows that search's list. With a list showing, a real click on a marker
+  // replaces it with the marker's details (the outline must go), and a real click on empty globe then deselects and closes the card
+  // (nothing may come back). The marker is a point added to the occurrences data source inside the circle; the empty spot is one
+  // where the canvas is on top and the scene picks nothing.
+  await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', true, { origin: 'user' }));
+  await page.click('#species-what-lives-here');
+  const centre = await page.evaluate(() => {
+    const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  });
+  await page.mouse.click(centre.x, centre.y);
+  await page.waitForFunction(() => document.querySelectorAll('#bio-card .bio-card-row').length > 0 || /failed|No CC0/.test(document.getElementById('bio-card')?.innerText || ''), { timeout: 45000 });
+  const listed = { ...(await countOutlines()), rows: await page.evaluate(() => document.querySelectorAll('#bio-card .bio-card-row').length) };
+  const spots = await page.evaluate(async () => {
+    const viewer = window.__godsEyeView.viewer;
+    const scene = viewer.scene;
+    const Cartesian3 = viewer.camera.position.constructor;
+    const Cartographic = viewer.camera.positionCartographic.constructor;
+    let ds = null;
+    for (let i = 0; i < viewer.dataSources.length; i += 1) if (viewer.dataSources.get(i).name === 'occurrences') ds = viewer.dataSources.get(i);
+    if (!ds) return { error: 'no occurrences data source' };
+    const rect = scene.canvas.getBoundingClientRect();
+    const onScreen = (lon, lat) => {
+      const height = scene.globe.getHeight(Cartographic.fromDegrees(lon, lat)) ?? 0;
+      const xy = scene.cartesianToCanvasCoordinates(Cartesian3.fromDegrees(lon, lat, height));
+      return xy ? { lon, lat, height, xy, page: { x: rect.left + xy.x, y: rect.top + xy.y } } : null;
+    };
+    const centreCarto = Cartographic.fromCartesian(viewer.camera.pickEllipsoid({ x: rect.width / 2, y: rect.height / 2 }, scene.globe.ellipsoid));
+    const lon0 = centreCarto.longitude * (180 / Math.PI);
+    const lat0 = centreCarto.latitude * (180 / Math.PI);
+    const marker = onScreen(lon0, lat0 + 0.045); // about 5 km north of the clicked point, inside the 10 km circle
+    ds.entities.removeById('qa-here-detail-marker');
+    ds.entities.add({ id: 'qa-here-detail-marker', position: Cartesian3.fromDegrees(marker.lon, marker.lat, marker.height + 10), point: { pixelSize: 18, disableDepthTestDistance: Number.POSITIVE_INFINITY }, description: '<b>qa-here-detail marker</b>' });
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    let empty = null;
+    for (const [dLon, dLat] of [[0, -0.05], [0.06, -0.05], [-0.06, -0.05], [0.06, 0.02], [-0.06, 0.02], [0, -0.09]]) {
+      const spot = onScreen(lon0 + dLon, lat0 + dLat);
+      if (!spot || document.elementFromPoint(spot.page.x, spot.page.y) !== scene.canvas) continue;
+      if (scene.pick(spot.xy) === undefined) { empty = spot; break; }
+    }
+    const markerPick = scene.pick(marker.xy);
+    return {
+      marker: { page: marker.page, onCanvas: document.elementFromPoint(marker.page.x, marker.page.y) === scene.canvas, picksMarker: markerPick?.id?.id === 'qa-here-detail-marker' },
+      empty: empty && { page: empty.page, lon: empty.lon, lat: empty.lat },
+    };
+  });
+  const cardState = () => page.evaluate(() => ({ selected: window.__godsEyeView.viewer.selectedEntity?.id ?? null, hidden: document.getElementById('bio-card').hidden, text: document.getElementById('bio-card').innerText.slice(0, 120) }));
+  let detail = null;
+  let closed = null;
+  if (spots.marker?.picksMarker && spots.empty) {
+    await page.mouse.click(spots.marker.page.x, spots.marker.page.y);
+    await sleep(2000);
+    detail = { ...(await cardState()), outlines: await countOutlines() };
+    await page.mouse.click(spots.empty.page.x, spots.empty.page.y);
+    await sleep(2000);
+    closed = { ...(await cardState()), outlines: await countOutlines() };
+  }
+  await page.evaluate(() => {
+    const viewer = window.__godsEyeView.viewer;
+    viewer.selectedEntity = undefined;
+    for (let i = 0; i < viewer.dataSources.length; i += 1) if (viewer.dataSources.get(i).name === 'occurrences') viewer.dataSources.get(i).entities.removeById('qa-here-detail-marker');
+  });
+  await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', false, { origin: 'user' }));
+  const ok = listed.groundPrimitives === 1 && listed.rows >= 1
+    && detail?.selected === 'qa-here-detail-marker' && detail.hidden === false && detail.text.includes('qa-here-detail marker') && detail.outlines.groundPrimitives === 0
+    && closed?.selected === null && closed.hidden === true && closed.outlines.groundPrimitives === 0 && closed.outlines.primitives === 0;
+  report('here-detail', ok, { listed, spots, detail, closed });
+}
+
 report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10), upstreamTileErrors: upstreamTileErrors.slice(0, 10) });
 await browser.close();
 process.exit(bad ? 1 : 0);
