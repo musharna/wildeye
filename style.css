@@ -9643,12 +9643,22 @@ body.recording-mode #bio-card { display: none !important; }
 .species-body { display: flex; flex-direction: column; gap: 8px; }
 @property --species-body-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @keyframes species-body-fade { from { --species-body-fade: 12px; } to { --species-body-fade: 0px; } }
+/* N4: the 12 px fade alone read as the end of the list on the desktop panel. On wider screens a "more ↓" hint sits at the body's bottom
+   edge while more is below and fades out as the end is reached, on the same scroll timeline: with nothing to scroll the timeline is
+   inactive and --species-more keeps its initial 0. Phones keep the fade only, since the chip rows sit 4 px above it. */
+@property --species-more { syntax: "<number>"; inherits: true; initial-value: 0; }
+@keyframes species-more { from { --species-more: 1; } 85% { --species-more: 1; } to { --species-more: 0; } }
 @supports (animation-timeline: scroll()) {
   #species-panel .species-body {
     -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--species-body-fade)), transparent);
     mask-image: linear-gradient(to bottom, #000 calc(100% - var(--species-body-fade)), transparent);
-    animation: species-body-fade linear both;
-    animation-timeline: scroll(self);
+    animation: species-body-fade linear both, species-more linear both;
+    animation-timeline: scroll(self), scroll(self);
+  }
+}
+@media (min-width: 721px) {
+  @supports (animation-timeline: scroll()) {
+    #species-panel .species-body::after { content: "more ↓" / ""; position: sticky; bottom: 0; align-self: flex-end; margin-top: -18px; padding: 2px 8px; border: 1px solid rgba(0, 212, 255, 0.45); border-radius: 999px; background: rgb(13, 15, 22); color: var(--accent); font: 9px var(--font-mono); letter-spacing: 1.2px; opacity: var(--species-more); pointer-events: none; }
   }
 }
 /* Each chip row sits beside its label when they fit on one line, and under it when they do not. */
@@ -9708,6 +9718,8 @@ body.recording-mode #bio-card { display: none !important; }
 /* The live region stays in the layout (never display: none, which would stop announcements); empty, it takes no height. */
 .species-datasets-status { margin: 0; color: #ffb86b; }
 .species-datasets-content { display: flex; flex-direction: column; gap: 4px; }
+/* Nit: the heading sticks to the top of the scrolling body while its list is in view, so dataset links scrolled to the end keep their label. */
+#species-datasets .dataset-list-heading { position: sticky; top: 0; z-index: 1; background: rgb(13, 15, 22); padding-block: 2px; }
 .dataset-list { display: flex; flex-direction: column; gap: 3px; }
 .dataset-list-heading { color: rgba(232, 234, 237, 0.8); font: 9px var(--font-mono); letter-spacing: 1.2px; }
 .dataset-list-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }

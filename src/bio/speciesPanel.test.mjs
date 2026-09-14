@@ -421,7 +421,12 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /#left-panel-stack > #species-panel:not\(\.collapsed\) \.species-panel-inner \{[^}]*overflow: hidden;/);
   assert.match(css, /#left-panel-stack > #species-panel:not\(\.collapsed\) \.species-body \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;/);
   assert.match(css, /@property --species-body-fade \{[^}]*initial-value: 0px;/);
-  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*#species-panel \.species-body \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--species-body-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
+  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*#species-panel \.species-body \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--species-body-fade\)\), transparent\);[^}]*animation: species-body-fade linear both, species-more linear both;[^}]*animation-timeline: scroll\(self\), scroll\(self\);/);
+  // N4: on wider screens a "more ↓" hint sits at the body's bottom edge while more is below and fades out at the end, driven by the same
+  // scroll timeline (0 when nothing scrolls). Nit: the Top datasets heading sticks to the top of the body while its list is in view.
+  assert.match(css, /@property --species-more \{[^}]*inherits: true;[^}]*initial-value: 0;/);
+  assert.match(css, /@media \(min-width: 721px\) \{\s*@supports \(animation-timeline: scroll\(\)\) \{\s*#species-panel \.species-body::after \{[^}]*content: "more ↓" \/ "";[^}]*position: sticky;[^}]*bottom: 0;[^}]*opacity: var\(--species-more\);/);
+  assert.match(css, /#species-datasets \.dataset-list-heading \{[^}]*position: sticky;[^}]*top: 0;[^}]*background: rgb\(13, 15, 22\);/);
   assert.match(css, /\.species-legend \{[^}]*background: rgb\(13, 15, 22\);/);
   assert.match(css, /\.species-chip-group \{ display: flex; flex-wrap: wrap;/);
   // In a group the chips take their text's width: the shared .scene-btn flex: 1 squeezed LAST 10 YEARS below its text on the desktop panel.
