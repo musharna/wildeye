@@ -137,38 +137,54 @@ What the build changed from the design above, and why.
   half size. The provider declares 512: the smallest circles at the Upper Midwest view measured 4.4 px across at 256 and
   8.9 px declared 512 (median core diameter).
 - The legend lists the five classes as solid circles at the style's width in CSS px, each in the colour the globe draws that class at the
-  default 12,000 km view: the median rendered colour of lone circles over land, each circle's class read from its tile's own record count,
-  over three runs. Solid style fills at their opacity on the dark panel showed colours the map never has (CIEDE2000 16.6–23.0 from the
-  rendered classes); the swatches are 0–3.5. The two highest classes had no circle to sample at that view, so their colours are predicted
-  from the others. The colours were measured over the Esri World Imagery basemap and hold at that distance only: at the 1,700 km Upper
-  Midwest view the circles draw brighter and more saturated (CIEDE2000 11–13 from the swatches). The caption says bigger, darker circles
-  hold more, the colours are as seen from far out and look brighter up close, and sizes change with zoom. `SPECIES_MAP_LEGEND` in
-  `src/bio/gbif.js` holds the classes and colours, `src/bio/gbif.test.mjs` pins the classes to the style file, and
-  `scripts/species-legend-probe.mjs`, `species-legend-colours.py` and `species-legend-fit.py` re-measure them against a preview build.
+  default 12,000 km view over the Esri World Imagery basemap, each circle's class read from its tile's own record count. The three lowest
+  classes were measured in the default LAST 10 YEARS map, around the centres of circles whose centre no other circle reaches (three runs).
+  That map has no circle of the two highest classes, and their circles always overlap others, so they were measured in the ALL YEARS map
+  from the pixels only their own circle covers (two runs: 51 circles of up to 10,000 records, 2 above). Where several circles above 10,000
+  stack, the globe draws a deeper magenta than the swatch (visual critic 7 saw one): 472 of the 473 such pixels in that view lie under 2 to
+  5 circles. Solid style fills at their opacity on the dark panel showed colours the map never has (CIEDE2000 16.6–23.0 from the rendered
+  classes). The colours hold from far out only: at the 1,700 km Upper Midwest view the circles of up to 100 and up to 1,000 records look
+  stronger, about 10 L* darker and twice as saturated (CIEDE2000 11–13 from the swatches). The caption says "Records per circle · colours as
+  seen from far out; closer up they look stronger". `SPECIES_MAP_LEGEND` in `src/bio/gbif.js` holds the classes, their colours and the map
+  each colour was measured in, `src/bio/gbif.test.mjs` pins the classes to the style file, and `scripts/species-legend-probe.mjs`
+  (`--years`), `species-legend-colours.py` and `species-legend-fit.py` (`--mode`) re-measure them against a preview build.
 - Limitation: circle size and count follow GBIF's cell size, which changes with tile zoom, so circles change size where Cesium draws two
   tile zooms side by side. At the equator in the 400×800 phone view, where GBIF zoom 2 meets zoom 1, the median circle width goes from
   11.5 px to 39.5 px (3.4×), an edge in density that the records do not have.
-- "What lives here" searches a 64-vertex polygon (`geometry`), and its gbif.org link carries the same polygon, because gbif.org
-  ignores `geo_distance`. A circle centred beyond ±85° latitude, or one that would cross ±180°, is searched with `geoDistance`
-  instead, and its link carries only the licences and years.
+- "What lives here" searches a 32-vertex polygon (`geometry`), its gbif.org link carries the same polygon, because gbif.org ignores
+  `geo_distance`, and the outline drawn on the globe has the same 32 vertices, so the card's count, the link and the outline describe one
+  area. 32 comes from real-browser clicks on 2026-09-14, not from a documented limit: gbif.org opened area links of up to 1,253 characters
+  to records and a 1,508-character 64-vertex link to 0 results or an error, for a reason not found in gbif-web's source or in replayed
+  requests. At 32 vertices a 50 km circle gives a link of about 821 characters (850 at the longest coordinates), and a test keeps every
+  radius under 1,000. A circle centred beyond ±85° latitude, or one that would cross ±180°, is searched with `geoDistance` instead, and its
+  link carries only the licences and years.
 - Datasets are credited by name, each linked to its DOI where GBIF has one and to its gbif.org dataset page otherwise, the user's choice on
   2026-09-14, because GBIF's data user agreement says "Users must publicly acknowledge ... the Data Publishers whose biodiversity data they
   have used, where appropriate through use of a Digital Object Identifier (DOI)". "What lives here" asks its one occurrence search for a
   second facet, `datasetKey` (5, with per-facet limits so species stay 20), and the SPECIES panel asks the taxon's top 3
   (`facet=datasetKey&datasetKey.facetLimit=3`) for the chosen years and licences, with `hasCoordinate=true` like the map tiles (GBIF's adhoc
   tiles add that filter and no geospatial-issue filter: the monarch z0 tile totalled 42,244 records, the search with hasCoordinate=true
-  42,244, and with hasGeospatialIssue=false as well 42,240). A failed panel search shows inside the block, in a polite live region, with
-  Retry, which keeps keyboard focus in the block. Each dataset is looked up at `/v1/dataset/{key}` (one pooled lookup per key for the
-  session) and listed as its title linked to its DOI on doi.org, or to its gbif.org page, with its record count. The panel links the taxon's
-  records on gbif.org with `taxon_key`, which gbif.org rewrites to its `taxonKey` filter (gbif-web `useNormalizedSearchParams`). A dataset's
-  licence is never shown: the iNaturalist Research-grade dataset is CC BY-NC while its CC BY records pass the record filter.
+  42,244, and with hasGeospatialIssue=false as well 42,240). A failed panel search shows inside the block, under its heading and above its
+  gbif.org link, in a polite live region, with Retry, which keeps keyboard focus in the block. Each dataset is looked up at
+  `/v1/dataset/{key}` (one pooled lookup per key for the session) and listed as its title linked to its DOI on doi.org, or to its gbif.org
+  page, with its record count. The panel links the taxon's records on gbif.org with `taxonKey` and
+  `checklistKey=d7dddbf4-2cf0-4f39-9b2a-bb099caae36c`, the GBIF Backbone Taxonomy. The app's taxon keys are Backbone keys, the default of
+  the API and the map tiles, but since 2026-06-18 gbif.org reads taxon keys under Catalogue of Life XR unless a link names a checklist, and
+  there a Backbone key matches no record: the link without the checklist opened to 0 results in a real browser, and with it to the monarch's
+  42,244 records. qa-species compares each gbif.org link's API count with the count the app showed or used; only a click checks gbif.org's
+  page itself. A dataset's licence is never shown: the iNaturalist Research-grade dataset is CC BY-NC while its CC BY records pass the
+  record filter.
 - The GBIF and iNaturalist terms pages answer scripts with 403, so their text was read from Internet Archive captures, which the user
   accepted on 2026-09-14. DATA_SOURCES.md quotes them with the capture timestamps.
 - The SPECIES panel lists, in order, the search box, its suggestions, the status line, the chosen species with the map switch, WHAT LIVES
-  HERE, the year and radius chips, the legend, the Top datasets and the credit. Its body scrolls under a fixed header and fades out at the
-  bottom while more is below; on wider screens a "more ↓" hint shows there too, and the Top datasets heading sticks while its list is in
-  view. On a 400x800 phone the left panel stack ends at half height, so the panel tightens its spacing to keep the action and both chip
-  rows whole without scrolling. On a 375x667 phone the chip rows need a scroll (measured in qa-species).
+  HERE, the year and radius chips, the legend, the Top datasets and the credit. Its body scrolls under a fixed header. Below the body,
+  inside the panel, a "more ↓" row of its own shows while more of the body is below and hides at the end, at every window size; its height
+  is always laid out and only its visibility changes, so it never covers content (a fade and an overlaying hint before it both hid content).
+  The Top datasets heading scrolls with its links. The left panel stack's natural height counts children hidden with `visibility` and the
+  panel's bottom border; without them the body overflowed on tall windows, by the hidden row and by 1 px. On a 400x800 phone the left panel
+  stack ends at half height, so the panel tightens its spacing to keep the action and both chip rows whole without scrolling, and at the end
+  of the scroll every Top datasets link is whole with its focus ring. On a 375x667 phone the chip rows need a scroll (measured in
+  qa-species).
 - The details card sanitizes layer descriptions with DOMPurify. Only http, https and mailto links survive, and each opens in a new
   tab with `rel="noopener noreferrer"`.
 - Only HTTP and network errors count as tile failures. GBIF answers an empty tile with 204, which Cesium reports as an error of
