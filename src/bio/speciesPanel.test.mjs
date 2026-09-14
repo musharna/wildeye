@@ -39,12 +39,22 @@ function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', can
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
   let enabled = initiallyEnabled;
   const calls = { params: [], enable: [], match: [], taxonDatasets: [], dataset: [] };
+  // Like src/data/manager.js, subscribers hear 'params-requested' before the layer applies new params (_reserveLayerParamsIntent) and 'params'
+  // after, so a render during the request sees the previous params. A fake that never notified hid that the FUZZY note was lost (M1).
+  const listeners = [];
+  const notify = (change) => { for (const listener of listeners) listener(change); };
   const dataManager = {
     getLayerParams: () => ({ ...params }),
-    setLayerParams: (id, p, options) => { calls.params.push({ id, p, origin: options.origin }); params = { ...params, ...p }; return true; },
+    setLayerParams: (id, p, options) => {
+      calls.params.push({ id, p, origin: options.origin });
+      notify({ type: 'params-requested', layerId: id, params: { ...p }, origin: options.origin });
+      params = { ...params, ...p };
+      notify({ type: 'params', layerId: id, params: { ...params }, origin: options.origin });
+      return true;
+    },
     isEnabled: () => enabled,
     setEnabled: async (id, on, options) => { calls.enable.push({ id, on, origin: options.origin }); enabled = on; return true; },
-    subscribe: () => () => {},
+    subscribe: (listener) => { listeners.push(listener); return () => {}; },
   };
   const speciesLayer = { getStats: () => ({ error: null, tileFailures: 0 }), onStatus: () => () => {} };
   const client = {

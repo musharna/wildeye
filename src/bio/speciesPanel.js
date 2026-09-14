@@ -131,10 +131,11 @@ export function createSpeciesPanel({
     const on = dataManager.isEnabled('species');
     chosen.hidden = !p.taxonKey;
     chosenName.textContent = p.name || (p.taxonKey ? `GBIF taxon ${p.taxonKey}` : '');
-    // M1: the GBIF name a FUZZY (or other non-EXACT) match mapped, for as long as that taxon is the chosen one.
-    if (shownAs && shownAs.taxonKey !== p.taxonKey) shownAs = null;
-    chosenNote.textContent = shownAs ? `shown as GBIF's ${shownAs.canonicalName}` : '';
-    chosenNote.hidden = !shownAs;
+    // M1: the GBIF name a FUZZY (or other non-EXACT) match mapped, shown while that taxon is the chosen one. Only a new choice (chooseTaxon)
+    // changes shownAs: the data manager notifies 'params-requested' before it applies new params, so a render can see the previous taxon.
+    const note = shownAs && shownAs.taxonKey === p.taxonKey ? `shown as GBIF's ${shownAs.canonicalName}` : '';
+    chosenNote.textContent = note;
+    chosenNote.hidden = !note;
     if (p.taxonKey && !p.name && lookingUpKey !== p.taxonKey) {
       // A share link carries only the key; look the name up once.
       lookingUpKey = p.taxonKey;
