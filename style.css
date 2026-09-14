@@ -9636,8 +9636,24 @@ body.recording-mode #bio-card { display: none !important; }
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
-#left-panel-stack > #species-panel:not(.collapsed) .species-panel-inner { height: 100%; max-height: 100%; overflow-y: auto; scrollbar-gutter: stable; }
+/* B1/S1: the header stays put and the body scrolls inside the panel, fading out at its bottom while more is below (the suggestion list's
+   scroll-driven fade, 12 px so it never dims the chip rows that must stay whole on a 400x800 phone). */
+#left-panel-stack > #species-panel:not(.collapsed) .species-panel-inner { height: 100%; max-height: 100%; overflow: hidden; }
+#left-panel-stack > #species-panel:not(.collapsed) .species-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 .species-body { display: flex; flex-direction: column; gap: 8px; }
+@property --species-body-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes species-body-fade { from { --species-body-fade: 12px; } to { --species-body-fade: 0px; } }
+@supports (animation-timeline: scroll()) {
+  #species-panel .species-body {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--species-body-fade)), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--species-body-fade)), transparent);
+    animation: species-body-fade linear both;
+    animation-timeline: scroll(self);
+  }
+}
+/* Each chip row sits beside its label when they fit on one line, and under it when they do not. */
+.species-chip-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.species-chip-group > .species-label { margin-bottom: 0; }
 /* A label sits 4 px above the control it names (the body's gap is 8 px), so it reads as that control's, not the one above. Its text is the
    chips' 0.8 white: the shared --text-secondary (0.5 white) measured 4.00 to 4.55:1 over the panel. */
 .species-label { margin-bottom: -4px; color: rgba(232, 234, 237, 0.8); font: 9px var(--font-mono); letter-spacing: 1.2px; }
@@ -9673,7 +9689,8 @@ body.recording-mode #bio-card { display: none !important; }
 .species-chosen-name { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The record-count legend: a caption over five circles with their bounds, each circle bottom-aligned above its label. Sizes, colours and
    labels come from SPECIES_MAP_LEGEND (src/bio/gbif.js): GBIF's scaled.circles classes as the globe draws them (spec: Implementation notes). */
-.species-legend { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; color: rgba(232, 234, 237, 0.78); font-size: 11px; }
+/* B1: an opaque ground, so a swatch cut by the panel's edge reads as legend, never as a circle on the globe behind the glass. */
+.species-legend { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; color: rgba(232, 234, 237, 0.78); font-size: 11px; background: rgb(13, 15, 22); border-radius: 8px; padding: 6px 8px; }
 .species-legend[hidden] { display: none; }
 .species-legend-classes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; max-width: 220px; }
 .species-legend-class { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; min-width: 0; }
@@ -9717,6 +9734,20 @@ body.recording-mode #bio-card { display: none !important; }
    separator dangling at the end of the first line. On their own lines neither can wrap inside itself. */
 .species-credit { margin: 0; color: rgba(232, 234, 237, 0.78); font-size: 11px; line-height: 1.4; }
 .species-credit > span { display: block; white-space: nowrap; }
+/* B1: on a 400x800 phone the left stack ends at half height, so the panel keeps WHAT LIVES HERE and both chip rows whole by tightening its
+   padding, gaps and control heights, letting the chips shrink below the shared 72 px, and keeping "Find a species" for screen readers only
+   (the placeholder names the box). Measured: the radius row ends 4 px above the fade. */
+@media (max-width: 720px) {
+  #species-panel .species-panel-inner { padding-top: 10px; padding-bottom: 10px; }
+  #species-panel .species-body { gap: 2px; }
+  #species-panel .species-label { margin-bottom: 0; letter-spacing: 0.4px; }
+  #species-panel label.species-label[for="species-search"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #species-panel #species-search { padding-top: 4px; padding-bottom: 4px; }
+  #species-panel .scene-btn.species-action { padding-top: 6px; padding-bottom: 6px; }
+  #species-panel .species-chip-group { column-gap: 6px; }
+  #species-panel .species-chip-row { gap: 4px; }
+  #species-panel .scene-btn.species-chip { min-width: 0; padding: 5px 7px; }
+}
 #species-panel.collapsed { width: var(--left-collapsed-width); }
 #species-panel.collapsed .species-body { display: none !important; }
 #species-panel.collapsed .panel-title { font-size: 8px; letter-spacing: 1.8px; }

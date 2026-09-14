@@ -344,18 +344,19 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   for (const id of PANEL_IDS) assert.match(stack, new RegExp(`id="${id}"`), id);
   assert.match(stack, /data-collapse-target="species-panel"/);
   assert.doesNotMatch(stack.slice(stack.indexOf('id="species-panel"')), /data-requires-backend/, 'species search works on the static host');
-  // The action sits directly after the chosen-species block, before the legend and the chips, so the 400x800 panel still shows it
-  // whole above its cut; the credit line is last.
+  // B1/S1: the action sits directly after the chosen-species block and the two chip rows follow it, each label beside its row in a group,
+  // so the controls stay whole above the panel's cut on a 400x800 phone; the legend, the datasets and the credit line come after them.
   const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
   // The legend's content is rendered from SPECIES_MAP_LEGEND (speciesPanel.js), so the markup holds an empty container.
-  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
+  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
+  assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
   for (const attr of ['role="switch"', 'aria-checked="false"', 'aria-label="Species map"']) assert.ok(toggleTag.includes(attr), `${attr} in ${toggleTag}`);
   assert.equal(toggleTag.includes('aria-pressed'), false, `no aria-pressed on the switch: ${toggleTag}`);
   // R-7u: the top datasets sit directly under the legend, which they hide with.
   assert.match(panelHtml, /<div id="species-legend" class="species-legend" hidden><\/div>\s*<div id="species-datasets" class="species-datasets" hidden><\/div>/);
-  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-legend"', 'id="species-datasets"', 'id="species-years-label"', 'id="species-years"', 'id="species-radius-label"', 'id="species-radius"', 'class="species-credit"'];
+  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-years-label"', 'id="species-years"', 'id="species-radius-label"', 'id="species-radius"', 'id="species-legend"', 'id="species-datasets"', 'class="species-credit"'];
   const positions = order.map((marker) => panelHtml.indexOf(marker));
   assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'markup order');
@@ -379,6 +380,15 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /#left-panel-stack > #species-panel \{[^}]*order: 5;/);
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);
+  // B1/S1: the body scrolls under a fixed header and fades out at its bottom while more is below; the legend has an opaque ground, so a
+  // swatch cut by the panel's edge can never sit on the globe; on narrow screens the controls tighten so the action and both chip rows fit.
+  assert.match(css, /#left-panel-stack > #species-panel:not\(\.collapsed\) \.species-panel-inner \{[^}]*overflow: hidden;/);
+  assert.match(css, /#left-panel-stack > #species-panel:not\(\.collapsed\) \.species-body \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;/);
+  assert.match(css, /@property --species-body-fade \{[^}]*initial-value: 0px;/);
+  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*#species-panel \.species-body \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--species-body-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
+  assert.match(css, /\.species-legend \{[^}]*background: rgb\(13, 15, 22\);/);
+  assert.match(css, /\.species-chip-group \{ display: flex; flex-wrap: wrap;/);
+  assert.match(css, /@media \(max-width: 720px\) \{[^@]*#species-panel \.scene-btn\.species-chip \{[^}]*min-width: 0;/);
   assert.match(css, /\.species-suggestions\[hidden\] \{ display: none; \}/);
   // R-7t: swatch sizes, fills and lines come from SPECIES_MAP_LEGEND, so none is written in the CSS; the CSS makes each swatch a circle
   // whose line is inside its stated width.

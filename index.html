@@ -699,19 +699,23 @@
           <button type="button" id="species-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Species map">MAP OFF</button>
         </div>
         <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">WHAT LIVES HERE</button>
+        <div class="species-chip-group">
+          <span id="species-years-label" class="species-label">Years</span>
+          <div id="species-years" class="species-chip-row" role="group" aria-labelledby="species-years-label">
+            <button type="button" class="scene-btn species-chip" data-years="recent" aria-pressed="true">LAST 10 YEARS</button>
+            <button type="button" class="scene-btn species-chip" data-years="all" aria-pressed="false">ALL YEARS</button>
+          </div>
+        </div>
+        <div class="species-chip-group">
+          <span id="species-radius-label" class="species-label">What lives here radius</span>
+          <div id="species-radius" class="species-chip-row" role="group" aria-labelledby="species-radius-label">
+            <button type="button" class="scene-btn species-chip" data-radius="1" aria-pressed="false">1 KM</button>
+            <button type="button" class="scene-btn species-chip" data-radius="10" aria-pressed="true">10 KM</button>
+            <button type="button" class="scene-btn species-chip" data-radius="50" aria-pressed="false">50 KM</button>
+          </div>
+        </div>
         <div id="species-legend" class="species-legend" hidden></div>
         <div id="species-datasets" class="species-datasets" hidden></div>
-        <span id="species-years-label" class="species-label">Years</span>
-        <div id="species-years" class="species-chip-row" role="group" aria-labelledby="species-years-label">
-          <button type="button" class="scene-btn species-chip" data-years="recent" aria-pressed="true">LAST 10 YEARS</button>
-          <button type="button" class="scene-btn species-chip" data-years="all" aria-pressed="false">ALL YEARS</button>
-        </div>
-        <span id="species-radius-label" class="species-label">What lives here radius</span>
-        <div id="species-radius" class="species-chip-row" role="group" aria-labelledby="species-radius-label">
-          <button type="button" class="scene-btn species-chip" data-radius="1" aria-pressed="false">1 KM</button>
-          <button type="button" class="scene-btn species-chip" data-radius="10" aria-pressed="true">10 KM</button>
-          <button type="button" class="scene-btn species-chip" data-radius="50" aria-pressed="false">50 KM</button>
-        </div>
         <p class="species-credit"><span>Names: iNaturalist</span> <span>Records: GBIF.org, CC0/CC BY only</span> <span>Top datasets: a DOI link where GBIF has one,</span> <span>otherwise a gbif.org dataset page</span></p>
       </div>
     </div>

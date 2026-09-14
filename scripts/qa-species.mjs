@@ -110,12 +110,70 @@ if (CHECKS.has('panel-layout')) {
   const expandedOk = !expanded.species.collapsed && near(expanded.species.width, Number.parseFloat(expanded.species.expandedVar));
   const phoneOk = !phone.species.collapsed && phone.species.right <= phone.viewport && phone.species.width >= 300;
   const restoredOk = restored.viewport === 1400 && restored.species.collapsed === initial.species && restored.scene.collapsed === initial.scene;
-  report('panel-layout', collapsedOk && expandedOk && phoneOk && restoredOk, {
+  // B1/S1: with a species mapped (legend and Top datasets showing), at the desktop default and on a 400x800 phone, WHAT LIVES HERE and both
+  // chip rows are whole inside the body's scroll viewport without scrolling, above its bottom fade, and are what the page hits at their
+  // corners; when more content is below, the fade shows; the legend's ground is opaque. Then the body is scrolled to its end for the review
+  // shots. The species is set through the data manager and cleared afterwards, so later checks start as before.
+  const fitAt = async (width, height, shotName) => {
+    await page.setViewport({ width, height });
+    await sleep(2500);
+    await setOpen('species-panel', true);
+    await sleep(1000);
+    await page.evaluate(() => { document.querySelector('#species-panel .species-body').scrollTop = 0; });
+    await page.waitForFunction(() => document.querySelectorAll('#species-datasets .dataset-row').length > 0 || document.querySelector('#species-datasets .species-datasets-error'), { timeout: 45000 }).catch(() => {});
+    await sleep(1500);
+    const fit = await page.evaluate(() => {
+      const body = document.querySelector('#species-panel .species-body');
+      const b = body.getBoundingClientRect();
+      const fade = parseFloat(getComputedStyle(body).getPropertyValue('--species-body-fade')) || 0;
+      const view = { top: b.top + body.clientTop, bottom: b.top + body.clientTop + body.clientHeight };
+      const whole = (el) => {
+        const r = el.getBoundingClientRect();
+        const inside = r.top >= view.top - 0.5 && r.bottom <= view.bottom - fade + 0.5;
+        const corners = [[r.left + 3, r.top + 3], [r.right - 3, r.top + 3], [r.left + 3, r.bottom - 3], [r.right - 3, r.bottom - 3]].every(([x, y]) => { const hit = document.elementFromPoint(x, y); return Boolean(hit && (hit === el || el.contains(hit))); });
+        return { top: Math.round(r.top), bottom: Math.round(r.bottom), inside, corners };
+      };
+      const legend = document.getElementById('species-legend');
+      const legendBg = getComputedStyle(legend).backgroundColor;
+      return {
+        viewport: `${innerWidth}x${innerHeight}`, scrollTop: body.scrollTop, view: { top: Math.round(view.top), bottom: Math.round(view.bottom) }, fade,
+        overflows: body.scrollHeight > body.clientHeight, fadeVar: getComputedStyle(body).getPropertyValue('--species-body-fade').trim(),
+        action: whole(document.getElementById('species-what-lives-here')), years: whole(document.getElementById('species-years')), radius: whole(document.getElementById('species-radius')),
+        legendHidden: legend.hidden, legendBg, legendOpaque: /^rgb\(/.test(legendBg) || /, 1\)$/.test(legendBg),
+        datasetsHidden: document.getElementById('species-datasets').hidden,
+      };
+    });
+    await page.evaluate(() => { const body = document.querySelector('#species-panel .species-body'); body.scrollTop = body.scrollHeight; });
+    await sleep(1200);
+    await shot(shotName);
+    await page.evaluate(() => { document.querySelector('#species-panel .species-body').scrollTop = 0; });
+    const ok = fit.scrollTop === 0 && ['action', 'years', 'radius'].every((k) => fit[k].inside && fit[k].corners) && (!fit.overflows || fit.fadeVar !== '0px') && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden;
+    return { ...fit, ok };
+  };
+  await page.evaluate(async () => {
+    const dm = window.__godsEyeView.dataManager;
+    if (!dm.setLayerParams('species', { taxonKey: 5133088, name: 'Monarch' }, { origin: 'user' })) throw new Error('species params rejected');
+    await dm.setEnabled('species', true, { origin: 'user' });
+  });
+  const desktopFit = await fitAt(1400, 900, 'panel-scrolled-desktop');
+  const phoneFit = await fitAt(400, 800, 'panel-scrolled-phone');
+  await page.setViewport({ width: 1400, height: 900 });
+  await sleep(2000);
+  await page.evaluate(async () => {
+    const dm = window.__godsEyeView.dataManager;
+    await dm.setEnabled('species', false, { origin: 'user' });
+    dm.setLayerParams('species', { taxonKey: null }, { origin: 'user' });
+  });
+  await setOpen('species-panel', !initial.species);
+  await sleep(800);
+  const fitOk = desktopFit.ok && phoneFit.ok;
+  report('panel-layout', collapsedOk && expandedOk && phoneOk && restoredOk && fitOk, {
     collapsed: { species: collapsed.species.width, scene: collapsed.scene.width },
     expanded: { species: expanded.species.width, speciesExpandedVar: expanded.species.expandedVar },
     phone: { viewport: phone.viewport, speciesWidth: phone.species.width, speciesLeft: phone.species.left, speciesRight: phone.species.right },
     restored: { viewport: restored.viewport, speciesCollapsed: restored.species.collapsed, sceneCollapsed: restored.scene.collapsed },
-    collapsedOk, expandedOk, phoneOk, restoredOk,
+    desktopFit, phoneFit,
+    collapsedOk, expandedOk, phoneOk, restoredOk, fitOk,
   });
 }
 
