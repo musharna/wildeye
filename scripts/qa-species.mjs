@@ -307,47 +307,80 @@ if (CHECKS.has('panel-layout')) {
   });
 }
 
-// R9-I1: a panel hidden by its own visibility must not take the left lane. The data panel is visibility: hidden without .active, which the F
-// key toggles, and every panel is hidden in clean view. At 1400x900, with the data panel expanded and the other stack panels collapsed, the
-// shown data panel is measured in full (focus mode: its list is taller than the lane, the positive control). After F, once the visibility
-// transition has ended, the lane is not in focus mode and the collapsed SCENE and SPECIES pills are shown with height. Clean view on and
-// then off returns the lane to that mode, and F again brings back the shown panel's mode. panel-layout checks, on a window at least 1,000 px
-// tall, that the SPECIES body does not overflow.
+// R9-I1 and R10-I1: the left lane follows the data panel's visibility, including while it changes. The data panel is visibility: hidden without
+// .active, which the F key toggles, and in clean view and recording mode; its visibility, opacity and transform transition over 300 ms. At
+// 1400x900, with the data panel expanded and the other stack panels collapsed:
+// - the shown panel puts the lane in focus mode (its list is taller than the lane), the positive control;
+// - hiding it (F, clean view on, recording mode on) settles the lane out of focus mode with the SCENE and SPECIES pills laid out;
+// - showing it (F, clean view off, recording mode off) has no frame, sampled on every animation frame, where the panel is visible with opacity
+//   above 0 and the lane is not in the shown mode, the panel is under 100 px tall or a pill is laid out: it fades in at full height;
+// - clean view on and off from the F-hidden state keeps the lane's mode.
+// Each step waits for a visibility transition on a stack panel where one is expected and throws when none arrives in 3 s. panel-layout checks
+// that the SPECIES body does not overflow on a window at least 1,000 px tall.
 if (CHECKS.has('left-stack')) {
   await page.setViewport({ width: 1400, height: 900 });
   await sleep(2000);
   const initial = await page.evaluate(() => {
     const data = document.getElementById('data-panel');
     const open = ['scene-panel', 'species-panel', 'cctv-panel'].filter((id) => { const panel = document.getElementById(id); return panel && !panel.classList.contains('collapsed'); });
-    return { collapsed: data.classList.contains('collapsed'), active: data.classList.contains('active'), cleanView: document.body.classList.contains('ui-clean-view'), open };
+    return { collapsed: data.classList.contains('collapsed'), active: data.classList.contains('active'), cleanView: document.body.classList.contains('ui-clean-view'), recording: document.body.classList.contains('recording-mode'), open };
+  });
+  await page.evaluate(() => {
+    // Samples the lane on every animation frame until a visibility transition on a stack panel has ended and 10 more frames have drawn, or,
+    // when none is expected, for 1.2 s; 3 s at most.
+    window.__qaSampleLane = (expectTransition) => new Promise((resolve) => {
+      const stack = document.getElementById('left-panel-stack');
+      const data = document.getElementById('data-panel');
+      const frames = [];
+      const started = performance.now();
+      let ended = null;
+      let framesAfterEnd = 0;
+      const onEnd = (event) => { if (ended === null && event.propertyName === 'visibility' && event.target.parentElement === stack) ended = Math.round(performance.now() - started); };
+      stack.addEventListener('transitionend', onEnd);
+      const pill = (id) => { const el = document.getElementById(id); return { display: getComputedStyle(el).display, height: +el.getBoundingClientRect().height.toFixed(1) }; };
+      const tick = () => {
+        const cs = getComputedStyle(data);
+        frames.push({ t: Math.round(performance.now() - started), visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: stack.dataset.layoutMode, scene: pill('scene-panel'), species: pill('species-panel') });
+        if (ended !== null) framesAfterEnd += 1;
+        const elapsed = performance.now() - started;
+        if ((ended !== null && framesAfterEnd > 10) || (!expectTransition && elapsed > 1200) || elapsed > 3000) {
+          stack.removeEventListener('transitionend', onEnd);
+          resolve({ ended, frames });
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
   });
   const stackState = () => page.evaluate(() => {
     const stack = document.getElementById('left-panel-stack');
     const panel = (id) => {
       const el = document.getElementById(id);
       const cs = getComputedStyle(el);
-      return { collapsed: el.classList.contains('collapsed'), active: el.classList.contains('active'), display: cs.display, visibility: cs.visibility, height: +el.getBoundingClientRect().height.toFixed(1), ariaHidden: el.getAttribute('aria-hidden'), allocated: el.style.getPropertyValue('--left-panel-allocated-height') || null };
+      return { collapsed: el.classList.contains('collapsed'), active: el.classList.contains('active'), display: cs.display, visibility: cs.visibility, opacity: Number(cs.opacity), height: +el.getBoundingClientRect().height.toFixed(1), ariaHidden: el.getAttribute('aria-hidden'), allocated: el.style.getPropertyValue('--left-panel-allocated-height') || null };
     };
-    return { mode: stack.dataset.layoutMode, focusClass: stack.classList.contains('layout-focus'), cleanView: document.body.classList.contains('ui-clean-view'), data: panel('data-panel'), scene: panel('scene-panel'), species: panel('species-panel') };
+    return { mode: stack.dataset.layoutMode, focusClass: stack.classList.contains('layout-focus'), cleanView: document.body.classList.contains('ui-clean-view'), recording: document.body.classList.contains('recording-mode'), data: panel('data-panel'), scene: panel('scene-panel'), species: panel('species-panel') };
   });
-  // Presses a key, waits for a visibility transition on a stack panel to end (3 s at most, reported), then for the lane's next frames.
-  const afterKey = async (key) => {
-    const ended = page.evaluate(() => new Promise((resolve) => {
-      const stack = document.getElementById('left-panel-stack');
-      const finish = (how) => { stack.removeEventListener('transitionend', onEnd); resolve(how); };
-      const onEnd = (event) => { if (event.propertyName === 'visibility' && event.target.parentElement === stack) finish('transitionend'); };
-      stack.addEventListener('transitionend', onEnd);
-      setTimeout(() => finish('no visibility transition in 3 s'), 3000);
-    }));
-    await page.keyboard.press(key);
-    const how = await ended;
+  const pressKey = (key) => () => page.keyboard.press(key);
+  const setRecording = (on) => () => page.evaluate((on) => window.__godsEyeView.styleManager.setRecordingMode(on), on);
+  // Runs one step with the lane sampled from before it, then reads the settled state. A missing expected transition throws.
+  const step = async (label, act, { transition }) => {
+    const sampling = page.evaluate((expect) => window.__qaSampleLane(expect), transition);
+    await act();
+    const sampled = await sampling;
+    if (transition && sampled.ended === null) throw new Error(`left-stack: no visibility transition on a stack panel within 3 s after ${label}`);
     await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await sleep(800);
-    return how;
+    const settled = await stackState();
+    const visible = sampled.frames.filter((frame) => frame.visibility === 'visible' && frame.opacity > 0);
+    return { label, ended: sampled.ended, frames: sampled.frames.length, firstVisible: visible[0] ?? null, visibleFrames: visible, settled };
   };
   await page.evaluate(() => {
     document.activeElement?.blur?.();
-    if (document.body.classList.contains('ui-clean-view')) window.__godsEyeView.styleManager.toggleCleanView(false);
+    const sm = window.__godsEyeView.styleManager;
+    if (document.body.classList.contains('recording-mode')) sm.setRecordingMode(false);
+    if (document.body.classList.contains('ui-clean-view')) sm.toggleCleanView(false);
     for (const id of ['scene-panel', 'species-panel', 'cctv-panel']) {
       const panel = document.getElementById(id);
       if (panel && !panel.classList.contains('collapsed')) panel.querySelector(`[data-collapse-target="${id}"]`)?.click();
@@ -356,32 +389,66 @@ if (CHECKS.has('left-stack')) {
     if (data.classList.contains('collapsed')) data.querySelector('[data-collapse-target="data-panel"]').click();
   });
   await sleep(1500);
-  const shownBy = (await page.evaluate(() => document.getElementById('data-panel').classList.contains('active'))) ? 'already active' : await afterKey('f');
+  const setup = (await page.evaluate(() => document.getElementById('data-panel').classList.contains('active'))) ? null : await step('F to show the panel before the check', pressKey('f'), { transition: true });
   const shown = await stackState();
-  const hiddenBy = await afterKey('f');
-  const hidden = await stackState();
+  const hideF = await step('F hide', pressKey('f'), { transition: true });
   await shot('left-stack-f-hidden');
-  const cleanOnBy = await afterKey('v');
-  const cleanOn = await stackState();
-  const cleanOffBy = await afterKey('v');
-  const cleanOff = await stackState();
-  const reshownBy = await afterKey('f');
-  const reshown = await stackState();
+  const cleanOnHidden = await step('clean view on from F-hidden', pressKey('v'), { transition: false });
+  const cleanOffHidden = await step('clean view off to F-hidden', pressKey('v'), { transition: false });
+  const showF = await step('F show', pressKey('f'), { transition: true });
+  const cleanOnVisible = await step('clean view on from shown', pressKey('v'), { transition: true });
+  const cleanOffVisible = await step('clean view off to shown', pressKey('v'), { transition: true });
+  const recordingOn = await step('recording mode on from shown', setRecording(true), { transition: true });
+  const recordingOff = await step('recording mode off to shown', setRecording(false), { transition: true });
+  // A frame part-way through the F show fade, for the critic: F hides, then F shows and the page is captured two frames later; the data
+  // panel's opacity and height are read just before and after the capture.
+  await step('F hide before the mid-fade shot', pressKey('f'), { transition: true });
+  const midFadeRead = () => page.evaluate(() => { const data = document.getElementById('data-panel'); const cs = getComputedStyle(data); return { visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: document.getElementById('left-panel-stack').dataset.layoutMode }; });
+  await page.keyboard.press('f');
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const midFadeBefore = await midFadeRead();
+  await shot('left-stack-f-show-midfade');
+  const midFadeAfter = await midFadeRead();
+  await sleep(1500);
+  const final = await stackState();
   // Back to the state before the check.
-  if (reshown.data.active !== initial.active) await afterKey('f');
+  if (final.data.active !== initial.active) await step('F back to the initial state', pressKey('f'), { transition: true });
   await page.evaluate((initial) => {
+    const sm = window.__godsEyeView.styleManager;
     const data = document.getElementById('data-panel');
     if (data.classList.contains('collapsed') !== initial.collapsed) data.querySelector('[data-collapse-target="data-panel"]').click();
     for (const id of initial.open) { const panel = document.getElementById(id); if (panel?.classList.contains('collapsed')) panel.querySelector(`[data-collapse-target="${id}"]`)?.click(); }
-    if (initial.cleanView) window.__godsEyeView.styleManager.toggleCleanView(true);
+    if (initial.cleanView) sm.toggleCleanView(true);
+    if (initial.recording) sm.setRecordingMode(true);
   }, initial);
   await sleep(1000);
-  const pillShown = (panel) => panel.collapsed && panel.display !== 'none' && panel.visibility === 'visible' && panel.height > 0 && panel.ariaHidden === null;
+  const laidOut = (panel) => panel.collapsed && panel.display !== 'none' && panel.height > 0 && panel.ariaHidden === null;
+  const pillShown = (panel) => laidOut(panel) && panel.visibility === 'visible';
   const shownOk = shown.data.active && !shown.data.collapsed && shown.data.visibility === 'visible' && shown.mode === 'focus';
-  const hiddenOk = !hidden.data.active && hidden.data.visibility === 'hidden' && hidden.mode !== 'focus' && !hidden.focusClass && pillShown(hidden.scene) && pillShown(hidden.species);
-  const cleanOk = cleanOn.cleanView && !cleanOff.cleanView && cleanOff.mode === hidden.mode && pillShown(cleanOff.scene) && pillShown(cleanOff.species);
-  const reshownOk = reshown.data.active && reshown.data.visibility === 'visible' && reshown.mode === shown.mode;
-  report('left-stack', shownOk && hiddenOk && cleanOk && reshownOk, { initial, shownBy, shown, hiddenBy, hidden, cleanOnBy, cleanOn, cleanOffBy, cleanOff, reshownBy, reshown, shownOk, hiddenOk, cleanOk, reshownOk });
+  // A hiding step: the panel stays at its height while it can be seen, and the lane settles out of focus mode with the pills laid out.
+  const hideOk = (result) => result.visibleFrames.every((frame) => frame.height >= 100) && result.settled.data.visibility === 'hidden' && result.settled.mode !== 'focus' && !result.settled.focusClass && laidOut(result.settled.scene) && laidOut(result.settled.species);
+  // A showing step: every frame where the panel can be seen is already in the shown mode, at 100 px or more, with both pills out of layout.
+  const showOk = (result) => result.firstVisible !== null && result.visibleFrames.every((frame) => frame.mode === shown.mode && frame.height >= 100 && frame.scene.display === 'none' && frame.species.display === 'none') && result.settled.data.visibility === 'visible' && result.settled.mode === shown.mode;
+  const checks = {
+    shownOk,
+    hideFOk: hideOk(hideF) && pillShown(hideF.settled.scene) && pillShown(hideF.settled.species),
+    cleanFromHiddenOk: cleanOnHidden.settled.cleanView && !cleanOffHidden.settled.cleanView && cleanOnHidden.settled.mode === hideF.settled.mode && cleanOffHidden.settled.mode === hideF.settled.mode && pillShown(cleanOffHidden.settled.scene) && pillShown(cleanOffHidden.settled.species),
+    showFOk: showOk(showF),
+    cleanOnVisibleOk: cleanOnVisible.settled.cleanView && hideOk(cleanOnVisible),
+    cleanOffVisibleOk: !cleanOffVisible.settled.cleanView && showOk(cleanOffVisible),
+    recordingOnOk: recordingOn.settled.recording && hideOk(recordingOn),
+    recordingOffOk: !recordingOff.settled.recording && showOk(recordingOff),
+  };
+  // The report keeps each step's first visible frame and every frame that breaks its rule, not the whole timeline.
+  const summarize = (result, rule) => ({ label: result.label, ended: result.ended, frames: result.frames, firstVisible: result.firstVisible, broken: result.visibleFrames.filter((frame) => !rule(frame)).slice(0, 5), settled: { mode: result.settled.mode, data: result.settled.data, scene: result.settled.scene, species: result.settled.species } });
+  const showRule = (frame) => frame.mode === shown.mode && frame.height >= 100 && frame.scene.display === 'none' && frame.species.display === 'none';
+  const hideRule = (frame) => frame.height >= 100;
+  report('left-stack', Object.values(checks).every(Boolean), {
+    initial, setup: setup && setup.label, shown,
+    steps: [summarize(hideF, hideRule), summarize(cleanOnHidden, hideRule), summarize(cleanOffHidden, hideRule), summarize(showF, showRule), summarize(cleanOnVisible, hideRule), summarize(cleanOffVisible, showRule), summarize(recordingOn, hideRule), summarize(recordingOff, showRule)],
+    midFade: { before: midFadeBefore, after: midFadeAfter }, final: { mode: final.mode, data: final.data },
+    ...checks,
+  });
 }
 
 if (CHECKS.has('card')) {
