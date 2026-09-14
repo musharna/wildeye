@@ -283,6 +283,10 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
     assert.ok(tag.includes('role="group"') && tag.includes(`aria-labelledby="${group}-label"`), `${group} is a group named by its visible label: ${tag}`);
     assert.equal(tag.includes('aria-label='), false, `${group} takes its name from the visible label only: ${tag}`);
   }
+  // R-7s: the row labels (Find a species, Years, What lives here radius) measured 4.00 to 4.55:1 in the shared 0.5 white, so they use the
+  // chips' 0.8 white.
+  assert.match(css, /\.species-label \{[^}]*color: rgba\(232, 234, 237, 0\.8\);/);
+  assert.doesNotMatch(css, /\.species-label \{[^}]*var\(--text-secondary\)/);
   assert.match(css, /#left-panel-stack > #species-panel \{[^}]*order: 5;/);
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);
