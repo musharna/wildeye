@@ -5,7 +5,8 @@ import { EARTH_RADIUS_KM, gbifPortalAnyLocationUrl, gbifPortalUrl, polygonRefusa
  * "What lives here" (spec: docs/superpowers/specs/2026-09-13-species-search-design.md). The SPECIES panel
  * arms a one-shot click. A click on the ground lists the 20 species with the most CC0 and CC BY GBIF records
  * within the chosen radius. A click on a marker is left to the normal click; a click on the sky stays armed. The searched
- * circle is outlined on the ground, not pickable, while the card shows that search's status or list: the outline goes when the card
+ * circle is outlined on the ground with a small cross at the clicked point, neither pickable, while the card shows that search's
+ * status or list: the outline goes when the card
  * stops showing it for any reason (closed, dismissed, or replaced by a marker's details), when WHAT LIVES HERE is armed again, and
  * when another search replaces it.
  */
@@ -40,14 +41,26 @@ export function circleOutline({ lat, lon, radiusKm, vertices = 64 }) {
   return points;
 }
 
-/** The searched circle as a thin ground outline in the accent colour. allowPicking: false, so clicks on it reach the globe and markers. */
+/** Arm length of the centre mark, as a fraction of the search radius. */
+export const CENTRE_MARK_FRACTION = 0.08;
+
+/** The centre mark: a north–south and an east–west arm through the clicked point, each end CENTRE_MARK_FRACTION of the radius away. */
+export function centreMark({ lat, lon, radiusKm }) {
+  const [north, east, south, west] = circleOutline({ lat, lon, radiusKm: radiusKm * CENTRE_MARK_FRACTION, vertices: 4 });
+  return [[north, south], [east, west]];
+}
+
+/**
+ * The searched circle as a thin ground outline in the accent colour, with the centre mark. One primitive, so both share a lifecycle, and
+ * allowPicking: false, so clicks on them reach the globe and markers.
+ */
 export function areaOutlinePrimitive({ lat, lon, radiusKm }) {
-  const positions = Cesium.Cartesian3.fromDegreesArray(circleOutline({ lat, lon, radiusKm }).flatMap((p) => [p.lon, p.lat]));
+  const line = (points, loop) => new Cesium.GeometryInstance({
+    geometry: new Cesium.GroundPolylineGeometry({ positions: Cesium.Cartesian3.fromDegreesArray(points.flatMap((p) => [p.lon, p.lat])), loop, width: 2 }),
+    attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.fromCssColorString(OUTLINE_COLOR)) },
+  });
   const primitive = new Cesium.GroundPolylinePrimitive({
-    geometryInstances: new Cesium.GeometryInstance({
-      geometry: new Cesium.GroundPolylineGeometry({ positions, loop: true, width: 2 }),
-      attributes: { color: Cesium.ColorGeometryInstanceAttribute.fromColor(Cesium.Color.fromCssColorString(OUTLINE_COLOR)) },
-    }),
+    geometryInstances: [line(circleOutline({ lat, lon, radiusKm }), true), ...centreMark({ lat, lon, radiusKm }).map((arm) => line(arm, false))],
     appearance: new Cesium.PolylineColorAppearance(),
     allowPicking: false,
   });
@@ -104,7 +117,13 @@ export function createWhatLivesHere({
     const { signal } = controller;
     const { years, radiusKm } = getParams();
     removeArea();
-    area = drawArea({ lat, lon, radiusKm });
+    try {
+      area = drawArea({ lat, lon, radiusKm });
+    } catch (error) {
+      // The outline is a visual aid: a failure to draw it is logged with its context, and the search goes on without it.
+      console.error('[what-lives-here] could not outline the searched circle', { lat, lon, radiusKm, error });
+      area = null;
+    }
     card.showStatus({ heading: HEADING, message: `Searching GBIF within ${radiusKm} km…` });
     try {
       const near = await client.speciesNear({ lat, lon, radiusKm, years }, { signal });

@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { AREA_OUTLINE_ROLE, areaOutlinePrimitive, circleOutline, classifyClick, createWhatLivesHere, HEADING } from './whatLivesHere.js';
+import { AREA_OUTLINE_ROLE, areaOutlinePrimitive, CENTRE_MARK_FRACTION, centreMark, circleOutline, classifyClick, createWhatLivesHere, HEADING } from './whatLivesHere.js';
 import { createBioClient } from './gbif.js';
 import { createDetailsCard } from './detailsCard.js';
 
@@ -502,6 +502,64 @@ test('arming again removes the previous outline (fake card)', async () => {
   assert.deepEqual(r.areas.cleared, [r.areas.drawn[0]]);
 });
 
+test('a failure drawing the outline is logged with its context and does not stop the search', async () => {
+  const r = rig({ drawArea: () => { throw new Error('WebGL context lost'); } });
+  r.controller.arm();
+  const logged = await captureConsoleError(() => r.controller.handleClick(CLICK));
+  assert.equal(r.calls.near.length, 1, 'the search was sent');
+  assert.equal(r.calls.list.length, 1, 'and its list shows');
+  assert.equal(logged.length, 1, 'one console.error');
+  const [label, context] = logged[0];
+  assert.match(label, /could not outline the searched circle/);
+  assert.ok(Math.abs(context.lat - 44.46) < 1e-6 && Math.abs(context.lon + 110.83) < 1e-6, 'logs the point');
+  assert.equal(context.radiusKm, 10);
+  assert.equal(context.error.message, 'WebGL context lost');
+  r.controller.cancel();
+  assert.deepEqual(r.areas.cleared, [], 'nothing was drawn, so nothing is removed');
+});
+
+test('where ground polylines are unsupported the default outline logs why and draws nothing; the search still lists', async () => {
+  const r = rig({ defaultArea: true, depthTexture: false });
+  r.controller.arm();
+  const logged = await captureConsoleError(() => r.controller.handleClick(CLICK));
+  assert.equal(r.groundPrimitives.items.length, 0, 'nothing drawn');
+  assert.equal(logged.length, 1, 'one console.error');
+  assert.match(logged[0][0], /ground polylines need WEBGL_depth_texture/);
+  assert.ok(Math.abs(logged[0][1].area.lat - 44.46) < 1e-6 && logged[0][1].area.radiusKm === 10, 'logs the area');
+  assert.equal(r.calls.list.length, 1, 'the list still shows');
+  r.controller.cancel();
+  assert.equal(r.groundPrimitives.items.length, 0);
+  await withLineWidthLimits(async () => {
+    const supported = rig({ defaultArea: true });
+    supported.controller.arm();
+    await supported.controller.handleClick(CLICK);
+    assert.equal(supported.groundPrimitives.items.length, 1, 'positive control: with WEBGL_depth_texture the same rig draws the outline');
+  });
+});
+
+test('centreMark: two crossing arms through the clicked point, each end on a circle of CENTRE_MARK_FRACTION of the radius', () => {
+  const R = 6371.0088;
+  const rad = Math.PI / 180;
+  const haversineKm = (a, b) => {
+    const h = Math.sin(((b.lat - a.lat) * rad) / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(((b.lon - a.lon) * rad) / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  assert.ok(CENTRE_MARK_FRACTION > 0 && CENTRE_MARK_FRACTION < 0.25, 'a small mark inside the circle');
+  for (const [lat, lon, radiusKm] of [[44.46, -110.83, 10], [89.9, 0, 50], [-16.5, 179.99, 50], [0, -180, 1]]) {
+    const where = `${lat},${lon} ${radiusKm} km`;
+    const centre = { lat, lon };
+    const arm = radiusKm * CENTRE_MARK_FRACTION;
+    const arms = centreMark({ lat, lon, radiusKm });
+    assert.equal(arms.length, 2, where);
+    for (const [a, b] of arms) {
+      assert.ok(Math.abs(haversineKm(centre, a) / arm - 1) < 1e-6 && Math.abs(haversineKm(centre, b) / arm - 1) < 1e-6, `${where}: both ends on the mark circle`);
+      assert.ok(Math.abs(haversineKm(a, b) / (2 * arm) - 1) < 1e-6, `${where}: the arm passes through the clicked point`);
+    }
+    const [[north], [east]] = arms;
+    assert.ok(Math.abs(haversineKm(north, east) / (Math.SQRT2 * arm) - 1) < 1e-3, `${where}: the arms cross at right angles`);
+  }
+});
+
 test('a Retry replaces the failed search outline with its own', async () => {
   let attempts = 0;
   const r = rig({ speciesNear: async () => { attempts += 1; if (attempts === 1) throw new Error('HTTP 503'); return { total: 2, species: [{ key: 5232437, count: 2 }] }; } });
@@ -552,7 +610,9 @@ test('the default outline is a ground polyline loop that cannot be picked, added
   assert.ok(primitive instanceof Cesium.GroundPolylinePrimitive);
   assert.equal(primitive.allowPicking, false, 'clicks on or near the outline fall through to the globe and markers');
   assert.equal(primitive.wildeyeRole, AREA_OUTLINE_ROLE);
-  assert.equal(primitive.geometryInstances.geometry.loop, true);
+  // one primitive, so the centre mark shares the outline's lifecycle and its allowPicking: false
+  assert.equal(primitive.geometryInstances.length, 3, 'the circle and the two arms of the centre mark');
+  assert.deepEqual(primitive.geometryInstances.map((instance) => instance.geometry.loop), [true, false, false]);
 
   const r = rig({ defaultArea: true });
   r.controller.arm();
