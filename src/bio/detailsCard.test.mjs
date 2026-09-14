@@ -237,3 +237,31 @@ test('onListEnd fires once whenever list or status content stops showing, and ne
   assert.equal(card.mode, 'list');
   assert.equal(ended.length, 4, 'status replacing details is not a list end');
 });
+
+// The owner's onListEnd runs inside the card's own state changes, so a throw there is logged under its own label: it cannot skip
+// onDismiss (dismiss path) or be reported as a failure to render details (detail path).
+test('a throwing onListEnd is logged under its own label, and dismiss still reaches onDismiss and details still show', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const dismissed = [];
+  const card = createDetailsCard({ viewer, doc, sanitize: (html) => html, onDismiss: () => dismissed.push(card.element.hidden), onListEnd: () => { throw new Error('outline already removed'); } });
+  const list = { heading: 'What lives here', filterLine: 'CC0 and CC BY records', entries: [], footer: 'GBIF.org', footerHref: 'https://www.gbif.org/', onRow: () => {} };
+  const logged = [];
+  const thrown = [];
+  const originalError = console.error;
+  console.error = (...args) => { logged.push(args); };
+  try {
+    card.showStatus({ heading: 'What lives here', message: 'Searching GBIF within 10 km…' });
+    try { doc.listeners.keydown({ key: 'Escape' }); } catch (error) { thrown.push(error.message); }
+    card.showList(list);
+    try { viewer.selectedEntity = entityIn('occurrences', '<b>Blue whale</b>'); } catch (error) { thrown.push(error.message); }
+  } finally {
+    console.error = originalError;
+  }
+  assert.deepEqual(thrown, [], 'nothing escapes the card');
+  assert.deepEqual(dismissed, [true], 'Escape still calls onDismiss once, after the card is hidden');
+  assert.equal(card.mode, 'detail', "the marker's details replace the list");
+  assert.equal(card.element.hidden, false, 'and show');
+  assert.deepEqual(logged.map(([label]) => label), ['[bio-card] onListEnd failed', '[bio-card] onListEnd failed']);
+  assert.deepEqual(logged.map(([, context]) => [context.from, context.to, context.error.message]), [['list', null, 'outline already removed'], ['list', 'detail', 'outline already removed']]);
+});

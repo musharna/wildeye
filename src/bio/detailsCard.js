@@ -107,10 +107,17 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   let mode = null;
   // The owner is told (onListEnd), after the change, whenever list or status content stops showing for any reason: the card
   // is closed or dismissed, or a marker's details replace it. "What lives here" keeps its outline exactly that long (R-7e).
+  // The owner's handler runs inside the card's own state change, so its failure is logged here under its own label: a dismiss still
+  // reaches onDismiss, and a marker's details are not reported as a render failure.
   const setMode = (next) => {
-    const endsList = mode === 'list' && next !== 'list';
+    const from = mode;
     mode = next;
-    if (endsList) onListEnd();
+    if (from !== 'list' || next === 'list') return;
+    try {
+      onListEnd();
+    } catch (error) {
+      console.error('[bio-card] onListEnd failed', { from, to: next, error });
+    }
   };
 
   const reset = (heading) => {
