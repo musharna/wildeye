@@ -18,18 +18,21 @@ function fakeElement() {
   };
 }
 
-const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-datasets', 'species-years', 'species-radius', 'species-what-lives-here'];
+const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-datasets', 'species-datasets-status', 'species-datasets-content', 'species-years', 'species-radius', 'species-what-lives-here'];
 const INAT_RG = '50c9509d-22c7-4a22-a47d-8c48425ef4a7';
 const OTHER_DATASET = '6ac3f774-d9fb-4796-b3e9-92bf6c81c084';
 const settle = async (turns = 20) => { for (let i = 0; i < turns; i += 1) await new Promise((resolve) => setImmediate(resolve)); };
 const MONARCH = { gbifKey: 5133088, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' };
 const yearsChip = (years) => ({ target: { closest: () => ({ dataset: { years } }) } });
-// The rows under "Top datasets": [link href, link text, count, note or null].
-const datasetRowsIn = (box) => box.children[0].children[1].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
+// The rows under "Top datasets" in the block's content element: [link href, link text, count, note or null].
+const datasetRowsIn = (content) => content.children[0].children[1].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
 
 function panelRig({ match = async () => 5133088, suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
-  const doc = { getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag }) };
+  const doc = { activeElement: null, getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag, focus() { doc.activeElement = this; } }) };
+  for (const node of Object.values(els)) node.focus = () => { doc.activeElement = node; };
+  // I-2: the block holds a polite live region that exists before any message; replacing the block's children would remove it.
+  els['species-datasets'].replaceChildren = () => { throw new Error('#species-datasets.replaceChildren would remove its live region'); };
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
   let enabled = initiallyEnabled;
   const calls = { params: [], enable: [], match: [], taxonDatasets: [], dataset: [] };
@@ -58,7 +61,7 @@ function panelRig({ match = async () => 5133088, suggest = async () => ({ source
   };
   const whatLivesHere = { armed: false, arm() {}, disarm() {} };
   const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer: () => {} });
-  return { panel, els, calls };
+  return { panel, els, calls, doc };
 }
 
 test('choosing an iNaturalist suggestion matches it in GBIF, sets the taxon and turns the map on', async () => {
@@ -181,19 +184,20 @@ test('the colour legend shows only while the map of a chosen species is on', asy
 test('the panel lists the top datasets of the mapped taxon with a gbif.org link to its records, and hides them with the legend', async () => {
   const { panel, els, calls } = panelRig();
   const box = els['species-datasets'];
+  const content = els['species-datasets-content'];
   assert.equal(box.hidden, true, 'no species chosen');
   await panel.choose(MONARCH);
   await settle();
   assert.deepEqual(calls.taxonDatasets.map((c) => c.args), [{ taxonKey: 5133088, years: 'recent' }]);
   assert.deepEqual(calls.dataset, [INAT_RG, OTHER_DATASET], 'each listed dataset is looked up, in facet order');
   assert.equal(box.hidden, false);
-  assert.deepEqual(box.children.map((child) => [child.tag, child.className]), [['div', 'dataset-list'], ['a', 'species-datasets-link']]);
-  assert.equal(box.children[0].children[0].textContent, 'Top datasets for this species', 'S3: the panel names whose datasets these are');
-  assert.deepEqual(datasetRowsIn(box), [
+  assert.deepEqual(content.children.map((child) => [child.tag, child.className]), [['div', 'dataset-list'], ['a', 'species-datasets-link']]);
+  assert.equal(content.children[0].children[0].textContent, 'Top datasets for this species', 'S3: the panel names whose datasets these are');
+  assert.deepEqual(datasetRowsIn(content), [
     ['https://doi.org/10.15468/ab3s5x', 'iNaturalist Research-grade Observations', '41,111', null],
     [`https://www.gbif.org/dataset/${OTHER_DATASET}`, 'Dataset without a DOI', '306', null],
   ]);
-  const link = box.children[1];
+  const link = content.children[1];
   assert.deepEqual([link.href, link.target, link.rel, link.textContent], [gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'recent' }), '_blank', 'noopener noreferrer', `All ${yearLabel('recent')} CC0/CC BY records on GBIF.org`]);
   panel.render();
   await settle();
@@ -209,7 +213,7 @@ test('new years or a new taxon abort the stale dataset search, and its late answ
   // A client that answers even after its signal aborted: the panel itself must drop the stale answer.
   const pending = [];
   const { panel, els } = panelRig({ taxonDatasets: (args, { signal }) => new Promise((resolve) => { pending.push({ args, signal, resolve }); }) });
-  const box = els['species-datasets'];
+  const box = els['species-datasets-content'];
   await panel.choose(MONARCH);
   await settle();
   assert.deepEqual(pending.map((p) => p.args), [{ taxonKey: 5133088, years: 'recent' }]);
@@ -241,36 +245,43 @@ test('a failed dataset search shows in the datasets block with Retry, survives a
   const original = console.error;
   console.error = (...args) => { logged.push(args); };
   try {
-    const { panel, els, calls } = panelRig({ taxonDatasets: async (args) => { await settle(2); const next = answers.shift(); if (next instanceof Error) throw next; return next; } });
+    const { panel, els, calls, doc } = panelRig({ taxonDatasets: async (args) => { await settle(2); const next = answers.shift(); if (next instanceof Error) throw next; return next; } });
     const box = els['species-datasets'];
+    const content = els['species-datasets-content'];
+    // I-2: the failure is written into the block's own polite live region (#species-datasets-status, in index.html from page load), so a
+    // screen reader announces it; Retry sits in the content.
+    const announced = els['species-datasets-status'];
     const failureIn = (node) => node.children.find((child) => child.className === 'species-datasets-error') ?? null;
     answers.push(new Error('HTTP 503'));
     await panel.choose(MONARCH);
     await settle();
-    const failure = failureIn(box);
-    assert.equal(failure?.children[0]?.textContent, 'GBIF dataset search failed (HTTP 503)');
-    const retry = failure.children[1];
-    assert.deepEqual([retry.tag, retry.type, retry.textContent], ['button', 'button', 'Retry']);
+    assert.equal(announced.textContent, 'GBIF dataset search failed (HTTP 503)');
+    const retry = failureIn(content)?.children.find((child) => child.tag === 'button');
+    assert.deepEqual([retry?.tag, retry?.type, retry?.textContent], ['button', 'button', 'Retry']);
     assert.equal(/failed/.test(els['species-status'].textContent), false, 'not in the shared status line');
     els['species-status'].textContent = 'iNaturalist didn\'t answer (HTTP 500); showing GBIF scientific names';
     panel.render();
     await settle();
-    assert.equal(failureIn(box)?.children[0]?.textContent, 'GBIF dataset search failed (HTTP 503)', 'a status message does not wipe it, and a render does not resend');
+    assert.equal(announced.textContent, 'GBIF dataset search failed (HTTP 503)', 'a status message does not wipe it, and a render does not resend');
     assert.equal(calls.taxonDatasets.length, 1);
     answers.push({ total: 306, datasets: [{ key: OTHER_DATASET, count: 306 }] });
+    doc.activeElement = retry;
     retry.listeners.click();
+    // I-2: Retry replaces its own button, so keyboard focus moves to the block itself (tabindex -1 in index.html), not to the page body.
+    assert.equal(doc.activeElement, box, 'focus stays in the Top datasets block after Retry');
     await settle();
     assert.equal(calls.taxonDatasets.length, 2, 'Retry sends one new search');
-    assert.equal(failureIn(box), null, 'a success clears the failure');
-    assert.deepEqual(datasetRowsIn(box).map((row) => row[1]), ['Dataset without a DOI']);
+    assert.equal(announced.textContent, '', 'a success clears the failure');
+    assert.equal(failureIn(content), null);
+    assert.deepEqual(datasetRowsIn(content).map((row) => row[1]), ['Dataset without a DOI']);
     answers.push(new Error('HTTP 429'), { total: 1, datasets: [{ key: INAT_RG, count: 1 }] });
     els['species-years'].listeners.click(yearsChip('all'));
     await settle();
-    assert.equal(failureIn(box)?.children[0]?.textContent, 'GBIF dataset search failed (HTTP 429)');
+    assert.equal(announced.textContent, 'GBIF dataset search failed (HTTP 429)');
     els['species-years'].listeners.click(yearsChip('recent'));
     await settle();
-    assert.equal(failureIn(box), null, 'a years change that succeeds shows no failure');
-    assert.equal([els['species-status'].textContent, ...box.children.map((child) => child.textContent)].some((text) => /failed/.test(text ?? '')), false, 'no failure text anywhere');
+    assert.equal(announced.textContent, '', 'a years change that succeeds shows no failure');
+    assert.equal([els['species-status'].textContent, announced.textContent, ...content.children.map((child) => child.textContent)].some((text) => /failed/.test(text ?? '')), false, 'no failure text anywhere');
     els['species-toggle'].listeners.click();
     await settle();
     assert.equal(box.hidden, true, 'the block, failure or list, hides with the legend');
@@ -289,7 +300,7 @@ test('an answer that lands after its search was superseded, while its dataset lo
     taxonDatasets: (args) => new Promise((resolve) => { searches.push({ args, resolve }); }),
     dataset: (key) => new Promise((resolve) => { lookups.push({ key, resolve }); }),
   });
-  const box = els['species-datasets'];
+  const box = els['species-datasets-content'];
   await panel.choose(MONARCH);
   await settle();
   searches[0].resolve({ total: 41111, datasets: [{ key: INAT_RG, count: 41111 }] });
@@ -306,13 +317,13 @@ test('an answer that lands after its search was superseded, while its dataset lo
 test('turning the map off while a dataset search is out aborts it and empties the hidden block', async () => {
   const searches = [];
   const { panel, els } = panelRig({ taxonDatasets: (args, { signal }) => new Promise((resolve) => { searches.push({ args, signal, resolve }); }) });
-  const box = els['species-datasets'];
+  const box = els['species-datasets-content'];
   await panel.choose(MONARCH);
   await settle();
   assert.equal(searches.length, 1);
   els['species-toggle'].listeners.click();
   await settle();
-  assert.equal(box.hidden, true);
+  assert.equal(els['species-datasets'].hidden, true);
   assert.equal(searches[0].signal.aborted, true, 'map off aborts the search in flight');
   searches[0].resolve({ total: 1, datasets: [{ key: INAT_RG, count: 1 }] });
   await settle();
@@ -327,7 +338,7 @@ test('a failed dataset lookup is a row naming its error', async () => {
     const lookup = panelRig({ dataset: async (key) => { if (key === OTHER_DATASET) throw new Error('timeout'); return { key, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }; } });
     await lookup.panel.choose(MONARCH);
     await settle();
-    assert.deepEqual(datasetRowsIn(lookup.els['species-datasets'])[1], [`https://www.gbif.org/dataset/${OTHER_DATASET}`, `GBIF dataset ${OTHER_DATASET}`, '306', 'dataset lookup failed: timeout']);
+    assert.deepEqual(datasetRowsIn(lookup.els['species-datasets-content'])[1], [`https://www.gbif.org/dataset/${OTHER_DATASET}`, `GBIF dataset ${OTHER_DATASET}`, '306', 'dataset lookup failed: timeout']);
   } finally {
     console.error = original;
   }
@@ -355,7 +366,8 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   for (const attr of ['role="switch"', 'aria-checked="false"', 'aria-label="Species map"']) assert.ok(toggleTag.includes(attr), `${attr} in ${toggleTag}`);
   assert.equal(toggleTag.includes('aria-pressed'), false, `no aria-pressed on the switch: ${toggleTag}`);
   // R-7u: the top datasets sit directly under the legend, which they hide with.
-  assert.match(panelHtml, /<div id="species-legend" class="species-legend" hidden><\/div>\s*<div id="species-datasets" class="species-datasets" hidden><\/div>/);
+  // I-2: the Top datasets block can take focus (Retry moves focus to it) and holds a polite live region from page load, then its content.
+  assert.match(panelHtml, /<div id="species-legend" class="species-legend" hidden><\/div>\s*<div id="species-datasets" class="species-datasets" tabindex="-1" hidden>\s*<p id="species-datasets-status" class="species-datasets-status" role="status" aria-live="polite"><\/p>\s*<div id="species-datasets-content" class="species-datasets-content"><\/div>\s*<\/div>/);
   const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-years-label"', 'id="species-years"', 'id="species-radius-label"', 'id="species-radius"', 'id="species-legend"', 'id="species-datasets"', 'class="species-credit"'];
   const positions = order.map((marker) => panelHtml.indexOf(marker));
   assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);

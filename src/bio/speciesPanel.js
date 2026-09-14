@@ -81,6 +81,9 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
   const toggle = el('species-toggle');
   const legend = el('species-legend');
   const datasetsBox = el('species-datasets');
+  // I-2: the block keeps a polite live region from page load (a failure written there is announced) and its replaceable content beside it.
+  const datasetsAnnounce = el('species-datasets-status');
+  const datasetsContent = el('species-datasets-content');
   const yearChips = el('species-years');
   const radiusChips = el('species-radius');
   const armButton = el('species-what-lives-here');
@@ -89,7 +92,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
   let chooseAbort = null;
   let lookingUpKey = null;
   // The top datasets block (R-7u): the taxon and years its content or its search in flight is for, that search's controller, and whether
-  // it has finished (shown, or failed into the status line).
+  // it has finished (shown, or failed into the block).
   let datasetsFor = null;
   let datasetsAbort = null;
   let datasetsSettled = false;
@@ -149,7 +152,8 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
     const loading = doc.createElement('span');
     loading.className = 'species-datasets-loading';
     loading.textContent = 'Top datasets: looking them up…';
-    datasetsBox.replaceChildren(loading);
+    datasetsAnnounce.textContent = '';
+    datasetsContent.replaceChildren(loading);
     const { signal } = controller;
     try {
       const { datasets } = await client.taxonDatasets({ taxonKey, years }, { signal });
@@ -169,23 +173,23 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
       link.textContent = years === 'all' ? 'All CC0/CC BY records on GBIF.org' : `All ${yearLabel(years)} CC0/CC BY records on GBIF.org`;
-      datasetsBox.replaceChildren(createDatasetList(doc, found, { heading: 'Top datasets for this species' }), link);
+      datasetsContent.replaceChildren(createDatasetList(doc, found, { heading: 'Top datasets for this species' }), link);
       datasetsSettled = true;
     } catch (error) {
       if (error?.name === 'AbortError' || signal.aborted) return;
       console.error('[species] dataset search failed', { taxonKey, years, error });
+      // The message goes into the live region that is already in the page, so it is announced; Retry sits in the content.
+      datasetsAnnounce.textContent = `GBIF dataset search failed (${error.message})`;
       const failure = doc.createElement('div');
       failure.className = 'species-datasets-error';
-      const message = doc.createElement('span');
-      message.textContent = `GBIF dataset search failed (${error.message})`;
       const retry = doc.createElement('button');
       retry.type = 'button';
       retry.className = 'scene-btn species-datasets-retry';
       retry.textContent = 'Retry';
-      retry.addEventListener('click', () => { datasetsFor = null; render(); });
-      failure.appendChild(message);
+      // Retry replaces its own button with the loading line, so focus first moves to the block (tabindex -1), not to the page body.
+      retry.addEventListener('click', () => { datasetsBox.focus(); datasetsFor = null; render(); });
       failure.appendChild(retry);
-      datasetsBox.replaceChildren(failure);
+      datasetsContent.replaceChildren(failure);
       datasetsSettled = true;
       datasetsFailed = true;
     }
@@ -197,7 +201,8 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
     if (!datasetsSettled) datasetsAbort?.abort();
     if (!datasetsSettled || datasetsFailed) {
       datasetsFor = null;
-      datasetsBox.replaceChildren();
+      datasetsContent.replaceChildren();
+      datasetsAnnounce.textContent = '';
     }
   }
 

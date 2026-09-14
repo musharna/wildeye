@@ -9705,6 +9705,9 @@ body.recording-mode #bio-card { display: none !important; }
 .species-datasets-loading { color: rgba(232, 234, 237, 0.8); }
 .species-datasets-link { color: var(--accent); }
 .species-datasets-error { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: #ffb86b; }
+/* The live region stays in the layout (never display: none, which would stop announcements); empty, it takes no height. */
+.species-datasets-status { margin: 0; color: #ffb86b; }
+.species-datasets-content { display: flex; flex-direction: column; gap: 4px; }
 .dataset-list { display: flex; flex-direction: column; gap: 3px; }
 .dataset-list-heading { color: rgba(232, 234, 237, 0.8); font: 9px var(--font-mono); letter-spacing: 1.2px; }
 .dataset-list-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
