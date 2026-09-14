@@ -9652,13 +9652,14 @@ body.recording-mode #bio-card { display: none !important; }
 .species-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .species-chosen[hidden] { display: none; }
 .species-chosen-name { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Hexagon colours as the globe draws them: GBIF's classic-noborder.poly classes (github.com/gbif/maps, mapnik-server
-   cartocss/classic-noborder-poly.mss: up to 10, 100, 1,000, 10,000, 100,000 and more records per hexagon) at SPECIES_ALPHA 1, seen
-   through the globe's ground atmosphere (about 0.79 x colour + (26, 28, 55) at the 12,000 km view). Fitted from 2026-09-13 captures
-   of the monarch map; the three classes present sample within CIEDE2000 0.6 of the fit (task-7-fix2-report.md, R-7f). */
-.species-legend { flex: 1 0 100%; display: flex; align-items: center; gap: 8px; color: rgba(232, 234, 237, 0.78); font-size: 11px; }
+/* The record-count legend: a caption over six swatches with their bounds. Swatch colours and labels come from SPECIES_MAP_LEGEND
+   (src/bio/gbif.js), GBIF's classic-noborder.poly classes as the globe draws them (spec: Implementation notes). */
+.species-legend { flex: 1 0 100%; display: flex; flex-direction: column; gap: 3px; color: rgba(232, 234, 237, 0.78); font-size: 11px; }
 .species-legend[hidden] { display: none; }
-.species-legend-ramp { flex: 0 0 72px; height: 8px; border-radius: 2px; background: linear-gradient(90deg, #e4e737, #e4be37, #e49637, #e46d37, #c32437, #b41c5b); }
+.species-legend-classes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; max-width: 252px; }
+.species-legend-class { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.species-legend-swatch { display: block; height: 8px; border-radius: 1px; }
+.species-legend-label { font: 10px var(--font-mono); text-align: center; white-space: nowrap; }
 .species-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 /* .scene-btn:hover paints exactly the pressed look, so a hovered chip (a resting pointer, a sticky touch hover) read as pressed:
    at 400x800 the pointer sat on ALL YEARS. Hover on an unpressed chip only lightens it; a pressed chip stays pressed under hover. */

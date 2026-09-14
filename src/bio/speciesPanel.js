@@ -1,7 +1,9 @@
 /**
  * SPECIES panel (spec: docs/superpowers/specs/2026-09-13-species-search-design.md): name search with
- * suggestions, the chosen species with a map switch and a colour legend, the "What lives here" button, and year and radius chips.
+ * suggestions, the chosen species with a map switch and a record-count legend, the "What lives here" button, and year and radius chips.
  */
+import { SPECIES_MAP_LEGEND } from './gbif.js';
+
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
 
@@ -12,6 +14,45 @@ export function suggestionText(item) {
   if (!term) return text;
   const isTerm = (name) => typeof name === 'string' && name.toLowerCase() === term.toLowerCase();
   return isTerm(item.commonName) || isTerm(item.scientificName) ? text : `${text} — matched "${term}"`;
+}
+
+const compactCount = (count) => (count >= 1000 ? `${count / 1000}k` : String(count));
+
+/** A class's label: its upper bound ("≤1k"), or "more than" the previous bound for the open top class (">100k"). */
+export function legendLabel(classes, index) {
+  const { upTo } = classes[index];
+  if (upTo !== null) return `≤${compactCount(upTo)}`;
+  if (index === 0) throw new Error('legendLabel: an open class needs a bounded class before it');
+  return `>${compactCount(classes[index - 1].upTo)}`;
+}
+
+/**
+ * The record-count legend from SPECIES_MAP_LEGEND: a caption, then one swatch per class in the colour the globe draws it (aria-hidden)
+ * with its bound as text, so the classes read out as a list labelled by the caption.
+ */
+export function renderLegendInto(container, doc, legend = SPECIES_MAP_LEGEND) {
+  const caption = doc.createElement('span');
+  caption.id = 'species-legend-caption';
+  caption.className = 'species-legend-caption';
+  caption.textContent = legend.caption;
+  const list = doc.createElement('ol');
+  list.className = 'species-legend-classes';
+  list.setAttribute('aria-labelledby', caption.id);
+  legend.classes.forEach((cls, index) => {
+    const item = doc.createElement('li');
+    item.className = 'species-legend-class';
+    const swatch = doc.createElement('span');
+    swatch.className = 'species-legend-swatch';
+    swatch.setAttribute('aria-hidden', 'true');
+    swatch.style.backgroundColor = cls.color;
+    const label = doc.createElement('span');
+    label.className = 'species-legend-label';
+    label.textContent = legendLabel(legend.classes, index);
+    item.appendChild(swatch);
+    item.appendChild(label);
+    list.appendChild(item);
+  });
+  container.replaceChildren(caption, list);
 }
 
 export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, client, whatLivesHere, setTimer = setTimeout, clearTimer = clearTimeout }) {
@@ -34,6 +75,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
   let suggestAbort = null;
   let chooseAbort = null;
   let lookingUpKey = null;
+  renderLegendInto(legend, doc);
 
   const params = () => dataManager.getLayerParams('species') || { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
 

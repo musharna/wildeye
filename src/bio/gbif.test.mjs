@@ -5,7 +5,7 @@ import {
   LICENSES, yearRange, yearLabel, densityTileTemplate, speciesNearUrl, gbifPortalUrl, parseSpeciesNear,
   inatSuggestUrl, parseInatSuggest, gbifSuggestUrl, parseGbifSuggest, gbifMatchUrl, parseGbifMatch,
   speciesUrl, parseSpeciesName, createRateLimiter, createPool, fetchJson, RequestError, createBioClient, circlePolygonWkt, RADII_KM,
-  polygonRefusal, gbifPortalAnyLocationUrl,
+  polygonRefusal, gbifPortalAnyLocationUrl, SPECIES_MAP_LEGEND,
 } from './gbif.js';
 
 const NOW = new Date('2026-09-13T12:00:00Z');
@@ -37,6 +37,25 @@ test('density tiles use the adhoc endpoint with both licence filters and the yea
   assert.equal(tile('all').searchParams.has('year'), false);
   assert.ok(densityTileTemplate({ taxonKey: 1, years: 'all', now: NOW }).includes('/{z}/{x}/{y}@1x.png?'), 'Cesium placeholders stay unencoded');
   assert.throws(() => densityTileTemplate({ taxonKey: 0, years: 'all', now: NOW }), /taxonKey/);
+});
+
+// R-7k: GBIF colours each hexagon by its absolute record count, in classes set by the tile style (github.com/gbif/maps,
+// mapnik-server/src/main/node/cartocss/<style>.mss; classic-noborder-poly.mss read 2026-09-13). The legend is those classes, so
+// the style the tiles use must have an entry here and the legend must match it: changing the style without the legend fails.
+const STYLE_CLASSES = {
+  'classic-noborder.poly': [[10, '#FFFF00'], [100, '#FFCC00'], [1000, '#FF9900'], [10000, '#FF6600'], [100000, '#D60A00'], [null, '#C2002D']],
+};
+
+test('the species map legend is the record-count classes of the style the tiles use, each in its colour as the globe draws it', () => {
+  const style = new URL(densityTileTemplate({ taxonKey: 5133088, years: 'all', now: NOW }).replace('{z}/{x}/{y}', '0/0/0')).searchParams.get('style');
+  assert.equal(SPECIES_MAP_LEGEND.style, style, 'the legend describes the style the tiles are drawn with');
+  assert.ok(Object.hasOwn(STYLE_CLASSES, style), `no class table for ${style}: read its .mss in github.com/gbif/maps, then refit the legend colours`);
+  assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.upTo, c.styleColor.toUpperCase()]), STYLE_CLASSES[style]);
+  // Fitted 2026-09-13 at the 12,000 km view: drawn = 0.794 x style colour + (25.5, 28.3, 55.0) per channel (spec, Implementation notes).
+  const drawn = (hex) => `#${[0, 1, 2].map((i) => Math.round(0.794 * parseInt(hex.slice(1 + 2 * i, 3 + 2 * i), 16) + [25.5, 28.3, 55.0][i]).toString(16).padStart(2, '0')).join('')}`;
+  assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => c.color), SPECIES_MAP_LEGEND.classes.map((c) => drawn(c.styleColor)));
+  assert.equal(SPECIES_MAP_LEGEND.caption, 'records per hexagon');
+  assert.ok(Object.isFrozen(SPECIES_MAP_LEGEND) && Object.isFrozen(SPECIES_MAP_LEGEND.classes) && SPECIES_MAP_LEGEND.classes.every(Object.isFrozen));
 });
 
 test('species near a point: a polygon around it, both licences, years, clean coordinates, top-20 species facet', () => {

@@ -96,6 +96,27 @@ export function circlePolygonWkt({ lat, lon, radiusKm, vertices = 64 }) {
 }
 
 /**
+ * The species map legend: GBIF colours each hexagon by its absolute record count, in the classes of the tile style
+ * (github.com/gbif/maps, mapnik-server/src/main/node/cartocss/classic-noborder-poly.mss). `upTo` is a class's upper bound (null: no
+ * bound), `styleColor` its colour in the style, `color` that colour as the globe draws it: fitted at the 12,000 km view as
+ * 0.794 x styleColor + (25.5, 28.3, 55.0) per channel, so it holds at that camera height, and the top class, absent from the monarch
+ * map, is predicted rather than sampled (spec: Implementation notes). densityTileTemplate uses `style`; gbif.test.mjs pins the classes
+ * to the style.
+ */
+export const SPECIES_MAP_LEGEND = Object.freeze({
+  style: 'classic-noborder.poly',
+  caption: 'records per hexagon',
+  classes: Object.freeze([
+    Object.freeze({ upTo: 10, styleColor: '#FFFF00', color: '#e4e737' }),
+    Object.freeze({ upTo: 100, styleColor: '#FFCC00', color: '#e4be37' }),
+    Object.freeze({ upTo: 1000, styleColor: '#FF9900', color: '#e49637' }),
+    Object.freeze({ upTo: 10000, styleColor: '#FF6600', color: '#e46d37' }),
+    Object.freeze({ upTo: 100000, styleColor: '#D60A00', color: '#c32437' }),
+    Object.freeze({ upTo: null, styleColor: '#C2002D', color: '#b41c5b' }),
+  ]),
+});
+
+/**
  * Cesium URL template for GBIF hexagon tiles of one taxon. `adhoc`, because `density` ignores `license=`. `srs=EPSG:3857`,
  * because `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator. `classic-noborder.poly`,
  * because its fills are opaque: with SPECIES_ALPHA 1 a hexagon's colour no longer depends on the imagery under it, so it matches
@@ -103,7 +124,7 @@ export function circlePolygonWkt({ lat, lon, radiusKm, vertices = 64 }) {
  */
 export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`densityTileTemplate: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: 'classic-noborder.poly', bin: 'hex', hexPerTile: '30', srs: 'EPSG:3857' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: SPECIES_MAP_LEGEND.style, bin: 'hex', hexPerTile: '30', srs: 'EPSG:3857' });
   appendRecordFilters(params, years, now);
   return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }

@@ -3,11 +3,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createSpeciesPanel, suggestionText } from './speciesPanel.js';
+import { SPECIES_MAP_LEGEND } from './gbif.js';
 import { DATA_CREDITS } from '../data/dataCredits.js';
 
 function fakeElement() {
   return {
-    textContent: '', hidden: false, value: '', attrs: {}, listeners: {}, children: [], dataset: {}, type: '', className: '',
+    textContent: '', hidden: false, value: '', attrs: {}, listeners: {}, children: [], dataset: {}, type: '', className: '', id: '', style: {},
     setAttribute(key, value) { this.attrs[key] = value; },
     addEventListener(type, fn) { this.listeners[type] = fn; },
     appendChild(child) { this.children.push(child); return child; },
@@ -21,7 +22,7 @@ const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 's
 
 function panelRig({ match = async () => 5133088 } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
-  const doc = { getElementById: (id) => els[id] || null, createElement: () => fakeElement() };
+  const doc = { getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag }) };
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
   let enabled = false;
   const calls = { params: [], enable: [], match: [] };
@@ -87,6 +88,28 @@ test('suggestion text names the matched term only when it differs from the commo
   assert.deepEqual(cases.map(([item]) => suggestionText(item)), cases.map(([, text]) => text));
 });
 
+// R-7k: GBIF colours hexagons by absolute record counts, so the legend names each class: a swatch in the colour the globe draws it
+// (aria-hidden) with its upper bound as text, under a caption. All of it comes from SPECIES_MAP_LEGEND, which gbif.test.mjs pins to
+// the tile style.
+test('the legend shows each GBIF record-count class as a swatch in its drawn colour with its upper bound as text', () => {
+  const { els } = panelRig();
+  const legend = els['species-legend'];
+  assert.equal(legend.children.length, 2, 'a caption and the class list');
+  const [caption, list] = legend.children;
+  assert.equal(caption.textContent, 'records per hexagon');
+  assert.ok(caption.id, 'the caption has an id');
+  assert.equal(list.tag, 'ol');
+  assert.equal(list.attrs['aria-labelledby'], caption.id, 'the caption labels the list');
+  assert.equal(list.children.length, 6);
+  const part = (item, className) => item.children.find((child) => child.className === className);
+  const swatches = list.children.map((item) => part(item, 'species-legend-swatch'));
+  const labels = list.children.map((item) => part(item, 'species-legend-label'));
+  assert.deepEqual(swatches.map((swatch) => swatch.style.backgroundColor), SPECIES_MAP_LEGEND.classes.map((c) => c.color));
+  assert.ok(swatches.every((swatch) => swatch.attrs['aria-hidden'] === 'true' && swatch.textContent === ''), 'swatches are decoration only');
+  assert.deepEqual(labels.map((label) => label.textContent), ['≤10', '≤100', '≤1k', '≤10k', '≤100k', '>100k']);
+  assert.ok(labels.every((label) => label.attrs['aria-hidden'] === undefined), 'the labels are read out');
+});
+
 test('the colour legend shows only while the map is on', async () => {
   const { panel, els } = panelRig();
   assert.equal(els['species-legend'].hidden, true, 'no species chosen, map off');
@@ -112,7 +135,8 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // The action sits directly after the chosen-species block (its legend inside it), before the chips, so a squeezed
   // panel still shows it; the credit line is last.
   const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
-  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<div id="species-legend"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"/);
+  // The legend's content is rendered from SPECIES_MAP_LEGEND (speciesPanel.js), so the markup holds an empty container.
+  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<div id="species-legend" class="species-legend" hidden><\/div>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"/);
   const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-legend"', 'id="species-what-lives-here"', 'id="species-years"', 'id="species-radius"', 'class="species-credit"'];
   const positions = order.map((marker) => panelHtml.indexOf(marker));
   assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);
@@ -122,8 +146,9 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);
   assert.match(css, /\.species-suggestions\[hidden\] \{ display: none; \}/);
-  // R-7f: the legend ramp is the classic-noborder.poly classes as the globe draws them (fitted, see the CSS comment)
-  assert.match(css, /\.species-legend-ramp \{[^}]*linear-gradient\(90deg, #e4e737, #e4be37, #e49637, #e46d37, #c32437, #b41c5b\)/);
+  // R-7k: the swatch colours come from SPECIES_MAP_LEGEND, so no legend colour is written in the CSS.
+  assert.doesNotMatch(css, /\.species-legend-ramp|#e4e737|#b41c5b/i);
+  assert.match(css, /\.species-legend-swatch \{[^}]*height: \d+px;/);
   assert.match(main, /dataManager\.register\(speciesLayer\);/);
   assert.match(main, /createDetailsCard\(\{/);
   assert.match(main, /createDetailsCard\(\{[^\n]*onDismiss: \(\) => whatLivesHere\?\.cancel\(\), onListEnd: \(\) => whatLivesHere\?\.listEnded\(\) \}\)/, 'the card ends the what-lives-here outline');
