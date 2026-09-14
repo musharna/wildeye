@@ -6,7 +6,7 @@ import {
   inatSuggestUrl, parseInatSuggest, gbifSuggestUrl, parseGbifSuggest, gbifMatchUrl, parseGbifMatch,
   speciesUrl, parseSpeciesName, createRateLimiter, createPool, fetchJson, RequestError, createBioClient, circlePolygonWkt, RADII_KM,
   polygonRefusal, gbifPortalAnyLocationUrl, SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX,
-  datasetUrl, parseDataset, datasetHref, taxonDatasetsUrl, parseTaxonDatasets, gbifPortalTaxonUrl,
+  datasetUrl, parseDataset, datasetHref, taxonDatasetsUrl, parseTaxonDatasets, gbifPortalTaxonUrl, GBIF_BACKBONE_CHECKLIST_KEY, SEARCH_POLYGON_VERTICES,
 } from './gbif.js';
 
 const NOW = new Date('2026-09-13T12:00:00Z');
@@ -125,7 +125,9 @@ test('the gbif.org link carries the search geometry byte for byte, both licences
   assert.equal(new URL(gbifPortalUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'all', now: NOW })).searchParams.has('year'), false);
 });
 
-test('circlePolygonWkt: a closed counter-clockwise ring of 64 vertices on the circle, 5 decimals; no pole, no antimeridian', () => {
+test('circlePolygonWkt: a closed counter-clockwise ring of SEARCH_POLYGON_VERTICES (32) vertices on the circle, 5 decimals; no pole, no antimeridian', () => {
+  // One vertex count for the search, its gbif.org link and the outline: gbif.org failed a 64-vertex link in a real browser (next test).
+  assert.equal(SEARCH_POLYGON_VERTICES, 32);
   const R = 6371.0088;
   const rad = Math.PI / 180;
   const haversineKm = ([lon1, lat1], [lon2, lat2]) => {
@@ -147,12 +149,12 @@ test('circlePolygonWkt: a closed counter-clockwise ring of 64 vertices on the ci
     for (const radiusKm of RADII_KM) {
       const where = `${lat},${lon} ${radiusKm} km`;
       const points = ring(circlePolygonWkt({ lat, lon, radiusKm }));
-      assert.equal(points.length, 65, where);
-      assert.deepEqual(points[64], points[0], `${where}: closed`);
-      const worst = Math.max(...points.slice(0, 64).map((p) => Math.abs(haversineKm([lon, lat], p) / radiusKm - 1)));
+      assert.equal(points.length, SEARCH_POLYGON_VERTICES + 1, where);
+      assert.deepEqual(points[SEARCH_POLYGON_VERTICES], points[0], `${where}: closed`);
+      const worst = Math.max(...points.slice(0, SEARCH_POLYGON_VERTICES).map((p) => Math.abs(haversineKm([lon, lat], p) / radiusKm - 1)));
       assert.ok(worst <= 0.005, `${where}: a vertex is ${(worst * 100).toFixed(3)}% off the radius`);
       let twiceArea = 0; // shoelace in lon/lat, centred on the point
-      for (let i = 0; i < 64; i += 1) twiceArea += (points[i][0] - lon) * (points[i + 1][1] - lat) - (points[i + 1][0] - lon) * (points[i][1] - lat);
+      for (let i = 0; i < SEARCH_POLYGON_VERTICES; i += 1) twiceArea += (points[i][0] - lon) * (points[i + 1][1] - lat) - (points[i + 1][0] - lon) * (points[i][1] - lat);
       assert.ok(twiceArea > 0, `${where}: counter-clockwise`);
     }
   }
@@ -171,11 +173,29 @@ test('circlePolygonWkt: a closed counter-clockwise ring of 64 vertices on the ci
   assert.throws(() => circlePolygonWkt({ lat: 0, lon: 179.9, radiusKm: 50 }), /antimeridian/);
   assert.throws(() => circlePolygonWkt({ lat: 60, lon: -179.5, radiusKm: 50 }), /antimeridian/);
   assert.match(polygonRefusal({ lat: 60, lon: -179.5, radiusKm: 50 }) ?? '', /antimeridian/);
-  assert.equal(ring(circlePolygonWkt({ lat: 0, lon: 179.5, radiusKm: 50 })).length, 65);
+  assert.equal(ring(circlePolygonWkt({ lat: 0, lon: 179.5, radiusKm: 50 })).length, SEARCH_POLYGON_VERTICES + 1);
   assert.equal(polygonRefusal({ lat: 0, lon: 179.5, radiusKm: 50 }), null);
   assert.equal(polygonRefusal({ lat: 85, lon: 20, radiusKm: 50 }), null);
   for (const bad of [{ radiusKm: 0 }, { radiusKm: Number.NaN }, { vertices: 2 }, { vertices: 6.5 }, { lon: 181 }]) {
     assert.throws(() => circlePolygonWkt({ lat: 0, lon: 0, radiusKm: 10, ...bad }), /circlePolygonWkt/, JSON.stringify(bad));
+  }
+});
+
+// 1,000 characters is a margin under a real-browser failure, not a documented GBIF limit. On 2026-09-14 gbif.org opened a 1,508-character
+// link (10 km, 64 vertices) to 0 results or an error, and links of 464 to 1,253 characters to records; the cause is unknown upstream. The
+// longest links have the longest coordinates: every vertex with a 3-digit negative longitude and a 2-digit negative latitude, which a ring
+// just inside the ±85° and ±180° refusal limits gives.
+test('gbif.org area links stay at most 1,000 characters at every radius, for the longest coordinates a polygon can have', () => {
+  for (const radiusKm of RADII_KM) {
+    const lat = -84.9;
+    let lon = -180;
+    while (polygonRefusal({ lat, lon, radiusKm }) !== null) lon = Number((lon + 0.01).toFixed(2));
+    assert.match(polygonRefusal({ lat, lon: lon - 0.05, radiusKm }) ?? '', /antimeridian/, `${radiusKm} km: the ring sits at the antimeridian limit`);
+    const href = gbifPortalUrl({ lat, lon, radiusKm, years: 'recent', now: NOW });
+    const pairs = new URL(href).searchParams.get('geometry').match(/^POLYGON\(\((.*)\)\)$/)[1].split(',');
+    assert.equal(pairs.length, SEARCH_POLYGON_VERTICES + 1);
+    for (const pair of pairs) assert.match(pair, /^-1\d\d\.\d+ -8\d\.\d+$/, `${radiusKm} km: the longest coordinates`);
+    assert.ok(href.length <= 1000, `${radiusKm} km at ${lat},${lon}: the gbif.org link is ${href.length} characters`);
   }
 });
 
@@ -277,10 +297,15 @@ test('the top datasets of a taxon: an occurrence search with the taxon, both lic
   assert.throws(() => parseTaxonDatasets({ facets: [] }), /count/);
   const portal = new URL(gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'recent', now: NOW }));
   assert.equal(portal.origin + portal.pathname, 'https://www.gbif.org/occurrence/search');
-  // M1: the gbif.org link carries the map's coordinate filter too (gbif-web lists hasCoordinate among its occurrence search fields and
-  // rewrites snake_case keys to camelCase).
-  assert.deepEqual([...portal.searchParams.entries()], [['taxon_key', '5133088'], ['has_coordinate', 'true'], ['license', 'CC0_1_0'], ['license', 'CC_BY_4_0'], ['year', '2017,2026']]);
-  assert.deepEqual([...new URL(gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'all', now: NOW })).searchParams.keys()], ['taxon_key', 'has_coordinate', 'license', 'license']);
+  // The link carries the map's coordinate filter too, in the camelCase names gbif.org writes back to its URL. Since 2026-06-18 gbif.org
+  // reads taxon keys under Catalogue of Life XR unless told otherwise, and this Backbone key matched 0 records there in a real browser; with
+  // the Backbone's checklistKey the same link opened to the monarch's ~42,244 records.
+  assert.equal(GBIF_BACKBONE_CHECKLIST_KEY, 'd7dddbf4-2cf0-4f39-9b2a-bb099caae36c');
+  assert.deepEqual([...portal.searchParams.entries()], [['taxonKey', '5133088'], ['checklistKey', GBIF_BACKBONE_CHECKLIST_KEY], ['hasCoordinate', 'true'], ['license', 'CC0_1_0'], ['license', 'CC_BY_4_0'], ['year', '2017,2026']]);
+  assert.deepEqual([...new URL(gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'all', now: NOW })).searchParams.keys()], ['taxonKey', 'checklistKey', 'hasCoordinate', 'license', 'license']);
+  // The area links filter no taxon, so they carry no checklist.
+  assert.equal(new URL(gbifPortalUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'recent', now: NOW })).searchParams.has('checklistKey'), false);
+  assert.equal(new URL(gbifPortalAnyLocationUrl({ years: 'recent', now: NOW })).searchParams.has('checklistKey'), false);
   assert.throws(() => gbifPortalTaxonUrl({ taxonKey: -1, years: 'all', now: NOW }), /taxonKey/);
 });
 

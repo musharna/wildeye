@@ -8,6 +8,13 @@ export const INAT_API = 'https://api.inaturalist.org';
 export const LICENSES = Object.freeze(['CC0_1_0', 'CC_BY_4_0']);
 export const RADII_KM = Object.freeze([1, 10, 50]);
 export const REQUEST_TIMEOUT_MS = 8000;
+/**
+ * The GBIF Backbone Taxonomy's checklist. The app's taxon keys are Backbone keys, the default of api.gbif.org v1 and the map tiles. Since
+ * 2026-06-18 www.gbif.org reads taxon keys under Catalogue of Life XR unless a link names a checklist, and there a Backbone key matches
+ * no record, so a gbif.org link that filters a taxon carries this key. gbifPortalUrl and gbifPortalAnyLocationUrl filter no taxon and
+ * carry none; one that gains a taxon filter needs it.
+ */
+export const GBIF_BACKBONE_CHECKLIST_KEY = 'd7dddbf4-2cf0-4f39-9b2a-bb099caae36c';
 
 export class RequestError extends Error {
   constructor(message, { status = null, url = null } = {}) {
@@ -52,6 +59,14 @@ export const EARTH_RADIUS_KM = 6371.0088;
  * searched with geoDistance instead (see speciesNearUrl).
  */
 export const MAX_POLYGON_LAT = 85;
+/**
+ * Vertices of the circle's polygon: the what-lives-here search, its gbif.org link and the outline drawn on the globe (whatLivesHere.js) all
+ * use it, so the card's count, the link and the outline describe the same area. In a real browser on 2026-09-14 gbif.org opened area
+ * links of up to 1,253 characters to records and a 1,508-character one (10 km, 64 vertices) to 0 results or an error; the cause is unknown
+ * upstream (nothing in gbif-web's source and no replayed request fails). At 32 vertices a 50 km circle gives a link of about 821
+ * characters, and gbif.test.mjs keeps every radius under 1,000 at the longest coordinates.
+ */
+export const SEARCH_POLYGON_VERTICES = 32;
 
 /** The circle's ring as [longitude, latitude] pairs, unchecked (circlePolygonWkt explains the offsets). */
 function ringVertices({ lat, lon, radiusKm, vertices }) {
@@ -67,7 +82,7 @@ function ringVertices({ lat, lon, radiusKm, vertices }) {
 }
 
 /** Why the search does not use a polygon for this circle (outside the ±85° margin, or across the antimeridian), or null when it does. */
-export function polygonRefusal({ lat, lon, radiusKm, vertices = 64 }) {
+export function polygonRefusal({ lat, lon, radiusKm, vertices = SEARCH_POLYGON_VERTICES }) {
   if (Math.abs(lat) > MAX_POLYGON_LAT) return `lat ${lat} is outside ±${MAX_POLYGON_LAT}°, the fixed safety margin polygons keep from the poles at every radius`;
   const across = ringVertices({ lat, lon, radiusKm, vertices }).find(([vertexLon]) => vertexLon < -180 || vertexLon > 180);
   if (across) return `the ${radiusKm} km circle around ${lat},${lon} crosses the antimeridian (vertex longitude ${across[0].toFixed(5)}), and a ring across ±180° cannot be one GBIF polygon`;
@@ -82,7 +97,7 @@ export function polygonRefusal({ lat, lon, radiusKm, vertices = 64 }) {
  * point's and the vertex's, which keeps every 50 km vertex within 0.04% of the radius up to 85°. The point's latitude
  * alone leaves them 0.6% short at 75° and 1.8% short at 85°.
  */
-export function circlePolygonWkt({ lat, lon, radiusKm, vertices = 64 }) {
+export function circlePolygonWkt({ lat, lon, radiusKm, vertices = SEARCH_POLYGON_VERTICES }) {
   if (!Number.isFinite(lat) || lat < -90 || lat > 90) throw new Error(`circlePolygonWkt: bad lat ${lat}`);
   if (!Number.isFinite(lon) || lon < -180 || lon > 180) throw new Error(`circlePolygonWkt: bad lon ${lon}`);
   if (!Number.isFinite(radiusKm) || radiusKm <= 0) throw new Error(`circlePolygonWkt: bad radius ${radiusKm} km`);
@@ -233,13 +248,13 @@ export function parseTaxonDatasets(json) {
 }
 
 /**
- * The taxon's records on gbif.org with the map's record filters: coordinates, licences and years (see taxonDatasetsUrl). gbif.org rewrites
- * snake_case keys to camelCase (gbif-web useNormalizedSearchParams) and lists taxonKey and hasCoordinate among its occurrence search fields
- * (gbif-web routes/occurrence/search filters.tsx and searchConfig.ts, main at 3ae5128).
+ * The taxon's records on gbif.org with the map's record filters: coordinates, licences and years (see taxonDatasetsUrl), in the camelCase
+ * names gbif.org writes back to its URL. `checklistKey` says the key is a Backbone key (GBIF_BACKBONE_CHECKLIST_KEY): in a real browser on
+ * 2026-09-14 the link without it opened to 0 results, and with it to the monarch's 42,244 records, the count the API gives.
  */
 export function gbifPortalTaxonUrl({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`gbifPortalTaxonUrl: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxon_key: String(taxonKey), has_coordinate: 'true' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, hasCoordinate: 'true' });
   appendRecordFilters(params, years, now);
   return `https://www.gbif.org/occurrence/search?${params}`;
 }

@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { EARTH_RADIUS_KM, gbifPortalAnyLocationUrl, gbifPortalUrl, polygonRefusal, yearLabel } from './gbif.js';
+import { EARTH_RADIUS_KM, SEARCH_POLYGON_VERTICES, gbifPortalAnyLocationUrl, gbifPortalUrl, polygonRefusal, yearLabel } from './gbif.js';
 
 /**
  * "What lives here" (spec: docs/superpowers/specs/2026-09-13-species-search-design.md). The SPECIES panel
@@ -25,9 +25,10 @@ const OUTLINE_COLOR = '#00d4ff';
 
 /**
  * `vertices` points on the circle of `radiusKm` around a point, by the spherical destination-point formula, so a circle at a
- * pole or across ±180° works too. Longitudes are wrapped into [-180, 180).
+ * pole or across ±180° works too. Longitudes are wrapped into [-180, 180). By default as many as the search polygon has, at the same
+ * bearings, so the outline drawn is the area searched.
  */
-export function circleOutline({ lat, lon, radiusKm, vertices = 64 }) {
+export function circleOutline({ lat, lon, radiusKm, vertices = SEARCH_POLYGON_VERTICES }) {
   const rad = Math.PI / 180;
   const delta = radiusKm / EARTH_RADIUS_KM;
   const lat1 = lat * rad;

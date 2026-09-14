@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { AREA_OUTLINE_ROLE, areaOutlinePrimitive, CENTRE_MARK_FRACTION, centreMark, circleOutline, classifyClick, createWhatLivesHere, HEADING } from './whatLivesHere.js';
-import { createBioClient } from './gbif.js';
+import { createBioClient, circlePolygonWkt, SEARCH_POLYGON_VERTICES } from './gbif.js';
 import { createDetailsCard } from './detailsCard.js';
 
 const YELLOWSTONE = Cesium.Cartesian3.fromDegrees(-110.83, 44.46);
@@ -644,7 +644,7 @@ test('a Retry replaces the failed search outline with its own', async () => {
   assert.equal(r.areas.cleared[0], r.areas.drawn[0]);
 });
 
-test('circleOutline: 64 points on the radius, longitudes within ±180°, also at a pole and across the antimeridian', () => {
+test('circleOutline: SEARCH_POLYGON_VERTICES (32) points on the radius, longitudes within ±180°, also at a pole and across the antimeridian', () => {
   const R = 6371.0088;
   const rad = Math.PI / 180;
   const haversineKm = (lon1, lat1, lon2, lat2) => {
@@ -654,7 +654,7 @@ test('circleOutline: 64 points on the radius, longitudes within ±180°, also at
   for (const [lat, lon, radiusKm] of [[44.46, -110.83, 10], [89.9, 0, 50], [-89.99, 120, 1], [-16.5, 179.8, 50], [0, -180, 10]]) {
     const where = `${lat},${lon} ${radiusKm} km`;
     const points = circleOutline({ lat, lon, radiusKm });
-    assert.equal(points.length, 64, where);
+    assert.equal(points.length, SEARCH_POLYGON_VERTICES, where);
     for (const p of points) {
       assert.ok(p.lon >= -180 && p.lon <= 180 && p.lat >= -90 && p.lat <= 90, `${where}: ${p.lon},${p.lat} in range`);
       assert.ok(Math.abs(haversineKm(lon, lat, p.lon, p.lat) / radiusKm - 1) < 1e-6, `${where}: ${p.lon},${p.lat} is on the circle`);
@@ -662,6 +662,25 @@ test('circleOutline: 64 points on the radius, longitudes within ±180°, also at
   }
   const across = circleOutline({ lat: -16.5, lon: 179.8, radiusKm: 50 });
   assert.ok(across.some((p) => p.lon < 0) && across.some((p) => p.lon > 0), 'a circle across ±180° has points on both sides');
+});
+
+// The drawn outline is the searched area: the same number of vertices as the search polygon, at the same bearings. Every polygon vertex has an
+// outline vertex within a quarter of the vertex spacing: the polygon's planar offsets slide its vertices along the circle by up to 4.4% of the
+// radius (50 km at -84.9°), while another vertex count or bearings half a step apart would miss by 9.8%.
+test('the what-lives-here outline has the vertices of the polygon the search and its gbif.org link use', () => {
+  assert.equal(SEARCH_POLYGON_VERTICES, 32);
+  const rad = Math.PI / 180;
+  const km = (lon1, lat1, lon2, lat2) => 2 * 6371.0088 * Math.asin(Math.sqrt(Math.sin(((lat2 - lat1) * rad) / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(((lon2 - lon1) * rad) / 2) ** 2));
+  for (const [lat, lon] of [[44.46, -110.83], [-33.92, 18.42], [70, 25], [-84.9, -174.8]]) {
+    for (const radiusKm of [1, 10, 50]) {
+      const where = `${lat},${lon} ${radiusKm} km`;
+      const polygon = circlePolygonWkt({ lat, lon, radiusKm }).match(/^POLYGON\(\((.*)\)\)$/)[1].split(',').slice(0, -1).map((pair) => pair.split(' ').map(Number));
+      const outline = circleOutline({ lat, lon, radiusKm });
+      assert.equal(outline.length, polygon.length, `${where}: vertex count`);
+      const worst = Math.max(...polygon.map(([pLon, pLat]) => Math.min(...outline.map((o) => km(o.lon, o.lat, pLon, pLat)))));
+      assert.ok(worst <= (Math.PI * radiusKm) / SEARCH_POLYGON_VERTICES / 2, `${where}: a polygon vertex is ${(worst * 1000).toFixed(1)} m from the nearest outline vertex`);
+    }
+  }
 });
 
 // Node has no WebGL context, so ContextLimits reports a line-width range of 0 and GroundPolylinePrimitive's render state
