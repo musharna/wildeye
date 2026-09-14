@@ -192,3 +192,48 @@ test('a list footer can carry a plain-text note before its link; without one the
   card.showList({ ...base, footer: 'Occurrence data: GBIF.org, CC0 and CC BY records only', footerHref: 'https://www.gbif.org/occurrence/search?geometry=x' });
   assert.deepEqual(foot.children.map((c) => c.tag), ['a'], 'no note, just the link');
 });
+
+// R-7e: the what-lives-here outline lives exactly as long as the card shows list or status content, so the card tells its
+// owner (onListEnd) whenever that content stops showing: dismissed, closed, or replaced by a marker's details.
+test('onListEnd fires once whenever list or status content stops showing, and never for other changes', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const ended = [];
+  const card = createDetailsCard({ viewer, doc, sanitize: (html) => html, onListEnd: () => ended.push(card.mode) });
+  const whale = entityIn('occurrences', '<b>Blue whale</b>');
+  const status = { heading: 'What lives here', message: 'Searching GBIF within 10 km…' };
+  const list = { heading: 'What lives here', filterLine: 'CC0 and CC BY records', entries: [], footer: 'GBIF.org', footerHref: 'https://www.gbif.org/', onRow: () => {} };
+
+  card.showStatus(status);
+  card.showList(list);
+  card.showStatus({ ...status, message: 'Click a spot on the globe. Esc cancels.' });
+  assert.deepEqual(ended, [], 'status and list content replacing each other is not an end');
+
+  viewer.selectedEntity = whale;
+  assert.equal(card.mode, 'detail');
+  assert.deepEqual(ended, ['detail'], "a marker's details replacing the list end it once, after the details show");
+  viewer.selectedEntity = undefined;
+  assert.equal(card.element.hidden, true, 'deselecting closes the details');
+  assert.equal(ended.length, 1, 'closing details is not a list end');
+
+  card.showStatus(status);
+  doc.listeners.keydown({ key: 'Escape' });
+  assert.deepEqual(ended.slice(1), [null], 'Escape on a status card ends it, after the card is closed');
+  doc.listeners.keydown({ key: 'Escape' });
+  assert.equal(ended.length, 2, 'a hidden card has nothing to end');
+
+  card.showList(list);
+  card.element.querySelector('.bio-card-close').listeners.click();
+  assert.equal(ended.length, 3, 'the close button on a list ends it');
+
+  card.showList(list);
+  card.close();
+  assert.equal(ended.length, 4, 'close() on a list ends it');
+  card.close();
+  assert.equal(ended.length, 4, 'close() on a hidden card ends nothing');
+
+  viewer.selectedEntity = whale;
+  card.showStatus(status);
+  assert.equal(card.mode, 'list');
+  assert.equal(ended.length, 4, 'status replacing details is not a list end');
+});

@@ -305,9 +305,10 @@ async function init() {
     dataManager.buildTogglePanel(document.getElementById('data-toggles'));
     styleManager.attachDataManager(dataManager);
     // Biology details card: Cesium's info box is off, so this is where biology markers show their details.
-    // Dismissing the card cancels the what-lives-here search it was waiting for (the controller is created below).
+    // Dismissing the card cancels the what-lives-here search it was waiting for (the controller is created below), and the
+    // searched circle's outline goes whenever the card stops showing that search's list, e.g. when a marker's details replace it.
     let whatLivesHere = null;
-    const bioCard = createDetailsCard({ viewer, layerName: (id) => dataManager.layers.get(id)?.module?.name || id, onDismiss: () => whatLivesHere?.cancel() });
+    const bioCard = createDetailsCard({ viewer, layerName: (id) => dataManager.layers.get(id)?.module?.name || id, onDismiss: () => whatLivesHere?.cancel(), onListEnd: () => whatLivesHere?.listEnded() });
     document.body.appendChild(bioCard.element);
     // Species search and "what lives here" (docs/superpowers/specs/2026-09-13-species-search-design.md).
     const bioClient = createBioClient();

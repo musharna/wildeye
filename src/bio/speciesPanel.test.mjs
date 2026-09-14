@@ -124,6 +124,7 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /\.species-suggestions\[hidden\] \{ display: none; \}/);
   assert.match(main, /dataManager\.register\(speciesLayer\);/);
   assert.match(main, /createDetailsCard\(\{/);
+  assert.match(main, /createDetailsCard\(\{[^\n]*onDismiss: \(\) => whatLivesHere\?\.cancel\(\), onListEnd: \(\) => whatLivesHere\?\.listEnded\(\) \}\)/, 'the card ends the what-lives-here outline');
   assert.match(main, /createWhatLivesHere\(\{/);
   assert.match(main, /createSpeciesPanel\(\{/);
   const cockpit = ui.match(/const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object\.freeze\(\[([\s\S]*?)\]\);/);

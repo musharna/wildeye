@@ -92,7 +92,7 @@ export function renderListInto(container, rows, doc, onRow) {
   }
 }
 
-export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {} }) {
+export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {} }) {
   const root = doc.createElement('aside');
   root.id = 'bio-card';
   root.className = 'bio-card';
@@ -105,6 +105,13 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   const body = root.querySelector('.bio-card-body');
   const foot = root.querySelector('.bio-card-foot');
   let mode = null;
+  // The owner is told (onListEnd), after the change, whenever list or status content stops showing for any reason: the card
+  // is closed or dismissed, or a marker's details replace it. "What lives here" keeps its outline exactly that long (R-7e).
+  const setMode = (next) => {
+    const endsList = mode === 'list' && next !== 'list';
+    mode = next;
+    if (endsList) onListEnd();
+  };
 
   const reset = (heading) => {
     title.textContent = heading;
@@ -112,7 +119,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     body.replaceChildren();
     foot.replaceChildren();
   };
-  const close = () => { root.hidden = true; mode = null; };
+  const close = () => { root.hidden = true; setMode(null); };
 
   viewer.selectedEntityChanged.addEventListener((entity) => {
     try {
@@ -121,10 +128,11 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         if (mode === 'detail') close();
         return;
       }
+      const html = sanitize(decision.html);
       reset(layerName(decision.layerId));
-      body.innerHTML = sanitize(decision.html);
-      mode = 'detail';
+      body.innerHTML = html;
       root.hidden = false;
+      setMode('detail');
     } catch (error) {
       console.error('[bio-card] could not render details', { layerId: entity?.entityCollection?.owner?.name ?? null, entityId: entity?.id ?? null, error });
     }
@@ -147,8 +155,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     if (mode === 'detail' && viewer.selectedEntity) viewer.selectedEntity = undefined;
     reset(heading);
     render();
-    mode = 'list';
     root.hidden = false;
+    setMode('list');
   };
   doc.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !root.hidden) dismiss();

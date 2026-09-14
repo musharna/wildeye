@@ -5,7 +5,9 @@ import { EARTH_RADIUS_KM, gbifPortalAnyLocationUrl, gbifPortalUrl, polygonRefusa
  * "What lives here" (spec: docs/superpowers/specs/2026-09-13-species-search-design.md). The SPECIES panel
  * arms a one-shot click. A click on the ground lists the 20 species with the most CC0 and CC BY GBIF records
  * within the chosen radius. A click on a marker is left to the normal click; a click on the sky stays armed. The searched
- * circle is outlined on the ground, not pickable, until the card is dismissed or another search replaces it.
+ * circle is outlined on the ground, not pickable, while the card shows that search's status or list: the outline goes when the card
+ * stops showing it for any reason (closed, dismissed, or replaced by a marker's details), when WHAT LIVES HERE is armed again, and
+ * when another search replaces it.
  */
 export const HEADING = 'What lives here';
 
@@ -162,12 +164,18 @@ export function createWhatLivesHere({
     get armed() { return armed; },
     arm() {
       controller?.abort(); // a search still in flight must not replace the prompt or leave a Retry for the old spot
+      removeArea(); // the prompt no longer describes the old circle
       setArmed(true);
       card.showStatus({ heading: HEADING, message: 'Click a spot on the globe. Esc cancels.' });
     },
     disarm() { setArmed(false); },
     /** The card was dismissed: abort the search it was waiting for (aborted searches are silent), disarm, remove the outline. */
     cancel() { controller?.abort(); setArmed(false); removeArea(); },
+    /**
+     * The card stopped showing this controller's status or list (its onListEnd): remove the outline, and abort a search still in
+     * flight, whose card is gone. Armed state is left alone: a marker's details can replace the prompt while it is armed.
+     */
+    listEnded() { controller?.abort(); removeArea(); },
     handleClick,
     destroy() { handler.destroy(); controller?.abort(); removeArea(); },
   };

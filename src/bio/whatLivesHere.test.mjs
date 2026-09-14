@@ -6,23 +6,53 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { AREA_OUTLINE_ROLE, areaOutlinePrimitive, circleOutline, classifyClick, createWhatLivesHere, HEADING } from './whatLivesHere.js';
 import { createBioClient } from './gbif.js';
+import { createDetailsCard } from './detailsCard.js';
 
 const YELLOWSTONE = Cesium.Cartesian3.fromDegrees(-110.83, 44.46);
 const DENALI = Cesium.Cartesian3.fromDegrees(-151.0074, 63.0692);
 const CLICK = { position: { x: 1, y: 1 } };
+const MARKER = { id: 'occ:blue-whale:2026-09-01:0', entityCollection: { owner: { name: 'occurrences' } }, description: { getValue: () => '<b>Blue whale</b>' } };
 
-function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, client: clientOverride = null, defaultArea = false } = {}) {
+// The browser pieces createDetailsCard touches (as in detailsCard.test.mjs), so the real card can drive the controller.
+function fakeCardDoc() {
+  const listeners = {};
+  const make = (tag) => {
+    const parts = {};
+    return {
+      tag, hidden: false, id: '', className: '', textContent: '', innerHTML: '', href: '', target: '', rel: '', attributes: {}, children: [], listeners: {},
+      setAttribute(name, value) { this.attributes[name] = String(value); },
+      appendChild(child) { this.children.push(child); return child; },
+      replaceChildren(...kids) { this.children = kids; this.innerHTML = ''; },
+      addEventListener(type, fn) { this.listeners[type] = fn; },
+      querySelector(selector) { return (parts[selector] ||= make(selector)); },
+    };
+  };
+  return { listeners, createElement: make, addEventListener(type, fn) { listeners[type] = fn; }, press(key) { listeners.keydown?.({ key }); } };
+}
+
+// realCard: the real details card, wired to the controller as src/main.js wires them (onDismiss → cancel, onListEnd → listEnded).
+function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, client: clientOverride = null, defaultArea = false, realCard = false, drawArea = null, depthTexture = true } = {}) {
   const calls = { near: [], names: [], status: [], list: [], card: [], picked: [], armed: [] };
   const params = { years: 'recent', radiusKm: 10 };
   // groundPrimitives stands in for Cesium's collection, for the default outline; `areas` records the injected outline seam.
   const groundPrimitives = { items: [], add(p) { this.items.push(p); return p; }, remove(p) { const i = this.items.indexOf(p); if (i >= 0) this.items.splice(i, 1); return i >= 0; } };
+  // Like Cesium's Viewer, selectedEntityChanged fires only when the selected value changes.
+  const selection = { handlers: [], value: undefined };
   const viewer = {
-    scene: { canvas: { style: {} }, pick: () => picked, pickPositionSupported: false, pickPosition: () => undefined, globe: { ellipsoid: Cesium.Ellipsoid.WGS84 }, groundPrimitives, frameState: { context: { depthTexture: true } } },
+    scene: { canvas: { style: {} }, pick: () => picked, pickPositionSupported: false, pickPosition: () => undefined, globe: { ellipsoid: Cesium.Ellipsoid.WGS84 }, groundPrimitives, frameState: { context: { depthTexture } } },
     camera: { pickEllipsoid: () => ground },
+    clock: { currentTime: 'now' },
+    selectedEntityChanged: { addEventListener: (fn) => selection.handlers.push(fn) },
+    get selectedEntity() { return selection.value; },
+    set selectedEntity(value) {
+      if (value === selection.value) return;
+      selection.value = value;
+      for (const fn of selection.handlers) fn(value);
+    },
   };
   const areas = { drawn: [], cleared: [] };
   const areaSeam = defaultArea ? {} : {
-    drawArea: (area) => { const handle = { ...area }; areas.drawn.push(handle); return handle; },
+    drawArea: drawArea || ((area) => { const handle = { ...area }; areas.drawn.push(handle); return handle; }),
     clearArea: (handle) => { areas.cleared.push(handle); },
   };
   const client = clientOverride || {
@@ -38,18 +68,22 @@ function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, spec
       return { key, scientificName: 'Branta canadensis', commonName: 'Canada Goose' };
     },
   };
-  // calls.card keeps status and list calls in one ordered log.
-  const card = {
-    showStatus: (s) => { calls.status.push(s); calls.card.push({ kind: 'status', ...s }); },
-    showList: (l) => { calls.list.push(l); calls.card.push({ kind: 'list', ...l }); },
-  };
+  // calls.card keeps status and list calls in one ordered log (fake card only).
+  let controller = null;
+  const cardDoc = realCard ? fakeCardDoc() : null;
+  const card = realCard
+    ? createDetailsCard({ viewer, doc: cardDoc, sanitize: (html) => html, onDismiss: () => controller.cancel(), onListEnd: () => controller.listEnded() })
+    : {
+      showStatus: (s) => { calls.status.push(s); calls.card.push({ kind: 'status', ...s }); },
+      showList: (l) => { calls.list.push(l); calls.card.push({ kind: 'list', ...l }); },
+    };
   // Records keydown listeners so a test can press a key.
   const doc = {
     keydown: [],
     addEventListener(type, fn) { if (type === 'keydown') this.keydown.push(fn); },
     press(key) { for (const fn of this.keydown) fn({ key }); },
   };
-  const controller = createWhatLivesHere({
+  controller = createWhatLivesHere({
     viewer,
     client,
     card,
@@ -60,7 +94,7 @@ function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, spec
     doc,
     ...areaSeam,
   });
-  return { controller, calls, viewer, doc, params, areas, groundPrimitives };
+  return { controller, calls, viewer, doc, params, areas, groundPrimitives, card, cardDoc };
 }
 
 // A GBIF search that stays pending until the test settles it. Like fetch, it rejects with the abort reason as soon
@@ -395,6 +429,77 @@ test('a search outlines its circle from the start; a second search replaces the 
   d.controller.destroy();
   assert.equal(d.areas.cleared.length, 1, 'destroy removes the outline');
   assert.equal(d.areas.cleared[0], d.areas.drawn[0]);
+});
+
+// R-7e: the outline lives exactly as long as the card shows that search's status or list (real card, wired as src/main.js).
+test("a marker's details replacing the list remove the outline, and deselecting then closes the card with nothing drawn back", async () => {
+  const r = rig({ realCard: true });
+  r.controller.arm();
+  await r.controller.handleClick(CLICK);
+  assert.equal(r.card.mode, 'list', 'the list shows');
+  assert.equal(r.areas.drawn.length, 1);
+  assert.deepEqual(r.areas.cleared, [], 'positive control: the listed search keeps its outline');
+  r.viewer.selectedEntity = MARKER; // a marker click: Cesium selects it and the card shows its details
+  assert.equal(r.card.mode, 'detail');
+  assert.deepEqual(r.areas.cleared, [r.areas.drawn[0]], 'the details replaced the list, so the outline is gone');
+  r.viewer.selectedEntity = undefined; // a click on empty globe: Cesium deselects and the card closes
+  assert.equal(r.card.element.hidden, true, 'the card is closed');
+  assert.equal(r.areas.cleared.length, 1, 'removed once');
+  assert.equal(r.areas.drawn.length, 1, 'nothing drawn back');
+});
+
+test("a marker's details replacing a search still in flight abort it, so it cannot reopen the list", async () => {
+  const pending = pendingNear();
+  const r = rig({ realCard: true, speciesNear: pending.speciesNear });
+  r.controller.arm();
+  const search = r.controller.handleClick(CLICK);
+  assert.equal(r.card.mode, 'list', 'the Searching status shows');
+  const logged = await captureConsoleError(async () => {
+    r.viewer.selectedEntity = MARKER;
+    pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }] });
+    await search;
+  });
+  assert.equal(pending.searches[0].signal.aborted, true, 'the search was aborted');
+  assert.equal(r.card.mode, 'detail', 'the details stay');
+  assert.deepEqual(r.areas.cleared, [r.areas.drawn[0]]);
+  assert.equal(r.calls.names.length, 0, 'no name lookups for the aborted search');
+  assert.deepEqual(logged, []);
+});
+
+test('Escape and the close button remove the outline once; arming again removes the previous outline; destroy removes the last', async () => {
+  const r = rig({ realCard: true });
+  r.controller.arm();
+  await r.controller.handleClick(CLICK);
+  r.cardDoc.press('Escape');
+  assert.equal(r.card.element.hidden, true);
+  assert.deepEqual(r.areas.cleared, [r.areas.drawn[0]], 'Escape removed the outline, once');
+
+  r.controller.arm();
+  await r.controller.handleClick(CLICK);
+  r.card.element.querySelector('.bio-card-close').listeners.click();
+  assert.deepEqual(r.areas.cleared, r.areas.drawn, 'the close button removed the second outline, once');
+
+  r.controller.arm();
+  await r.controller.handleClick(CLICK);
+  assert.equal(r.areas.cleared.length, 2, 'positive control: the third outline shows');
+  r.controller.arm();
+  assert.deepEqual(r.areas.cleared, r.areas.drawn, 'arming again removed it before any click');
+  assert.equal(r.controller.armed, true);
+  assert.equal(r.card.mode, 'list', 'the prompt shows');
+
+  await r.controller.handleClick(CLICK);
+  assert.equal(r.areas.drawn.length, 4);
+  r.controller.destroy();
+  assert.deepEqual(r.areas.cleared, r.areas.drawn, 'destroy removed the fourth outline');
+});
+
+test('arming again removes the previous outline (fake card)', async () => {
+  const r = rig();
+  r.controller.arm();
+  await r.controller.handleClick(CLICK);
+  assert.deepEqual(r.areas.cleared, [], 'positive control: the outline shows after the search');
+  r.controller.arm();
+  assert.deepEqual(r.areas.cleared, [r.areas.drawn[0]]);
 });
 
 test('a Retry replaces the failed search outline with its own', async () => {
