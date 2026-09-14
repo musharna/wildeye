@@ -100,18 +100,24 @@ export function circlePolygonWkt({ lat, lon, radiusKm, vertices = 64 }) {
  * count, in the classes of the tile style (github.com/gbif/maps mapnik-server/src/main/node/cartocss/scaled-circles.mss, last changed in
  * commit 9dd3dba827d1c41f1a5e58d6df6226b87249988c, the same bytes as master c3df098 on 2026-09-14). `upTo` is a class's upper bound
  * (null: none), `widthPx` its marker width in tile pixels, `fill` and `opacity` its marker fill, `lineColor` and `lineWidthPx` its marker
- * line (width 0: no line). Circles above the lowest class are semi-transparent and mix with the imagery under them, so the legend shows
- * the style's own values, not colours fitted to one view. densityTileTemplate uses `style`; gbif.test.mjs pins the classes to the style.
+ * line (width 0: no line). densityTileTemplate uses `style`; gbif.test.mjs pins the classes to the style.
+ *
+ * `color` is the legend swatch: the class as the globe draws it at the default 12,000 km view, the median rendered colour of lone circles
+ * over land, each circle's class read from its tile's own record count (B2, three runs, 2026-09-14). The style fills are semi-transparent
+ * above the lowest class and the globe tints the imagery, so a swatch in the style fill showed colours the map never has. The two highest
+ * classes had no circle to sample at that view; their colours are predicted (`predicted: true`) from the sampled classes by a fit of
+ * rendered = (1 - opacity) x ground + opacity x (0.595 x fill + (88.6, 93.6, 93.8)), whose largest residual on the sampled classes is 23.6.
+ * Swatch widths stay the style's, so their order holds; on screen circles are only roughly that size and change with zoom, as the caption says.
  */
 export const SPECIES_MAP_LEGEND = Object.freeze({
   style: 'scaled.circles',
-  caption: 'records per circle',
+  caption: 'Records per circle: bigger, darker circles hold more records. Circle sizes change with zoom.',
   classes: Object.freeze([
-    Object.freeze({ upTo: 10, widthPx: 6, fill: '#fed976', opacity: 1.0, lineColor: '#fe9724', lineWidthPx: 1 }),
-    Object.freeze({ upTo: 100, widthPx: 7, fill: '#fd8d3c', opacity: 0.8, lineColor: '#fd5b24', lineWidthPx: 0 }),
-    Object.freeze({ upTo: 1000, widthPx: 10, fill: '#fd8d3c', opacity: 0.7, lineColor: '#fd471d', lineWidthPx: 0 }),
-    Object.freeze({ upTo: 10000, widthPx: 16, fill: '#f03b20', opacity: 0.6, lineColor: '#f01129', lineWidthPx: 0 }),
-    Object.freeze({ upTo: null, widthPx: 30, fill: '#bd0026', opacity: 0.6, lineColor: '#bd0047', lineWidthPx: 0 }),
+    Object.freeze({ upTo: 10, widthPx: 6, fill: '#fed976', opacity: 1.0, lineColor: '#fe9724', lineWidthPx: 1, color: '#e4d9ac', predicted: false }),
+    Object.freeze({ upTo: 100, widthPx: 7, fill: '#fd8d3c', opacity: 0.8, lineColor: '#fd5b24', lineWidthPx: 0, color: '#d5aa78', predicted: false }),
+    Object.freeze({ upTo: 1000, widthPx: 10, fill: '#fd8d3c', opacity: 0.7, lineColor: '#fd471d', lineWidthPx: 0, color: '#cea878', predicted: false }),
+    Object.freeze({ upTo: 10000, widthPx: 16, fill: '#f03b20', opacity: 0.6, lineColor: '#f01129', lineWidthPx: 0, color: '#be8770', predicted: true }),
+    Object.freeze({ upTo: null, widthPx: 30, fill: '#bd0026', opacity: 0.6, lineColor: '#bd0047', lineWidthPx: 0, color: '#ab7272', predicted: true }),
   ]),
 });
 

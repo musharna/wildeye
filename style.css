@@ -9666,8 +9666,8 @@ body.recording-mode #bio-card { display: none !important; }
 .species-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .species-chosen[hidden] { display: none; }
 .species-chosen-name { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The record-count legend: a caption over five circles with their bounds, each circle bottom-aligned above its label. Sizes, fills,
-   opacities, lines and labels come from SPECIES_MAP_LEGEND (src/bio/gbif.js), GBIF's scaled.circles classes (spec: Implementation notes). */
+/* The record-count legend: a caption over five circles with their bounds, each circle bottom-aligned above its label. Sizes, colours and
+   labels come from SPECIES_MAP_LEGEND (src/bio/gbif.js): GBIF's scaled.circles classes as the globe draws them (spec: Implementation notes). */
 .species-legend { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; color: rgba(232, 234, 237, 0.78); font-size: 11px; }
 .species-legend[hidden] { display: none; }
 .species-legend-classes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; max-width: 220px; }

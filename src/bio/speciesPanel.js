@@ -36,9 +36,9 @@ export function legendLabel(classes, index) {
 }
 
 /**
- * The record-count legend from SPECIES_MAP_LEGEND: a caption, then one circle per class (aria-hidden) at the class's style width in CSS
- * px, in its fill and opacity, with its line where the style draws one, and its bound as text, so the classes read out as a list labelled
- * by the caption.
+ * The record-count legend from SPECIES_MAP_LEGEND: a caption, then one solid circle per class (aria-hidden) at the class's style width in
+ * CSS px, in the colour the globe draws that class (`color`), and its bound as text, so the classes read out as a list labelled by the
+ * caption.
  */
 export function renderLegendInto(container, doc, legend = SPECIES_MAP_LEGEND) {
   const caption = doc.createElement('span');
@@ -56,9 +56,7 @@ export function renderLegendInto(container, doc, legend = SPECIES_MAP_LEGEND) {
     swatch.setAttribute('aria-hidden', 'true');
     swatch.style.width = `${cls.widthPx}px`;
     swatch.style.height = `${cls.widthPx}px`;
-    swatch.style.backgroundColor = cls.fill;
-    swatch.style.opacity = String(cls.opacity);
-    swatch.style.border = cls.lineWidthPx > 0 ? `${cls.lineWidthPx}px solid ${cls.lineColor}` : 'none';
+    swatch.style.backgroundColor = cls.color;
     const label = doc.createElement('span');
     label.className = 'species-legend-label';
     label.textContent = legendLabel(legend.classes, index);

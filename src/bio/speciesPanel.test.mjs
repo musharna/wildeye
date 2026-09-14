@@ -134,12 +134,12 @@ test('suggestion rows are worded for the query that was sent, even when the box 
 // R-7t: GBIF draws each cell as a circle sized, filled and faded by its record count, so the legend names each class: a circle at the
 // class's style width in CSS px, in its fill and opacity, with its line where the style draws one (aria-hidden), and its upper bound as
 // text, under a caption. All of it comes from SPECIES_MAP_LEGEND, which gbif.test.mjs pins to the tile style.
-test('the legend shows each GBIF record-count class as a circle in its style size, fill, opacity and line, with its upper bound as text', () => {
+test('the legend shows each GBIF record-count class as a circle at its style size in its drawn colour, with its upper bound as text', () => {
   const { els } = panelRig();
   const legend = els['species-legend'];
   assert.equal(legend.children.length, 2, 'a caption and the class list');
   const [caption, list] = legend.children;
-  assert.equal(caption.textContent, 'records per circle');
+  assert.equal(caption.textContent, SPECIES_MAP_LEGEND.caption);
   assert.ok(caption.id, 'the caption has an id');
   assert.equal(list.tag, 'ol');
   assert.equal(list.attrs['aria-labelledby'], caption.id, 'the caption labels the list');
@@ -147,12 +147,14 @@ test('the legend shows each GBIF record-count class as a circle in its style siz
   const part = (item, className) => item.children.find((child) => child.className === className);
   const swatches = list.children.map((item) => part(item, 'species-legend-swatch'));
   const labels = list.children.map((item) => part(item, 'species-legend-label'));
-  assert.deepEqual(swatches.map(({ style }) => [style.width, style.height, style.backgroundColor, style.opacity, style.border]), [
-    ['6px', '6px', '#fed976', '1', '1px solid #fe9724'],
-    ['7px', '7px', '#fd8d3c', '0.8', 'none'],
-    ['10px', '10px', '#fd8d3c', '0.7', 'none'],
-    ['16px', '16px', '#f03b20', '0.6', 'none'],
-    ['30px', '30px', '#bd0026', '0.6', 'none'],
+  // B2: a solid circle at the style width in the colour the globe draws that class (SPECIES_MAP_LEGEND.color), not the style fill at its
+  // opacity, which on the dark panel showed colours the map never has.
+  assert.deepEqual(swatches.map(({ style }) => [style.width, style.height, style.backgroundColor, style.opacity ?? '', style.border ?? '']), [
+    ['6px', '6px', '#e4d9ac', '', ''],
+    ['7px', '7px', '#d5aa78', '', ''],
+    ['10px', '10px', '#cea878', '', ''],
+    ['16px', '16px', '#be8770', '', ''],
+    ['30px', '30px', '#ab7272', '', ''],
   ]);
   assert.ok(swatches.every((swatch) => swatch.attrs['aria-hidden'] === 'true' && swatch.textContent === ''), 'swatches are decoration only');
   assert.deepEqual(labels.map((label) => label.textContent), ['≤10', '≤100', '≤1k', '≤10k', '>10k']);
