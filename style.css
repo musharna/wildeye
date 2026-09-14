@@ -9653,13 +9653,13 @@ body.recording-mode #bio-card { display: none !important; }
 .species-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .species-chosen[hidden] { display: none; }
 .species-chosen-name { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The record-count legend: a caption over six swatches with their bounds. Swatch colours and labels come from SPECIES_MAP_LEGEND
-   (src/bio/gbif.js), GBIF's classic-noborder.poly classes as the globe draws them (spec: Implementation notes). */
+/* The record-count legend: a caption over five circles with their bounds, each circle bottom-aligned above its label. Sizes, fills,
+   opacities, lines and labels come from SPECIES_MAP_LEGEND (src/bio/gbif.js), GBIF's scaled.circles classes (spec: Implementation notes). */
 .species-legend { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; color: rgba(232, 234, 237, 0.78); font-size: 11px; }
 .species-legend[hidden] { display: none; }
-.species-legend-classes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; max-width: 252px; }
-.species-legend-class { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.species-legend-swatch { display: block; height: 8px; border-radius: 1px; }
+.species-legend-classes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; max-width: 220px; }
+.species-legend-class { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; min-width: 0; }
+.species-legend-swatch { display: block; flex: 0 0 auto; border-radius: 50%; box-sizing: border-box; }
 .species-legend-label { font: 10px var(--font-mono); text-align: center; white-space: nowrap; }
 .species-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 /* Unpressed chips: the shared .scene-btn text (0.5 white) measured 4.00 to 4.55:1 over the panel, so species chips use 0.8 white. The

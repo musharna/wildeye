@@ -1,18 +1,14 @@
 import * as Cesium from 'cesium';
-import { densityTileTemplate, RADII_KM, SPECIES_TILE_TAGS } from '../bio/gbif.js';
+import { densityTileTemplate, RADII_KM, SPECIES_TILE_SIZE_PX } from '../bio/gbif.js';
 import { setStackedImagery } from './rasterDrape.js';
 
 /**
- * Species map (spec: docs/superpowers/specs/2026-09-13-species-search-design.md): GBIF hexagon tiles for the
+ * Species map (spec: docs/superpowers/specs/2026-09-13-species-search-design.md): GBIF circle tiles for the
  * taxon chosen in the SPECIES panel, CC0 and CC BY records only. Browser-side, so it works on the static host.
  * Joins the shared drape stack at SPECIES_ZRANK so drape refreshes cannot bury it.
  */
 export const SPECIES_ZRANK = 1000;
-/**
- * Opaque, chosen by measurement (spec: Implementation notes): at 0.7 the same class changed colour with the ground under it and the
- * sparsest class blended into light land; opaque classic-noborder.poly fills give the highest lowest-class contrast of the styles
- * measured and, at the 12,000 km view the legend colours were fitted at, the colours the legend shows.
- */
+/** Layer alpha 1: each circle keeps the opacity its record-count class has in GBIF's scaled.circles style, as the legend shows it. */
 export const SPECIES_ALPHA = 1;
 export const SPECIES_YEARS = Object.freeze(['recent', 'all']);
 export const TILE_FAILURE_LIMIT = 8;
@@ -73,7 +69,8 @@ export function createSpeciesLayer({
     _lastError = null;
     if (!_viewer || !_params.taxonKey) return;
     const generation = _generation;
-    const provider = providerFor(densityTileTemplate({ taxonKey: _params.taxonKey, years: _params.years, now: now() }), { customTags: SPECIES_TILE_TAGS });
+    // Declared at the size GBIF serves: at Cesium's default of 256 px each tile pixel was drawn at about half size (spec: Implementation notes).
+    const provider = providerFor(densityTileTemplate({ taxonKey: _params.taxonKey, years: _params.years, now: now() }), { tileWidth: SPECIES_TILE_SIZE_PX, tileHeight: SPECIES_TILE_SIZE_PX });
     provider.errorEvent.addEventListener((tileError) => {
       if (generation !== _generation) return;
       const error = tileError?.error ?? tileError;

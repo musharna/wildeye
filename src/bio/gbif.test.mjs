@@ -5,7 +5,7 @@ import {
   LICENSES, yearRange, yearLabel, densityTileTemplate, speciesNearUrl, gbifPortalUrl, parseSpeciesNear,
   inatSuggestUrl, parseInatSuggest, gbifSuggestUrl, parseGbifSuggest, gbifMatchUrl, parseGbifMatch,
   speciesUrl, parseSpeciesName, createRateLimiter, createPool, fetchJson, RequestError, createBioClient, circlePolygonWkt, RADII_KM,
-  polygonRefusal, gbifPortalAnyLocationUrl, SPECIES_MAP_LEGEND, hexPerTileForZoom, SPECIES_TILE_TAGS,
+  polygonRefusal, gbifPortalAnyLocationUrl, SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX,
 } from './gbif.js';
 
 const NOW = new Date('2026-09-13T12:00:00Z');
@@ -30,45 +30,42 @@ test('density tiles use the adhoc endpoint with both licence filters and the yea
   assert.equal(recent.searchParams.get('taxonKey'), '5133088');
   assert.equal(recent.searchParams.get('year'), '2017,2026');
   assert.equal(recent.searchParams.get('srs'), 'EPSG:3857', 'Web Mercator tiles, the default tiling scheme of Cesium UrlTemplateImageryProvider');
-  // R-7f, chosen by measurement: opaque fills keep the rendered colour off the basemap, so the legend matches the map at the 12,000 km
-  // view its colours were fitted at
-  assert.equal(recent.searchParams.get('style'), 'classic-noborder.poly');
-  assert.equal(recent.searchParams.get('bin'), 'hex');
-  assert.equal(recent.searchParams.get('hexPerTile'), '{hexPerTile}', 'R-7m: Cesium fills in the hexagon count for each zoom (SPECIES_TILE_TAGS)');
+  // R-7t, the user's choice 2026-09-14: GBIF's unbinned scaled circles. Binned hexagons drew record-bearing cells empty at fine sizes
+  // and painted ocean at coarse ones; unbinned, every record-bearing cell is a circle (spec: Implementation notes).
+  assert.equal(recent.searchParams.get('style'), 'scaled.circles');
+  for (const key of ['bin', 'hexPerTile', 'squareSize']) assert.equal(recent.searchParams.has(key), false, `${key}: unbinned cells take no bin parameter`);
   assert.equal(tile('all').searchParams.has('year'), false);
   const template = densityTileTemplate({ taxonKey: 1, years: 'all', now: NOW });
-  assert.ok(template.includes('/{z}/{x}/{y}@1x.png?') && template.includes('&hexPerTile={hexPerTile}&'), `Cesium placeholders stay unencoded: ${template}`);
+  assert.ok(template.includes('/{z}/{x}/{y}@1x.png?'), `Cesium placeholders stay unencoded: ${template}`);
+  assert.equal(template.includes('{hexPerTile}'), false, template);
+  // GBIF serves @1x PNG tiles 512 px square (techdocs maps v2: "normally 512px wide squares"; 512x512 measured 2026-09-14), and the
+  // species provider declares that size: at Cesium's default of 256 every GBIF pixel was drawn at about half size.
+  assert.equal(SPECIES_TILE_SIZE_PX, 512);
   assert.throws(() => densityTileTemplate({ taxonKey: 0, years: 'all', now: NOW }), /taxonKey/);
 });
 
-// R-7m: adhoc bins one point per Elasticsearch geohash cell into hexagons, so a hexagon no point lands in draws empty even when it
-// holds records. Measured 2026-09-13 against the point-level density tiles (monarch, and Bombus affinis with under 5,000 CC0/CC BY
-// records in 2017-2026): no single hexPerTile kept that share at or under 1% at zooms 3, 6 and 9 for both species; 6 at zooms 4-6,
-// where GBIF's geohash length is 4, and 4 at every other zoom did (spec: Implementation notes).
-test('hexagons per tile are 6 at zooms 4 to 6 and 4 at every other zoom, filled in for each tile through a Cesium custom tag', () => {
-  assert.deepEqual(Array.from({ length: 15 }, (_, z) => hexPerTileForZoom(z)), [4, 4, 4, 4, 6, 6, 6, 4, 4, 4, 4, 4, 4, 4, 4]);
-  for (const bad of [-1, 1.5, '3', null]) assert.throws(() => hexPerTileForZoom(bad), /zoom/, String(bad));
-  assert.equal(SPECIES_TILE_TAGS.hexPerTile({}, 0, 0, 5), 6);
-  assert.equal(SPECIES_TILE_TAGS.hexPerTile({}, 0, 0, 9), 4);
-  assert.ok(Object.isFrozen(SPECIES_TILE_TAGS));
-});
-
-// R-7k: GBIF colours each hexagon by its absolute record count, in classes set by the tile style (github.com/gbif/maps,
-// mapnik-server/src/main/node/cartocss/<style>.mss; classic-noborder-poly.mss read 2026-09-13). The legend is those classes, so
-// the style the tiles use must have an entry here and the legend must match it: changing the style without the legend fails.
+// R-7t: GBIF draws each unbinned cell as a circle whose size, fill, opacity and line are set by its record count, in the classes of the
+// tile style (github.com/gbif/maps mapnik-server/src/main/node/cartocss/scaled-circles.mss, last changed in 9dd3dba827d1, read
+// 2026-09-14). The legend is those classes, so the style the tiles use must have an entry here and the legend must match it: changing
+// the style without the legend fails. Row: [upper bound, marker-width px, marker-fill, marker-opacity, marker-line-color, marker-line-width px].
 const STYLE_CLASSES = {
-  'classic-noborder.poly': [[10, '#FFFF00'], [100, '#FFCC00'], [1000, '#FF9900'], [10000, '#FF6600'], [100000, '#D60A00'], [null, '#C2002D']],
+  'scaled.circles': [
+    [10, 6, '#fed976', 1.0, '#fe9724', 1],
+    [100, 7, '#fd8d3c', 0.8, '#fd5b24', 0],
+    [1000, 10, '#fd8d3c', 0.7, '#fd471d', 0],
+    [10000, 16, '#f03b20', 0.6, '#f01129', 0],
+    [null, 30, '#bd0026', 0.6, '#bd0047', 0],
+  ],
 };
 
-test('the species map legend is the record-count classes of the style the tiles use, each in its colour as the globe draws it', () => {
+test('the species map legend is the record-count classes of the style the tiles use, each a circle in its style size, fill, opacity and line', () => {
   const style = new URL(densityTileTemplate({ taxonKey: 5133088, years: 'all', now: NOW }).replace('{z}/{x}/{y}', '0/0/0')).searchParams.get('style');
   assert.equal(SPECIES_MAP_LEGEND.style, style, 'the legend describes the style the tiles are drawn with');
-  assert.ok(Object.hasOwn(STYLE_CLASSES, style), `no class table for ${style}: read its .mss in github.com/gbif/maps, then refit the legend colours`);
-  assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.upTo, c.styleColor.toUpperCase()]), STYLE_CLASSES[style]);
-  // Fitted 2026-09-13 at the 12,000 km view: drawn = 0.794 x style colour + (25.5, 28.3, 55.0) per channel (spec, Implementation notes).
-  const drawn = (hex) => `#${[0, 1, 2].map((i) => Math.round(0.794 * parseInt(hex.slice(1 + 2 * i, 3 + 2 * i), 16) + [25.5, 28.3, 55.0][i]).toString(16).padStart(2, '0')).join('')}`;
-  assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => c.color), SPECIES_MAP_LEGEND.classes.map((c) => drawn(c.styleColor)));
-  assert.equal(SPECIES_MAP_LEGEND.caption, 'records per hexagon');
+  assert.ok(Object.hasOwn(STYLE_CLASSES, style), `no class table for ${style}: read its .mss in github.com/gbif/maps`);
+  assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.upTo, c.widthPx, c.fill, c.opacity, c.lineColor, c.lineWidthPx]), STYLE_CLASSES[style]);
+  // Semi-transparent circles mix with the imagery under them, so no colour fitted to one view can hold; the legend shows the style.
+  assert.ok(SPECIES_MAP_LEGEND.classes.every((c) => !Object.hasOwn(c, 'color') && !Object.hasOwn(c, 'styleColor')), 'no fitted colours');
+  assert.equal(SPECIES_MAP_LEGEND.caption, 'records per circle');
   assert.ok(Object.isFrozen(SPECIES_MAP_LEGEND) && Object.isFrozen(SPECIES_MAP_LEGEND.classes) && SPECIES_MAP_LEGEND.classes.every(Object.isFrozen));
 });
 

@@ -6,7 +6,7 @@
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
-import { hexPerTileForZoom } from '../src/bio/gbif.js';
+import { SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX } from '../src/bio/gbif.js';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -20,6 +20,8 @@ const page = await browser.newPage();
 const requests = [];
 const failed = [];
 page.on('request', (r) => requests.push(r.url()));
+const tileStatus = new Map(); // species map tile URL -> HTTP status, so the search check decodes only tiles GBIF drew (200, not 204)
+page.on('response', (r) => { if (r.url().includes('/v2/map/occurrence/')) tileStatus.set(r.url(), r.status()); });
 const upstreamTileErrors = [];
 // GBIF's maps backend sometimes fails one vector tile on its own side (seen: monarch adhoc/8/48/92 at EPSG:3857, a fast 503
 // every time while its neighbours load). GBIF marks those with an `x-error: Error from backend (vector tile)…` header, so a
@@ -276,16 +278,31 @@ if (CHECKS.has('search')) {
     const q = new URL(u).searchParams;
     return u.includes('/v2/map/occurrence/adhoc/') && q.getAll('license').includes('CC0_1_0') && q.getAll('license').includes('CC_BY_4_0') && q.get('taxonKey') === '5133088' && q.get('srs') === 'EPSG:3857';
   });
-  // R-7m: Cesium fills hexPerTile for each tile's zoom (SPECIES_TILE_TAGS), so every requested tile carries the value for its own zoom.
+  // R-7t: unbinned circles laid out at the size GBIF serves. Every species tile request is an @1x PNG in the legend's style
+  // (scaled.circles) with no bin parameter; the species provider declares SPECIES_TILE_SIZE_PX, and tiles GBIF drew (200), decoded in the
+  // page, are exactly the declared size, so a mismatch between what is declared and what is served fails here.
   const zoomOf = (u) => new URL(u).pathname.split('/')[5];
-  const hexMismatches = tiles.filter((u) => new URL(u).searchParams.get('hexPerTile') !== String(hexPerTileForZoom(Number(zoomOf(u))))).map((u) => ({ z: zoomOf(u), hexPerTile: new URL(u).searchParams.get('hexPerTile') }));
-  const hexPerTileByZoom = Object.fromEntries([...new Set(tiles.map(zoomOf))].sort((a, b) => a - b).map((z) => [z, [...new Set(tiles.filter((u) => zoomOf(u) === z).map((u) => new URL(u).searchParams.get('hexPerTile')))]]));
+  const styleMismatches = tiles.filter((u) => { const url = new URL(u); const q = url.searchParams; return q.get('style') !== SPECIES_MAP_LEGEND.style || ['bin', 'hexPerTile', 'squareSize'].some((key) => q.has(key)) || !url.pathname.endsWith('@1x.png'); });
+  const drawnTiles = tiles.filter((u) => tileStatus.get(u) === 200).slice(0, 6);
+  const layout = await page.evaluate(async (samples) => {
+    const layers = window.__godsEyeView.viewer.imageryLayers;
+    let provider = null;
+    for (let i = 0; i < layers.length; i += 1) if (String(layers.get(i).imageryProvider?.url ?? '').includes('/v2/map/occurrence/')) provider = layers.get(i).imageryProvider;
+    const served = [];
+    for (const url of samples) {
+      const img = new Image();
+      img.src = url;
+      try { await img.decode(); served.push({ z: new URL(url).pathname.split('/')[5], width: img.naturalWidth, height: img.naturalHeight }); } catch (error) { served.push({ url, error: String(error) }); }
+    }
+    return { declared: provider ? { tileWidth: provider.tileWidth, tileHeight: provider.tileHeight } : null, served };
+  }, drawnTiles);
+  const layoutOk = layout.declared?.tileWidth === SPECIES_TILE_SIZE_PX && layout.declared.tileHeight === SPECIES_TILE_SIZE_PX && layout.served.length > 0 && layout.served.every((tile) => tile.width === layout.declared.tileWidth && tile.height === layout.declared.tileHeight);
   const params = await page.evaluate(() => window.__godsEyeView.dataManager.getLayerParams('species'));
   // Ruling R-2a: the species layer counts only real HTTP/network tile errors (GBIF answers empty tiles with 204),
   // so after the tiles load its status must carry no error.
   const stats = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('species')?.module?.getStats() ?? null);
   await shot('search');
-  report('search', first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && hexMismatches.length === 0 && stats?.error === null, { first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, hexPerTileByZoom, hexMismatches: hexMismatches.slice(0, 5), srs: tiles[0] ? new URL(tiles[0]).searchParams.get('srs') : null, sample: tiles[0] || null });
+  report('search', first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && styleMismatches.length === 0 && layoutOk && stats?.error === null, { first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, zooms: [...new Set(tiles.map(zoomOf))].sort((a, b) => a - b), styleMismatches: styleMismatches.length, styleMismatchSample: styleMismatches.slice(0, 3), layout, layoutOk, srs: tiles[0] ? new URL(tiles[0]).searchParams.get('srs') : null, sample: tiles[0] || null });
 }
 
 let hereSearch = null;

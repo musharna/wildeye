@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createSpeciesLayer, mergeSpeciesParams, DEFAULT_SPECIES_PARAMS, SPECIES_ALPHA, TILE_FAILURE_LIMIT } from './species.js';
 import { setStackedImagery } from './rasterDrape.js';
-import { SPECIES_TILE_TAGS } from '../bio/gbif.js';
+import { SPECIES_TILE_SIZE_PX } from '../bio/gbif.js';
 
 const NOW = new Date('2026-09-13T12:00:00Z');
 // GBIF answers an empty tile with HTTP 204 and no body; Cesium rejects that with this RuntimeError (Resource.js).
@@ -66,12 +66,12 @@ test('no tiles until a species is chosen; years rebuild the tiles, radius does n
   assert.equal(layer.setParams({ taxonKey: 5133088, name: 'Monarch' }), true);
   assert.equal(providers.length, 1);
   assert.match(providers[0].url, /\/v2\/map\/occurrence\/adhoc\/\{z\}\/\{x\}\/\{y\}@1x\.png\?.*taxonKey=5133088/);
-  // R-7m: the hexagon count differs by zoom, so the provider fills {hexPerTile} for each tile it requests.
-  assert.ok(providers[0].url.includes('hexPerTile={hexPerTile}'), providers[0].url);
-  assert.equal(providers[0].options?.customTags, SPECIES_TILE_TAGS);
+  // R-7t: unbinned circles, no per-zoom tag; the provider declares the tile size GBIF serves (512 px), not Cesium's default 256.
+  assert.equal(providers[0].url.includes('hexPerTile'), false, providers[0].url);
+  assert.deepEqual(providers[0].options, { tileWidth: SPECIES_TILE_SIZE_PX, tileHeight: SPECIES_TILE_SIZE_PX });
   assert.equal(viewer.imageryLayers.list.length, 1);
   assert.equal(viewer.imageryLayers.list[0].alpha, SPECIES_ALPHA);
-  assert.equal(SPECIES_ALPHA, 1, 'R-7f: opaque hexagons, so the legend colours are the colours on the map');
+  assert.equal(SPECIES_ALPHA, 1, 'layer alpha 1: each circle keeps the opacity its style class gives it, which the legend shows');
   assert.equal(viewer.imageryLayers.list[0].show, false, 'hidden until enabled');
   layer.enable();
   assert.equal(viewer.imageryLayers.list[0].show, true);
@@ -87,6 +87,19 @@ test('no tiles until a species is chosen; years rebuild the tiles, radius does n
   assert.deepEqual(layer.getParams(), { taxonKey: 5133088, name: 'Monarch', years: 'all', radiusKm: 50 });
   layer.destroy();
   assert.equal(viewer.imageryLayers.list.length, 0);
+});
+
+// At Cesium's default tile size (256) every pixel of GBIF's 512 px tiles was drawn at about half size; the real provider must declare 512.
+test('the default provider is a Cesium UrlTemplateImageryProvider declaring the 512 px tiles GBIF serves', () => {
+  const layer = createSpeciesLayer({ imageryLayerFor: (provider, options) => ({ provider, alpha: options.alpha, show: true }), stack: () => {}, now: () => NOW });
+  const viewer = { imageryLayers: fakeImageryLayers() };
+  layer.init(viewer);
+  layer.setParams({ taxonKey: 5133088 });
+  const provider = viewer.imageryLayers.list[0].provider;
+  assert.ok(provider instanceof Cesium.UrlTemplateImageryProvider);
+  assert.deepEqual([provider.tileWidth, provider.tileHeight, provider.maximumLevel], [512, 512, 14]);
+  assert.match(provider.url, /\/v2\/map\/occurrence\/adhoc\/\{z\}\/\{x\}\/\{y\}@1x\.png\?/);
+  layer.destroy();
 });
 
 test('species tiles stay above the raster drapes after a drape restacks', () => {

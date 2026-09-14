@@ -96,52 +96,43 @@ export function circlePolygonWkt({ lat, lon, radiusKm, vertices = 64 }) {
 }
 
 /**
- * The species map legend: GBIF colours each hexagon by its absolute record count, in the classes of the tile style
- * (github.com/gbif/maps, mapnik-server/src/main/node/cartocss/classic-noborder-poly.mss). `upTo` is a class's upper bound (null: no
- * bound), `styleColor` its colour in the style, `color` that colour as the globe draws it: fitted at the 12,000 km view as
- * 0.794 x styleColor + (25.5, 28.3, 55.0) per channel, so it holds at that camera height, and the top class, absent from the monarch
- * map, is predicted rather than sampled (spec: Implementation notes). densityTileTemplate uses `style`; gbif.test.mjs pins the classes
- * to the style.
+ * The species map legend. GBIF draws each unbinned cell of records as a circle whose size, fill, opacity and line are set by its record
+ * count, in the classes of the tile style (github.com/gbif/maps mapnik-server/src/main/node/cartocss/scaled-circles.mss, last changed in
+ * commit 9dd3dba827d1c41f1a5e58d6df6226b87249988c, the same bytes as master c3df098 on 2026-09-14). `upTo` is a class's upper bound
+ * (null: none), `widthPx` its marker width in tile pixels, `fill` and `opacity` its marker fill, `lineColor` and `lineWidthPx` its marker
+ * line (width 0: no line). Circles above the lowest class are semi-transparent and mix with the imagery under them, so the legend shows
+ * the style's own values, not colours fitted to one view. densityTileTemplate uses `style`; gbif.test.mjs pins the classes to the style.
  */
 export const SPECIES_MAP_LEGEND = Object.freeze({
-  style: 'classic-noborder.poly',
-  caption: 'records per hexagon',
+  style: 'scaled.circles',
+  caption: 'records per circle',
   classes: Object.freeze([
-    Object.freeze({ upTo: 10, styleColor: '#FFFF00', color: '#e4e737' }),
-    Object.freeze({ upTo: 100, styleColor: '#FFCC00', color: '#e4be37' }),
-    Object.freeze({ upTo: 1000, styleColor: '#FF9900', color: '#e49637' }),
-    Object.freeze({ upTo: 10000, styleColor: '#FF6600', color: '#e46d37' }),
-    Object.freeze({ upTo: 100000, styleColor: '#D60A00', color: '#c32437' }),
-    Object.freeze({ upTo: null, styleColor: '#C2002D', color: '#b41c5b' }),
+    Object.freeze({ upTo: 10, widthPx: 6, fill: '#fed976', opacity: 1.0, lineColor: '#fe9724', lineWidthPx: 1 }),
+    Object.freeze({ upTo: 100, widthPx: 7, fill: '#fd8d3c', opacity: 0.8, lineColor: '#fd5b24', lineWidthPx: 0 }),
+    Object.freeze({ upTo: 1000, widthPx: 10, fill: '#fd8d3c', opacity: 0.7, lineColor: '#fd471d', lineWidthPx: 0 }),
+    Object.freeze({ upTo: 10000, widthPx: 16, fill: '#f03b20', opacity: 0.6, lineColor: '#f01129', lineWidthPx: 0 }),
+    Object.freeze({ upTo: null, widthPx: 30, fill: '#bd0026', opacity: 0.6, lineColor: '#bd0047', lineWidthPx: 0 }),
   ]),
 });
 
 /**
- * Hexagons per tile side at GBIF zoom `z`. `adhoc` aggregates records into Elasticsearch geohash cells whose length GBIF sets by zoom
- * (github.com/gbif/occurrence BaseEsHeatmapRequestBuilder PRECISION_LOOKUP: 4 at zooms 4-6) and bins one point per cell, so a hexagon
- * no point lands in draws empty even when it holds records. 6 at zooms 4-6 and 4 at every other zoom are the finest values measured
- * to keep that share at or under 1% at zooms 3, 6 and 9 for a common and a sparse species (spec: Implementation notes).
+ * Width and height in px of the @1x PNG tiles densityTileTemplate requests (GBIF techdocs maps v2: "normally 512px wide squares"; 512x512
+ * measured 2026-09-14). The species provider declares this size, so one tile pixel is drawn at about one screen pixel; at Cesium's default
+ * of 256 each was drawn at about half size (spec: Implementation notes).
  */
-export function hexPerTileForZoom(z) {
-  if (!Number.isInteger(z) || z < 0) throw new Error(`hexPerTileForZoom: bad zoom ${z}`);
-  return z >= 4 && z <= 6 ? 6 : 4;
-}
-
-/** Cesium UrlTemplateImageryProvider `customTags` that fill densityTileTemplate's {hexPerTile} with the value for each tile's zoom. */
-export const SPECIES_TILE_TAGS = Object.freeze({ hexPerTile: (imageryProvider, x, y, level) => hexPerTileForZoom(level) });
+export const SPECIES_TILE_SIZE_PX = 512;
 
 /**
- * Cesium URL template for GBIF hexagon tiles of one taxon. `adhoc`, because `density` ignores `license=`. `srs=EPSG:3857`,
- * because `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator. The style comes from
- * SPECIES_MAP_LEGEND: `classic-noborder.poly`, whose fills are opaque, so with SPECIES_ALPHA 1 a hexagon's colour no longer depends
- * on the imagery under it. The legend colours match the map at the 12,000 km view they were fitted at; the top class is predicted,
- * not sampled (spec: Implementation notes). SPECIES_TILE_TAGS fills `{hexPerTile}` for each tile's zoom (hexPerTileForZoom).
+ * Cesium URL template for GBIF's circle tiles of one taxon. `adhoc`, because `density` ignores `license=`. `srs=EPSG:3857`, because
+ * `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator. No `bin`: every record-bearing cell is
+ * drawn as a circle in the SPECIES_MAP_LEGEND style, where binned hexagons drew some empty (spec: Implementation notes). The @1x tiles are
+ * SPECIES_TILE_SIZE_PX square.
  */
 export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`densityTileTemplate: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: SPECIES_MAP_LEGEND.style, bin: 'hex', hexPerTile: '{hexPerTile}', srs: 'EPSG:3857' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: SPECIES_MAP_LEGEND.style, srs: 'EPSG:3857' });
   appendRecordFilters(params, years, now);
-  return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${String(params).replace('%7BhexPerTile%7D', '{hexPerTile}')}`;
+  return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }
 
 /**

@@ -114,25 +114,31 @@ test('suggestion rows are worded for the query that was sent, even when the box 
   ]);
 });
 
-// R-7k: GBIF colours hexagons by absolute record counts, so the legend names each class: a swatch in the colour the globe draws it
-// (aria-hidden) with its upper bound as text, under a caption. All of it comes from SPECIES_MAP_LEGEND, which gbif.test.mjs pins to
-// the tile style.
-test('the legend shows each GBIF record-count class as a swatch in its drawn colour with its upper bound as text', () => {
+// R-7t: GBIF draws each cell as a circle sized, filled and faded by its record count, so the legend names each class: a circle at the
+// class's style width in CSS px, in its fill and opacity, with its line where the style draws one (aria-hidden), and its upper bound as
+// text, under a caption. All of it comes from SPECIES_MAP_LEGEND, which gbif.test.mjs pins to the tile style.
+test('the legend shows each GBIF record-count class as a circle in its style size, fill, opacity and line, with its upper bound as text', () => {
   const { els } = panelRig();
   const legend = els['species-legend'];
   assert.equal(legend.children.length, 2, 'a caption and the class list');
   const [caption, list] = legend.children;
-  assert.equal(caption.textContent, 'records per hexagon');
+  assert.equal(caption.textContent, 'records per circle');
   assert.ok(caption.id, 'the caption has an id');
   assert.equal(list.tag, 'ol');
   assert.equal(list.attrs['aria-labelledby'], caption.id, 'the caption labels the list');
-  assert.equal(list.children.length, 6);
+  assert.equal(list.children.length, SPECIES_MAP_LEGEND.classes.length);
   const part = (item, className) => item.children.find((child) => child.className === className);
   const swatches = list.children.map((item) => part(item, 'species-legend-swatch'));
   const labels = list.children.map((item) => part(item, 'species-legend-label'));
-  assert.deepEqual(swatches.map((swatch) => swatch.style.backgroundColor), SPECIES_MAP_LEGEND.classes.map((c) => c.color));
+  assert.deepEqual(swatches.map(({ style }) => [style.width, style.height, style.backgroundColor, style.opacity, style.border]), [
+    ['6px', '6px', '#fed976', '1', '1px solid #fe9724'],
+    ['7px', '7px', '#fd8d3c', '0.8', 'none'],
+    ['10px', '10px', '#fd8d3c', '0.7', 'none'],
+    ['16px', '16px', '#f03b20', '0.6', 'none'],
+    ['30px', '30px', '#bd0026', '0.6', 'none'],
+  ]);
   assert.ok(swatches.every((swatch) => swatch.attrs['aria-hidden'] === 'true' && swatch.textContent === ''), 'swatches are decoration only');
-  assert.deepEqual(labels.map((label) => label.textContent), ['≤10', '≤100', '≤1k', '≤10k', '≤100k', '>100k']);
+  assert.deepEqual(labels.map((label) => label.textContent), ['≤10', '≤100', '≤1k', '≤10k', '>10k']);
   assert.ok(labels.every((label) => label.attrs['aria-hidden'] === undefined), 'the labels are read out');
 });
 
@@ -176,7 +182,7 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'markup order');
   assert.doesNotMatch(panelHtml.slice(panelHtml.indexOf('class="species-credit"')), /<button|<input|id="species-/, 'nothing after the credit line');
   // R-7o: each chip row has a visible label directly above it that also names its group, so "1 / 10 / 50 KM" does not read as a
-  // hexagon size.
+  // map feature size.
   for (const [group, text] of [['species-years', 'Years'], ['species-radius', 'What lives here radius']]) {
     assert.match(panelHtml, new RegExp(`<span id="${group}-label" class="species-label">${text}</span>\\s*<div id="${group}"`), `${group}: its visible label comes first`);
     const tag = panelHtml.match(new RegExp(`<div id="${group}"[^>]*>`))?.[0] ?? '';
@@ -187,9 +193,11 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);
   assert.match(css, /\.species-suggestions\[hidden\] \{ display: none; \}/);
-  // R-7k: the swatch colours come from SPECIES_MAP_LEGEND, so no legend colour is written in the CSS.
-  assert.doesNotMatch(css, /\.species-legend-ramp|#e4e737|#b41c5b/i);
-  assert.match(css, /\.species-legend-swatch \{[^}]*height: \d+px;/);
+  // R-7t: swatch sizes, fills and lines come from SPECIES_MAP_LEGEND, so none is written in the CSS; the CSS makes each swatch a circle
+  // whose line is inside its stated width.
+  assert.doesNotMatch(css, /\.species-legend-ramp|#e4e737|#b41c5b|#fed976|#fd8d3c|#f03b20|#bd0026/i);
+  assert.match(css, /\.species-legend-swatch \{[^}]*border-radius: 50%;[^}]*box-sizing: border-box;/);
+  assert.doesNotMatch(css, /\.species-legend-swatch \{[^}]*(?:width|height):/);
   assert.match(css, /\.scene-btn\.species-switch\[aria-checked="true"\]::before \{/);
   assert.doesNotMatch(css, /species-switch\[aria-pressed/);
   assert.match(main, /dataManager\.register\(speciesLayer\);/);
