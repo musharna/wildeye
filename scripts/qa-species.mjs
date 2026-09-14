@@ -388,9 +388,25 @@ if (CHECKS.has('left-stack')) {
     const data = document.getElementById('data-panel');
     if (data.classList.contains('collapsed')) data.querySelector('[data-collapse-target="data-panel"]').click();
   });
-  await sleep(1500);
+  // The positive control is read once the lane has laid out the expanded panel: an allocated height, and the same mode and panel height on 4
+  // reads 250 ms apart. A fixed 1.5 s wait read it mid-expansion on a loaded host (251 px, no allocation, normal mode). 20 s at most, then throw.
+  const settledLane = async (label) => {
+    const started = Date.now();
+    let last = null;
+    let same = 0;
+    while (Date.now() - started < 20000) {
+      const state = await stackState();
+      const key = `${state.mode} ${state.data.height} ${state.data.allocated}`;
+      same = state.data.allocated !== null && key === last ? same + 1 : 0;
+      last = key;
+      if (same >= 3) return state;
+      await sleep(250);
+    }
+    throw new Error(`left-stack: the lane did not settle within 20 s ${label} (last: ${last})`);
+  };
+  await settledLane('after expanding the data panel');
   const setup = (await page.evaluate(() => document.getElementById('data-panel').classList.contains('active'))) ? null : await step('F to show the panel before the check', pressKey('f'), { transition: true });
-  const shown = await stackState();
+  const shown = await settledLane('with the data panel shown');
   const hideF = await step('F hide', pressKey('f'), { transition: true });
   await shot('left-stack-f-hidden');
   const cleanOnHidden = await step('clean view on from F-hidden', pressKey('v'), { transition: false });
@@ -400,15 +416,18 @@ if (CHECKS.has('left-stack')) {
   const cleanOffVisible = await step('clean view off to shown', pressKey('v'), { transition: true });
   const recordingOn = await step('recording mode on from shown', setRecording(true), { transition: true });
   const recordingOff = await step('recording mode off to shown', setRecording(false), { transition: true });
-  // A frame part-way through the F show fade, for the critic: F hides, then F shows and the page is captured two frames later; the data
-  // panel's opacity and height are read just before and after the capture.
+  // A frame part-way through the F show fade, for the critic: F hides, then F shows. Two frames later, after the lane's passes at the start of
+  // the show, the data panel's transitions are held at 150 ms, half their duration, because a capture under swiftshader takes longer than the
+  // whole fade; its opacity and height are read just before and after the capture, and the transitions then play on.
   await step('F hide before the mid-fade shot', pressKey('f'), { transition: true });
   const midFadeRead = () => page.evaluate(() => { const data = document.getElementById('data-panel'); const cs = getComputedStyle(data); return { visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: document.getElementById('left-panel-stack').dataset.layoutMode }; });
   await page.keyboard.press('f');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const held = await page.evaluate(() => { const animations = document.getElementById('data-panel').getAnimations(); for (const animation of animations) { animation.pause(); animation.currentTime = 150; } return animations.map((animation) => animation.transitionProperty); });
   const midFadeBefore = await midFadeRead();
   await shot('left-stack-f-show-midfade');
   const midFadeAfter = await midFadeRead();
+  await page.evaluate(() => { for (const animation of document.getElementById('data-panel').getAnimations()) animation.play(); });
   await sleep(1500);
   const final = await stackState();
   // Back to the state before the check.
@@ -446,7 +465,7 @@ if (CHECKS.has('left-stack')) {
   report('left-stack', Object.values(checks).every(Boolean), {
     initial, setup: setup && setup.label, shown,
     steps: [summarize(hideF, hideRule), summarize(cleanOnHidden, hideRule), summarize(cleanOffHidden, hideRule), summarize(showF, showRule), summarize(cleanOnVisible, hideRule), summarize(cleanOffVisible, showRule), summarize(recordingOn, hideRule), summarize(recordingOff, showRule)],
-    midFade: { before: midFadeBefore, after: midFadeAfter }, final: { mode: final.mode, data: final.data },
+    midFade: { held, before: midFadeBefore, after: midFadeAfter }, final: { mode: final.mode, data: final.data },
     ...checks,
   });
 }
