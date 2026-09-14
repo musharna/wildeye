@@ -6,11 +6,14 @@
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
-import { SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX } from '../src/bio/gbif.js';
+import { GBIF_BACKBONE_CHECKLIST_KEY, SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX } from '../src/bio/gbif.js';
+import { MORE_SLACK_PX } from '../src/bio/speciesPanel.js';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
+// I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
+const TALL_DESKTOP_HEIGHT = 1100;
 const CHECKS = new Set(arg('--checks', 'panel-layout,card,suggestion-fade,search,panel-datasets,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
@@ -41,6 +44,18 @@ page.on('response', (r) => {
 page.on('requestfailed', (r) => { if (!/google|gstatic|cesium\.com|tile/.test(r.url())) failed.push(`REQFAIL ${r.url()} ${r.failure()?.errorText}`); });
 page.on('pageerror', (e) => failed.push(`PAGEERROR ${String(e?.message || e).slice(0, 160)}`));
 page.on('dialog', (d) => d.dismiss().catch(() => {}));
+// Species map tiles still in flight, for waitForMapTiles.
+const pendingTiles = new Set();
+page.on('request', (r) => { if (r.url().includes('/v2/map/occurrence/')) pendingTiles.add(r.url()); });
+page.on('requestfinished', (r) => { pendingTiles.delete(r.url()); });
+page.on('requestfailed', (r) => { pendingTiles.delete(r.url()); });
+// The record count of every dataset-facet search the page got back, by URL: portal-link compares the panel's gbif.org link with it.
+const datasetSearchCounts = new Map();
+page.on('response', (r) => {
+  let u; try { u = new URL(r.url()); } catch { return; }
+  if (u.hostname !== 'api.gbif.org' || u.pathname !== '/v1/occurrence/search' || u.searchParams.getAll('facet').join() !== 'datasetKey' || r.status() !== 200) return;
+  r.json().then((json) => { datasetSearchCounts.set(r.url(), json.count); }, (error) => { failed.push(`BODY ${r.url()} ${error}`); });
+});
 
 let bad = 0;
 const report = (check, ok, detail = {}) => { if (!ok) bad += 1; console.log(JSON.stringify({ check, ok, ...detail })); };
@@ -59,6 +74,26 @@ const flyTo = (lon, lat, height) => page.evaluate(async (lon, lat, height) => {
   viewer.camera.setView({ destination: Cartesian3.fromDegrees(lon, lat, height), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
   await new Promise((resolve) => setTimeout(resolve, 5000));
 }, lon, lat, height);
+// Item 11: a screenshot with the species map on waits until the map has loaded: the globe reports its tiles loaded, Cesium's tile-load queue
+// (tileLoadProgressEvent) is empty and no species tile request is pending, for 6 polls 500 ms apart. A timeout is returned, not swallowed:
+// the checks that shoot the map fail on it.
+const waitForMapTiles = async (timeoutMs = 90000) => {
+  await page.evaluate(() => {
+    if (window.__qaTileQueue) return;
+    window.__qaTileQueue = { length: 0 };
+    window.__godsEyeView.viewer.scene.globe.tileLoadProgressEvent.addEventListener((length) => { window.__qaTileQueue.length = length; });
+  });
+  const started = Date.now();
+  let stable = 0;
+  let last = null;
+  while (Date.now() - started < timeoutMs) {
+    last = { ...(await page.evaluate(() => ({ queue: window.__qaTileQueue.length, tilesLoaded: window.__godsEyeView.viewer.scene.globe.tilesLoaded }))), pendingSpeciesTiles: pendingTiles.size };
+    stable = last.tilesLoaded && last.queue === 0 && last.pendingSpeciesTiles === 0 ? stable + 1 : 0;
+    if (stable >= 6) return { settled: true, ms: Date.now() - started };
+    await sleep(500);
+  }
+  return { settled: false, ms: Date.now() - started, last };
+};
 
 const openSpeciesPanel = async () => {
   await page.evaluate(() => {
@@ -114,28 +149,88 @@ if (CHECKS.has('panel-layout')) {
   const expandedOk = !expanded.species.collapsed && near(expanded.species.width, Number.parseFloat(expanded.species.expandedVar));
   const phoneOk = !phone.species.collapsed && phone.species.right <= phone.viewport && phone.species.width >= 300;
   const restoredOk = restored.viewport === 1400 && restored.species.collapsed === initial.species && restored.scene.collapsed === initial.scene;
-  // B1/S1: with a species mapped (legend and Top datasets showing), at the desktop default and on a 400x800 phone, WHAT LIVES HERE and both
-  // chip rows are whole inside the body's scroll viewport without scrolling, above its bottom fade, and are what the page hits at their
-  // corners; when more content is below, the fade shows; the legend's ground is opaque. Then the body is scrolled to its end for the review
-  // shots. The species is set through the data manager and cleared afterwards, so later checks start as before.
-  const fitAt = async (width, height, shotName, { shotAtTop = false } = {}) => {
+  // With a species mapped (legend and Top datasets showing), at the desktop default and on a 400x800 phone, WHAT LIVES HERE and both chip rows
+  // are whole inside the body's scroll view without scrolling and are what the page hits at their corners, and no chip, action or legend
+  // caption text is cut. B1: the scroll cue is a row of its own below the scroll container, inside the panel: laid out with its own height,
+  // aria-hidden, overlapping no visible part of any element inside the scroll container, shown while more of the body is below and hidden
+  // at the end, at 1400x900, 400x800 and 375x667. I2: on a desktop window tall enough for the whole body nothing overflows and the cue is
+  // hidden. I1: at the end of the scroll every link in the Top datasets block is whole in view, is what the page hits at its centre, and
+  // takes keyboard focus with its focus ring inside the view. The species is set through the data manager and cleared afterwards.
+  const cueState = () => {
+    const body = document.getElementById('species-body');
+    const cue = document.getElementById('species-more');
+    if (!body || !cue) return { present: false, body: Boolean(body) };
+    const b = body.getBoundingClientRect();
+    const view = { top: b.top + body.clientTop, bottom: Math.min(b.bottom, b.top + body.clientTop + body.clientHeight), left: b.left + body.clientLeft, right: b.left + body.clientLeft + body.clientWidth };
+    const c = cue.getBoundingClientRect();
+    const cs = getComputedStyle(cue);
+    // The part of each element inside the scroll container a reader can see (its box clipped to the view), against the cue's box.
+    const overlaps = [...body.querySelectorAll('*')].flatMap((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return [];
+      const seen = { top: Math.max(r.top, view.top), bottom: Math.min(r.bottom, view.bottom), left: Math.max(r.left, view.left), right: Math.min(r.right, view.right) };
+      const x = Math.min(seen.right, c.right) - Math.max(seen.left, c.left);
+      const y = Math.min(seen.bottom, c.bottom) - Math.max(seen.top, c.top);
+      return x > 0.5 && y > 0.5 ? [{ el: el.id || String(el.className) || el.tagName, x: +x.toFixed(1), y: +y.toFixed(1) }] : [];
+    });
+    return {
+      present: true, display: cs.display, visibility: cs.visibility, text: cue.textContent, ariaHidden: cue.getAttribute('aria-hidden'),
+      inPanel: document.querySelector('#species-panel .species-panel-inner').contains(cue) && !body.contains(cue),
+      box: { top: +c.top.toFixed(1), bottom: +c.bottom.toFixed(1), height: +c.height.toFixed(1) }, viewBottom: +view.bottom.toFixed(1),
+      rangeLeft: body.scrollHeight - body.clientHeight - body.scrollTop, overlapCount: overlaps.length, overlaps: overlaps.slice(0, 5),
+    };
+  };
+  const linksAtEnd = async () => {
+    const count = await page.evaluate(() => document.querySelectorAll('#species-datasets a').length);
+    const rows = [];
+    for (let i = 0; i < count; i += 1) {
+      // Keyboard focus (Shift+Tab, then Tab back), so :focus-visible and its ring apply; then the body goes back to the end of its scroll.
+      await page.evaluate((i) => document.querySelectorAll('#species-datasets a')[i].focus(), i);
+      await page.keyboard.down('Shift');
+      await page.keyboard.press('Tab');
+      await page.keyboard.up('Shift');
+      await page.keyboard.press('Tab');
+      await page.evaluate(() => { const body = document.getElementById('species-body'); body.scrollTop = body.scrollHeight; });
+      await sleep(300);
+      rows.push(await page.evaluate((i) => {
+        const a = document.querySelectorAll('#species-datasets a')[i];
+        const body = document.getElementById('species-body');
+        const b = body.getBoundingClientRect();
+        const view = { top: b.top + body.clientTop, bottom: Math.min(b.bottom, b.top + body.clientTop + body.clientHeight), left: b.left + body.clientLeft, right: b.left + body.clientLeft + body.clientWidth };
+        const r = a.getBoundingClientRect();
+        const cs = getComputedStyle(a);
+        const out = (parseFloat(cs.outlineWidth) || 0) + (parseFloat(cs.outlineOffset) || 0);
+        const ring = { top: r.top - out, bottom: r.bottom + out, left: r.left - out, right: r.right + out };
+        const inside = (box) => box.top >= view.top - 0.5 && box.bottom <= view.bottom + 0.5 && box.left >= view.left - 0.5 && box.right <= view.right + 0.5;
+        const hit = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+        const round = (box) => Object.fromEntries(Object.entries(box).map(([k, v]) => [k, +v.toFixed(1)]));
+        return {
+          text: a.textContent.slice(0, 40), atEnd: body.scrollHeight - body.clientHeight - body.scrollTop <= 1, whole: inside(r), hit: Boolean(hit && (hit === a || a.contains(hit))),
+          focused: document.activeElement === a, focusVisible: a.matches(':focus-visible'), outline: `${cs.outlineStyle} ${cs.outlineWidth} offset ${cs.outlineOffset}`,
+          ringInside: cs.outlineStyle !== 'none' && inside(ring), box: round({ top: r.top, bottom: r.bottom, left: r.left, right: r.right }), view: round(view),
+        };
+      }, i));
+    }
+    return { rows, ok: rows.length >= 2 && rows.every((row) => row.atEnd && row.whole && row.hit && row.focused && row.focusVisible && row.ringInside) };
+  };
+  const fitAt = async (width, height, shotName, { shotAtTop = false, controls = true, links = true, overflow = true } = {}) => {
     await page.setViewport({ width, height });
     await sleep(2500);
     await setOpen('species-panel', true);
     await sleep(1000);
-    await page.evaluate(() => { document.querySelector('#species-panel .species-body').scrollTop = 0; });
+    await page.evaluate(() => { document.getElementById('species-body').scrollTop = 0; });
     // M-2: the datasets wait's outcome is recorded (a timeout or a failure in the block fails the fit), not discarded.
     const datasetsWait = await page.waitForFunction(() => document.querySelectorAll('#species-datasets .dataset-row').length > 0 || document.querySelector('#species-datasets .species-datasets-error'), { timeout: 45000 }).then(() => 'settled', (error) => String(error).slice(0, 120));
     const datasetsFailure = await page.evaluate(() => document.getElementById('species-datasets-status')?.textContent || null);
-    await sleep(1500);
+    const mapTiles = await waitForMapTiles();
+    await sleep(1000);
     const fit = await page.evaluate(() => {
-      const body = document.querySelector('#species-panel .species-body');
+      const body = document.getElementById('species-body');
       const b = body.getBoundingClientRect();
-      const fade = parseFloat(getComputedStyle(body).getPropertyValue('--species-body-fade')) || 0;
-      const view = { top: b.top + body.clientTop, bottom: b.top + body.clientTop + body.clientHeight };
+      const view = { top: b.top + body.clientTop, bottom: Math.min(b.bottom, b.top + body.clientTop + body.clientHeight) };
       const whole = (el) => {
         const r = el.getBoundingClientRect();
-        const inside = r.top >= view.top - 0.5 && r.bottom <= view.bottom - fade + 0.5;
+        const inside = r.top >= view.top - 0.5 && r.bottom <= view.bottom + 0.5;
         // Probe points inset by half the height from the rounded ends, as the round-5 shots did: the pill's square corners are outside it.
         const inset = Math.min((r.bottom - r.top) / 2, 10);
         const corners = [[r.left + inset, r.top + 2], [r.right - inset, r.top + 2], [r.left + inset, r.bottom - 2], [r.right - inset, r.bottom - 2]].every(([x, y]) => { const hit = document.elementFromPoint(x, y); return Boolean(hit && (hit === el || el.contains(hit))); });
@@ -143,42 +238,34 @@ if (CHECKS.has('panel-layout')) {
       };
       const legend = document.getElementById('species-legend');
       const legendBg = getComputedStyle(legend).backgroundColor;
+      const caption = document.getElementById('species-legend-caption');
       return {
-        viewport: `${innerWidth}x${innerHeight}`, scrollTop: body.scrollTop, view: { top: Math.round(view.top), bottom: Math.round(view.bottom) }, fade,
-        overflows: body.scrollHeight > body.clientHeight, fadeVar: getComputedStyle(body).getPropertyValue('--species-body-fade').trim(),
+        viewport: `${innerWidth}x${innerHeight}`, scrollTop: body.scrollTop, scrollHeight: body.scrollHeight, clientHeight: body.clientHeight, view: { top: Math.round(view.top), bottom: Math.round(view.bottom) },
         action: whole(document.getElementById('species-what-lives-here')), years: whole(document.getElementById('species-years')), radius: whole(document.getElementById('species-radius')),
         legendHidden: legend.hidden, legendBg, legendOpaque: /^rgb\(/.test(legendBg) || /, 1\)$/.test(legendBg),
         datasetsHidden: document.getElementById('species-datasets').hidden,
-        // N4: the "more ↓" hint (wider screens only; content none on phones) at the top of the scroll range
-        more: getComputedStyle(body).getPropertyValue('--species-more').trim(),
-        hintAtTop: getComputedStyle(body, '::after').content === 'none' ? null : Number(parseFloat(getComputedStyle(body, '::after').opacity).toFixed(2)),
-        // no chip or action text cut off inside its button
-        clipped: [...document.querySelectorAll('#species-panel .species-chip, #species-what-lives-here')].filter((b) => b.scrollWidth > b.clientWidth + 0.5).map((b) => ({ text: b.textContent, scrollWidth: b.scrollWidth, clientWidth: b.clientWidth })),
+        // no chip, action or caption text cut off inside its box
+        clipped: [...document.querySelectorAll('#species-panel .species-chip, #species-what-lives-here, #species-legend-caption')].filter((el) => el.scrollWidth > el.clientWidth + 0.5).map((el) => ({ text: el.textContent, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth })),
+        caption: caption ? { text: caption.textContent, right: +caption.getBoundingClientRect().right.toFixed(1), legendContentRight: +(legend.getBoundingClientRect().right - parseFloat(getComputedStyle(legend).paddingRight)).toFixed(1) } : null,
       };
     });
-    if (shotAtTop) await shot(shotName);
-    await page.evaluate(() => { const body = document.querySelector('#species-panel .species-body'); body.scrollTop = body.scrollHeight; });
+    const cueTop = await page.evaluate(cueState);
+    if (shotName && shotAtTop) await shot(shotName);
+    await page.evaluate(() => { const body = document.getElementById('species-body'); body.scrollTop = body.scrollHeight; });
     await sleep(1200);
-    // At the end of the scroll: the hint has faded out, and the Top datasets heading is on screen above its links (it sticks while its list shows).
-    const end = await page.evaluate(() => {
-      const body = document.querySelector('#species-panel .species-body');
-      const b = body.getBoundingClientRect();
-      const view = { top: b.top + body.clientTop, bottom: b.top + body.clientTop + body.clientHeight };
-      const heading = document.querySelector('#species-datasets .dataset-list-heading');
-      const h = heading?.getBoundingClientRect();
-      const hit = h ? document.elementFromPoint(h.left + 6, (h.top + h.bottom) / 2) : null;
-      return {
-        scrollTop: body.scrollTop, more: getComputedStyle(body).getPropertyValue('--species-more').trim(),
-        hintAtEnd: getComputedStyle(body, '::after').content === 'none' ? null : Number(parseFloat(getComputedStyle(body, '::after').opacity).toFixed(2)),
-        heading: h ? { top: Math.round(h.top), bottom: Math.round(h.bottom), inView: h.top >= view.top - 0.5 && h.bottom <= view.bottom + 0.5, hit: Boolean(hit && (hit === heading || heading.contains(hit))) } : null,
-      };
-    });
-    if (!shotAtTop) await shot(shotName);
-    await page.evaluate(() => { document.querySelector('#species-panel .species-body').scrollTop = 0; });
-    const hintOk = fit.hintAtTop === null || !fit.overflows || (fit.hintAtTop >= 0.9 && end.hintAtEnd !== null && end.hintAtEnd <= 0.1);
-    const headingOk = Boolean(end.heading?.inView && end.heading.hit);
-    const ok = datasetsWait === 'settled' && datasetsFailure === null && fit.scrollTop === 0 && ['action', 'years', 'radius'].every((k) => fit[k].inside && fit[k].corners) && (!fit.overflows || fit.fadeVar !== '0px') && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden && fit.clipped.length === 0 && hintOk && headingOk;
-    return { ...fit, datasetsWait, datasetsFailure, end, hintOk, headingOk, ok };
+    const cueEnd = await page.evaluate(cueState);
+    const endLinks = links ? await linksAtEnd() : null;
+    if (shotName && !shotAtTop) await shot(shotName);
+    await page.evaluate(() => { document.activeElement?.blur?.(); document.getElementById('species-body').scrollTop = 0; });
+    const range = fit.scrollHeight - fit.clientHeight;
+    const overflowOk = overflow ? range > MORE_SLACK_PX : range === 0;
+    const cueLaidOut = (state) => state.present && state.display !== 'none' && state.inPanel && state.ariaHidden === 'true' && state.box.height >= 10 && state.overlapCount === 0;
+    const cueOk = cueLaidOut(cueTop) && cueLaidOut(cueEnd) && cueTop.visibility === (overflow ? 'visible' : 'hidden') && cueEnd.rangeLeft <= MORE_SLACK_PX && cueEnd.visibility === 'hidden';
+    const controlsOk = !controls || ['action', 'years', 'radius'].every((key) => fit[key].inside && fit[key].corners);
+    const captionOk = Boolean(fit.caption) && fit.caption.right <= fit.caption.legendContentRight + 0.5;
+    const linksOk = !links || Boolean(endLinks?.ok);
+    const ok = mapTiles.settled && datasetsWait === 'settled' && datasetsFailure === null && fit.scrollTop === 0 && controlsOk && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden && fit.clipped.length === 0 && captionOk && overflowOk && cueOk && linksOk;
+    return { ...fit, range, mapTiles, datasetsWait, datasetsFailure, cueTop, cueEnd, endLinks, overflowOk, cueOk, controlsOk, captionOk, linksOk, ok };
   };
   await page.evaluate(async () => {
     const dm = window.__godsEyeView.dataManager;
@@ -187,8 +274,10 @@ if (CHECKS.has('panel-layout')) {
   });
   const desktopFit = await fitAt(1400, 900, 'panel-scrolled-desktop');
   const phoneFit = await fitAt(400, 800, 'panel-scrolled-phone');
-  // M-4: a 375x667 phone, measured and shot at the top of the scroll; reported, not required (the brief's fit criterion is 400x800).
-  const smallPhoneFit = await fitAt(375, 667, 'panel-375x667', { shotAtTop: true });
+  // 375x667: the cue is required (critic S2); the controls and the end links are measured and reported, the fit criterion being 400x800.
+  const smallPhoneFit = await fitAt(375, 667, 'panel-375x667', { shotAtTop: true, controls: false, links: false });
+  // I2: a desktop window at least 1,000 px tall where the whole body fits: nothing overflows, and the cue stays hidden.
+  const tallDesktopFit = await fitAt(1400, TALL_DESKTOP_HEIGHT, null, { overflow: false, links: false });
   await page.setViewport({ width: 1400, height: 900 });
   await sleep(2000);
   await page.evaluate(async () => {
@@ -198,13 +287,13 @@ if (CHECKS.has('panel-layout')) {
   });
   await setOpen('species-panel', !initial.species);
   await sleep(800);
-  const fitOk = desktopFit.ok && phoneFit.ok;
+  const fitOk = desktopFit.ok && phoneFit.ok && smallPhoneFit.ok && tallDesktopFit.ok;
   report('panel-layout', collapsedOk && expandedOk && phoneOk && restoredOk && fitOk, {
     collapsed: { species: collapsed.species.width, scene: collapsed.scene.width },
     expanded: { species: expanded.species.width, speciesExpandedVar: expanded.species.expandedVar },
     phone: { viewport: phone.viewport, speciesWidth: phone.species.width, speciesLeft: phone.species.left, speciesRight: phone.species.right },
     restored: { viewport: restored.viewport, speciesCollapsed: restored.species.collapsed, sceneCollapsed: restored.scene.collapsed },
-    desktopFit, phoneFit, smallPhoneFit,
+    desktopFit, phoneFit, smallPhoneFit, tallDesktopFit,
     collapsedOk, expandedOk, phoneOk, restoredOk, fitOk,
   });
 }
@@ -398,10 +487,12 @@ if (CHECKS.has('search')) {
   // Ruling R-2a: the species layer counts only real HTTP/network tile errors (GBIF answers empty tiles with 204),
   // so after the tiles load its status must carry no error.
   const stats = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('species')?.module?.getStats() ?? null);
+  const mapTiles = await waitForMapTiles();
   await shot('search');
-  report('search', first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && styleMismatches.length === 0 && layoutOk && stats?.error === null, { first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, zooms: [...new Set(tiles.map(zoomOf))].sort((a, b) => a - b), styleMismatches: styleMismatches.length, styleMismatchSample: styleMismatches.slice(0, 3), layout, layoutOk, srs: tiles[0] ? new URL(tiles[0]).searchParams.get('srs') : null, sample: tiles[0] || null });
+  report('search', mapTiles.settled && first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && styleMismatches.length === 0 && layoutOk && stats?.error === null, { mapTiles, first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, zooms: [...new Set(tiles.map(zoomOf))].sort((a, b) => a - b), styleMismatches: styleMismatches.length, styleMismatchSample: styleMismatches.slice(0, 3), layout, layoutOk, srs: tiles[0] ? new URL(tiles[0]).searchParams.get('srs') : null, sample: tiles[0] || null });
 }
 
+let panelTaxon = null; // the panel's gbif.org link and the dataset search it sits under, for portal-link
 if (CHECKS.has('panel-datasets')) {
   // R-7u: with the map of a taxon on, the panel lists that taxon's top 1-3 datasets for the years and licences, each a DOI or gbif.org
   // dataset link, then a link to the same records on gbif.org; the search the page sent carries the taxon, both licences, the years and a
@@ -428,13 +519,17 @@ if (CHECKS.has('panel-datasets')) {
     rowsOk: datasetRowsOk(rows, 3),
     visible: panel.visible && panel.heading === 'Top datasets for this species',
     searchOk: Boolean(sent) && sent.searchParams.get('taxonKey') === String(state.params?.taxonKey) && sent.searchParams.get('hasCoordinate') === 'true' && !sent.searchParams.has('hasGeospatialIssue') && sent.searchParams.get('datasetKey.facetLimit') === '3' && sent.searchParams.get('limit') === '0' && JSON.stringify(sent.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']),
-    linkOk: Boolean(link) && link.origin + link.pathname === 'https://www.gbif.org/occurrence/search' && link.searchParams.get('taxon_key') === String(state.params?.taxonKey) && link.searchParams.get('has_coordinate') === 'true' && JSON.stringify(link.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']) && link.searchParams.get('year') === years && panel.link.target === '_blank' && /\bnoopener\b/.test(panel.link.rel || '') && /\bnoreferrer\b/.test(panel.link.rel || ''),
+    // The link names the Backbone checklist its taxon key belongs to, in camelCase (portal-link compares its count with the API's).
+    linkOk: Boolean(link) && link.origin + link.pathname === 'https://www.gbif.org/occurrence/search' && JSON.stringify([...link.searchParams.keys()]) === JSON.stringify(years ? ['taxonKey', 'checklistKey', 'hasCoordinate', 'license', 'license', 'year'] : ['taxonKey', 'checklistKey', 'hasCoordinate', 'license', 'license']) && link.searchParams.get('taxonKey') === String(state.params?.taxonKey) && link.searchParams.get('checklistKey') === GBIF_BACKBONE_CHECKLIST_KEY && link.searchParams.get('hasCoordinate') === 'true' && JSON.stringify(link.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']) && link.searchParams.get('year') === years && panel.link.target === '_blank' && /\bnoopener\b/.test(panel.link.rel || '') && /\bnoreferrer\b/.test(panel.link.rel || ''),
   };
+  panelTaxon = panel.link ? { href: panel.link.href, sent: sent ? String(sent) : null } : null;
+  const mapTiles = await waitForMapTiles();
   await shot('panel-datasets');
-  report('panel-datasets', Object.values(checks).every(Boolean), { ...(failure ? { failure } : {}), ...checks, waited, state, panel, rows, sent: sent ? String(sent) : null });
+  report('panel-datasets', mapTiles.settled && Object.values(checks).every(Boolean), { mapTiles, ...(failure ? { failure } : {}), ...checks, waited, state, panel, rows, sent: sent ? String(sent) : null });
 }
 
 let hereSearch = null;
+let hereCard = null; // the here check's card: its gbif.org link and filter line, for portal-link
 const isHereSearch = (url) => { let u; try { u = new URL(url); } catch { return false; } return u.hostname === 'api.gbif.org' && u.pathname === '/v1/occurrence/search' && u.searchParams.get('facet') === 'speciesKey'; };
 const AREA_OUTLINE_ROLE = 'what-lives-here-area'; // src/bio/whatLivesHere.js
 const countOutlines = () => page.evaluate((role) => {
@@ -515,9 +610,11 @@ if (CHECKS.has('here')) {
     const after = await cardState();
     click = { selectedBefore: before.selected, selectedAfter: after.selected, cardUnchanged: !after.hidden && after.text === before.text };
   }
+  const mapTiles = await waitForMapTiles();
   await shot('what-lives-here');
   const outlineOk = outline.count === 1 && outline.inPrimitives === 0 && outline.allowPicking === false && outline.controlHit === true && outline.outlineHit === false && click?.selectedAfter === null && click?.cardUnchanged === true;
-  report('here', result.rows >= 1 && Boolean(result.link) && outlineOk, { ...result, outline, click, outlineOk });
+  hereCard = { href: result.link, filter: result.filter };
+  report('here', mapTiles.settled && result.rows >= 1 && Boolean(result.link) && outlineOk, { mapTiles, ...result, outline, click, outlineOk });
   // R-7u: after a real search the card foot names 1-5 top datasets, each a DOI or gbif.org dataset link, above the gbif.org link; the search
   // asked for both facets with their own limits.
   const hereUrl = hereSearch ? new URL(hereSearch) : null;
@@ -529,40 +626,6 @@ if (CHECKS.has('here')) {
   const headingOk = result.cardHeading === 'Top datasets in this area';
   const cueOk = Boolean(result.body) && (result.body.scrollHeight <= result.body.clientHeight ? result.body.fade === '0px' : result.body.fade !== '0px');
   report('card-datasets', datasetRowsOk(cardDatasets, 5) && facetsOk && orderOk && footRelOk && headingOk && cueOk, { rows: cardDatasets, facetsOk, footOrder: result.footOrder, orderOk, footRel: result.footRel, footRelOk, cardHeading: result.cardHeading, headingOk, body: result.body, cueOk });
-}
-
-if (CHECKS.has('portal-link')) {
-  // gbif.org answers scripts with a bot check, so the footer link is compared with the GBIF search the page really sent
-  // (R-7b): gbif.org's location filter is `geometry` and it drops `geo_distance`, so the link must carry the search's
-  // geometry exactly, with the same licences and years.
-  const href = await page.evaluate(() => document.querySelector('#bio-card .bio-card-foot > a')?.getAttribute('href') ?? null);
-  const parse = (url) => { try { return new URL(url); } catch { return null; } };
-  const link = href ? parse(href) : null;
-  const sent = hereSearch ? parse(hereSearch) : null;
-  if (!link || !sent) {
-    // Never pass by skipping: portal-link needs the here check's GBIF request and its footer link.
-    report('portal-link', false, { reason: !sent ? 'no what-lives-here GBIF search request was captured (run the here check first)' : 'the what-lives-here card has no footer link', href, hereSearch });
-  } else {
-    const noDistance = (u) => !u.searchParams.has('geo_distance') && !u.searchParams.has('geoDistance');
-    const rawGeometry = (url) => (url.match(/[?&]geometry=([^&]*)/) || [])[1] ?? null;
-    const geometry = link.searchParams.get('geometry');
-    const licences = (u) => u.searchParams.getAll('license');
-    const checks = {
-      portalPath: link.origin + link.pathname === 'https://www.gbif.org/occurrence/search',
-      geometryIsPolygon: /^POLYGON\(\(/.test(geometry || ''),
-      geometryEqual: geometry !== null && geometry === sent.searchParams.get('geometry'),
-      licencesEqual: ['CC0_1_0', 'CC_BY_4_0'].every((l) => licences(sent).includes(l)) && JSON.stringify(licences(link)) === JSON.stringify(licences(sent)),
-      yearEqual: sent.searchParams.get('year') !== null && link.searchParams.get('year') === sent.searchParams.get('year'),
-      noDistanceParam: noDistance(link) && noDistance(sent),
-    };
-    report('portal-link', Object.values(checks).every(Boolean), {
-      ...checks,
-      rawGeometryEqual: rawGeometry(href) === rawGeometry(hereSearch),
-      geometryVertices: geometry ? geometry.split(',').length : null,
-      link: { length: href.length, params: [...link.searchParams.entries()] },
-      search: { length: hereSearch.length, params: [...sent.searchParams.entries()] },
-    });
-  }
 }
 
 if (CHECKS.has('here')) {
@@ -662,6 +725,108 @@ if (CHECKS.has('here')) {
     && detail?.selected === 'qa-here-detail-marker' && detail.hidden === false && detail.text.includes('qa-here-detail marker') && detail.outlines.groundPrimitives === 0
     && closed?.selected === null && closed.hidden === true && closed.outlines.groundPrimitives === 0 && closed.outlines.primitives === 0;
   report('here-detail', ok, { listed, spots, detail, closed, restored, ...(error ? { error } : {}) });
+}
+
+if (CHECKS.has('portal-link')) {
+  // The gbif.org links a person opens. A script can check what each link says: its parameters, its length, and the record count api.gbif.org
+  // v1 gives for the same parameters (taxonKey, checklistKey, hasCoordinate, license, year, geometry), which must be the count the app showed
+  // or used. It cannot check gbif.org's own page: www.gbif.org answers scripts with a bot check, and on 2026-09-14 it showed 0 results for
+  // links whose API count was right (a Backbone taxon key read under its default Catalogue of Life XR checklist; a 1,508-character polygon).
+  // Only a person clicking the links in forPeople verifies that.
+  const MAX_PORTAL_URL = 1000; // a margin under the 1,508-character link gbif.org failed in a real browser, not a documented GBIF limit
+  const PORTAL_TO_API = ['taxonKey', 'checklistKey', 'hasCoordinate', 'license', 'year', 'geometry'];
+  const parse = (url) => { try { return new URL(url); } catch { return null; } };
+  const apiCount = async (href) => {
+    const link = parse(href);
+    if (!link || link.origin + link.pathname !== 'https://www.gbif.org/occurrence/search') return { error: `not a gbif.org occurrence search link: ${href}` };
+    const unmapped = [...new Set(link.searchParams.keys())].filter((key) => !PORTAL_TO_API.includes(key));
+    if (unmapped.length) return { error: `gbif.org parameters with no API mapping: ${unmapped.join(', ')}` };
+    const api = new URL('https://api.gbif.org/v1/occurrence/search');
+    for (const [key, value] of link.searchParams) api.searchParams.append(key, value);
+    api.searchParams.set('limit', '0');
+    try {
+      const res = await fetch(api, { signal: AbortSignal.timeout(30000) });
+      if (!res.ok) return { api: String(api), error: `HTTP ${res.status}` };
+      return { api: String(api), count: (await res.json()).count };
+    } catch (error) {
+      return { api: String(api), error: String(error) };
+    }
+  };
+  const cardTotal = (filter) => { const m = /· ([\d,]+) records$/.exec(filter || ''); return m ? Number(m[1].replace(/,/g, '')) : null; };
+  const noDistance = (u) => !u.searchParams.has('geo_distance') && !u.searchParams.has('geoDistance');
+  const licencesOk = (u) => JSON.stringify(u.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']);
+  // An area link carries the search's own polygon, licences and years, no checklist, and its API count is the card's record total.
+  const areaLink = async (label, card, searchHref) => {
+    const link = parse(card?.href);
+    const sent = parse(searchHref);
+    if (!link || !sent) return { label, ok: false, reason: !sent ? 'no what-lives-here GBIF search was captured' : 'the card has no gbif.org link', href: card?.href ?? null };
+    const api = await apiCount(card.href);
+    const total = cardTotal(card.filter);
+    const checks = {
+      geometryIsPolygon: /^POLYGON\(\(/.test(link.searchParams.get('geometry') || ''),
+      geometryEqual: link.searchParams.get('geometry') === sent.searchParams.get('geometry'),
+      licencesEqual: licencesOk(link) && licencesOk(sent),
+      yearEqual: sent.searchParams.get('year') !== null && link.searchParams.get('year') === sent.searchParams.get('year'),
+      noDistanceParam: noDistance(link) && noDistance(sent),
+      noChecklist: !link.searchParams.has('checklistKey'),
+      lengthOk: card.href.length <= MAX_PORTAL_URL,
+      countEqual: Number.isInteger(api.count) && api.count > 0 && api.count === total,
+    };
+    return { label, ok: Object.values(checks).every(Boolean), ...checks, href: card.href, length: card.href.length, vertices: (link.searchParams.get('geometry') || '').split(',').length, cardTotal: total, api };
+  };
+  // A new what-lives-here search from the SPECIES panel at a place and radius (its chip); the card is dismissed afterwards.
+  const searchAt = async ({ lon, lat, radiusKm }) => {
+    await openSpeciesPanel();
+    await page.click(`#species-radius [data-radius="${radiusKm}"]`);
+    await flyTo(lon, lat, 40_000);
+    const from = requests.length;
+    await page.click('#species-what-lives-here');
+    const centre = await page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
+    await page.mouse.click(centre.x, centre.y);
+    await page.waitForFunction(() => document.querySelectorAll('#bio-card .bio-card-row').length > 0 || /failed|No CC0/.test(document.getElementById('bio-card')?.innerText || ''), { timeout: 45000 });
+    const card = await page.evaluate(() => ({ rows: document.querySelectorAll('#bio-card .bio-card-row').length, filter: document.querySelector('#bio-card .bio-card-filter')?.textContent || '', href: document.querySelector('#bio-card .bio-card-foot > a')?.getAttribute('href') ?? null, note: document.querySelector('#bio-card .bio-card-foot-note')?.textContent ?? null, text: document.getElementById('bio-card').innerText.slice(0, 200) }));
+    const search = requests.slice(from).filter(isHereSearch).at(-1) || null;
+    await page.keyboard.press('Escape');
+    await sleep(800);
+    return { ...card, search };
+  };
+  const results = [];
+  let error = null;
+  try {
+    // 1. the here check's 10 km card
+    results.push(await areaLink('card 10 km', hereCard, hereSearch));
+    // 2. a 50 km search at the same spot: the longest polygon link
+    const wide = await searchAt({ lon: -110.83, lat: 44.46, radiusKm: 50 });
+    results.push({ ...(await areaLink('card 50 km', wide, wide.search)), rows: wide.rows, filter: wide.filter });
+    // 3. a 50 km search across the antimeridian (Taveuni, Fiji): searched with geoDistance, so the link carries the licences and years only
+    const across = await searchAt({ lon: 179.97, lat: -16.8, radiusKm: 50 });
+    const acrossLink = parse(across.href);
+    const acrossSent = parse(across.search);
+    const acrossApi = across.href ? await apiCount(across.href) : null;
+    const acrossChecks = {
+      searchUsedDistance: Boolean(acrossSent) && acrossSent.searchParams.has('geoDistance') && !acrossSent.searchParams.has('geometry'),
+      linkHasNoLocation: Boolean(acrossLink) && JSON.stringify([...acrossLink.searchParams.keys()]) === JSON.stringify(['license', 'license', 'year']) && licencesOk(acrossLink) && acrossLink.searchParams.get('year') === acrossSent?.searchParams.get('year'),
+      noteShown: across.note === "gbif.org can't show this area as a circle",
+      lengthOk: Boolean(across.href) && across.href.length <= MAX_PORTAL_URL,
+      countPositive: Number.isInteger(acrossApi?.count) && acrossApi.count > 0,
+    };
+    results.push({ label: 'no-location card (50 km across 180°)', ok: Object.values(acrossChecks).every(Boolean), ...acrossChecks, href: across.href, length: across.href?.length ?? null, rows: across.rows, filter: across.filter, api: acrossApi });
+    // 4. the SPECIES panel's link to the mapped taxon's records: the Backbone checklist, and the count of the dataset search the panel used
+    const taxonLink = parse(panelTaxon?.href);
+    const used = panelTaxon?.sent ? datasetSearchCounts.get(panelTaxon.sent) : undefined;
+    const taxonApi = taxonLink ? await apiCount(panelTaxon.href) : null;
+    const taxonChecks = {
+      checklistKey: taxonLink?.searchParams.get('checklistKey') === GBIF_BACKBONE_CHECKLIST_KEY,
+      lengthOk: Boolean(panelTaxon?.href) && panelTaxon.href.length <= MAX_PORTAL_URL,
+      countEqual: Number.isInteger(taxonApi?.count) && taxonApi.count > 0 && taxonApi.count === used,
+    };
+    results.push({ label: 'panel taxon link', ok: Object.values(taxonChecks).every(Boolean), ...taxonChecks, href: panelTaxon?.href ?? null, length: panelTaxon?.href?.length ?? null, datasetSearch: panelTaxon?.sent ?? null, datasetSearchCount: used ?? null, api: taxonApi });
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await page.click('#species-radius [data-radius="10"]').catch((caught) => { error = `${error ?? ''} restoring the 10 km radius: ${caught}`; });
+  }
+  report('portal-link', error === null && results.length === 4 && results.every((r) => r.ok), { results, ...(error ? { error } : {}), forPeople: { card50km: results[1]?.href ?? null, panelTaxon: results[3]?.href ?? null, noLocation: results[2]?.href ?? null } });
 }
 
 report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10), upstreamTileErrors: upstreamTileErrors.slice(0, 10) });
