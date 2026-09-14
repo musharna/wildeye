@@ -71,8 +71,9 @@ export function describeOccurrence(p, ds = {}) {
   const link = p.url
     ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${src} record</a>`
     : src;
+  // The DOI starts its own line: after a long dataset title a " · " separator wrapped to the start of the next line.
   const doi = meta.doi
-    ? ` · <a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`
+    ? `<br><a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`
     : "";
   const publisher = meta.publisher ? ` — ${esc(meta.publisher)}` : "";
   const unc = Number.isFinite(p.uncertainty_m) ? ` · ±${Math.round(p.uncertainty_m)} m` : "";

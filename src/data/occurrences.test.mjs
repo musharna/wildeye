@@ -30,6 +30,9 @@ test('pointEntity: id is stable, colour by group, age drives alpha', () => {
   const html = describeOccurrence(by, { dk: { title: 'Whale survey', publisher: 'Acme Inst', doi: '10.1/abc' } });
   assert.match(html, /CC BY 4\.0/); assert.doesNotMatch(html, /CC0/);
   assert.match(html, /±12 m.*Whale survey — Acme Inst.*doi\.org\/10\.1\/abc/s);
+  // S7: the DOI starts its own line, so a wrap can never leave a separator dot at the start of a line.
+  assert.match(html, /Whale survey — Acme Inst<br><a href="https:\/\/doi\.org\/10\.1\/abc"[^>]*>doi:10\.1\/abc<\/a><br>/);
+  assert.doesNotMatch(html, /· <a href="https:\/\/doi\.org/);
   assert.equal(licenceLabel('https://example.org/weird'), 'https://example.org/weird');
   assert.match(describeOccurrence({ ...by, name: '<img src=x>' }), /&lt;img/);
 });
