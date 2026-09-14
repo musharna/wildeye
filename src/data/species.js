@@ -9,7 +9,7 @@ import { setStackedImagery } from './rasterDrape.js';
  */
 export const SPECIES_ZRANK = 1000;
 /**
- * Opaque, chosen by measurement (task-7-fix2-report.md R-7f): at 0.7 the same class changed colour with the ground under it and the
+ * Opaque, chosen by measurement (spec: Implementation notes): at 0.7 the same class changed colour with the ground under it and the
  * sparsest class blended into light land; opaque classic-noborder.poly fills give the highest lowest-class contrast of the styles
  * measured and the colours the legend shows.
  */

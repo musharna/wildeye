@@ -118,9 +118,10 @@ export const SPECIES_MAP_LEGEND = Object.freeze({
 
 /**
  * Cesium URL template for GBIF hexagon tiles of one taxon. `adhoc`, because `density` ignores `license=`. `srs=EPSG:3857`,
- * because `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator. `classic-noborder.poly`,
- * because its fills are opaque: with SPECIES_ALPHA 1 a hexagon's colour no longer depends on the imagery under it, so it matches
- * the legend (measured 2026-09-13, task-7-fix2-report.md R-7f).
+ * because `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator. The style comes from
+ * SPECIES_MAP_LEGEND: `classic-noborder.poly`, whose fills are opaque, so with SPECIES_ALPHA 1 a hexagon's colour no longer depends
+ * on the imagery under it. The legend colours match the map at the 12,000 km view they were fitted at; the top class is predicted,
+ * not sampled (spec: Implementation notes).
  */
 export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`densityTileTemplate: bad taxonKey ${taxonKey}`);

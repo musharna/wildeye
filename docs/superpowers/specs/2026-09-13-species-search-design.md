@@ -47,7 +47,7 @@ Pages build (no `/api`).
    - `gbifSuggest(q)`: `/v1/species/suggest` — used only when iNaturalist fails, with a visible notice.
    - `densityTileTemplate({taxonKey, years})`: `/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png` with
      `taxonKey`, `license=CC0_1_0&license=CC_BY_4_0`, `year=<from>,<to>` (omitted for all years),
-     `style=classic.poly&bin=hex`. Never `density`.
+     `style=classic.poly&bin=hex`. Never `density`. (Built differently: see Implementation notes.)
    - `speciesNear({lat, lon, radiusKm, years})`: `/v1/occurrence/search?geoDistance=lat,lon,Rkm`,
      both licences, year range, `hasCoordinate=true&hasGeospatialIssue=false&facet=speciesKey&facetLimit=20&limit=0`
      → `{total, species:[{key, count}]}`.
@@ -56,7 +56,7 @@ Pages build (no `/api`).
    - Every request: 8 s timeout, `AbortController`; a newer search aborts the older one.
 3. `src/data/species.js` — data layer `species` (token `sp`, `requiresBackend` false).
    - Cesium `UrlTemplateImageryProvider` from `densityTileTemplate`, alpha 0.7, stacked above the
-     raster drapes.
+     raster drapes. (Built at alpha 1: see Implementation notes.)
    - `getParams/setParams`: `{taxonKey, years: 'recent'|'all', radiusKm: 1|10|50}`; `recent` = the
      last 10 calendar years including the current one.
    - Share-link option group in `src/data/layerState.js` (taxon key, years, radius); the display name
@@ -113,3 +113,34 @@ Pages build (no `/api`).
 ## Out of scope
 Season/year replay, biology scenes, new data layers from the 2026-09-13 source triage, voice aliases,
 IUCN badges in the species list (IUCN stays dormant until its token exists).
+
+## Implementation notes (2026-09-13)
+What the build changed from the design above, and why.
+- Map tiles request `srs=EPSG:3857`. GBIF's `adhoc` endpoint defaults to EPSG:4326, and Cesium's
+  `UrlTemplateImageryProvider` lays tiles out in Web Mercator, so without it the hexagons are drawn in the wrong place.
+- The map style is `classic-noborder.poly` at layer alpha 1, not `classic.poly` at 0.7. Opaque fills keep a hexagon's colour
+  independent of the imagery under it. Against the Esri basemap at the 12,000 km view, the sparsest class has a median contrast
+  of 2.36:1 over land and 2.78:1 over ocean (1.90:1 and 2.18:1 with `classic.poly` at 0.7). No fill reaches 3:1 there: the
+  globe's ground atmosphere lightens the basemap so much that even white measures 2.54:1 over that land.
+- The legend lists the record-count classes of that style (github.com/gbif/maps,
+  `mapnik-server/src/main/node/cartocss/classic-noborder-poly.mss`): up to 10, 100, 1,000, 10,000 and 100,000 records per
+  hexagon, and more. Each swatch is its class colour as the globe draws it, fitted at the 12,000 km view as
+  0.794 × style colour + (25.5, 28.3, 55.0) per channel. The fit holds at that camera height; closer views draw purer colours.
+  The top class does not occur in the monarch map, so its colour is predicted, not sampled. `SPECIES_MAP_LEGEND` in
+  `src/bio/gbif.js` holds the classes and colours, and `src/bio/gbif.test.mjs` pins them to the style the tiles use.
+- "What lives here" searches a 64-vertex polygon (`geometry`), and its gbif.org link carries the same polygon, because gbif.org
+  ignores `geo_distance`. A circle centred beyond ±85° latitude, or one that would cross ±180°, is searched with `geoDistance`
+  instead, and its link carries only the licences and years.
+- The details card sanitizes layer descriptions with DOMPurify. Only http, https and mailto links survive, and each opens in a new
+  tab with `rel="noopener noreferrer"`.
+- Only HTTP and network errors count as tile failures. GBIF answers an empty tile with 204, which Cesium reports as an error of
+  its own.
+- Dismissing the card cancels the search it was waiting for. The searched circle's outline shows exactly while the card shows
+  that search's status or list.
+- Hexagons can mismatch where Cesium mixes GBIF zoom levels across the view. Square bins were tested at 128 px (empty stripes)
+  and 256 px (a blurred map) and rejected.
+- The `adhoc` endpoint aggregates records into Elasticsearch geohash cells whose size depends on the zoom, and bins one point per
+  cell into hexagons (github.com/gbif/maps `AdHocMapsResource`, github.com/gbif/occurrence `BaseEsHeatmapRequestBuilder`).
+  Where a hexagon is about one cell wide or smaller, some hexagons that hold records draw empty: with `hexPerTile=30`, 19% of the
+  hexagons with monarch records in tile 3/2/2, 53% in 6/16/23 and 74% in 9/130/190 (compared with the point-level `density`
+  tiles, 2026-09-13).
