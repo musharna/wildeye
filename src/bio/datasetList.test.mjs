@@ -1,7 +1,7 @@
 // src/bio/datasetList.test.mjs — 'Top datasets' rows (R-7u): facet order, DOI or gbif.org links, counts, failed lookups, text only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createDatasetList, datasetRows, DATASETS_HEADING } from './datasetList.js';
+import { createDatasetList, createDatasetRows, datasetRows, DATASETS_HEADING } from './datasetList.js';
 
 const INAT_RG = '50c9509d-22c7-4a22-a47d-8c48425ef4a7'; // DOI 10.15468/ab3s5x (live 2026-09-14)
 const OTHER = '6ac3f774-d9fb-4796-b3e9-92bf6c81c084';
@@ -57,4 +57,11 @@ test('the Top datasets block is built with text only, and every link is https in
     ['https://www.gbif.org/dataset/' + OTHER, '_blank', 'noopener noreferrer'],
   ]);
   assert.equal(createDatasetList(doc, [], { heading: 'Top datasets' }).children[1].children.length, 0, 'no datasets: an empty list under the heading');
+});
+
+// S5: the SPECIES panel keeps its heading in the page through every state, so it takes the rows alone, labelled by that heading's id.
+test('the rows can be built on their own, labelled by a heading elsewhere in the page', () => {
+  const list = createDatasetRows(fakeDoc(), [{ key: INAT_RG, count: 3, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }], { labelledBy: 'species-datasets-heading' });
+  assert.deepEqual([list.tag, list.className, list.attributes['aria-labelledby'], list.attributes['aria-label']], ['ol', 'dataset-list-rows', 'species-datasets-heading', undefined]);
+  assert.deepEqual(list.children.map((li) => [li.children[0].href, li.children[0].rel, li.children[1].textContent]), [['https://doi.org/10.15468/ab3s5x', 'noopener noreferrer', '3']]);
 });

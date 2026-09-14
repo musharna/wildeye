@@ -81,11 +81,11 @@ test('the species map legend is the record-count classes of the style the tiles 
   assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.color, c.predicted]), [
     ['#e4d9ac', false], ['#d5aa78', false], ['#cea878', false], ['#be8770', true], ['#ab7272', true],
   ]);
-  // Swatch sizes keep the style's order. I-1: the caption says in plain words what size and colour mean, that the colours are as seen from
-  // far out (closer views draw the circles brighter: 11-13 CIEDE2000 from the swatches at the 1,700 km Upper Midwest view), and that sizes
-  // change with zoom.
+  // Swatch sizes keep the style's order. I3: the caption says what was measured: the colours are as seen from far out, and closer up the
+  // circles look stronger, not brighter (at the 1,700 km Upper Midwest view the <=100 and <=1k circles are about 10 L* darker and twice as
+  // saturated as their swatches).
   assert.ok(SPECIES_MAP_LEGEND.classes.every((c, i, all) => i === 0 || c.widthPx > all[i - 1].widthPx), 'sizes grow with the class');
-  assert.equal(SPECIES_MAP_LEGEND.caption, 'Records per circle: bigger, darker circles hold more. Colours as seen from far out; closer views look brighter. Sizes change with zoom.');
+  assert.equal(SPECIES_MAP_LEGEND.caption, 'Records per circle · colours as seen from far out; closer up they look stronger');
   assert.ok(Object.isFrozen(SPECIES_MAP_LEGEND) && Object.isFrozen(SPECIES_MAP_LEGEND.classes) && SPECIES_MAP_LEGEND.classes.every(Object.isFrozen));
 });
 

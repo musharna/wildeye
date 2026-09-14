@@ -4,10 +4,20 @@
  * map, and the labelled year and radius chips.
  */
 import { SPECIES_MAP_LEGEND, gbifPortalTaxonUrl, yearLabel } from './gbif.js';
-import { createDatasetList } from './datasetList.js';
+import { createDatasetRows } from './datasetList.js';
 
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
+/**
+ * I2: scrollHeight and clientHeight are whole pixels rounded from fractional layout, so a scroll range of up to 2 px is rounding, not content,
+ * and the scroll cue stays hidden.
+ */
+export const MORE_SLACK_PX = 2;
+
+/** Whether more of a scroll container's content is below its view: more than MORE_SLACK_PX of its scroll range is left. */
+export function hasMoreBelow({ scrollTop, scrollHeight, clientHeight }) {
+  return scrollHeight - clientHeight - scrollTop > MORE_SLACK_PX;
+}
 
 /**
  * "Common · Scientific (rank)", plus the term iNaturalist matched, which can be another common name ("Hump-back Cicada" for Swamp
@@ -67,7 +77,10 @@ export function renderLegendInto(container, doc, legend = SPECIES_MAP_LEGEND) {
   container.replaceChildren(caption, list);
 }
 
-export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, client, whatLivesHere, setTimer = setTimeout, clearTimer = clearTimeout }) {
+export function createSpeciesPanel({
+  doc = document, dataManager, speciesLayer, client, whatLivesHere, setTimer = setTimeout, clearTimer = clearTimeout,
+  observeSize = (targets, onChange) => { const observer = new ResizeObserver(onChange); for (const target of targets) observer.observe(target); },
+}) {
   const el = (id) => {
     const node = doc.getElementById(id);
     if (!node) throw new Error(`SPECIES panel: #${id} is missing from index.html`);
@@ -87,6 +100,9 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
   const yearChips = el('species-years');
   const radiusChips = el('species-radius');
   const armButton = el('species-what-lives-here');
+  // B1: the scroll cue is a row of its own below the scrolling body, so it never covers content; only its visibility changes.
+  const body = el('species-body');
+  const more = el('species-more');
   let timer = null;
   let suggestAbort = null;
   let chooseAbort = null;
@@ -98,6 +114,11 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
   let datasetsSettled = false;
   let datasetsFailed = false;
   renderLegendInto(legend, doc);
+  const updateMore = () => { more.style.visibility = hasMoreBelow(body) ? 'visible' : 'hidden'; };
+  body.addEventListener('scroll', updateMore, { passive: true });
+  // The body's size follows the window and the panel stack; its content's follows the legend, the datasets and the suggestions.
+  observeSize([body, ...body.children], updateMore);
+  updateMore();
 
   const params = () => dataManager.getLayerParams('species') || { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
 
@@ -138,8 +159,20 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
    * R-7u: the 3 datasets with the most CC0 / CC BY records of the mapped taxon in the chosen years, named with DOI links, then a link to
    * those records on gbif.org. One search per taxon and years: a change aborts the search in flight, and an answer for anything but the
    * current taxon and years is dropped. A failed search shows inside the block with Retry (I1: the shared status line was wiped by later
-   * messages and kept a stale failure after a success); a failed dataset lookup shows in its row.
+   * messages and kept a stale failure after a success), under the block's heading and above the gbif.org link, which stay in every state
+   * (S5); a failed dataset lookup shows in its row.
    */
+  /** The taxon's records on gbif.org for the chosen years. It does not depend on the dataset search, so it shows in every state. */
+  function taxonRecordsLink(taxonKey, years) {
+    const link = doc.createElement('a');
+    link.className = 'species-datasets-link';
+    link.href = gbifPortalTaxonUrl({ taxonKey, years });
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = years === 'all' ? 'All CC0/CC BY records on GBIF.org' : `All ${yearLabel(years)} CC0/CC BY records on GBIF.org`;
+    return link;
+  }
+
   async function showDatasets({ taxonKey, years }) {
     const key = `${taxonKey}|${years}`;
     if (key === datasetsFor) return;
@@ -151,9 +184,9 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
     datasetsFailed = false;
     const loading = doc.createElement('span');
     loading.className = 'species-datasets-loading';
-    loading.textContent = 'Top datasets: looking them up…';
+    loading.textContent = 'Looking up the datasets…';
     datasetsAnnounce.textContent = '';
-    datasetsContent.replaceChildren(loading);
+    datasetsContent.replaceChildren(loading, taxonRecordsLink(taxonKey, years));
     const { signal } = controller;
     try {
       const { datasets } = await client.taxonDatasets({ taxonKey, years }, { signal });
@@ -167,13 +200,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
         },
       )));
       if (signal.aborted) return;
-      const link = doc.createElement('a');
-      link.className = 'species-datasets-link';
-      link.href = gbifPortalTaxonUrl({ taxonKey, years });
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = years === 'all' ? 'All CC0/CC BY records on GBIF.org' : `All ${yearLabel(years)} CC0/CC BY records on GBIF.org`;
-      datasetsContent.replaceChildren(createDatasetList(doc, found, { heading: 'Top datasets for this species' }), link);
+      datasetsContent.replaceChildren(createDatasetRows(doc, found, { labelledBy: 'species-datasets-heading' }), taxonRecordsLink(taxonKey, years));
       datasetsSettled = true;
     } catch (error) {
       if (error?.name === 'AbortError' || signal.aborted) return;
@@ -184,12 +211,12 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
       failure.className = 'species-datasets-error';
       const retry = doc.createElement('button');
       retry.type = 'button';
-      retry.className = 'scene-btn species-datasets-retry';
+      retry.className = 'scene-btn species-action species-datasets-retry'; // S1: the panel's cyan action, not a grey button
       retry.textContent = 'Retry';
       // Retry replaces its own button with the loading line, so focus first moves to the block (tabindex -1), not to the page body.
       retry.addEventListener('click', () => { datasetsBox.focus(); datasetsFor = null; render(); });
       failure.appendChild(retry);
-      datasetsContent.replaceChildren(failure);
+      datasetsContent.replaceChildren(failure, taxonRecordsLink(taxonKey, years));
       datasetsSettled = true;
       datasetsFailed = true;
     }

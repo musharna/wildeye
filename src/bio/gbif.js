@@ -130,7 +130,7 @@ export function circlePolygonWkt({ lat, lon, radiusKm, vertices = SEARCH_POLYGON
  */
 export const SPECIES_MAP_LEGEND = Object.freeze({
   style: 'scaled.circles',
-  caption: 'Records per circle: bigger, darker circles hold more. Colours as seen from far out; closer views look brighter. Sizes change with zoom.',
+  caption: 'Records per circle · colours as seen from far out; closer up they look stronger',
   classes: Object.freeze([
     Object.freeze({ upTo: 10, widthPx: 6, fill: '#fed976', opacity: 1.0, lineColor: '#fe9724', lineWidthPx: 1, color: '#e4d9ac', predicted: false }),
     Object.freeze({ upTo: 100, widthPx: 7, fill: '#fd8d3c', opacity: 0.8, lineColor: '#fd5b24', lineWidthPx: 0, color: '#d5aa78', predicted: false }),

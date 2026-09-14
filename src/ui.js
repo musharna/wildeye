@@ -7162,7 +7162,9 @@ export class StyleManager {
 
     for (const child of inner.children) {
       const childStyle = getComputedStyle(child);
-      if (childStyle.display === 'none' || childStyle.visibility === 'hidden') continue;
+      // A visibility: hidden child still takes its layout space (the SPECIES panel's scroll cue is hidden while nothing is below), so only
+      // display: none is left out; skipping hidden children left the panel short by that child, and its body overflowed.
+      if (childStyle.display === 'none') continue;
       const childRect = child.getBoundingClientRect();
       const marginBottom = parseFloat(childStyle.marginBottom) || 0;
       const naturalChildHeight = Math.max(childRect.height, child.scrollHeight || 0);
@@ -7174,7 +7176,10 @@ export class StyleManager {
       + (parseFloat(panelStyle.borderBottomWidth) || 0)
       + (parseFloat(panelStyle.paddingTop) || 0)
       + (parseFloat(panelStyle.paddingBottom) || 0);
-    return Math.ceil(contentBottom + paddingBottom + wrapperChrome);
+    // contentBottom runs from the inner's border-box top, so it holds the inner's top border; the bottom border is added here. Without it a
+    // panel with a bordered inner came out 1 px short, and the SPECIES body overflowed by 1 px on tall windows (I2).
+    const borderBottom = parseFloat(innerStyle.borderBottomWidth) || 0;
+    return Math.ceil(contentBottom + paddingBottom + borderBottom + wrapperChrome);
   }
 
   /**

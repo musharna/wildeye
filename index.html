@@ -689,7 +689,7 @@
         <span class="panel-divider"></span>
         <button class="panel-collapse-btn" data-collapse-target="species-panel" title="Collapse panel">+</button>
       </div>
-      <div class="species-body">
+      <div id="species-body" class="species-body">
         <label class="species-label" for="species-search">Find a species</label>
         <input type="search" id="species-search" placeholder="monarch, humpback, red maple…" autocomplete="off" spellcheck="false" />
         <ul id="species-suggestions" class="species-suggestions" aria-label="Species suggestions" hidden></ul>
@@ -716,11 +716,13 @@
         </div>
         <div id="species-legend" class="species-legend" hidden></div>
         <div id="species-datasets" class="species-datasets" tabindex="-1" hidden>
+          <span id="species-datasets-heading" class="dataset-list-heading">Top datasets for this species</span>
           <p id="species-datasets-status" class="species-datasets-status" role="status" aria-live="polite"></p>
           <div id="species-datasets-content" class="species-datasets-content"></div>
         </div>
         <p class="species-credit"><span>Names: iNaturalist</span> <span>Records: GBIF.org, CC0/CC BY only</span> <span>Top datasets: a DOI link where GBIF has one,</span> <span>otherwise a gbif.org dataset page</span></p>
       </div>
+      <div id="species-more" class="species-more" aria-hidden="true">more ↓</div>
     </div>
   </div>
 

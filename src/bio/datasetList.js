@@ -21,29 +21,39 @@ export function datasetRows(datasets) {
   });
 }
 
-/** The block: a heading, then one row per dataset (its link, its count, and a note for a failed lookup). Links open in a new tab with no opener or referrer. */
-export function createDatasetList(doc, datasets, { heading = DATASETS_HEADING } = {}) {
-  const make = (tag, className, text) => {
-    const node = doc.createElement(tag);
-    node.className = className;
-    if (text !== undefined) node.textContent = text;
-    return node;
-  };
-  const block = make('div', 'dataset-list');
-  const list = make('ol', 'dataset-list-rows');
-  list.setAttribute('aria-label', heading);
+function make(doc, tag, className, text) {
+  const node = doc.createElement(tag);
+  node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+/**
+ * The rows alone: one list item per dataset (its link, its count, and a note for a failed lookup), named by `label`, or by the element whose
+ * id is `labelledBy` (the SPECIES panel's heading is in its markup). Links open in a new tab with no opener or referrer.
+ */
+export function createDatasetRows(doc, datasets, { label = DATASETS_HEADING, labelledBy = null } = {}) {
+  const list = make(doc, 'ol', 'dataset-list-rows');
+  if (labelledBy) list.setAttribute('aria-labelledby', labelledBy);
+  else list.setAttribute('aria-label', label);
   for (const row of datasetRows(datasets)) {
-    const item = make('li', 'dataset-row');
-    const link = make('a', 'dataset-row-link', row.text);
+    const item = make(doc, 'li', 'dataset-row');
+    const link = make(doc, 'a', 'dataset-row-link', row.text);
     link.href = row.href;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     item.appendChild(link);
-    item.appendChild(make('span', 'dataset-row-count', row.count));
-    if (row.note) item.appendChild(make('span', 'dataset-row-note', row.note));
+    item.appendChild(make(doc, 'span', 'dataset-row-count', row.count));
+    if (row.note) item.appendChild(make(doc, 'span', 'dataset-row-note', row.note));
     list.appendChild(item);
   }
-  block.appendChild(make('span', 'dataset-list-heading', heading));
-  block.appendChild(list);
+  return list;
+}
+
+/** The block: a heading, then its rows (createDatasetRows). */
+export function createDatasetList(doc, datasets, { heading = DATASETS_HEADING } = {}) {
+  const block = make(doc, 'div', 'dataset-list');
+  block.appendChild(make(doc, 'span', 'dataset-list-heading', heading));
+  block.appendChild(createDatasetRows(doc, datasets, { label: heading }));
   return block;
 }

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createSpeciesPanel, suggestionText } from './speciesPanel.js';
+import { createSpeciesPanel, hasMoreBelow, MORE_SLACK_PX, suggestionText } from './speciesPanel.js';
 import { SPECIES_MAP_LEGEND, gbifPortalTaxonUrl, yearLabel } from './gbif.js';
 import { DATA_CREDITS } from '../data/dataCredits.js';
 
@@ -18,14 +18,14 @@ function fakeElement() {
   };
 }
 
-const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-datasets', 'species-datasets-status', 'species-datasets-content', 'species-years', 'species-radius', 'species-what-lives-here'];
+const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-datasets', 'species-datasets-heading', 'species-datasets-status', 'species-datasets-content', 'species-years', 'species-radius', 'species-what-lives-here', 'species-body', 'species-more'];
 const INAT_RG = '50c9509d-22c7-4a22-a47d-8c48425ef4a7';
 const OTHER_DATASET = '6ac3f774-d9fb-4796-b3e9-92bf6c81c084';
 const settle = async (turns = 20) => { for (let i = 0; i < turns; i += 1) await new Promise((resolve) => setImmediate(resolve)); };
 const MONARCH = { gbifKey: 5133088, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' };
 const yearsChip = (years) => ({ target: { closest: () => ({ dataset: { years } }) } });
-// The rows under "Top datasets" in the block's content element: [link href, link text, count, note or null].
-const datasetRowsIn = (content) => content.children[0].children[1].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
+// The rows in the block's content element, a list labelled by the block's heading in index.html: [link href, link text, count, note or null].
+const datasetRowsIn = (content) => content.children[0].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
 
 function panelRig({ match = async () => 5133088, suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
@@ -33,6 +33,7 @@ function panelRig({ match = async () => 5133088, suggest = async () => ({ source
   for (const node of Object.values(els)) node.focus = () => { doc.activeElement = node; };
   // I-2: the block holds a polite live region that exists before any message; replacing the block's children would remove it.
   els['species-datasets'].replaceChildren = () => { throw new Error('#species-datasets.replaceChildren would remove its live region'); };
+  Object.assign(els['species-body'], { scrollTop: 0, scrollHeight: 0, clientHeight: 0 });
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
   let enabled = initiallyEnabled;
   const calls = { params: [], enable: [], match: [], taxonDatasets: [], dataset: [] };
@@ -60,8 +61,9 @@ function panelRig({ match = async () => 5133088, suggest = async () => ({ source
     },
   };
   const whatLivesHere = { armed: false, arm() {}, disarm() {} };
-  const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer: () => {} });
-  return { panel, els, calls, doc };
+  const resizes = [];
+  const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer: () => {}, observeSize: (targets, onChange) => { resizes.push({ targets, onChange }); } });
+  return { panel, els, calls, doc, resizes };
 }
 
 test('choosing an iNaturalist suggestion matches it in GBIF, sets the taxon and turns the map on', async () => {
@@ -191,8 +193,10 @@ test('the panel lists the top datasets of the mapped taxon with a gbif.org link 
   assert.deepEqual(calls.taxonDatasets.map((c) => c.args), [{ taxonKey: 5133088, years: 'recent' }]);
   assert.deepEqual(calls.dataset, [INAT_RG, OTHER_DATASET], 'each listed dataset is looked up, in facet order');
   assert.equal(box.hidden, false);
-  assert.deepEqual(content.children.map((child) => [child.tag, child.className]), [['div', 'dataset-list'], ['a', 'species-datasets-link']]);
-  assert.equal(content.children[0].children[0].textContent, 'Top datasets for this species', 'S3: the panel names whose datasets these are');
+  // S5: the heading "Top datasets for this species" is in index.html (#species-datasets-heading), so it stays in every state; the rows are a
+  // list it labels.
+  assert.deepEqual(content.children.map((child) => [child.tag, child.className]), [['ol', 'dataset-list-rows'], ['a', 'species-datasets-link']]);
+  assert.equal(content.children[0].attrs['aria-labelledby'], 'species-datasets-heading');
   assert.deepEqual(datasetRowsIn(content), [
     ['https://doi.org/10.15468/ab3s5x', 'iNaturalist Research-grade Observations', '41,111', null],
     [`https://www.gbif.org/dataset/${OTHER_DATASET}`, 'Dataset without a DOI', '306', null],
@@ -258,6 +262,11 @@ test('a failed dataset search shows in the datasets block with Retry, survives a
     assert.equal(announced.textContent, 'GBIF dataset search failed (HTTP 503)');
     const retry = failureIn(content)?.children.find((child) => child.tag === 'button');
     assert.deepEqual([retry?.tag, retry?.type, retry?.textContent], ['button', 'button', 'Retry']);
+    // S1: Retry is the panel's cyan action button. S5: only the rows are replaced; the link to the taxon's records on gbif.org stays.
+    assert.match(retry.className, /\bscene-btn\b/);
+    assert.match(retry.className, /\bspecies-action\b/);
+    assert.deepEqual(content.children.map((child) => child.className), ['species-datasets-error', 'species-datasets-link']);
+    assert.equal(content.children[1].href, gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'recent' }));
     assert.equal(/failed/.test(els['species-status'].textContent), false, 'not in the shared status line');
     els['species-status'].textContent = 'iNaturalist didn\'t answer (HTTP 500); showing GBIF scientific names';
     panel.render();
@@ -311,7 +320,7 @@ test('an answer that lands after its search was superseded, while its dataset lo
   assert.equal(searches.length, 2, 'the years change sent a new search');
   lookups[0].resolve({ key: INAT_RG, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' });
   await settle();
-  assert.deepEqual(box.children.map((child) => child.className), ['species-datasets-loading'], 'the superseded answer is dropped; the new search is still loading');
+  assert.deepEqual(box.children.map((child) => child.className), ['species-datasets-loading', 'species-datasets-link'], 'the superseded answer is dropped; the new search is still loading');
 });
 
 test('turning the map off while a dataset search is out aborts it and empties the hidden block', async () => {
@@ -369,6 +378,31 @@ test('a failed dataset lookup is a row naming its error', async () => {
   assert.deepEqual(logged.map(([label]) => label), ['[species] dataset lookup failed']);
 });
 
+// B1: the scroll cue is a row of its own below the scrolling body. It shows while more of the body is below and hides at the end. I2:
+// scrollHeight and clientHeight are whole pixels rounded from fractional layout, so a range of up to 2 px counts as nothing to scroll.
+test('the scroll cue shows while more of the panel body is below, hides at the end, and allows 2 px of rounding', () => {
+  assert.equal(MORE_SLACK_PX, 2);
+  const cases = [[0, 500, 500, false], [0, 501, 500, false], [0, 502, 500, false], [0, 503, 500, true], [100, 616, 500, true], [113, 616, 500, true], [114, 616, 500, false], [116, 616, 500, false]];
+  assert.deepEqual(cases.map(([scrollTop, scrollHeight, clientHeight]) => hasMoreBelow({ scrollTop, scrollHeight, clientHeight })), cases.map((c) => c[3]));
+  const { els, resizes } = panelRig();
+  const body = els['species-body'];
+  const cue = els['species-more'];
+  assert.equal(cue.style.visibility, 'hidden', 'nothing to scroll');
+  assert.ok(resizes.length === 1 && resizes[0].targets.includes(body), 'the body\'s size is observed');
+  Object.assign(body, { scrollHeight: 616, clientHeight: 500 });
+  resizes[0].onChange();
+  assert.equal(cue.style.visibility, 'visible', 'content grew past the body');
+  body.scrollTop = 116;
+  body.listeners.scroll();
+  assert.equal(cue.style.visibility, 'hidden', 'at the end');
+  body.scrollTop = 40;
+  body.listeners.scroll();
+  assert.equal(cue.style.visibility, 'visible', 'scrolled back up');
+  Object.assign(body, { scrollTop: 0, scrollHeight: 501, clientHeight: 500 });
+  resizes[0].onChange();
+  assert.equal(cue.style.visibility, 'hidden', 'I2: a 1 px range is rounding');
+});
+
 test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits are in place', () => {
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
@@ -391,12 +425,16 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.equal(toggleTag.includes('aria-pressed'), false, `no aria-pressed on the switch: ${toggleTag}`);
   // R-7u: the top datasets sit directly under the legend, which they hide with.
   // I-2: the Top datasets block can take focus (Retry moves focus to it) and holds a polite live region from page load, then its content.
-  assert.match(panelHtml, /<div id="species-legend" class="species-legend" hidden><\/div>\s*<div id="species-datasets" class="species-datasets" tabindex="-1" hidden>\s*<p id="species-datasets-status" class="species-datasets-status" role="status" aria-live="polite"><\/p>\s*<div id="species-datasets-content" class="species-datasets-content"><\/div>\s*<\/div>/);
+  // S5: its heading is markup, so a failed search keeps it above the message and Retry.
+  assert.match(panelHtml, /<div id="species-legend" class="species-legend" hidden><\/div>\s*<div id="species-datasets" class="species-datasets" tabindex="-1" hidden>\s*<span id="species-datasets-heading" class="dataset-list-heading">Top datasets for this species<\/span>\s*<p id="species-datasets-status" class="species-datasets-status" role="status" aria-live="polite"><\/p>\s*<div id="species-datasets-content" class="species-datasets-content"><\/div>\s*<\/div>/);
   const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-years-label"', 'id="species-years"', 'id="species-radius-label"', 'id="species-radius"', 'id="species-legend"', 'id="species-datasets"', 'class="species-credit"'];
   const positions = order.map((marker) => panelHtml.indexOf(marker));
   assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'markup order');
-  assert.doesNotMatch(panelHtml.slice(panelHtml.indexOf('class="species-credit"')), /<button|<input|id="species-/, 'nothing after the credit line');
+  assert.doesNotMatch(panelHtml.slice(panelHtml.indexOf('class="species-credit"'), panelHtml.indexOf('id="species-more"')), /<button|<input|id="species-/, 'nothing after the credit line but the cue');
+  // B1: the scroll cue is a row after the scrolling body, inside the panel, hidden from screen readers.
+  assert.match(panelHtml, /<div id="species-body" class="species-body">/);
+  assert.match(panelHtml, /<p class="species-credit">[\s\S]*?<\/p>\s*<\/div>\s*<div id="species-more" class="species-more" aria-hidden="true">more ↓<\/div>\s*<\/div>\s*<\/div>/);
   // R-7o: each chip row has a visible label directly above it that also names its group, so "1 / 10 / 50 KM" does not read as a
   // map feature size.
   for (const [group, text] of [['species-years', 'Years'], ['species-radius', 'What lives here radius']]) {
@@ -416,17 +454,18 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /#left-panel-stack > #species-panel \{[^}]*order: 5;/);
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);
-  // B1/S1: the body scrolls under a fixed header and fades out at its bottom while more is below; the legend has an opaque ground, so a
+  // B1/S1: the body scrolls under a fixed header, with the scroll cue in a row of its own below it; the legend has an opaque ground, so a
   // swatch cut by the panel's edge can never sit on the globe; on narrow screens the controls tighten so the action and both chip rows fit.
   assert.match(css, /#left-panel-stack > #species-panel:not\(\.collapsed\) \.species-panel-inner \{[^}]*overflow: hidden;/);
   assert.match(css, /#left-panel-stack > #species-panel:not\(\.collapsed\) \.species-body \{[^}]*flex: 1 1 auto;[^}]*min-height: 0;[^}]*overflow-y: auto;/);
-  assert.match(css, /@property --species-body-fade \{[^}]*initial-value: 0px;/);
-  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*#species-panel \.species-body \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--species-body-fade\)\), transparent\);[^}]*animation: species-body-fade linear both, species-more linear both;[^}]*animation-timeline: scroll\(self\), scroll\(self\);/);
-  // N4: on wider screens a "more ↓" hint sits at the body's bottom edge while more is below and fades out at the end, driven by the same
-  // scroll timeline (0 when nothing scrolls). Nit: the Top datasets heading sticks to the top of the body while its list is in view.
-  assert.match(css, /@property --species-more \{[^}]*inherits: true;[^}]*initial-value: 0;/);
-  assert.match(css, /@media \(min-width: 721px\) \{\s*@supports \(animation-timeline: scroll\(\)\) \{\s*#species-panel \.species-body::after \{[^}]*content: "more ↓" \/ "";[^}]*position: sticky;[^}]*bottom: 0;[^}]*opacity: var\(--species-more\);/);
-  assert.match(css, /#species-datasets \.dataset-list-heading \{[^}]*position: sticky;[^}]*top: 0;[^}]*background: rgb\(13, 15, 22\);/);
+  // B1: no fade and no overlaying hint on the body. The cue is a row of its own with a reserved height, shown and hidden by visibility only,
+  // never positioned over the body, and gone with the collapsed body. I1: the Top datasets heading scrolls with its links (sticky covered the
+  // top link on a phone).
+  assert.doesNotMatch(css, /--species-body-fade|--species-more|\.species-body::after|#species-panel \.species-body \{[^}]*mask-image/);
+  assert.match(css, /\.species-more \{[^}]*flex: 0 0 auto;[^}]*height: \d+px;[^}]*color: var\(--accent\);[^}]*visibility: hidden;/);
+  assert.doesNotMatch(css, /\.species-more \{[^}]*(?:position:|margin-top: -)/);
+  assert.match(css, /#species-panel\.collapsed \.species-more \{ display: none !important; \}/);
+  assert.doesNotMatch(css, /dataset-list-heading \{[^}]*sticky/);
   assert.match(css, /\.species-legend \{[^}]*background: rgb\(13, 15, 22\);/);
   assert.match(css, /\.species-chip-group \{ display: flex; flex-wrap: wrap;/);
   // In a group the chips take their text's width: the shared .scene-btn flex: 1 squeezed LAST 10 YEARS below its text on the desktop panel.

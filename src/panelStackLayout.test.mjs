@@ -169,6 +169,14 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     /expandedPanels[\s\S]*?removeProperty\('--left-panel-allocated-height'\)[\s\S]*?_measureLeftPanelNaturalHeight/,
     'left intrinsic measurement must clear the prior allocation first',
   );
+  // I2: a visibility: hidden child still takes layout space (the SPECIES panel's scroll cue), and the inner's bottom border is part of the
+  // height; without either the SPECIES body overflowed on tall windows (by the cue's 16 px, and then by 1 px).
+  assert.match(
+    ui,
+    /_measureLeftPanelNaturalHeight\(panel\) \{[\s\S]*?if \(childStyle\.display === 'none'\) continue;[\s\S]*?const borderBottom = parseFloat\(innerStyle\.borderBottomWidth\) \|\| 0;\s*return Math\.ceil\(contentBottom \+ paddingBottom \+ borderBottom \+ wrapperChrome\);/,
+    'the natural height counts hidden-but-laid-out children and the bottom border',
+  );
+  assert.doesNotMatch(ui, /childStyle\.visibility === 'hidden'\) continue/);
   assert.match(
     ui,
     /panel !== this\._ppToggles[\s\S]*?removeProperty\('--right-panel-allocated-height'\)[\s\S]*?const naturalHeight/,
