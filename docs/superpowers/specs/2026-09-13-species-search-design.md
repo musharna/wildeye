@@ -138,8 +138,11 @@ What the build changed from the design above, and why.
   default 12,000 km view: the median rendered colour of lone circles over land, each circle's class read from its tile's own record count,
   over three runs. Solid style fills at their opacity on the dark panel showed colours the map never has (CIEDE2000 16.6–23.0 from the
   rendered classes); the swatches are 0–3.5. The two highest classes had no circle to sample at that view, so their colours are predicted
-  from the others. The caption says bigger, darker circles hold more records and circle sizes change with zoom. `SPECIES_MAP_LEGEND` in
-  `src/bio/gbif.js` holds the classes and colours, and `src/bio/gbif.test.mjs` pins the classes to the style file.
+  from the others. The colours were measured over the Esri World Imagery basemap and hold at that distance only: at the 1,700 km Upper
+  Midwest view the circles draw brighter and more saturated (CIEDE2000 11–13 from the swatches). The caption says bigger, darker circles
+  hold more, the colours are as seen from far out and look brighter up close, and sizes change with zoom. `SPECIES_MAP_LEGEND` in
+  `src/bio/gbif.js` holds the classes and colours, `src/bio/gbif.test.mjs` pins the classes to the style file, and
+  `scripts/species-legend-probe.mjs`, `species-legend-colours.py` and `species-legend-fit.py` re-measure them against a preview build.
 - Limitation: circle size and count follow GBIF's cell size, which changes with tile zoom, so circles change size where Cesium draws two
   tile zooms side by side. At the equator in the 400×800 phone view, where GBIF zoom 2 meets zoom 1, the median circle width goes from
   11.5 px to 39.5 px (3.4×), an edge in density that the records do not have.

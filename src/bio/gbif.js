@@ -102,16 +102,20 @@ export function circlePolygonWkt({ lat, lon, radiusKm, vertices = 64 }) {
  * (null: none), `widthPx` its marker width in tile pixels, `fill` and `opacity` its marker fill, `lineColor` and `lineWidthPx` its marker
  * line (width 0: no line). densityTileTemplate uses `style`; gbif.test.mjs pins the classes to the style.
  *
- * `color` is the legend swatch: the class as the globe draws it at the default 12,000 km view, the median rendered colour of lone circles
- * over land, each circle's class read from its tile's own record count (B2, three runs, 2026-09-14). The style fills are semi-transparent
- * above the lowest class and the globe tints the imagery, so a swatch in the style fill showed colours the map never has. The two highest
- * classes had no circle to sample at that view; their colours are predicted (`predicted: true`) from the sampled classes by a fit of
- * rendered = (1 - opacity) x ground + opacity x (0.595 x fill + (88.6, 93.6, 93.8)), whose largest residual on the sampled classes is 23.6.
- * Swatch widths stay the style's, so their order holds; on screen circles are only roughly that size and change with zoom, as the caption says.
+ * `color` is the legend swatch: the class as the globe draws it at the default view (camera straight down over lon -90, lat 30 at 12,000
+ * km, 1400x900, over the Esri World Imagery basemap), the median rendered colour of lone circles over land, each circle's class read from
+ * its tile's own record count (B2, three runs, 2026-09-14; scripts/species-legend-probe.mjs, species-legend-colours.py,
+ * species-legend-fit.py). The style fills are semi-transparent above the lowest class and the globe tints the imagery, so a swatch in the
+ * style fill showed colours the map never has. The two highest classes had no circle to sample at that view; their colours are predicted
+ * (`predicted: true`) from the sampled classes by a fit of rendered = (1 - opacity) x ground + opacity x (0.595 x fill + (88.6, 93.6, 93.8)),
+ * with ground (127, 145, 110), the median land under the sampled circles; its largest residual on the sampled classes is 23.6.
+ * The colours hold at that distance only: at the 1,700 km Upper Midwest view the same classes draw brighter and more saturated (CIEDE2000
+ * 11-13 from these swatches), which the caption says. Swatch widths stay the style's, so their order holds; on screen circles are only
+ * roughly that size and change with zoom, as the caption also says.
  */
 export const SPECIES_MAP_LEGEND = Object.freeze({
   style: 'scaled.circles',
-  caption: 'Records per circle: bigger, darker circles hold more records. Circle sizes change with zoom.',
+  caption: 'Records per circle: bigger, darker circles hold more. Colours as seen from far out; closer views look brighter. Sizes change with zoom.',
   classes: Object.freeze([
     Object.freeze({ upTo: 10, widthPx: 6, fill: '#fed976', opacity: 1.0, lineColor: '#fe9724', lineWidthPx: 1, color: '#e4d9ac', predicted: false }),
     Object.freeze({ upTo: 100, widthPx: 7, fill: '#fd8d3c', opacity: 0.8, lineColor: '#fd5b24', lineWidthPx: 0, color: '#d5aa78', predicted: false }),

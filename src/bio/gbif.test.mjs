@@ -75,14 +75,17 @@ test('the species map legend is the record-count classes of the style the tiles 
   assert.ok(Object.hasOwn(STYLE_CLASSES, style), `no class table for ${style}: read its .mss in github.com/gbif/maps`);
   assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.upTo, c.widthPx, c.fill, c.opacity, c.lineColor, c.lineWidthPx]), STYLE_CLASSES[style]);
   // B2: each swatch is its class's circles as the globe draws them at the default 12,000 km view: the median rendered colour of lone
-  // circles over land, each circle's class read from its tile's own record count (tmp/r8 class-colours.py, 3 runs, 2026-09-14). The two
-  // highest classes had no circle to sample there and are predicted from the others (legend-fit.py), so they carry predicted: true.
+  // circles over land, each circle's class read from its tile's own record count (scripts/species-legend-probe.mjs and
+  // scripts/species-legend-colours.py, 3 runs, 2026-09-14). The two highest classes had no circle to sample there and are predicted from
+  // the others (scripts/species-legend-fit.py), so they carry predicted: true.
   assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.color, c.predicted]), [
     ['#e4d9ac', false], ['#d5aa78', false], ['#cea878', false], ['#be8770', true], ['#ab7272', true],
   ]);
-  // Swatch sizes keep the style's order, and the caption says in plain words what size and colour mean and that sizes change with zoom.
+  // Swatch sizes keep the style's order. I-1: the caption says in plain words what size and colour mean, that the colours are as seen from
+  // far out (closer views draw the circles brighter: 11-13 CIEDE2000 from the swatches at the 1,700 km Upper Midwest view), and that sizes
+  // change with zoom.
   assert.ok(SPECIES_MAP_LEGEND.classes.every((c, i, all) => i === 0 || c.widthPx > all[i - 1].widthPx), 'sizes grow with the class');
-  assert.equal(SPECIES_MAP_LEGEND.caption, 'Records per circle: bigger, darker circles hold more records. Circle sizes change with zoom.');
+  assert.equal(SPECIES_MAP_LEGEND.caption, 'Records per circle: bigger, darker circles hold more. Colours as seen from far out; closer views look brighter. Sizes change with zoom.');
   assert.ok(Object.isFrozen(SPECIES_MAP_LEGEND) && Object.isFrozen(SPECIES_MAP_LEGEND.classes) && SPECIES_MAP_LEGEND.classes.every(Object.isFrozen));
 });
 
