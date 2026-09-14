@@ -97,11 +97,13 @@ export function circlePolygonWkt({ lat, lon, radiusKm, vertices = 64 }) {
 
 /**
  * Cesium URL template for GBIF hexagon tiles of one taxon. `adhoc`, because `density` ignores `license=`. `srs=EPSG:3857`,
- * because `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator.
+ * because `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator. `classic-noborder.poly`,
+ * because its fills are opaque: with SPECIES_ALPHA 1 a hexagon's colour no longer depends on the imagery under it, so it matches
+ * the legend (measured 2026-09-13, task-7-fix2-report.md R-7f).
  */
 export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`densityTileTemplate: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: 'classic.poly', bin: 'hex', hexPerTile: '30', srs: 'EPSG:3857' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: 'classic-noborder.poly', bin: 'hex', hexPerTile: '30', srs: 'EPSG:3857' });
   appendRecordFilters(params, years, now);
   return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }

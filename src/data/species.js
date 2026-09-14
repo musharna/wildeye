@@ -8,7 +8,12 @@ import { setStackedImagery } from './rasterDrape.js';
  * Joins the shared drape stack at SPECIES_ZRANK so drape refreshes cannot bury it.
  */
 export const SPECIES_ZRANK = 1000;
-export const SPECIES_ALPHA = 0.7;
+/**
+ * Opaque, chosen by measurement (task-7-fix2-report.md R-7f): at 0.7 the same class changed colour with the ground under it and the
+ * sparsest class blended into light land; opaque classic-noborder.poly fills give the highest lowest-class contrast of the styles
+ * measured and the colours the legend shows.
+ */
+export const SPECIES_ALPHA = 1;
 export const SPECIES_YEARS = Object.freeze(['recent', 'all']);
 export const TILE_FAILURE_LIMIT = 8;
 export const DEFAULT_SPECIES_PARAMS = Object.freeze({ taxonKey: null, name: null, years: 'recent', radiusKm: 10 });

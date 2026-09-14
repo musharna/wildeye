@@ -122,6 +122,8 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);
   assert.match(css, /\.species-suggestions\[hidden\] \{ display: none; \}/);
+  // R-7f: the legend ramp is the classic-noborder.poly classes as the globe draws them (fitted, see the CSS comment)
+  assert.match(css, /\.species-legend-ramp \{[^}]*linear-gradient\(90deg, #e4e737, #e4be37, #e49637, #e46d37, #c32437, #b41c5b\)/);
   assert.match(main, /dataManager\.register\(speciesLayer\);/);
   assert.match(main, /createDetailsCard\(\{/);
   assert.match(main, /createDetailsCard\(\{[^\n]*onDismiss: \(\) => whatLivesHere\?\.cancel\(\), onListEnd: \(\) => whatLivesHere\?\.listEnded\(\) \}\)/, 'the card ends the what-lives-here outline');

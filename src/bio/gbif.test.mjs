@@ -30,6 +30,10 @@ test('density tiles use the adhoc endpoint with both licence filters and the yea
   assert.equal(recent.searchParams.get('taxonKey'), '5133088');
   assert.equal(recent.searchParams.get('year'), '2017,2026');
   assert.equal(recent.searchParams.get('srs'), 'EPSG:3857', 'Web Mercator tiles, the default tiling scheme of Cesium UrlTemplateImageryProvider');
+  // R-7f, chosen by measurement: opaque fills keep the rendered colour off the basemap, so the legend matches the map
+  assert.equal(recent.searchParams.get('style'), 'classic-noborder.poly');
+  assert.equal(recent.searchParams.get('bin'), 'hex');
+  assert.equal(recent.searchParams.get('hexPerTile'), '30');
   assert.equal(tile('all').searchParams.has('year'), false);
   assert.ok(densityTileTemplate({ taxonKey: 1, years: 'all', now: NOW }).includes('/{z}/{x}/{y}@1x.png?'), 'Cesium placeholders stay unencoded');
   assert.throws(() => densityTileTemplate({ taxonKey: 0, years: 'all', now: NOW }), /taxonKey/);

@@ -67,6 +67,7 @@ test('no tiles until a species is chosen; years rebuild the tiles, radius does n
   assert.match(providers[0].url, /\/v2\/map\/occurrence\/adhoc\/\{z\}\/\{x\}\/\{y\}@1x\.png\?.*taxonKey=5133088/);
   assert.equal(viewer.imageryLayers.list.length, 1);
   assert.equal(viewer.imageryLayers.list[0].alpha, SPECIES_ALPHA);
+  assert.equal(SPECIES_ALPHA, 1, 'R-7f: opaque hexagons, so the legend colours are the colours on the map');
   assert.equal(viewer.imageryLayers.list[0].show, false, 'hidden until enabled');
   layer.enable();
   assert.equal(viewer.imageryLayers.list[0].show, true);
