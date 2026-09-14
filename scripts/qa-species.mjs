@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,card,suggestion-fade,search,panel-datasets,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,card,suggestion-fade,search,panel-datasets,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,card,suggestion-fade,search,panel-datasets,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,card,suggestion-fade,search,panel-datasets,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -261,7 +261,8 @@ if (CHECKS.has('panel-layout')) {
     const overflowOk = overflow ? range > MORE_SLACK_PX : range === 0;
     const cueLaidOut = (state) => state.present && state.display !== 'none' && state.inPanel && state.ariaHidden === 'true' && state.box.height >= 10 && state.overlapCount === 0;
     const cueOk = cueLaidOut(cueTop) && cueLaidOut(cueEnd) && cueTop.visibility === (overflow ? 'visible' : 'hidden') && cueEnd.rangeLeft <= MORE_SLACK_PX && cueEnd.visibility === 'hidden';
-    const controlsOk = !controls || ['action', 'years', 'radius'].every((key) => fit[key].inside && fit[key].corners);
+    const controlKeys = controls === true ? ['action', 'years', 'radius'] : controls || [];
+    const controlsOk = controlKeys.every((key) => fit[key].inside && fit[key].corners);
     const captionOk = Boolean(fit.caption) && fit.caption.right <= fit.caption.legendContentRight + 0.5;
     const linksOk = !links || Boolean(endLinks?.ok);
     const ok = mapTiles.settled && datasetsWait === 'settled' && datasetsFailure === null && fit.scrollTop === 0 && controlsOk && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden && fit.clipped.length === 0 && captionOk && overflowOk && cueOk && linksOk;
@@ -274,8 +275,16 @@ if (CHECKS.has('panel-layout')) {
   });
   const desktopFit = await fitAt(1400, 900, 'panel-scrolled-desktop');
   const phoneFit = await fitAt(400, 800, 'panel-scrolled-phone');
-  // 375x667: the cue is required (critic S2); the controls and the end links are measured and reported, the fit criterion being 400x800.
-  const smallPhoneFit = await fitAt(375, 667, 'panel-375x667', { shotAtTop: true, controls: false, links: false });
+  // Critic 8 S1: at the page's starting camera (street level over Austin, pitched 30° down) the ground below the stack holds no monarch record
+  // from the last 10 years (api.gbif.org v1: 0; its 12 species tiles answered 200 and the circles they draw sit at the horizon, under the
+  // header), so the 375x667 capture looks straight down on central Texas from 400 km, where 875 such records lie below the stack. The camera
+  // is put back afterwards.
+  await page.evaluate(() => { const c = window.__godsEyeView.viewer.camera; window.__qaSavedCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll }; });
+  await flyTo(-97.74, 30.27, 400_000);
+  // 375x667: the cue is required (critic S2), and WHAT LIVES HERE is whole inside the body's view at the scroll top and hit at its corners
+  // (critic 8 B1: its bottom 4 px were cut). The chip rows and the end links are measured and reported, the fit criterion being 400x800.
+  const smallPhoneFit = await fitAt(375, 667, 'panel-375x667', { shotAtTop: true, controls: ['action'], links: false });
+  await page.evaluate(() => { const s = window.__qaSavedCamera; window.__godsEyeView.viewer.camera.setView({ destination: s.position, orientation: { heading: s.heading, pitch: s.pitch, roll: s.roll } }); });
   // I2: a desktop window at least 1,000 px tall where the whole body fits: nothing overflows, and the cue stays hidden.
   const tallDesktopFit = await fitAt(1400, TALL_DESKTOP_HEIGHT, null, { overflow: false, links: false });
   await page.setViewport({ width: 1400, height: 900 });
@@ -296,6 +305,83 @@ if (CHECKS.has('panel-layout')) {
     desktopFit, phoneFit, smallPhoneFit, tallDesktopFit,
     collapsedOk, expandedOk, phoneOk, restoredOk, fitOk,
   });
+}
+
+// R9-I1: a panel hidden by its own visibility must not take the left lane. The data panel is visibility: hidden without .active, which the F
+// key toggles, and every panel is hidden in clean view. At 1400x900, with the data panel expanded and the other stack panels collapsed, the
+// shown data panel is measured in full (focus mode: its list is taller than the lane, the positive control). After F, once the visibility
+// transition has ended, the lane is not in focus mode and the collapsed SCENE and SPECIES pills are shown with height. Clean view on and
+// then off returns the lane to that mode, and F again brings back the shown panel's mode. panel-layout checks, on a window at least 1,000 px
+// tall, that the SPECIES body does not overflow.
+if (CHECKS.has('left-stack')) {
+  await page.setViewport({ width: 1400, height: 900 });
+  await sleep(2000);
+  const initial = await page.evaluate(() => {
+    const data = document.getElementById('data-panel');
+    const open = ['scene-panel', 'species-panel', 'cctv-panel'].filter((id) => { const panel = document.getElementById(id); return panel && !panel.classList.contains('collapsed'); });
+    return { collapsed: data.classList.contains('collapsed'), active: data.classList.contains('active'), cleanView: document.body.classList.contains('ui-clean-view'), open };
+  });
+  const stackState = () => page.evaluate(() => {
+    const stack = document.getElementById('left-panel-stack');
+    const panel = (id) => {
+      const el = document.getElementById(id);
+      const cs = getComputedStyle(el);
+      return { collapsed: el.classList.contains('collapsed'), active: el.classList.contains('active'), display: cs.display, visibility: cs.visibility, height: +el.getBoundingClientRect().height.toFixed(1), ariaHidden: el.getAttribute('aria-hidden'), allocated: el.style.getPropertyValue('--left-panel-allocated-height') || null };
+    };
+    return { mode: stack.dataset.layoutMode, focusClass: stack.classList.contains('layout-focus'), cleanView: document.body.classList.contains('ui-clean-view'), data: panel('data-panel'), scene: panel('scene-panel'), species: panel('species-panel') };
+  });
+  // Presses a key, waits for a visibility transition on a stack panel to end (3 s at most, reported), then for the lane's next frames.
+  const afterKey = async (key) => {
+    const ended = page.evaluate(() => new Promise((resolve) => {
+      const stack = document.getElementById('left-panel-stack');
+      const finish = (how) => { stack.removeEventListener('transitionend', onEnd); resolve(how); };
+      const onEnd = (event) => { if (event.propertyName === 'visibility' && event.target.parentElement === stack) finish('transitionend'); };
+      stack.addEventListener('transitionend', onEnd);
+      setTimeout(() => finish('no visibility transition in 3 s'), 3000);
+    }));
+    await page.keyboard.press(key);
+    const how = await ended;
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await sleep(800);
+    return how;
+  };
+  await page.evaluate(() => {
+    document.activeElement?.blur?.();
+    if (document.body.classList.contains('ui-clean-view')) window.__godsEyeView.styleManager.toggleCleanView(false);
+    for (const id of ['scene-panel', 'species-panel', 'cctv-panel']) {
+      const panel = document.getElementById(id);
+      if (panel && !panel.classList.contains('collapsed')) panel.querySelector(`[data-collapse-target="${id}"]`)?.click();
+    }
+    const data = document.getElementById('data-panel');
+    if (data.classList.contains('collapsed')) data.querySelector('[data-collapse-target="data-panel"]').click();
+  });
+  await sleep(1500);
+  const shownBy = (await page.evaluate(() => document.getElementById('data-panel').classList.contains('active'))) ? 'already active' : await afterKey('f');
+  const shown = await stackState();
+  const hiddenBy = await afterKey('f');
+  const hidden = await stackState();
+  await shot('left-stack-f-hidden');
+  const cleanOnBy = await afterKey('v');
+  const cleanOn = await stackState();
+  const cleanOffBy = await afterKey('v');
+  const cleanOff = await stackState();
+  const reshownBy = await afterKey('f');
+  const reshown = await stackState();
+  // Back to the state before the check.
+  if (reshown.data.active !== initial.active) await afterKey('f');
+  await page.evaluate((initial) => {
+    const data = document.getElementById('data-panel');
+    if (data.classList.contains('collapsed') !== initial.collapsed) data.querySelector('[data-collapse-target="data-panel"]').click();
+    for (const id of initial.open) { const panel = document.getElementById(id); if (panel?.classList.contains('collapsed')) panel.querySelector(`[data-collapse-target="${id}"]`)?.click(); }
+    if (initial.cleanView) window.__godsEyeView.styleManager.toggleCleanView(true);
+  }, initial);
+  await sleep(1000);
+  const pillShown = (panel) => panel.collapsed && panel.display !== 'none' && panel.visibility === 'visible' && panel.height > 0 && panel.ariaHidden === null;
+  const shownOk = shown.data.active && !shown.data.collapsed && shown.data.visibility === 'visible' && shown.mode === 'focus';
+  const hiddenOk = !hidden.data.active && hidden.data.visibility === 'hidden' && hidden.mode !== 'focus' && !hidden.focusClass && pillShown(hidden.scene) && pillShown(hidden.species);
+  const cleanOk = cleanOn.cleanView && !cleanOff.cleanView && cleanOff.mode === hidden.mode && pillShown(cleanOff.scene) && pillShown(cleanOff.species);
+  const reshownOk = reshown.data.active && reshown.data.visibility === 'visible' && reshown.mode === shown.mode;
+  report('left-stack', shownOk && hiddenOk && cleanOk && reshownOk, { initial, shownBy, shown, hiddenBy, hidden, cleanOnBy, cleanOn, cleanOffBy, cleanOff, reshownBy, reshown, shownOk, hiddenOk, cleanOk, reshownOk });
 }
 
 if (CHECKS.has('card')) {
