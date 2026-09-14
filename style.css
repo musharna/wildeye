@@ -9654,6 +9654,8 @@ body.recording-mode #bio-card { display: none !important; }
 /* Each chip row sits beside its label when they fit on one line, and under it when they do not. */
 .species-chip-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .species-chip-group > .species-label { margin-bottom: 0; }
+/* The shared .scene-btn is flex: 1 with a 72 px floor, which squeezed LAST 10 YEARS below its text inside a group; each chip takes its text's width. */
+.species-chip-group .scene-btn.species-chip { flex: 0 0 auto; }
 /* A label sits 4 px above the control it names (the body's gap is 8 px), so it reads as that control's, not the one above. Its text is the
    chips' 0.8 white: the shared --text-secondary (0.5 white) measured 4.00 to 4.55:1 over the panel. */
 .species-label { margin-bottom: -4px; color: rgba(232, 234, 237, 0.8); font: 9px var(--font-mono); letter-spacing: 1.2px; }

@@ -388,6 +388,8 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*#species-panel \.species-body \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--species-body-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
   assert.match(css, /\.species-legend \{[^}]*background: rgb\(13, 15, 22\);/);
   assert.match(css, /\.species-chip-group \{ display: flex; flex-wrap: wrap;/);
+  // In a group the chips take their text's width: the shared .scene-btn flex: 1 squeezed LAST 10 YEARS below its text on the desktop panel.
+  assert.match(css, /\.species-chip-group \.scene-btn\.species-chip \{ flex: 0 0 auto; \}/);
   assert.match(css, /@media \(max-width: 720px\) \{[^@]*#species-panel \.scene-btn\.species-chip \{[^}]*min-width: 0;/);
   assert.match(css, /\.species-suggestions\[hidden\] \{ display: none; \}/);
   // R-7t: swatch sizes, fills and lines come from SPECIES_MAP_LEGEND, so none is written in the CSS; the CSS makes each swatch a circle
