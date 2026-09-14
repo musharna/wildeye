@@ -144,6 +144,32 @@ test('camera-only, partial, and malformed panel shares remain valid incoming sta
   }
 });
 
+// M5 (final review): the SPECIES panel's open state travels in a share link, so the recipient of a link with the species map on sees the
+// panel's legend, taxon name and Top datasets credits. ui.js builds and restores the panels in SHARE_PANEL_STATE_SPECS, and sharelink.js
+// encodes and decodes the panels in SHARE_PANEL_STATE_REGISTRY: a panel missing from either list is dropped, so both list the same panels.
+test('a share link round-trips the SPECIES panel open, and ui.js and sharelink.js list the same panels', () => {
+  const sender = makeManager();
+  sender.setPanelStateProvider(() => ({ specs: [{ id: 'data-panel', collapsed: true }, { id: 'species-panel', collapsed: false }] }));
+  clearTimeout(sender._debounceTimer);
+  sender._updateHash();
+  const hash = window.location.hash;
+  const received = makeManager(hash).parseInitialHash();
+  assert.deepEqual(received.panelState, { specs: [
+    { id: 'data-panel', collapsed: true, pinned: null },
+    { id: 'species-panel', collapsed: false, pinned: null },
+  ] }, `round trip through ${hash}`);
+  const ids = (source, start) => {
+    const from = source.indexOf(start);
+    assert.ok(from >= 0, `missing ${start}`);
+    return [...source.slice(from, source.indexOf(']);', from)).matchAll(/id: '([^']+)'/g)].map((match) => match[1]);
+  };
+  const uiIds = ids(uiSource, 'const SHARE_PANEL_STATE_SPECS = Object.freeze([');
+  const registryIds = ids(fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8'), 'const SHARE_PANEL_STATE_REGISTRY = Object.freeze([');
+  assert.ok(registryIds.length >= 9, `positive control: the registry's panels are read (${registryIds})`);
+  assert.ok(uiIds.includes('species-panel'), `ui.js shares species-panel: ${uiIds}`);
+  assert.deepEqual(uiIds, registryIds, 'ui.js and sharelink.js list the same panels in the same order');
+});
+
 // Both `bing-road` and the `k` panel token belonged to the retired left Map
 // Stack panel. Nothing is owed to a link that carried them — no build with
 // either one ever shipped publicly — so the parser no longer knows them, and

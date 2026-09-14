@@ -212,6 +212,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'global-context-panel' },
   { id: 'pp-toggles' },
   { id: 'param-slider-panel' },
+  { id: 'species-panel' },
 ]);
 /** Standard map-view panels cleared out of the way on a fresh Cockpit entry. */
 const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
