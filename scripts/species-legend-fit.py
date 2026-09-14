@@ -9,7 +9,8 @@ T(v) = a * v + b_channel is fitted by least squares to the sampled (style fill, 
 the runs. It prints the fit, each class's colour, and CIEDE2000 / dE76 of the committed colour (read from src/bio/gbif.js) against each
 run's median.
 
-Run against a preview build (see scripts/species-legend-probe.mjs):
+Run against a preview build (see scripts/species-legend-probe.mjs), with a Python that has numpy and Pillow (species-legend-colours.py needs
+both):
   python3 scripts/species-legend-fit.py <probe dir> [<probe dir> ...]
 The committed colours came from three global runs on 2026-09-14: sampled classes #e4d9ac, #d5aa78, #cea878; predicted #be8770, #ab7272 from
 a = 0.595, b = (88.6, 93.6, 93.8), ground (127, 145, 110), largest residual 23.6.

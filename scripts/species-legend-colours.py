@@ -8,6 +8,7 @@ centre. A class's colour is the median over its circles. dE76 and CIEDE2000 agai
 Mode 'centre' (4th argument) relaxes the overlap rule: another circle may touch the sampled circle but must not reach its sampled centre
 (centre distance > other radius + sample radius + 1 px). Each sampled circle also records its ground: the same pixels in the off frame.
 Usage: python3 scripts/species-legend-colours.py <probe dir> <view> [swatches json] [lone|centre]   (the legend used 'centre')
+Needs numpy and Pillow.
 """
 import json, signal, sys
 signal.signal(signal.SIGALRM, lambda *_: (sys.stderr.write("aborting: walltime guard\n"), sys.exit(2))); signal.alarm(600)
