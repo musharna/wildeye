@@ -154,8 +154,8 @@ What the build changed from the design above, and why.
 - Datasets are credited by name, each linked to its DOI where GBIF has one and to its gbif.org dataset page otherwise, the user's choice
   on 2026-09-14, because GBIF's data user agreement says "Users must publicly acknowledge ... the Data Publishers whose biodiversity data
   they have used, where appropriate through use of a Digital Object Identifier (DOI)". "What lives here" asks its one occurrence search
-  for a second facet, `datasetKey` (5, with per-facet limits so species stay 20), and the SPECIES panel asks the taxon's top 3 (`facet=datasetKey&datasetKey.facetLimit=3`) for the chosen years and
-  licences, with `hasCoordinate=true` like the map tiles (GBIF's adhoc tiles add that filter and no geospatial-issue filter: the monarch
+  for a second facet, `datasetKey` (5, with per-facet limits so species stay 20), and the SPECIES panel asks the taxon's top 3
+  (`facet=datasetKey&datasetKey.facetLimit=3`) for the chosen years and licences, with `hasCoordinate=true` like the map tiles (GBIF's adhoc tiles add that filter and no geospatial-issue filter: the monarch
   z0 tile totalled 42,244 records, the search with hasCoordinate=true 42,244, and with hasGeospatialIssue=false as well 42,240). A failed
   panel search shows inside the block, in a polite live region, with Retry, which keeps keyboard focus in the block. Each dataset is looked
   up at `/v1/dataset/{key}` (one pooled lookup per key for the session) and listed as its title linked to its DOI on doi.org, or to its
