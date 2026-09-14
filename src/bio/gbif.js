@@ -313,10 +313,19 @@ export function gbifMatchUrl(name) {
   return `${GBIF_API}/v1/species/match?${new URLSearchParams({ name, strict: 'true' })}`;
 }
 
-/** GBIF key for a scientific name; a synonym resolves to its accepted key; no match is null. */
+/**
+ * GBIF's match for a scientific name (M1): the key to map (a synonym resolves to its accepted key), how GBIF matched the name (EXACT, FUZZY,
+ * HIGHERRANK or NONE) and the name it matched, so a match that is not EXACT can say which GBIF name the map shows. No match has a null key
+ * and name; a response that is not a match fails loud rather than reading as "not in GBIF".
+ */
 export function parseGbifMatch(json) {
-  if (!json || json.matchType === 'NONE' || !Number.isInteger(json.usageKey)) return null;
-  return Number.isInteger(json.acceptedUsageKey) ? json.acceptedUsageKey : json.usageKey;
+  const matchType = json?.matchType;
+  if (typeof matchType !== 'string') throw new Error(`GBIF match: response has no matchType (${String(JSON.stringify(json)).slice(0, 120)})`);
+  if (matchType === 'NONE') return { key: null, matchType, canonicalName: null };
+  if (!Number.isInteger(json.usageKey)) throw new Error(`GBIF match: a ${matchType} match has no usageKey`);
+  const canonicalName = json.canonicalName || json.scientificName;
+  if (typeof canonicalName !== 'string' || !canonicalName) throw new Error(`GBIF match: a ${matchType} match for key ${json.usageKey} has no name`);
+  return { key: Number.isInteger(json.acceptedUsageKey) ? json.acceptedUsageKey : json.usageKey, matchType, canonicalName };
 }
 
 export function speciesUrl(key) {

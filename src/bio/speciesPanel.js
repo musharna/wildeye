@@ -91,6 +91,7 @@ export function createSpeciesPanel({
   const status = el('species-status');
   const chosen = el('species-chosen');
   const chosenName = el('species-chosen-name');
+  const chosenNote = el('species-chosen-note');
   const toggle = el('species-toggle');
   const legend = el('species-legend');
   const datasetsBox = el('species-datasets');
@@ -107,6 +108,8 @@ export function createSpeciesPanel({
   let suggestAbort = null;
   let chooseAbort = null;
   let lookingUpKey = null;
+  // M1: { taxonKey, canonicalName } while the chosen taxon came from a GBIF match that was not EXACT.
+  let shownAs = null;
   // The top datasets block (R-7u): the taxon and years its content or its search in flight is for, that search's controller, and whether
   // it has finished (shown, or failed into the block).
   let datasetsFor = null;
@@ -127,6 +130,10 @@ export function createSpeciesPanel({
     const on = dataManager.isEnabled('species');
     chosen.hidden = !p.taxonKey;
     chosenName.textContent = p.name || (p.taxonKey ? `GBIF taxon ${p.taxonKey}` : '');
+    // M1: the GBIF name a FUZZY (or other non-EXACT) match mapped, for as long as that taxon is the chosen one.
+    if (shownAs && shownAs.taxonKey !== p.taxonKey) shownAs = null;
+    chosenNote.textContent = shownAs ? `shown as GBIF's ${shownAs.canonicalName}` : '';
+    chosenNote.hidden = !shownAs;
     if (p.taxonKey && !p.name && lookingUpKey !== p.taxonKey) {
       // A share link carries only the key; look the name up once.
       lookingUpKey = p.taxonKey;
@@ -274,8 +281,12 @@ export function createSpeciesPanel({
     }
   }
 
-  /** Put a GBIF taxon on the map. Used by suggestions and by "what lives here" rows. */
-  async function chooseTaxon({ taxonKey, name }) {
+  /**
+   * Put a GBIF taxon on the map. Used by suggestions and by "what lives here" rows. `shownAsName` is the GBIF name a match that was not EXACT
+   * found (M1); any other choice clears it.
+   */
+  async function chooseTaxon({ taxonKey, name, shownAsName = null }) {
+    shownAs = shownAsName ? { taxonKey, canonicalName: shownAsName } : null;
     if (!dataManager.setLayerParams('species', { taxonKey, name }, { origin: 'user' })) {
       throw new Error(`species layer rejected taxon ${taxonKey}`);
     }
@@ -290,14 +301,21 @@ export function createSpeciesPanel({
     clearSuggestions();
     status.textContent = `Looking up ${item.scientificName} in GBIF…`;
     try {
-      const taxonKey = item.gbifKey ?? await client.match(item.scientificName, { signal: chooseAbort.signal });
-      if (!taxonKey) {
-        status.textContent = `${item.scientificName} is not in GBIF.`;
-        return false;
+      let taxonKey = item.gbifKey;
+      let shownAsName = null;
+      if (taxonKey === null || taxonKey === undefined) {
+        const match = await client.match(item.scientificName, { signal: chooseAbort.signal });
+        if (match.key === null) {
+          status.textContent = `${item.scientificName} is not in GBIF.`;
+          return false;
+        }
+        taxonKey = match.key;
+        // M1: GBIF matched another spelling or a higher rank ("Danaus plexippa" is mapped as Danaus plexippus), so say which name is shown.
+        if (match.matchType !== 'EXACT') shownAsName = match.canonicalName;
       }
-      await chooseTaxon({ taxonKey, name: item.commonName || item.scientificName });
+      await chooseTaxon({ taxonKey, name: item.commonName || item.scientificName, shownAsName });
       input.value = '';
-      status.textContent = '';
+      status.textContent = shownAsName ? `No exact GBIF match for ${item.scientificName}; shown as GBIF's ${shownAsName}.` : '';
       return true;
     } catch (error) {
       if (error?.name === 'AbortError') return false;

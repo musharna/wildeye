@@ -9691,6 +9691,8 @@ body.recording-mode #bio-card { display: none !important; }
 .species-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .species-chosen[hidden] { display: none; }
 .species-chosen-name { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* M1: "shown as GBIF's <name>" on a line of its own under the name and the switch, in the notes' amber, when a match was not EXACT. */
+.species-chosen-note { flex: 1 0 100%; color: #ffb86b; font-size: 11px; }
 /* The record-count legend: a caption over five circles with their bounds, each circle bottom-aligned above its label. Sizes, colours and
    labels come from SPECIES_MAP_LEGEND (src/bio/gbif.js): GBIF's scaled.circles classes as the globe draws them (spec: Implementation notes). */
 /* B1: an opaque ground, so a swatch cut by the panel's edge reads as legend, never as a circle on the globe behind the glass. */

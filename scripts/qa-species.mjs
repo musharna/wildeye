@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card,suggestion-fade,search,panel-datasets,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,fuzzy-match,card,suggestion-fade,search,panel-datasets,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card,suggestion-fade,search,panel-datasets,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,fuzzy-match,card,suggestion-fade,search,panel-datasets,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -474,7 +474,8 @@ if (CHECKS.has('left-stack')) {
 // app shows: the OSM street map from low altitude with the scope mask off (both are user settings), at 1400x900 and 375x667.
 // - Failures are forced in the page's fetch, which answers HTTP 503 itself, so nothing reaches the network or no-failed-requests: the name
 //   search and the Top datasets search in the panel; the what-lives-here search in a status card; and the name and dataset lookups in a list
-//   card across the antimeridian, whose foot also carries its "can't show this area as a circle" note.
+//   card across the antimeridian, whose foot also carries its "can't show this area as a circle" note. The panel's species is chosen through a
+//   real GBIF match that answers FUZZY (iNaturalist's suggestion is answered in the page as "Danaus plexippa"), so its note is measured too (M1).
 // - Method: each text node's line boxes, clipped to their scroll view and the window, are read with the text's colour and opacity. The text is
 //   then made transparent and the page captured, so each pixel under a line box is the ground that text is drawn on. The text colour is
 //   composited over each of those pixels, and the lowest WCAG ratio is the text's. The body of each surface is scrolled through, so every text
@@ -488,27 +489,34 @@ if (CHECKS.has('contrast')) {
   const TAVEUNI = [179.97, -16.8, 10000]; // Taveuni, Fiji: a 50 km circle there crosses the antimeridian (the portal-link check's spot)
   const TEXT_MIN = 4.5;
   const MAP_BEHIND_MIN_L = 0.5;
-  const RUSTY_PATCHED = { taxonKey: 1340481, name: 'Rusty-patched Bumble Bee' }; // not the monarch, whose finished Top datasets list the panel keeps
+  // One iNaturalist suggestion naming a misspelling, which the real strict GBIF match answers FUZZY (5133088 Danaus plexippus).
+  const FUZZY_SUGGESTION = { total_results: 1, page: 1, per_page: 1, results: [{ id: 48662, name: 'Danaus plexippa', rank: 'species', preferred_common_name: 'Monarch', matched_term: 'Monarch' }] };
+  const INAT_AUTOCOMPLETE = '^https://api\\.inaturalist\\.org/v1/taxa/autocomplete';
+  const TAXON_DATASET_SEARCH = '^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*taxonKey=)';
   const frames = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const addStyle = (id, css) => page.evaluate((id, css) => { const style = document.createElement('style'); style.id = id; style.textContent = css; document.head.appendChild(style); }, id, css);
   const removeStyle = (id) => page.evaluate((id) => document.getElementById(id)?.remove(), id);
   const hideText = (root) => `${root}, ${root} *, ${root} *::before, ${root} *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; transition: none !important; } ${root} input::placeholder { color: transparent !important; }`;
-  const setFailures = (patterns) => page.evaluate((patterns) => {
+  // Each rule is a URL pattern the page's fetch answers with HTTP 503, or { pattern, body }, answered 200 with that JSON.
+  const setFailures = (rules) => page.evaluate((rules) => {
     if (!window.__qaFetchOriginal) {
       window.__qaFetchOriginal = window.fetch;
       window.__qaFetchForced = [];
       window.fetch = (input, init) => {
         const url = String(input?.url ?? input);
-        if ((window.__qaFetchFailures || []).some((pattern) => new RegExp(pattern).test(url))) {
+        const rule = (window.__qaFetchRules || []).find((r) => new RegExp(typeof r === 'string' ? r : r.pattern).test(url));
+        if (rule) {
           window.__qaFetchForced.push(url);
-          return Promise.resolve(new Response('{"qa":"forced failure"}', { status: 503, headers: { 'content-type': 'application/json' } }));
+          return Promise.resolve(typeof rule === 'string'
+            ? new Response('{"qa":"forced failure"}', { status: 503, headers: { 'content-type': 'application/json' } })
+            : new Response(JSON.stringify(rule.body), { status: 200, headers: { 'content-type': 'application/json' } }));
         }
         return window.__qaFetchOriginal.call(window, input, init);
       };
     }
-    window.__qaFetchFailures = patterns;
+    window.__qaFetchRules = rules;
     window.__qaFetchForced.length = 0;
-  }, patterns);
+  }, rules);
   const forcedCount = () => page.evaluate(() => window.__qaFetchForced?.length ?? 0);
   const canvasCentre = () => page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
   const collapseSpecies = async () => { await page.evaluate(() => { const panel = document.getElementById('species-panel'); if (!panel.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click(); }); await sleep(800); };
@@ -699,26 +707,29 @@ if (CHECKS.has('contrast')) {
       const size = `${width}x${height}`;
       await page.setViewport({ width, height });
       await sleep(2500);
-      // The panel: the Top datasets search and the name search fail.
-      await setFailures(['^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*taxonKey=)', '^https://api\\.inaturalist\\.org/v1/taxa/autocomplete', '^https://api\\.gbif\\.org/v1/species/suggest']);
+      // The panel: the monarch chosen through a real FUZZY match (its note shows), with years "all" (the panel keeps a finished monarch list
+      // for the last 10 years from panel-layout); then the Top datasets search and the name search fail.
+      await setFailures([{ pattern: INAT_AUTOCOMPLETE, body: FUZZY_SUGGESTION }, TAXON_DATASET_SEARCH]);
       await closeCard();
       await flyTo(...AUSTIN);
-      await page.evaluate(async (taxon) => {
-        const dm = window.__godsEyeView.dataManager;
-        if (!dm.setLayerParams('species', { ...taxon, years: 'recent', radiusKm: 10 }, { origin: 'user' })) throw new Error('species params rejected');
-        await dm.setEnabled('species', true, { origin: 'user' });
-      }, RUSTY_PATCHED);
+      await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { taxonKey: null, years: 'all', radiusKm: 10 }, { origin: 'user' })) throw new Error('species params rejected'); });
       await openSpeciesPanel();
       await page.evaluate(() => { document.getElementById('species-body').scrollTop = 0; });
-      await page.waitForFunction(() => /^GBIF dataset search failed/.test(document.getElementById('species-datasets-status')?.textContent || ''), { timeout: 30000 });
+      await page.click('#species-search', { clickCount: 3 });
+      await page.keyboard.press('Backspace');
+      await page.type('#species-search', 'monarch', { delay: 30 });
+      await page.waitForFunction(() => document.querySelector('#species-suggestions button')?.textContent.includes('Danaus plexippa'), { timeout: 20000 });
+      await page.click('#species-suggestions button');
+      await page.waitForFunction(() => /^GBIF dataset search failed/.test(document.getElementById('species-datasets-status')?.textContent || '') && document.getElementById('species-chosen-note')?.hidden === false, { timeout: 45000 });
+      await setFailures([INAT_AUTOCOMPLETE, '^https://api\\.gbif\\.org/v1/species/suggest', TAXON_DATASET_SEARCH]);
       await page.click('#species-search', { clickCount: 3 });
       await page.keyboard.press('Backspace');
       await page.type('#species-search', 'monarch', { delay: 30 });
       await page.waitForFunction(() => /^Name search failed/.test(document.getElementById('species-status')?.textContent || ''), { timeout: 30000 });
-      const panelForced = await page.evaluate(() => ({ status: document.getElementById('species-status').textContent, datasets: document.getElementById('species-datasets-status').textContent, retry: Boolean(document.querySelector('#species-datasets .species-datasets-retry')) }));
+      const panelForced = await page.evaluate(() => ({ status: document.getElementById('species-status').textContent, datasets: document.getElementById('species-datasets-status').textContent, retry: Boolean(document.querySelector('#species-datasets .species-datasets-retry')), note: document.getElementById('species-chosen-note').textContent }));
       const panelTiles = await waitForMapTiles();
       const panel = await measureSurface(`panel-${size}`, { root: '#species-panel .species-panel-inner', scroller: '#species-body', parked: '#species-panel .panel-header' });
-      surfaces.push({ ...panel, ok: panel.ok && panelForced.retry, viewport: size, forced: { ...panelForced, requests: await forcedCount() }, tiles: panelTiles.settled });
+      surfaces.push({ ...panel, ok: panel.ok && panelForced.retry && panelForced.note === "shown as GBIF's Danaus plexippus" && Boolean(panel.classes['span#species-chosen-note.species-chosen-note']), viewport: size, forced: { ...panelForced, requests: await forcedCount() }, tiles: panelTiles.settled });
       // A status card: the what-lives-here search fails. The panel is collapsed, so the map is what shows behind the card.
       await setFailures(['^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*facet=speciesKey)']);
       await page.evaluate(async () => { await window.__godsEyeView.dataManager.setEnabled('species', false, { origin: 'user' }); });
@@ -778,6 +789,70 @@ if (CHECKS.has('contrast')) {
   }
   const restoredOk = restored?.stack === initial.stack && restored.scope === initial.scope && restored.fetchRestored === true && restored.speciesEnabled === initial.speciesEnabled;
   report('contrast', error === null && restoredOk && surfaces.length === VIEWPORTS.length * 3 && surfaces.every((s) => s.ok), { settings, surfaces, restored, ...(error ? { error } : {}) });
+}
+
+// M1 (final review): a strict GBIF match that answers FUZZY is mapped and says so. The page's fetch answers iNaturalist's autocomplete with one
+// row naming "Danaus plexippa" (a misspelling), so the choice goes through the real /v1/species/match, which answered FUZZY 5133088 Danaus
+// plexippus (confidence 97) on 2026-09-14: the chosen row and the status must say it is shown as GBIF's Danaus plexippus, with 5133088 mapped.
+// Positive control in the same check: iNaturalist's real first suggestion for "monarch" matches EXACT and shows no note.
+if (CHECKS.has('fuzzy-match')) {
+  const FUZZY_ROW = { total_results: 1, page: 1, per_page: 1, results: [{ id: 48662, name: 'Danaus plexippa', rank: 'species', preferred_common_name: 'Monarch', matched_term: 'Monarch' }] };
+  const matches = [];
+  const onMatch = (r) => { if (r.url().startsWith('https://api.gbif.org/v1/species/match')) r.json().then((json) => matches.push({ name: new URL(r.url()).searchParams.get('name'), matchType: json.matchType, usageKey: json.usageKey ?? null, canonicalName: json.canonicalName ?? null }), (error) => failed.push(`BODY ${r.url()} ${error}`)); };
+  page.on('response', onMatch);
+  const read = () => page.evaluate(() => {
+    const dm = window.__godsEyeView.dataManager;
+    const note = document.getElementById('species-chosen-note');
+    return { name: document.getElementById('species-chosen-name').textContent, note: note ? { hidden: note.hidden, text: note.textContent } : null, status: document.getElementById('species-status').textContent, taxonKey: dm.getLayerParams('species')?.taxonKey ?? null, enabled: dm.isEnabled('species') };
+  });
+  const chooseFirst = async (expected) => {
+    await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { taxonKey: null }, { origin: 'user' })) throw new Error('species params rejected'); });
+    await page.click('#species-search', { clickCount: 3 });
+    await page.keyboard.press('Backspace');
+    await page.type('#species-search', 'monarch', { delay: 40 });
+    await page.waitForFunction((expected) => document.querySelector('#species-suggestions button')?.textContent.includes(expected), { timeout: 20000 }, expected);
+    const suggestion = await page.evaluate(() => document.querySelector('#species-suggestions button').textContent);
+    await page.click('#species-suggestions button');
+    await page.waitForFunction(() => window.__godsEyeView.dataManager.getLayerParams('species')?.taxonKey === 5133088 && !/^Looking up/.test(document.getElementById('species-status').textContent), { timeout: 30000 });
+    await sleep(500);
+    return { suggestion, ...(await read()) };
+  };
+  let exact = null;
+  let fuzzy = null;
+  let mapTiles = null;
+  let error = null;
+  try {
+    await openSpeciesPanel();
+    exact = await chooseFirst('Danaus plexippus');
+    await page.evaluate((body) => {
+      window.__qaFuzzyFetch = window.fetch;
+      window.fetch = (input, init) => {
+        const url = String(input?.url ?? input);
+        if (url.startsWith('https://api.inaturalist.org/v1/taxa/autocomplete')) return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }));
+        return window.__qaFuzzyFetch.call(window, input, init);
+      };
+    }, FUZZY_ROW);
+    fuzzy = await chooseFirst('Danaus plexippa');
+    mapTiles = await waitForMapTiles();
+    await shot('fuzzy-match');
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await page.evaluate(async () => {
+      if (window.__qaFuzzyFetch) { window.fetch = window.__qaFuzzyFetch; delete window.__qaFuzzyFetch; }
+      const dm = window.__godsEyeView.dataManager;
+      await dm.setEnabled('species', false, { origin: 'user' });
+      dm.setLayerParams('species', { taxonKey: null }, { origin: 'user' });
+      const input = document.getElementById('species-search');
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+    }).catch((caught) => { error = `${error ?? ''} restoring: ${caught}`; });
+    page.off('response', onMatch);
+  }
+  const NOTE = "shown as GBIF's Danaus plexippus";
+  const exactOk = Boolean(exact) && exact.suggestion.includes('Danaus plexippus') && exact.taxonKey === 5133088 && exact.note?.hidden === true && exact.status === '' && matches.some((m) => m.name === 'Danaus plexippus' && m.matchType === 'EXACT' && m.usageKey === 5133088);
+  const fuzzyOk = Boolean(fuzzy) && fuzzy.taxonKey === 5133088 && fuzzy.enabled && fuzzy.name === 'Monarch' && fuzzy.note?.hidden === false && fuzzy.note.text === NOTE && fuzzy.status.includes(NOTE) && matches.some((m) => m.name === 'Danaus plexippa' && m.matchType === 'FUZZY' && m.usageKey === 5133088);
+  report('fuzzy-match', error === null && exactOk && fuzzyOk && Boolean(mapTiles?.settled), { exact, fuzzy, matches, mapTiles, exactOk, fuzzyOk, ...(error ? { error } : {}) });
 }
 
 if (CHECKS.has('card')) {

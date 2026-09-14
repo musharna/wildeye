@@ -348,10 +348,18 @@ test('name parsers keep the fields the panel shows', () => {
     parseGbifSuggest([{ key: 6223161, canonicalName: 'Danaus plexaure', scientificName: 'Danaus plexaure (Godart)', rank: 'SPECIES' }]),
     [{ id: null, gbifKey: 6223161, scientificName: 'Danaus plexaure', commonName: null, rank: 'species', matchedTerm: null }],
   );
-  // live 2026-09-13: strict match on the synonym Megaptera nodosa → accepted key 5220086
-  assert.equal(parseGbifMatch({ usageKey: 5220089, matchType: 'EXACT', status: 'SYNONYM', acceptedUsageKey: 5220086 }), 5220086);
-  assert.equal(parseGbifMatch({ usageKey: 5133088, matchType: 'EXACT', status: 'ACCEPTED' }), 5133088);
-  assert.equal(parseGbifMatch({ matchType: 'NONE' }), null);
+  // M1 (final review): a match says how GBIF matched the name and which name it matched, so a FUZZY match can be shown as such. Live strict
+  // responses of 2026-09-14, trimmed to the fields read: the synonym Megaptera nodosa (EXACT, accepted key 5220086), the monarch (EXACT), the
+  // misspelling "Danaus plexippa" (FUZZY), and "Danaus fakeus" (NONE).
+  assert.deepEqual(parseGbifMatch({ usageKey: 5220089, acceptedUsageKey: 5220086, scientificName: 'Megaptera nodosa (Bonnaterre, 1789)', canonicalName: 'Megaptera nodosa', status: 'SYNONYM', confidence: 99, matchType: 'EXACT' }), { key: 5220086, matchType: 'EXACT', canonicalName: 'Megaptera nodosa' });
+  assert.deepEqual(parseGbifMatch({ usageKey: 5133088, scientificName: 'Danaus plexippus (Linnaeus, 1758)', canonicalName: 'Danaus plexippus', status: 'ACCEPTED', confidence: 99, matchType: 'EXACT' }), { key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' });
+  assert.deepEqual(parseGbifMatch({ usageKey: 5133088, scientificName: 'Danaus plexippus (Linnaeus, 1758)', canonicalName: 'Danaus plexippus', status: 'ACCEPTED', confidence: 97, matchType: 'FUZZY' }), { key: 5133088, matchType: 'FUZZY', canonicalName: 'Danaus plexippus' });
+  assert.deepEqual(parseGbifMatch({ confidence: 100, matchType: 'NONE', synonym: false }), { key: null, matchType: 'NONE', canonicalName: null });
+  // A response that is not a match fails loud instead of reading as "not in GBIF".
+  assert.throws(() => parseGbifMatch({ usageKey: 5133088, canonicalName: 'Danaus plexippus' }), /matchType/);
+  assert.throws(() => parseGbifMatch({ matchType: 'FUZZY', canonicalName: 'Danaus plexippus' }), /usageKey/);
+  assert.throws(() => parseGbifMatch({ usageKey: 5133088, matchType: 'FUZZY' }), /name/);
+  assert.throws(() => parseGbifMatch(null), /matchType/);
   assert.deepEqual(
     parseSpeciesName({ key: 5232437, scientificName: 'Branta canadensis (Linnaeus, 1758)', canonicalName: 'Branta canadensis', vernacularName: 'Canada Goose (canadensis Group)', class: 'Aves' }),
     { key: 5232437, scientificName: 'Branta canadensis', commonName: 'Canada Goose (canadensis Group)', className: 'Aves' },

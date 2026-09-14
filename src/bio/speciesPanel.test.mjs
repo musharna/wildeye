@@ -18,7 +18,7 @@ function fakeElement() {
   };
 }
 
-const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-datasets', 'species-datasets-heading', 'species-datasets-status', 'species-datasets-content', 'species-years', 'species-radius', 'species-what-lives-here', 'species-body', 'species-more'];
+const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-chosen-note', 'species-toggle', 'species-legend', 'species-datasets', 'species-datasets-heading', 'species-datasets-status', 'species-datasets-content', 'species-years', 'species-radius', 'species-what-lives-here', 'species-body', 'species-more'];
 const INAT_RG = '50c9509d-22c7-4a22-a47d-8c48425ef4a7';
 const OTHER_DATASET = '6ac3f774-d9fb-4796-b3e9-92bf6c81c084';
 const settle = async (turns = 20) => { for (let i = 0; i < turns; i += 1) await new Promise((resolve) => setImmediate(resolve)); };
@@ -27,7 +27,7 @@ const yearsChip = (years) => ({ target: { closest: () => ({ dataset: { years } }
 // The rows in the block's content element, a list labelled by the block's heading in index.html: [link href, link text, count, note or null].
 const datasetRowsIn = (content) => content.children[0].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
 
-function panelRig({ match = async () => 5133088, suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
+function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' }), suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
   const doc = { activeElement: null, getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag, focus() { doc.activeElement = this; } }) };
   for (const node of Object.values(els)) node.focus = () => { doc.activeElement = node; };
@@ -87,7 +87,7 @@ test('a GBIF suggestion skips the match; a name GBIF lacks says so and changes n
   assert.deepEqual(direct.calls.match, []);
   assert.equal(direct.calls.params.at(-1).p.taxonKey, 6223161);
 
-  const missing = panelRig({ match: async () => null });
+  const missing = panelRig({ match: async () => ({ key: null, matchType: 'NONE', canonicalName: null }) });
   assert.equal(await missing.panel.choose({ gbifKey: null, scientificName: 'Nonexistus fakeus', commonName: null, rank: 'species' }), false);
   assert.equal(missing.els['species-status'].textContent, 'Nonexistus fakeus is not in GBIF.');
   assert.equal(missing.calls.params.length, 0);
@@ -136,6 +136,34 @@ test('suggestion rows are worded for the query that was sent, even when the box 
     'Humpback Whale · Megaptera novaeangliae (species)',
     'Swamp Cicada · Neotibicen tibicen (species) — matched "Hump-back Cicada"',
   ]);
+});
+
+// M1 (final review): a strict GBIF match can answer FUZZY (live 2026-09-14: "Danaus plexippa" → 5133088 Danaus plexippus, confidence 97), and
+// the map then shows another name's records under the chosen label. So a match that is not EXACT is mapped and the chosen row and the status
+// say it is shown as GBIF's name; an EXACT match says nothing; NONE maps nothing; choosing the same taxon exactly clears the note.
+test("a FUZZY match is mapped and says it is shown as GBIF's name; EXACT says nothing; NONE maps nothing", async () => {
+  const fuzzy = panelRig({ match: async () => ({ key: 5133088, matchType: 'FUZZY', canonicalName: 'Danaus plexippus' }) });
+  assert.equal(await fuzzy.panel.choose({ gbifKey: null, scientificName: 'Danaus plexippa', commonName: 'Monarch', rank: 'species' }), true);
+  assert.deepEqual(fuzzy.calls.params.at(-1), { id: 'species', p: { taxonKey: 5133088, name: 'Monarch' }, origin: 'user' }, 'the match key is mapped');
+  assert.equal(fuzzy.els['species-chosen-name'].textContent, 'Monarch');
+  assert.equal(fuzzy.els['species-chosen-note'].hidden, false);
+  assert.equal(fuzzy.els['species-chosen-note'].textContent, "shown as GBIF's Danaus plexippus");
+  assert.equal(fuzzy.els['species-status'].textContent, "No exact GBIF match for Danaus plexippa; shown as GBIF's Danaus plexippus.");
+  await fuzzy.panel.chooseTaxon({ taxonKey: 5133088, name: 'Monarch' }); // a what-lives-here row: an exact GBIF key
+  assert.equal(fuzzy.els['species-chosen-note'].hidden, true, 'choosing the taxon exactly clears the note');
+  assert.equal(fuzzy.els['species-chosen-note'].textContent, '');
+
+  const exact = panelRig();
+  assert.equal(await exact.panel.choose({ gbifKey: null, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' }), true);
+  assert.equal(exact.calls.params.at(-1).p.taxonKey, 5133088);
+  assert.equal(exact.els['species-chosen-note'].hidden, true, 'an EXACT match has no note');
+  assert.equal(exact.els['species-status'].textContent, '');
+
+  const none = panelRig({ match: async () => ({ key: null, matchType: 'NONE', canonicalName: null }) });
+  assert.equal(await none.panel.choose({ gbifKey: null, scientificName: 'Danaus fakeus', commonName: null, rank: 'species' }), false);
+  assert.equal(none.els['species-status'].textContent, 'Danaus fakeus is not in GBIF.');
+  assert.equal(none.calls.params.length, 0, 'NONE maps nothing');
+  assert.equal(none.els['species-chosen-note'].hidden, true);
 });
 
 // R-7t: GBIF draws each cell as a circle sized, filled and faded by its record count, so the legend names each class: a circle at the
@@ -448,7 +476,7 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // so the controls stay whole above the panel's cut on a 400x800 phone; the legend, the datasets and the credit line come after them.
   const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
   // The legend's content is rendered from SPECIES_MAP_LEGEND (speciesPanel.js), so the markup holds an empty container.
-  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
+  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<span id="species-chosen-note" class="species-chosen-note" hidden><\/span>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
   assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
