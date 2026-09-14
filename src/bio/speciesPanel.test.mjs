@@ -408,6 +408,32 @@ test('the scroll cue shows while more of the panel body is below, hides at the e
   assert.equal(cue.style.visibility, 'hidden', 'I2: a 1 px range is rounding');
 });
 
+// I1 (final review): the status and error lines, Retry, the card foot and the close × used the shared --text-secondary (0.5 white), 2.96:1
+// over a white basemap through the 0.72 glass. No text rule of the panel, the card or their dataset lists may use the shared 0.5 or 0.3
+// white, and both surfaces have a background floor of 0.86, so text holds 4.5:1 over the lightest basemap (qa-species contrast measures it).
+test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both surfaces have a background floor', () => {
+  const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+  // Comments are removed first, so a comment above a rule is not read as part of its selector.
+  const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]*)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body }));
+  const feature = rules.filter(({ selector }) => /\.species-|#species-|\.bio-card|\.dataset-/.test(selector));
+  assert.ok(feature.length > 40, `positive control: the feature's rules are found (${feature.length})`);
+  const dim = feature.filter(({ body }) => /(?:^|[;\s])color:\s*var\(--text-(?:secondary|dim)\)/.test(body)).map(({ selector }) => selector);
+  assert.deepEqual(dim, [], 'rules still using the shared 0.5 or 0.3 white');
+  for (const selector of ['.bio-card-close', '.bio-card-status', '.bio-card-retry', '.bio-card-foot', '.species-status']) {
+    const rule = feature.find((r) => r.selector === selector);
+    assert.ok(rule, `${selector} rule`);
+    assert.match(rule.body, /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.8\);/, `${selector} is 0.8 white`);
+  }
+  // The card foot is capped at half the card's height and scrolls, so a tall foot cannot squeeze the species list to nothing or leave the card.
+  const foot = feature.find((r) => r.selector === '.bio-card-foot');
+  for (const declaration of ['flex: 0 0 auto;', 'max-height: 26vh;', 'overflow-y: auto;']) assert.ok(foot.body.includes(declaration), `.bio-card-foot has ${declaration}`);
+  for (const selector of ['.species-panel-inner', '.bio-card']) {
+    const rule = feature.find((r) => r.selector === selector);
+    assert.ok(rule, `${selector} rule`);
+    assert.match(rule.body, /(?:^|[;\s])background: rgba\(12, 12, 20, 0\.86\);/, `${selector} has the 0.86 background floor`);
+  }
+});
+
 test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits are in place', () => {
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');

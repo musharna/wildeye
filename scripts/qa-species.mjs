@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,card,suggestion-fade,search,panel-datasets,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card,suggestion-fade,search,panel-datasets,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,card,suggestion-fade,search,panel-datasets,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card,suggestion-fade,search,panel-datasets,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -468,6 +468,316 @@ if (CHECKS.has('left-stack')) {
     midFade: { held, before: midFadeBefore, after: midFadeAfter }, final: { mode: final.mode, data: final.data },
     ...checks,
   });
+}
+
+// I1 (final review): WCAG contrast of every text in the SPECIES panel and the details card, in forced error states, over the lightest basemap the
+// app shows: the OSM street map from low altitude with the scope mask off (both are user settings), at 1400x900 and 375x667.
+// - Failures are forced in the page's fetch, which answers HTTP 503 itself, so nothing reaches the network or no-failed-requests: the name
+//   search and the Top datasets search in the panel; the what-lives-here search in a status card; and the name and dataset lookups in a list
+//   card across the antimeridian, whose foot also carries its "can't show this area as a circle" note.
+// - Method: each text node's line boxes, clipped to their scroll view and the window, are read with the text's colour and opacity. The text is
+//   then made transparent and the page captured, so each pixel under a line box is the ground that text is drawn on. The text colour is
+//   composited over each of those pixels, and the lowest WCAG ratio is the text's. The body of each surface is scrolled through, so every text
+//   is measured where it can be seen. Text needs 4.5:1, the card's close × (non-text) 3:1.
+// - The host header (the SPECIES title and its button, parked with R-7ii S2) is measured and reported, not gated.
+// - Controls in the same check: each forced message is present; the map behind each surface, captured with the surface hidden, has a median
+//   relative luminance of at least 0.5; and a 0.3-white control line placed in each surface measures under 4.5:1.
+if (CHECKS.has('contrast')) {
+  const VIEWPORTS = [[1400, 900], [375, 667]];
+  const AUSTIN = [-97.74, 30.27, 3000]; // central Austin from 3 km: OSM blocks, streets and parks
+  const TAVEUNI = [179.97, -16.8, 10000]; // Taveuni, Fiji: a 50 km circle there crosses the antimeridian (the portal-link check's spot)
+  const TEXT_MIN = 4.5;
+  const MAP_BEHIND_MIN_L = 0.5;
+  const RUSTY_PATCHED = { taxonKey: 1340481, name: 'Rusty-patched Bumble Bee' }; // not the monarch, whose finished Top datasets list the panel keeps
+  const frames = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const addStyle = (id, css) => page.evaluate((id, css) => { const style = document.createElement('style'); style.id = id; style.textContent = css; document.head.appendChild(style); }, id, css);
+  const removeStyle = (id) => page.evaluate((id) => document.getElementById(id)?.remove(), id);
+  const hideText = (root) => `${root}, ${root} *, ${root} *::before, ${root} *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; transition: none !important; } ${root} input::placeholder { color: transparent !important; }`;
+  const setFailures = (patterns) => page.evaluate((patterns) => {
+    if (!window.__qaFetchOriginal) {
+      window.__qaFetchOriginal = window.fetch;
+      window.__qaFetchForced = [];
+      window.fetch = (input, init) => {
+        const url = String(input?.url ?? input);
+        if ((window.__qaFetchFailures || []).some((pattern) => new RegExp(pattern).test(url))) {
+          window.__qaFetchForced.push(url);
+          return Promise.resolve(new Response('{"qa":"forced failure"}', { status: 503, headers: { 'content-type': 'application/json' } }));
+        }
+        return window.__qaFetchOriginal.call(window, input, init);
+      };
+    }
+    window.__qaFetchFailures = patterns;
+    window.__qaFetchForced.length = 0;
+  }, patterns);
+  const forcedCount = () => page.evaluate(() => window.__qaFetchForced?.length ?? 0);
+  const canvasCentre = () => page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
+  const collapseSpecies = async () => { await page.evaluate(() => { const panel = document.getElementById('species-panel'); if (!panel.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click(); }); await sleep(800); };
+  const closeCard = async () => { await page.evaluate(() => { const card = document.getElementById('bio-card'); if (card && !card.hidden) card.querySelector('.bio-card-close').click(); }); await sleep(500); };
+  await page.evaluate(() => {
+    const lin = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+    const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    const parseColor = (text) => { const parts = (text.match(/[\d.]+/g) || []).map(Number); return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }; };
+    const describe = (el) => el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '') + [...el.classList].map((name) => `.${name}`).join('');
+    const opacityOf = (el) => { let opacity = 1; for (let node = el; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity); return opacity; };
+    // A box clipped to the view of the element itself and of every ancestor that clips (an ellipsised name's line box runs on under the switch
+    // beside it) and to the window; null when nothing of it can be seen.
+    const clip = (box, el) => {
+      let b = { ...box };
+      for (let node = el; node; node = node.parentElement) {
+        const cs = getComputedStyle(node);
+        if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+        const r = node.getBoundingClientRect();
+        b = { left: Math.max(b.left, r.left + node.clientLeft), top: Math.max(b.top, r.top + node.clientTop), right: Math.min(b.right, r.left + node.clientLeft + node.clientWidth), bottom: Math.min(b.bottom, r.top + node.clientTop + node.clientHeight) };
+      }
+      b = { left: Math.max(b.left, 0), top: Math.max(b.top, 0), right: Math.min(b.right, innerWidth), bottom: Math.min(b.bottom, innerHeight) };
+      return b.right - b.left >= 1 && b.bottom - b.top >= 1 ? b : null;
+    };
+    const decode = async (png) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${png}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0);
+      return { width: img.width, data: ctx.getImageData(0, 0, img.width, img.height).data, scale: img.width / innerWidth };
+    };
+    window.__qaContrast = {
+      collect(rootSelector, parkedSelector, nonTextSelector) {
+        const root = document.querySelector(rootSelector);
+        if (!root) throw new Error(`contrast: ${rootSelector} is missing`);
+        const rootBox = root.getBoundingClientRect();
+        const items = new Map();
+        // Text kept for screen readers only (a 1 px box, like the phone's "Find a species" label) is reported, not gated: nobody sees it.
+        const screenReaderOnly = (el) => { const r = el.getBoundingClientRect(); return r.width <= 1 || r.height <= 1; };
+        const add = (el, text, rects, color) => {
+          if (!rects.length) return;
+          const key = `${describe(el)}|${text.slice(0, 60)}`;
+          const hiddenFromSight = screenReaderOnly(el);
+          const item = items.get(key) || { key, label: describe(el), text: text.slice(0, 60), color, opacity: opacityOf(el), rects: [], gate: !hiddenFromSight && !(parkedSelector && el.closest(parkedSelector)), screenReaderOnly: hiddenFromSight, min: el.closest(nonTextSelector) ? 3 : 4.5, control: el.id === 'qa-contrast-control' };
+          item.rects.push(...rects);
+          // Text drawn outside its surface's box is not on the surface's ground.
+          item.outside = Boolean(item.outside) || rects.some((r) => r.left < rootBox.left - 0.5 || r.right > rootBox.right + 0.5 || r.top < rootBox.top - 0.5 || r.bottom > rootBox.bottom + 0.5);
+          items.set(key, item);
+        };
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const text = node.textContent.replace(/\s+/g, ' ').trim();
+          if (!text) continue;
+          const el = node.parentElement;
+          const cs = getComputedStyle(el);
+          if (cs.visibility !== 'visible' || opacityOf(el) === 0) continue;
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          add(el, text, [...range.getClientRects()].map((r) => clip({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }, el)).filter(Boolean), parseColor(cs.color));
+        }
+        // An input's value or placeholder: its content box, as wide as the text (the clear button sits to its right).
+        for (const input of root.querySelectorAll('input')) {
+          const cs = getComputedStyle(input);
+          if (cs.visibility !== 'visible' || input.getClientRects().length === 0) continue;
+          const text = input.value || input.placeholder;
+          if (!text) continue;
+          const ctx = document.createElement('canvas').getContext('2d');
+          ctx.font = cs.font;
+          const r = input.getBoundingClientRect();
+          const left = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft);
+          const right = Math.min(left + ctx.measureText(text).width, r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight));
+          const box = clip({ left, top: r.top + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop), right, bottom: r.bottom - parseFloat(cs.borderBottomWidth) - parseFloat(cs.paddingBottom) }, input);
+          add(input, `${input.value ? 'value' : 'placeholder'}: ${text}`, box ? [box] : [], parseColor(input.value ? cs.color : getComputedStyle(input, '::placeholder').color));
+        }
+        return [...items.values()];
+      },
+      async analyse(png, items) {
+        const { width, data, scale } = await decode(png);
+        return items.map((item) => {
+          const alpha = item.color.a * item.opacity;
+          const text = [item.color.r, item.color.g, item.color.b];
+          let worst = null;
+          let pixels = 0;
+          for (const r of item.rects) {
+            for (let y = Math.ceil(r.top * scale); y < Math.floor(r.bottom * scale); y += 1) {
+              for (let x = Math.ceil(r.left * scale); x < Math.floor(r.right * scale); x += 1) {
+                const i = (y * width + x) * 4;
+                const bg = [data[i], data[i + 1], data[i + 2]];
+                const fg = text.map((channel, k) => alpha * channel + (1 - alpha) * bg[k]);
+                const lf = lum(...fg);
+                const lb = lum(...bg);
+                const ratio = (Math.max(lf, lb) + 0.05) / (Math.min(lf, lb) + 0.05);
+                pixels += 1;
+                if (!worst || ratio < worst.ratio) worst = { ratio, bg };
+              }
+            }
+          }
+          return { key: item.key, label: item.label, text: item.text, color: item.color, opacity: item.opacity, gate: item.gate, screenReaderOnly: item.screenReaderOnly, outside: item.outside, min: item.min, control: item.control, pixels, ratio: worst ? +worst.ratio.toFixed(2) : null, worstBg: worst?.bg ?? null };
+        });
+      },
+      async behind(png, box) {
+        const { width, data, scale } = await decode(png);
+        const values = [];
+        for (let y = Math.ceil(box.top * scale); y < Math.floor(box.bottom * scale); y += 2) {
+          for (let x = Math.ceil(box.left * scale); x < Math.floor(box.right * scale); x += 2) { const i = (y * width + x) * 4; values.push(lum(data[i], data[i + 1], data[i + 2])); }
+        }
+        values.sort((p, q) => p - q);
+        if (!values.length) return { pixels: 0, medianL: null };
+        return { pixels: values.length, p10L: +values[Math.floor(values.length * 0.1)].toFixed(3), medianL: +values[Math.floor(values.length / 2)].toFixed(3), maxL: +values.at(-1).toFixed(3) };
+      },
+    };
+  });
+  // One surface in its current state: the map behind it, then every text at each scroll position of its body, then a capture for the critic.
+  const measureSurface = async (name, { root, scroller, parked = null, nonText = '.bio-card-close' }) => {
+    const { width, height } = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    await page.mouse.move(Math.round(width / 2), Math.round(height * 0.45)); // no hover on a surface
+    await page.evaluate(() => document.activeElement?.blur?.());
+    await addStyle('qa-contrast-hide-surface', `${root} { opacity: 0 !important; transition: none !important; }`);
+    await frames();
+    await sleep(300);
+    const box = await page.evaluate((root) => { const r = document.querySelector(root).getBoundingClientRect(); return { left: Math.max(0, r.left), top: Math.max(0, r.top), right: Math.min(innerWidth, r.right), bottom: Math.min(innerHeight, r.bottom) }; }, root);
+    const behind = await page.evaluate((png, box) => window.__qaContrast.behind(png, box), await page.screenshot({ encoding: 'base64' }), box);
+    await removeStyle('qa-contrast-hide-surface');
+    await page.evaluate((root) => {
+      const span = document.createElement('span');
+      span.id = 'qa-contrast-control';
+      span.textContent = 'qa control, 0.3 white';
+      span.style.cssText = 'position: absolute; left: 16px; bottom: 3px; font: 11px/1 var(--font-sans); color: rgba(232, 234, 237, 0.3); pointer-events: none; white-space: nowrap;';
+      document.querySelector(root).appendChild(span);
+    }, root);
+    await frames();
+    await sleep(500);
+    const range = scroller ? await page.evaluate((s) => { const el = document.querySelector(s); return el ? { max: el.scrollHeight - el.clientHeight, step: Math.max(40, Math.floor(el.clientHeight * 0.8)) } : null; }, scroller) : null;
+    const positions = [0];
+    if (range && range.max > 0) { for (let p = range.step; p < range.max; p += range.step) positions.push(p); positions.push(range.max); }
+    const merged = new Map();
+    for (const position of positions) {
+      if (scroller) { await page.evaluate((s, p) => { const el = document.querySelector(s); if (el) el.scrollTop = p; }, scroller, position); await sleep(400); }
+      const items = await page.evaluate((root, parked, nonText) => window.__qaContrast.collect(root, parked, nonText), root, parked, nonText);
+      await addStyle('qa-contrast-hide-text', hideText(root));
+      await frames();
+      await sleep(200);
+      const png = await page.screenshot({ encoding: 'base64' });
+      await removeStyle('qa-contrast-hide-text');
+      for (const item of await page.evaluate((png, items) => window.__qaContrast.analyse(png, items), png, items)) {
+        const prior = merged.get(item.key);
+        const pixels = (prior?.pixels ?? 0) + item.pixels;
+        const outside = Boolean(prior?.outside) || item.outside;
+        if (!prior || (item.ratio !== null && (prior.ratio === null || item.ratio < prior.ratio))) merged.set(item.key, { ...item, pixels, outside });
+        else Object.assign(prior, { pixels, outside });
+      }
+      await frames();
+      await sleep(500); // the colours transition back before the next read
+    }
+    await page.evaluate((s) => { document.getElementById('qa-contrast-control')?.remove(); const el = s && document.querySelector(s); if (el) el.scrollTop = 0; }, scroller);
+    await sleep(400);
+    await shot(`contrast-${name}`);
+    const items = [...merged.values()];
+    const control = items.find((item) => item.control) || null;
+    const gated = items.filter((item) => item.gate && !item.control);
+    const classes = {};
+    for (const item of gated) { if (!classes[item.label] || (item.ratio ?? 0) < (classes[item.label].ratio ?? Infinity)) classes[item.label] = { ratio: item.ratio, min: item.min, text: item.text, worstBg: item.worstBg }; }
+    const failing = gated.filter((item) => item.ratio !== null && item.ratio < item.min).map(({ key, ratio, min, color, worstBg }) => ({ key, ratio, min, color, worstBg }));
+    const unmeasured = gated.filter((item) => item.ratio === null).map((item) => item.key);
+    const outside = gated.filter((item) => item.outside).map((item) => item.key);
+    const ok = behind.medianL !== null && behind.medianL >= MAP_BEHIND_MIN_L && gated.length >= 4 && failing.length === 0 && unmeasured.length === 0 && outside.length === 0 && control?.ratio != null && control.ratio < TEXT_MIN;
+    return { name, ok, behind, positions: positions.length, measured: gated.length, classes, failing, unmeasured, outside, control: control && { ratio: control.ratio, pixels: control.pixels }, parked: items.filter((item) => !item.gate && !item.control).map(({ key, ratio, screenReaderOnly }) => ({ key, ratio, ...(screenReaderOnly ? { screenReaderOnly } : {}) })) };
+  };
+  const initial = await page.evaluate(() => {
+    const view = window.__godsEyeView;
+    const c = view.viewer.camera;
+    window.__qaContrastCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll };
+    return { stack: view.mapStackController.getState().activeId, scope: document.getElementById('scope-toggle')?.getAttribute('aria-pressed') ?? null, speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed'), speciesEnabled: view.dataManager.isEnabled('species'), params: view.dataManager.getLayerParams('species') };
+  });
+  const surfaces = [];
+  const settings = {};
+  let error = null;
+  let restored = null;
+  try {
+    settings.stack = await page.evaluate(async () => (await window.__godsEyeView.mapStackController.setStack('osm')).activeId);
+    if (settings.stack !== 'osm') throw new Error(`contrast: the OSM stack did not become active (${settings.stack})`);
+    settings.scope = await page.evaluate(() => { const button = document.getElementById('scope-toggle'); if (!button) throw new Error('contrast: #scope-toggle is missing'); if (button.getAttribute('aria-pressed') === 'true') button.click(); return button.getAttribute('aria-pressed'); });
+    if (settings.scope !== 'false') throw new Error(`contrast: the scope mask did not turn off (aria-pressed ${settings.scope})`);
+    for (const [width, height] of VIEWPORTS) {
+      const size = `${width}x${height}`;
+      await page.setViewport({ width, height });
+      await sleep(2500);
+      // The panel: the Top datasets search and the name search fail.
+      await setFailures(['^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*taxonKey=)', '^https://api\\.inaturalist\\.org/v1/taxa/autocomplete', '^https://api\\.gbif\\.org/v1/species/suggest']);
+      await closeCard();
+      await flyTo(...AUSTIN);
+      await page.evaluate(async (taxon) => {
+        const dm = window.__godsEyeView.dataManager;
+        if (!dm.setLayerParams('species', { ...taxon, years: 'recent', radiusKm: 10 }, { origin: 'user' })) throw new Error('species params rejected');
+        await dm.setEnabled('species', true, { origin: 'user' });
+      }, RUSTY_PATCHED);
+      await openSpeciesPanel();
+      await page.evaluate(() => { document.getElementById('species-body').scrollTop = 0; });
+      await page.waitForFunction(() => /^GBIF dataset search failed/.test(document.getElementById('species-datasets-status')?.textContent || ''), { timeout: 30000 });
+      await page.click('#species-search', { clickCount: 3 });
+      await page.keyboard.press('Backspace');
+      await page.type('#species-search', 'monarch', { delay: 30 });
+      await page.waitForFunction(() => /^Name search failed/.test(document.getElementById('species-status')?.textContent || ''), { timeout: 30000 });
+      const panelForced = await page.evaluate(() => ({ status: document.getElementById('species-status').textContent, datasets: document.getElementById('species-datasets-status').textContent, retry: Boolean(document.querySelector('#species-datasets .species-datasets-retry')) }));
+      const panelTiles = await waitForMapTiles();
+      const panel = await measureSurface(`panel-${size}`, { root: '#species-panel .species-panel-inner', scroller: '#species-body', parked: '#species-panel .panel-header' });
+      surfaces.push({ ...panel, ok: panel.ok && panelForced.retry, viewport: size, forced: { ...panelForced, requests: await forcedCount() }, tiles: panelTiles.settled });
+      // A status card: the what-lives-here search fails. The panel is collapsed, so the map is what shows behind the card.
+      await setFailures(['^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*facet=speciesKey)']);
+      await page.evaluate(async () => { await window.__godsEyeView.dataManager.setEnabled('species', false, { origin: 'user' }); });
+      await page.click('#species-what-lives-here');
+      await collapseSpecies();
+      const centre = await canvasCentre();
+      await page.mouse.click(centre.x, centre.y);
+      await page.waitForFunction(() => /^GBIF search failed/.test(document.querySelector('#bio-card .bio-card-status')?.textContent || ''), { timeout: 45000 });
+      const statusForced = await page.evaluate(() => ({ status: document.querySelector('#bio-card .bio-card-status').textContent, retry: Boolean(document.querySelector('#bio-card .bio-card-retry')) }));
+      const statusTiles = await waitForMapTiles();
+      const statusCard = await measureSurface(`card-status-${size}`, { root: '#bio-card', scroller: '#bio-card .bio-card-body' });
+      surfaces.push({ ...statusCard, ok: statusCard.ok && statusForced.retry, viewport: size, forced: { ...statusForced, requests: await forcedCount() }, tiles: statusTiles.settled });
+      await closeCard();
+      // A list card across the antimeridian: every name and dataset lookup fails, and the foot says gbif.org can't show the area as a circle.
+      await setFailures(['^https://api\\.gbif\\.org/v1/species/\\d+(?:[?#]|$)', '^https://api\\.gbif\\.org/v1/dataset/']);
+      await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { radiusKm: 50 }, { origin: 'user' })) throw new Error('species radius rejected'); });
+      await flyTo(...TAVEUNI);
+      await openSpeciesPanel();
+      await page.click('#species-what-lives-here');
+      await collapseSpecies();
+      const centre2 = await canvasCentre();
+      await page.mouse.click(centre2.x, centre2.y);
+      await page.waitForFunction(() => document.querySelector('#bio-card .bio-card-foot-note') && document.querySelectorAll('#bio-card .bio-card-row').length > 0, { timeout: 60000 });
+      const listForced = await page.evaluate(() => ({ rows: document.querySelectorAll('#bio-card .bio-card-row').length, rowNotes: document.querySelectorAll('#bio-card .bio-card-row-note').length, datasetNotes: document.querySelectorAll('#bio-card .dataset-row-note').length, footNote: document.querySelector('#bio-card .bio-card-foot-note')?.textContent ?? null }));
+      const listTiles = await waitForMapTiles();
+      const listCard = await measureSurface(`card-list-${size}`, { root: '#bio-card', scroller: '#bio-card .bio-card-body' });
+      // The species rows themselves must be seen and measured, not only the foot.
+      surfaces.push({ ...listCard, ok: listCard.ok && Boolean(listCard.classes['span.bio-card-row-primary']) && listForced.rowNotes > 0 && listForced.datasetNotes > 0 && listForced.footNote === "gbif.org can't show this area as a circle", viewport: size, forced: { ...listForced, requests: await forcedCount() }, tiles: listTiles.settled });
+      await closeCard();
+    }
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 600);
+  } finally {
+    restored = await page.evaluate(async (initial) => {
+      if (window.__qaFetchOriginal) { window.fetch = window.__qaFetchOriginal; delete window.__qaFetchOriginal; }
+      for (const id of ['qa-contrast-control', 'qa-contrast-hide-text', 'qa-contrast-hide-surface']) document.getElementById(id)?.remove();
+      const view = window.__godsEyeView;
+      const dm = view.dataManager;
+      const card = document.getElementById('bio-card');
+      if (card && !card.hidden) card.querySelector('.bio-card-close').click();
+      await dm.setEnabled('species', initial.speciesEnabled, { origin: 'user' });
+      dm.setLayerParams('species', { taxonKey: initial.params?.taxonKey ?? null, years: initial.params?.years ?? 'recent', radiusKm: initial.params?.radiusKm ?? 10, ...(initial.params?.name ? { name: initial.params.name } : {}) }, { origin: 'user' });
+      const input = document.getElementById('species-search');
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+      const scope = document.getElementById('scope-toggle');
+      if (scope && initial.scope !== null && scope.getAttribute('aria-pressed') !== initial.scope) scope.click();
+      const stack = (await view.mapStackController.setStack(initial.stack)).activeId;
+      const saved = window.__qaContrastCamera;
+      view.viewer.camera.setView({ destination: saved.position, orientation: { heading: saved.heading, pitch: saved.pitch, roll: saved.roll } });
+      const panel = document.getElementById('species-panel');
+      if (panel.classList.contains('collapsed') !== initial.speciesCollapsed) panel.querySelector('[data-collapse-target="species-panel"]').click();
+      return { stack, scope: scope?.getAttribute('aria-pressed') ?? null, speciesEnabled: dm.isEnabled('species'), params: dm.getLayerParams('species'), fetchRestored: !window.__qaFetchOriginal };
+    }, initial).catch((caught) => ({ error: String(caught?.stack || caught).slice(0, 300) }));
+    await page.setViewport({ width: 1400, height: 900 });
+    await sleep(2000);
+  }
+  const restoredOk = restored?.stack === initial.stack && restored.scope === initial.scope && restored.fetchRestored === true && restored.speciesEnabled === initial.speciesEnabled;
+  report('contrast', error === null && restoredOk && surfaces.length === VIEWPORTS.length * 3 && surfaces.every((s) => s.ok), { settings, surfaces, restored, ...(error ? { error } : {}) });
 }
 
 if (CHECKS.has('card')) {

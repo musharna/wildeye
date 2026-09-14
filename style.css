@@ -9526,6 +9526,8 @@ body.scene-playback-mode #key-setup {
 }
 
 /* ── Biology details card (src/bio/detailsCard.js) ── */
+/* I1 (final review): the card and the SPECIES panel have a background floor of 0.86 rather than the shared 0.72 glass, so their text holds 4.5:1
+   where a light street map shows through (measured in qa-species contrast). */
 .bio-card {
   position: fixed;
   right: 24px;
@@ -9537,7 +9539,7 @@ body.scene-playback-mode #key-setup {
   flex-direction: column;
   gap: 6px;
   padding: 12px 14px;
-  background: var(--glass-bg);
+  background: rgba(12, 12, 20, 0.86);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   backdrop-filter: blur(24px) saturate(1.4);
@@ -9550,7 +9552,9 @@ body.scene-playback-mode #key-setup {
 .bio-card-head { display: flex; align-items: center; gap: 8px; }
 /* No text-transform: uppercase — it maps µ (U+00B5) to M in unit strings. */
 .bio-card-title { flex: 1; min-width: 0; font: 10px/1.3 var(--font-mono); letter-spacing: 1px; color: var(--accent); }
-.bio-card-close { background: none; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: var(--text-secondary); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 8px; }
+/* I1: the close ×, the status and error lines, Retry and the foot are 0.8 white like the filter and rows: in the shared 0.5 white they measured
+   2.96:1 over a white basemap. */
+.bio-card-close { background: none; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: rgba(232, 234, 237, 0.8); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 8px; }
 .bio-card-close:hover { color: var(--accent); border-color: var(--accent); }
 /* 0.8 white: the shared --text-secondary (0.5 white) measured 4.09:1 over the card (visual critic 5). */
 .bio-card-filter { color: rgba(232, 234, 237, 0.8); font-size: 11px; }
@@ -9578,9 +9582,11 @@ body.scene-playback-mode #key-setup {
 .bio-card-row-secondary:empty { display: none; }
 .bio-card-row-count { grid-column: 2; grid-row: 1; color: rgba(232, 234, 237, 0.8); font: 10px/1.6 var(--font-mono); }
 .bio-card-row-note { grid-column: 1 / -1; color: #ffb86b; font-size: 11px; }
-.bio-card-status { margin: 0 0 6px; color: var(--text-secondary); }
-.bio-card-retry { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: var(--text-secondary); cursor: pointer; font: 9px var(--font-mono); letter-spacing: 1.2px; padding: 5px 9px; }
-.bio-card-foot { font-size: 11px; color: var(--text-secondary); border-top: 1px solid var(--glass-border); padding-top: 6px; }
+.bio-card-status { margin: 0 0 6px; color: rgba(232, 234, 237, 0.8); }
+.bio-card-retry { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: rgba(232, 234, 237, 0.8); cursor: pointer; font: 9px var(--font-mono); letter-spacing: 1.2px; padding: 5px 9px; }
+/* The foot keeps its content height up to half the card's 52vh and scrolls beyond it, and never shrinks below that: at 375x667 a list with five
+   failed dataset lookups made the foot taller than the card, the species list above it shrank to 0 px and the foot ran out of the card's box. */
+.bio-card-foot { flex: 0 0 auto; max-height: 26vh; overflow-y: auto; font-size: 11px; color: rgba(232, 234, 237, 0.8); border-top: 1px solid var(--glass-border); padding-top: 6px; }
 .bio-card-foot:empty { display: none; }
 .bio-card-foot-note { display: block; margin-bottom: 2px; }
 body.ui-clean-view #bio-card,
@@ -9623,9 +9629,10 @@ body.recording-mode #bio-card { display: none !important; }
   opacity: 0.25;
   pointer-events: none;
 }
+/* I1: the 0.86 background floor, as on the card. */
 .species-panel-inner {
   position: relative;
-  background: var(--glass-bg);
+  background: rgba(12, 12, 20, 0.86);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   padding: 14px;
@@ -9678,7 +9685,8 @@ body.recording-mode #bio-card { display: none !important; }
 }
 .species-suggestion { width: 100%; text-align: left; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans); padding: 5px 8px; }
 .species-suggestion:hover, .species-suggestion:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }
-.species-status { color: var(--text-secondary); font-size: 11px; }
+/* I1: status and error lines ("Name search failed …") are 0.8 white; the shared 0.5 white measured 2.96:1 over a white basemap. */
+.species-status { color: rgba(232, 234, 237, 0.8); font-size: 11px; }
 .species-status:empty { display: none; }
 .species-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .species-chosen[hidden] { display: none; }
