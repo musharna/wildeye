@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,fuzzy-match,card,suggestion-fade,search,panel-datasets,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,fuzzy-match,card,suggestion-fade,search,panel-datasets,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -1001,6 +1001,55 @@ if (CHECKS.has('suggestion-fade')) {
   const controlOk = Boolean(control?.overflows) && control.fade !== '0px' && control.bottomToFirst < 0.85;
   const shortOk = short !== null && short.rows >= 2 && short.rows < 5 && !short.overflows && short.fade === '0px' && short.visibleRows === short.rows && short.bottomToFirst >= 0.95;
   report('suggestion-fade', error === null && controlOk && shortOk, { control, short, controlOk, shortOk, ...(error ? { error } : {}) });
+}
+
+// M2 (final review): one Escape does one thing in the real page, where the search box's keydown listener runs before the document's. With
+// WHAT LIVES HERE armed (its prompt card showing) and suggestions showing, the first Escape only hides the list: the card stays and it stays
+// armed. Positive control in the same check: the second Escape, with no list showing, closes the card and disarms.
+if (CHECKS.has('escape')) {
+  const read = () => page.evaluate(() => ({
+    listHidden: document.getElementById('species-suggestions').hidden,
+    cardHidden: document.getElementById('bio-card').hidden,
+    card: document.getElementById('bio-card').innerText.slice(0, 60),
+    armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true',
+    cursor: window.__godsEyeView.viewer.scene.canvas.style.cursor,
+    value: document.getElementById('species-search').value,
+    focused: document.activeElement?.id || document.activeElement?.tagName || null,
+  }));
+  const states = {};
+  let error = null;
+  try {
+    await openSpeciesPanel();
+    await page.click('#species-what-lives-here');
+    await page.waitForFunction(() => !document.getElementById('bio-card').hidden, { timeout: 10000 });
+    await page.click('#species-search', { clickCount: 3 });
+    await page.keyboard.press('Backspace');
+    await page.type('#species-search', 'monarch', { delay: 40 });
+    await page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
+    states.before = await read();
+    await page.keyboard.press('Escape');
+    await sleep(700);
+    states.first = await read();
+    await page.keyboard.press('Escape');
+    await sleep(700);
+    states.second = await read();
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await page.evaluate(() => {
+      const input = document.getElementById('species-search');
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+      const card = document.getElementById('bio-card');
+      if (!card.hidden) card.querySelector('.bio-card-close').click();
+      const arm = document.getElementById('species-what-lives-here');
+      if (arm.getAttribute('aria-pressed') === 'true') arm.click();
+    }).catch((caught) => { error = `${error ?? ''} restoring: ${caught}`; });
+    await sleep(500);
+  }
+  const firstOk = Boolean(states.first) && states.before.listHidden === false && states.before.cardHidden === false && states.before.armed && states.first.listHidden === true && states.first.cardHidden === false && states.first.armed;
+  const secondOk = Boolean(states.second) && states.second.cardHidden === true && states.second.armed === false;
+  report('escape', error === null && firstOk && secondOk, { ...states, firstOk, secondOk, ...(error ? { error } : {}) });
 }
 
 if (CHECKS.has('search')) {

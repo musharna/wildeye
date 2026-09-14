@@ -379,6 +379,17 @@ test('Escape while armed disarms (cursor back, onArmedChange(false)); other keys
   assert.equal(r.calls.near.length, 0);
 });
 
+// M2 (final review): an Escape the species search already handled (it hid the suggestion list) does not also disarm WHAT LIVES HERE.
+test('an Escape another control handled keeps WHAT LIVES HERE armed; an unhandled Escape disarms', () => {
+  const r = rig();
+  r.controller.arm();
+  for (const listener of r.doc.keydown) listener({ key: 'Escape', defaultPrevented: true });
+  assert.equal(r.controller.armed, true, 'a handled Escape keeps it armed');
+  assert.deepEqual(r.calls.armed, [true]);
+  for (const listener of r.doc.keydown) listener({ key: 'Escape', defaultPrevented: false });
+  assert.equal(r.controller.armed, false, 'positive control: an unhandled Escape disarms');
+});
+
 test('a failed name lookup falls back to the taxon key and logs the key; the other names still resolve', async () => {
   const r = rig({
     near: { total: 9, species: [{ key: 5232437, count: 5 }, { key: 2480528, count: 4 }], datasets: [] },

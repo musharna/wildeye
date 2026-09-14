@@ -184,8 +184,9 @@ export function createWhatLivesHere({
 
   const handler = handlerFor(viewer.scene.canvas);
   handler.setInputAction((event) => { void handleClick(event); }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  // M2: an Escape another control already handled (the species search hiding its suggestions) does not also disarm.
   doc.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && armed) setArmed(false);
+    if (event.key === 'Escape' && !event.defaultPrevented && armed) setArmed(false);
   });
 
   return {

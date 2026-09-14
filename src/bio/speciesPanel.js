@@ -331,7 +331,11 @@ export function createSpeciesPanel({
   });
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') list.querySelector('button')?.click();
-    if (event.key === 'Escape') clearSuggestions();
+    // M2: an Escape that hides a visible list does only that, and says so, so the card and WHAT LIVES HERE leave it alone.
+    if (event.key === 'Escape' && !list.hidden) {
+      clearSuggestions();
+      event.preventDefault();
+    }
   });
   toggle.addEventListener('click', () => {
     void dataManager.setEnabled('species', !dataManager.isEnabled('species'), { origin: 'user' }).then(render);

@@ -166,6 +166,25 @@ test("a FUZZY match is mapped and says it is shown as GBIF's name; EXACT says no
   assert.equal(none.els['species-chosen-note'].hidden, true);
 });
 
+// M2 (final review): Escape in the search box hides a visible suggestion list and marks the key handled (a recorded keydown), so the details
+// card and WHAT LIVES HERE, which listen on the document after it, leave that key alone; with no list showing, Escape is left for them.
+test('Escape hides a visible suggestion list and marks the key handled; with no list showing it is left unhandled', async () => {
+  const { els } = panelRig({ suggest: async () => ({ source: 'inaturalist', items: [MONARCH] }), setTimer: (fn) => { fn(); return 1; } });
+  const input = els['species-search'];
+  input.value = 'monarch';
+  input.listeners.input();
+  await settle();
+  assert.equal(els['species-suggestions'].hidden, false, 'the list shows');
+  const keydown = (key) => ({ key, defaultPrevented: false, prevented: 0, preventDefault() { this.defaultPrevented = true; this.prevented += 1; } });
+  const first = keydown('Escape');
+  input.listeners.keydown(first);
+  assert.equal(els['species-suggestions'].hidden, true, 'Escape hides the list');
+  assert.equal(first.prevented, 1, 'and marks the key handled');
+  const second = keydown('Escape');
+  input.listeners.keydown(second);
+  assert.equal(second.prevented, 0, 'with no list showing, Escape is left for the card and WHAT LIVES HERE');
+});
+
 // R-7t: GBIF draws each cell as a circle sized, filled and faded by its record count, so the legend names each class: a circle at the
 // class's style width in CSS px, in its fill and opacity, with its line where the style draws one (aria-hidden), and its upper bound as
 // text, under a caption. All of it comes from SPECIES_MAP_LEGEND, which gbif.test.mjs pins to the tile style.

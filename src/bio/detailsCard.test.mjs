@@ -187,6 +187,23 @@ test('Escape and the close button each call onDismiss once; a card that is alrea
   assert.equal(dismissed.length, 2, 'the close button on the hidden card calls nothing');
 });
 
+// M2 (final review): one Escape does one thing. The species search marks the Escape that hides its suggestion list as handled (preventDefault)
+// before the document's listeners run, and the card then leaves it alone; an Escape nobody handled still dismisses the card.
+test('an Escape another control handled leaves the card open; an unhandled Escape dismisses it', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const dismissed = [];
+  const card = createDetailsCard({ viewer, doc, sanitize: (html) => html, onDismiss: () => dismissed.push(true) });
+  card.showStatus({ heading: 'What lives here', message: 'Click a spot on the globe. Esc cancels.' });
+  const handled = { key: 'Escape', defaultPrevented: true };
+  doc.listeners.keydown(handled);
+  assert.equal(card.element.hidden, false, 'a handled Escape leaves the card open');
+  assert.deepEqual(dismissed, [], 'and cancels nothing');
+  doc.listeners.keydown({ key: 'Escape', defaultPrevented: false });
+  assert.equal(card.element.hidden, true, 'positive control: an unhandled Escape dismisses the card');
+  assert.deepEqual(dismissed, [true]);
+});
+
 // F9: where gbif.org cannot show the searched circle, the footer says so in plain text before its link.
 test('a list footer can carry a plain-text note before its link; without one the footer is just the link', () => {
   const doc = cardDoc();

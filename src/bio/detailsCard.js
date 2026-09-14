@@ -167,8 +167,9 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     root.hidden = false;
     setMode('list');
   };
+  // M2: an Escape another control already handled (the species search hiding its suggestions) is not the card's.
   doc.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !root.hidden) dismiss();
+    if (event.key === 'Escape' && !event.defaultPrevented && !root.hidden) dismiss();
   });
 
   return {
