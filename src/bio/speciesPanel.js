@@ -1,6 +1,6 @@
 /**
  * SPECIES panel (spec: docs/superpowers/specs/2026-09-13-species-search-design.md): name search with
- * suggestions, the chosen species with a map switch and a record-count legend, the "What lives here" button, and year and radius chips.
+ * suggestions, the chosen species with a map switch, the "What lives here" button, the record-count legend, and year and radius chips.
  */
 import { SPECIES_MAP_LEGEND } from './gbif.js';
 
@@ -106,7 +106,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
     }
     toggle.textContent = on ? 'MAP ON' : 'MAP OFF';
     toggle.setAttribute('aria-checked', String(on));
-    legend.hidden = !on;
+    legend.hidden = !(on && p.taxonKey); // below the action, outside the chosen-species block
     for (const chip of yearChips.querySelectorAll('[data-years]')) chip.setAttribute('aria-pressed', String(chip.dataset.years === p.years));
     for (const chip of radiusChips.querySelectorAll('[data-radius]')) chip.setAttribute('aria-pressed', String(Number(chip.dataset.radius) === p.radiusKm));
     const stats = speciesLayer.getStats();

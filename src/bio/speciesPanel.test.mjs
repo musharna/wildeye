@@ -20,11 +20,11 @@ function fakeElement() {
 
 const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-years', 'species-radius', 'species-what-lives-here'];
 
-function panelRig({ match = async () => 5133088, suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0 } = {}) {
+function panelRig({ match = async () => 5133088, suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, enabled: initiallyEnabled = false } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
   const doc = { getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag }) };
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
-  let enabled = false;
+  let enabled = initiallyEnabled;
   const calls = { params: [], enable: [], match: [] };
   const dataManager = {
     getLayerParams: () => ({ ...params }),
@@ -136,7 +136,9 @@ test('the legend shows each GBIF record-count class as a swatch in its drawn col
   assert.ok(labels.every((label) => label.attrs['aria-hidden'] === undefined), 'the labels are read out');
 });
 
-test('the colour legend shows only while the map is on', async () => {
+test('the colour legend shows only while the map of a chosen species is on', async () => {
+  // The legend sits below the action, outside the chosen-species block, so it cannot inherit that block's hidden state.
+  assert.equal(panelRig({ enabled: true }).els['species-legend'].hidden, true, 'map on with no species chosen');
   const { panel, els } = panelRig();
   assert.equal(els['species-legend'].hidden, true, 'no species chosen, map off');
   await panel.choose({ gbifKey: 5133088, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' });
@@ -159,16 +161,16 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   for (const id of PANEL_IDS) assert.match(stack, new RegExp(`id="${id}"`), id);
   assert.match(stack, /data-collapse-target="species-panel"/);
   assert.doesNotMatch(stack.slice(stack.indexOf('id="species-panel"')), /data-requires-backend/, 'species search works on the static host');
-  // The action sits directly after the chosen-species block (its legend inside it), before the chips, so a squeezed
-  // panel still shows it; the credit line is last.
+  // The action sits directly after the chosen-species block, before the legend and the chips, so the 400x800 panel still shows it
+  // whole above its cut; the credit line is last.
   const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
   // The legend's content is rendered from SPECIES_MAP_LEGEND (speciesPanel.js), so the markup holds an empty container.
-  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<div id="species-legend" class="species-legend" hidden><\/div>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"/);
+  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
   for (const attr of ['role="switch"', 'aria-checked="false"', 'aria-label="Species map"']) assert.ok(toggleTag.includes(attr), `${attr} in ${toggleTag}`);
   assert.equal(toggleTag.includes('aria-pressed'), false, `no aria-pressed on the switch: ${toggleTag}`);
-  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-legend"', 'id="species-what-lives-here"', 'id="species-years"', 'id="species-radius"', 'class="species-credit"'];
+  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-legend"', 'id="species-years"', 'id="species-radius"', 'class="species-credit"'];
   const positions = order.map((marker) => panelHtml.indexOf(marker));
   assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'markup order');

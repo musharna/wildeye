@@ -9654,7 +9654,7 @@ body.recording-mode #bio-card { display: none !important; }
 .species-chosen-name { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The record-count legend: a caption over six swatches with their bounds. Swatch colours and labels come from SPECIES_MAP_LEGEND
    (src/bio/gbif.js), GBIF's classic-noborder.poly classes as the globe draws them (spec: Implementation notes). */
-.species-legend { flex: 1 0 100%; display: flex; flex-direction: column; gap: 3px; color: rgba(232, 234, 237, 0.78); font-size: 11px; }
+.species-legend { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; color: rgba(232, 234, 237, 0.78); font-size: 11px; }
 .species-legend[hidden] { display: none; }
 .species-legend-classes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; max-width: 252px; }
 .species-legend-class { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
