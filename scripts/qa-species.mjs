@@ -20,6 +20,10 @@ const page = await browser.newPage();
 const requests = [];
 const failed = [];
 page.on('request', (r) => requests.push(r.url()));
+// Every dataset-facet occurrence search the page sends, never reset: the panel reuses a finished list when the same taxon and years return
+// (panel-layout maps the monarch before the search check chooses it again), so a check cannot rely on a request after its own start.
+const datasetSearches = [];
+page.on('request', (r) => { let u; try { u = new URL(r.url()); } catch { return; } if (u.hostname === 'api.gbif.org' && u.pathname === '/v1/occurrence/search' && u.searchParams.getAll('facet').join() === 'datasetKey') datasetSearches.push(u); });
 const tileStatus = new Map(); // species map tile URL -> HTTP status, so the search check decodes only tiles GBIF drew (200, not 204)
 page.on('response', (r) => { if (r.url().includes('/v2/map/occurrence/')) tileStatus.set(r.url(), r.status()); });
 const upstreamTileErrors = [];
@@ -130,7 +134,9 @@ if (CHECKS.has('panel-layout')) {
       const whole = (el) => {
         const r = el.getBoundingClientRect();
         const inside = r.top >= view.top - 0.5 && r.bottom <= view.bottom - fade + 0.5;
-        const corners = [[r.left + 3, r.top + 3], [r.right - 3, r.top + 3], [r.left + 3, r.bottom - 3], [r.right - 3, r.bottom - 3]].every(([x, y]) => { const hit = document.elementFromPoint(x, y); return Boolean(hit && (hit === el || el.contains(hit))); });
+        // Probe points inset by half the height from the rounded ends, as the round-5 shots did: the pill's square corners are outside it.
+        const inset = Math.min((r.bottom - r.top) / 2, 10);
+        const corners = [[r.left + inset, r.top + 2], [r.right - inset, r.top + 2], [r.left + inset, r.bottom - 2], [r.right - inset, r.bottom - 2]].every(([x, y]) => { const hit = document.elementFromPoint(x, y); return Boolean(hit && (hit === el || el.contains(hit))); });
         return { top: Math.round(r.top), bottom: Math.round(r.bottom), inside, corners };
       };
       const legend = document.getElementById('species-legend');
@@ -141,13 +147,15 @@ if (CHECKS.has('panel-layout')) {
         action: whole(document.getElementById('species-what-lives-here')), years: whole(document.getElementById('species-years')), radius: whole(document.getElementById('species-radius')),
         legendHidden: legend.hidden, legendBg, legendOpaque: /^rgb\(/.test(legendBg) || /, 1\)$/.test(legendBg),
         datasetsHidden: document.getElementById('species-datasets').hidden,
+        // no chip or action text cut off inside its button
+        clipped: [...document.querySelectorAll('#species-panel .species-chip, #species-what-lives-here')].filter((b) => b.scrollWidth > b.clientWidth + 0.5).map((b) => ({ text: b.textContent, scrollWidth: b.scrollWidth, clientWidth: b.clientWidth })),
       };
     });
     await page.evaluate(() => { const body = document.querySelector('#species-panel .species-body'); body.scrollTop = body.scrollHeight; });
     await sleep(1200);
     await shot(shotName);
     await page.evaluate(() => { document.querySelector('#species-panel .species-body').scrollTop = 0; });
-    const ok = fit.scrollTop === 0 && ['action', 'years', 'radius'].every((k) => fit[k].inside && fit[k].corners) && (!fit.overflows || fit.fadeVar !== '0px') && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden;
+    const ok = fit.scrollTop === 0 && ['action', 'years', 'radius'].every((k) => fit[k].inside && fit[k].corners) && (!fit.overflows || fit.fadeVar !== '0px') && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden && fit.clipped.length === 0;
     return { ...fit, ok };
   };
   await page.evaluate(async () => {
@@ -385,9 +393,9 @@ if (CHECKS.has('panel-datasets')) {
     return { hidden: box?.hidden ?? null, visible: Boolean(box && !box.hidden && box.getBoundingClientRect().height > 0), heading: box?.querySelector('.dataset-list-heading')?.textContent ?? null, link: link ? { href: link.getAttribute('href'), target: link.getAttribute('target'), rel: link.getAttribute('rel'), text: link.textContent } : null, status: document.getElementById('species-status')?.textContent ?? '' };
   });
   const rows = await readDatasetRows('#species-datasets .dataset-row');
-  const sent = requests.map((u) => { try { return new URL(u); } catch { return null; } }).filter((u) => u && u.hostname === 'api.gbif.org' && u.pathname === '/v1/occurrence/search' && u.searchParams.getAll('facet').join() === 'datasetKey').at(-1) || null;
+  const years = state.params?.years === 'all' ? null : `${new Date().getUTCFullYear() - 9},${new Date().getUTCFullYear()}`;
+  const sent = datasetSearches.filter((u) => u.searchParams.get('taxonKey') === String(state.params?.taxonKey) && u.searchParams.get('year') === years).at(-1) || null;
   const link = panel.link ? new URL(panel.link.href) : null;
-  const years = sent?.searchParams.get('year') ?? null;
   const checks = {
     mapOn: state.enabled && Boolean(state.params?.taxonKey),
     rowsOk: datasetRowsOk(rows, 3),
