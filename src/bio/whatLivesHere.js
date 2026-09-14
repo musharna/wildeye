@@ -12,8 +12,14 @@ import { EARTH_RADIUS_KM, SEARCH_POLYGON_VERTICES, gbifPortalAnyLocationUrl, gbi
  */
 export const HEADING = 'What lives here';
 
+/**
+ * An entity click is a pick carrying an id, on the pick or on its primitive, as Cesium's own pickEntity reads it (picked.id ?? picked.primitive.id):
+ * cables and FIRMS fires carry theirs on the primitive (M6). Not resolvePickId, which returns null for an object id without .id or .mmsi, such
+ * as a cable's { reference }.
+ */
 export function classifyClick({ picked, position }) {
-  if (picked && picked.id !== undefined && picked.id !== null) return 'entity';
+  const id = picked?.id ?? picked?.primitive?.id;
+  if (id !== undefined && id !== null) return 'entity';
   if (!position) return 'sky';
   return 'ground';
 }

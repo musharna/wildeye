@@ -140,6 +140,12 @@ async function captureConsoleError(fn) {
 test('classifyClick: marker, sky, ground', () => {
   assert.equal(classifyClick({ picked: { id: 'occ:1' }, position: YELLOWSTONE }), 'entity');
   assert.equal(classifyClick({ picked: { primitive: {} }, position: YELLOWSTONE }), 'ground', 'a pick without an id (terrain, 3D tiles) is ground');
+  // M6 (final review): some layers carry their id on the picked primitive, which Cesium's own pickEntity reads (picked.id ?? picked.primitive.id):
+  // a submarine cable's { reference } (telegeographySubmarineCables.js resolvePickRecord) and a FIRMS fire's string id (firmsHeatmap.js pickedFire).
+  // Both are entity clicks, so the layer's own click wins and no search runs.
+  assert.equal(classifyClick({ picked: { primitive: { id: { reference: 'cable:2africa' } } }, position: YELLOWSTONE }), 'entity', 'a cable, id on the primitive');
+  assert.equal(classifyClick({ picked: { primitive: { id: 'firms:VIIRS:1' } }, position: YELLOWSTONE }), 'entity', 'a FIRMS fire, id on the primitive');
+  assert.equal(classifyClick({ picked: { primitive: { id: undefined }, content: {} }, position: YELLOWSTONE }), 'ground', 'a 3D tile feature: its tileset has no id');
   assert.equal(classifyClick({ picked: undefined, position: null }), 'sky');
   assert.equal(classifyClick({ picked: undefined, position: YELLOWSTONE }), 'ground');
 });
