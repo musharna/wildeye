@@ -129,8 +129,8 @@ What the build changed from the design above, and why.
   monarch's at `hexPerTile=30`, zooms 3, 6 and 9), and the coarse per-zoom sizes that avoided that painted wide stretches of ocean
   (114,954 px more than 8 px from land at the 12,000 km view).
 - On the final template (2026-09-14), 0 record-bearing cells went undrawn in the tiles measured at zooms 2, 3, 5, 6, 8 and 9 for the
-  monarch and for Bombus affinis. At the 12,000 km view, five captures of the same setup gave 1,614–1,909 species pixels more than 8 px
-  from land and a median smallest-class circle core of 10.65–12.05 px; the spread comes from which tiles had loaded at capture time.
+  monarch and for Bombus affinis. At the 12,000 km view, six captures of the same setup gave 1,614–1,909 species pixels more than 8 px
+  from land and a median smallest-class circle core of 10.62–12.05 px; the spread comes from which tiles had loaded at capture time.
 - GBIF serves `@1x` tiles 512 px square, and `UrlTemplateImageryProvider` assumes 256 px unless told, so it drew every GBIF pixel at about
   half size. The provider declares 512: the smallest circles at the Upper Midwest view measured 4.4 px across at 256 and
   8.9 px declared 512 (median core diameter).
