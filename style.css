@@ -9743,6 +9743,10 @@ body.recording-mode #bio-card { display: none !important; }
    Top datasets link whole (measured in qa-species panel-layout). */
 @media (max-width: 720px) {
   #species-panel .species-panel-inner { padding-top: 10px; padding-bottom: 4px; }
+  /* Critic 8 B1: at 375x667 the cue row took WHAT LIVES HERE's clearance and the body's view cut its bottom 4 px. The open panel's header
+     sits 6 px under the top edge and 8 px above the search box (from 10 and 14), so the body gains 10 px; the collapsed pill keeps its own. */
+  #species-panel:not(.collapsed) .species-panel-inner { padding-top: 6px; }
+  #species-panel:not(.collapsed) .panel-header { margin-bottom: 8px; }
   #species-panel .species-more { height: 12px; margin-top: 0; line-height: 12px; }
   #species-panel .species-credit { line-height: 1.25; }
   #species-panel .species-datasets-content { gap: 2px; }
