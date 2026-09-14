@@ -104,9 +104,9 @@ test('circlePolygonWkt: a closed counter-clockwise ring of 64 vertices on the ci
   assert.equal(ring(circlePolygonWkt({ lat: 10, lon: 10, radiusKm: 10, vertices: 16 })).length, 17);
   assert.equal(new URL(speciesNearUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'all', now: NOW })).searchParams.get('geometry'), circlePolygonWkt({ lat: 44.46, lon: -110.83, radiusKm: 10 }));
 
-  // Polygons are built only below 85° latitude and away from ±180°: a ring near a pole or across the antimeridian cannot be
-  // expressed as a simple GBIF polygon. circlePolygonWkt and the gbif.org polygon link refuse such a circle, polygonRefusal
-  // says why, and the search falls back to geoDistance (next test).
+  // Polygons are built only within ±85° latitude, a fixed safety margin for every radius (a ring reaches past a pole only within
+  // one radius of it, 0.45° for 50 km), and away from ±180°, where a ring cannot be one GBIF polygon. circlePolygonWkt and the
+  // gbif.org polygon link refuse such a circle, polygonRefusal says why, and the search falls back to geoDistance (next test).
   for (const lat of [85.001, -85.001, 89.9]) {
     assert.throws(() => circlePolygonWkt({ lat, lon: 0, radiusKm: 10 }), /85/);
     assert.match(polygonRefusal({ lat, lon: 0, radiusKm: 10 }) ?? '', /85/);

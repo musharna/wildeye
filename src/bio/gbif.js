@@ -46,8 +46,10 @@ function checkPoint(lat, lon, radiusKm) {
 /** Mean earth radius (IUGG), km. */
 export const EARTH_RADIUS_KM = 6371.0088;
 /**
- * Polygons are built only below 85° latitude and away from ±180°: a ring near a pole or across the antimeridian cannot be
- * expressed as a simple GBIF polygon. Such a circle is searched with geoDistance instead (see speciesNearUrl).
+ * Polygons are built only within ±85° latitude and away from ±180°. 85° is a fixed safety margin, the same for every radius: a ring
+ * from ringVertices reaches past a pole only when its centre is within one radius of it, 0.45° for 50 km (from 89.5° a 50 km ring
+ * tops out at 89.95°; from 89.9° it reaches 90.35°). A ring that would cross ±180° cannot be one GBIF polygon. Either circle is
+ * searched with geoDistance instead (see speciesNearUrl).
  */
 export const MAX_POLYGON_LAT = 85;
 
@@ -64,11 +66,11 @@ function ringVertices({ lat, lon, radiusKm, vertices }) {
   return ring;
 }
 
-/** Why the circle cannot be a simple GBIF polygon (beyond ±85° latitude, or across the antimeridian), or null when it can. */
+/** Why the search does not use a polygon for this circle (outside the ±85° margin, or across the antimeridian), or null when it does. */
 export function polygonRefusal({ lat, lon, radiusKm, vertices = 64 }) {
-  if (Math.abs(lat) > MAX_POLYGON_LAT) return `lat ${lat} is outside ±${MAX_POLYGON_LAT}° (a ring near a pole is not a simple GBIF polygon)`;
+  if (Math.abs(lat) > MAX_POLYGON_LAT) return `lat ${lat} is outside ±${MAX_POLYGON_LAT}°, the fixed safety margin polygons keep from the poles at every radius`;
   const across = ringVertices({ lat, lon, radiusKm, vertices }).find(([vertexLon]) => vertexLon < -180 || vertexLon > 180);
-  if (across) return `the ${radiusKm} km circle around ${lat},${lon} crosses the antimeridian (vertex longitude ${across[0].toFixed(5)})`;
+  if (across) return `the ${radiusKm} km circle around ${lat},${lon} crosses the antimeridian (vertex longitude ${across[0].toFixed(5)}), and a ring across ±180° cannot be one GBIF polygon`;
   return null;
 }
 
