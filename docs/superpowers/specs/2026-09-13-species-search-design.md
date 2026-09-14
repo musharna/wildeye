@@ -47,7 +47,8 @@ Pages build (no `/api`).
    - `gbifSuggest(q)`: `/v1/species/suggest` — used only when iNaturalist fails, with a visible notice.
    - `densityTileTemplate({taxonKey, years})`: `/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png` with
      `taxonKey`, `license=CC0_1_0&license=CC_BY_4_0`, `year=<from>,<to>` (omitted for all years),
-     `style=scaled.circles` with no `bin`, and `srs=EPSG:3857`. Never `density`. (Designed as hexagon tiles; changed to circles: see Implementation notes.)
+     `style=scaled.circles` with no `bin`, and `srs=EPSG:3857`. Never `density`. (Designed as hexagon tiles; changed to circles: see
+     Implementation notes.)
    - `speciesNear({lat, lon, radiusKm, years})`: `/v1/occurrence/search?geoDistance=lat,lon,Rkm`,
      both licences, year range, `hasCoordinate=true&hasGeospatialIssue=false&facet=speciesKey&facetLimit=20&limit=0`
      → `{total, species:[{key, count}]}`. (Searched differently: see Implementation notes.)
@@ -67,7 +68,8 @@ Pages build (no `/api`).
    - Search box: suggestions after 3 letters and a 300 ms pause (common name, scientific name, rank).
    - Chosen species chip with on/off (enables/disables the `species` layer).
    - Year chips: last 10 years (default) / all years. Radius chips: 1 / 10 (default) / 50 km.
-   - "What lives here" button. Credit line: names from iNaturalist, records from GBIF.org, top datasets named with a DOI link where GBIF has one and a gbif.org dataset page otherwise.
+   - "What lives here" button. Credit line: names from iNaturalist, records from GBIF.org, top datasets named with a DOI link where GBIF
+     has one and a gbif.org dataset page otherwise.
    - While the map is on: the record-count legend, then the taxon's top 3 datasets (see Implementation notes).
 5. `src/bio/whatLivesHere.js` — arm, then click.
    - Button arms a one-shot `LEFT_CLICK`; cursor becomes a crosshair; Escape disarms.
@@ -149,21 +151,24 @@ What the build changed from the design above, and why.
 - "What lives here" searches a 64-vertex polygon (`geometry`), and its gbif.org link carries the same polygon, because gbif.org
   ignores `geo_distance`. A circle centred beyond ±85° latitude, or one that would cross ±180°, is searched with `geoDistance`
   instead, and its link carries only the licences and years.
-- Datasets are credited with DOIs, the user's choice on 2026-09-14, because GBIF's data user agreement says "Users must publicly
-  acknowledge ... the Data Publishers whose biodiversity data they have used, where appropriate through use of a Digital Object
-  Identifier (DOI)". "What lives here" asks its one occurrence search for a second facet, `datasetKey` (5, with per-facet limits so
-  species stay 20), and the SPECIES panel asks the taxon's top 3 (`facet=datasetKey&datasetKey.facetLimit=3`) for the chosen years and
+- Datasets are credited by name, each linked to its DOI where GBIF has one and to its gbif.org dataset page otherwise, the user's choice
+  on 2026-09-14, because GBIF's data user agreement says "Users must publicly acknowledge ... the Data Publishers whose biodiversity data
+  they have used, where appropriate through use of a Digital Object Identifier (DOI)". "What lives here" asks its one occurrence search
+  for a second facet, `datasetKey` (5, with per-facet limits so species stay 20), and the SPECIES panel asks the taxon's top 3 (`facet=datasetKey&datasetKey.facetLimit=3`) for the chosen years and
   licences, with `hasCoordinate=true` like the map tiles (GBIF's adhoc tiles add that filter and no geospatial-issue filter: the monarch
   z0 tile totalled 42,244 records, the search with hasCoordinate=true 42,244, and with hasGeospatialIssue=false as well 42,240). A failed
-  panel search shows inside the block with Retry. Each dataset is looked up at `/v1/dataset/{key}` (one pooled lookup per key for the session) and listed as its title linked to
-  its DOI on doi.org, or to its gbif.org page, with its record count. The panel links the taxon's records on gbif.org with `taxon_key`,
+  panel search shows inside the block, in a polite live region, with Retry, which keeps keyboard focus in the block. Each dataset is looked
+  up at `/v1/dataset/{key}` (one pooled lookup per key for the session) and listed as its title linked to its DOI on doi.org, or to its
+  gbif.org page, with its record count. The panel links the taxon's records on gbif.org with `taxon_key`,
   which gbif.org rewrites to its `taxonKey` filter (gbif-web `useNormalizedSearchParams`). A dataset's licence is never shown: the
   iNaturalist Research-grade dataset is CC BY-NC while its CC BY records pass the record filter.
 - The GBIF and iNaturalist terms pages answer scripts with 403, so their text was read from Internet Archive captures, which the user
   accepted on 2026-09-14. DATA_SOURCES.md quotes them with the capture timestamps.
-- The SPECIES panel lists, in order, the search, WHAT LIVES HERE, the year and radius chips, the legend, the Top datasets and the credit.
-  Its body scrolls under a fixed header and fades out at the bottom while more is below. On a 400x800 phone the left panel stack ends at
-  half height, so the panel tightens its spacing to keep the action and both chip rows whole without scrolling.
+- The SPECIES panel lists, in order, the search box, its suggestions, the status line, the chosen species with the map switch, WHAT LIVES
+  HERE, the year and radius chips, the legend, the Top datasets and the credit. Its body scrolls under a fixed header and fades out at the
+  bottom while more is below; on wider screens a "more ↓" hint shows there too, and the Top datasets heading sticks while its list is in
+  view. On a 400x800 phone the left panel stack ends at half height, so the panel tightens its spacing to keep the action and both chip
+  rows whole without scrolling. On a 375x667 phone the chip rows need a scroll (measured in qa-species).
 - The details card sanitizes layer descriptions with DOMPurify. Only http, https and mailto links survive, and each opens in a new
   tab with `rel="noopener noreferrer"`.
 - Only HTTP and network errors count as tile failures. GBIF answers an empty tile with 204, which Cesium reports as an error of
