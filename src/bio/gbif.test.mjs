@@ -107,7 +107,7 @@ test('species near a point: a polygon around it, both licences, years, clean coo
   assert.throws(() => speciesNearUrl({ lat: Number.NaN, lon: -110, radiusKm: 10, years: 'all', now: NOW }), /lat/);
 });
 
-test('the gbif.org link carries the search geometry byte for byte, both licences and the years, and no geo_distance', () => {
+test('the gbif.org link carries the search geometry byte for byte, its geospatial-issue filter, both licences and the years, and no geo_distance', () => {
   // gbif.org (gbif-web) keeps only its config fields; `geo_distance` is not one, so a link with it opens with no location filter.
   const rawGeometry = (href) => (href.match(/[?&]geometry=([^&]*)/) || [])[1] ?? null;
   // a rounded point and an unrounded one, as a Cesium click gives
@@ -123,6 +123,10 @@ test('the gbif.org link carries the search geometry byte for byte, both licences
     for (const key of ['geo_distance', 'geoDistance']) assert.equal(portal.searchParams.has(key), false, key);
     assert.deepEqual(portal.searchParams.getAll('license'), LICENSES);
     assert.equal(portal.searchParams.get('year'), '2017,2026');
+    // The card shows the search's count, so the link carries the search's geospatial-issue filter too (gbif-web lists hasGeospatialIssue among
+    // its occurrence search fields): on 2026-09-14 a 50 km link without it counted 222,689 records where the card said 217,508.
+    assert.equal(portal.searchParams.get('hasGeospatialIssue'), 'false');
+    assert.equal(portal.searchParams.get('hasGeospatialIssue'), search.searchParams.get('hasGeospatialIssue'));
   }
   assert.equal(new URL(gbifPortalUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'all', now: NOW })).searchParams.has('year'), false);
 });

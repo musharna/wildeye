@@ -729,12 +729,12 @@ if (CHECKS.has('here')) {
 
 if (CHECKS.has('portal-link')) {
   // The gbif.org links a person opens. A script can check what each link says: its parameters, its length, and the record count api.gbif.org
-  // v1 gives for the same parameters (taxonKey, checklistKey, hasCoordinate, license, year, geometry), which must be the count the app showed
+  // v1 gives for the same parameters (taxonKey, checklistKey, hasCoordinate, hasGeospatialIssue, license, year, geometry), which must be the count the app showed
   // or used. It cannot check gbif.org's own page: www.gbif.org answers scripts with a bot check, and on 2026-09-14 it showed 0 results for
   // links whose API count was right (a Backbone taxon key read under its default Catalogue of Life XR checklist; a 1,508-character polygon).
   // Only a person clicking the links in forPeople verifies that.
   const MAX_PORTAL_URL = 1000; // a margin under the 1,508-character link gbif.org failed in a real browser, not a documented GBIF limit
-  const PORTAL_TO_API = ['taxonKey', 'checklistKey', 'hasCoordinate', 'license', 'year', 'geometry'];
+  const PORTAL_TO_API = ['taxonKey', 'checklistKey', 'hasCoordinate', 'hasGeospatialIssue', 'license', 'year', 'geometry'];
   const parse = (url) => { try { return new URL(url); } catch { return null; } };
   const apiCount = async (href) => {
     const link = parse(href);
@@ -755,7 +755,8 @@ if (CHECKS.has('portal-link')) {
   const cardTotal = (filter) => { const m = /· ([\d,]+) records$/.exec(filter || ''); return m ? Number(m[1].replace(/,/g, '')) : null; };
   const noDistance = (u) => !u.searchParams.has('geo_distance') && !u.searchParams.has('geoDistance');
   const licencesOk = (u) => JSON.stringify(u.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']);
-  // An area link carries the search's own polygon, licences and years, no checklist, and its API count is the card's record total.
+  // An area link carries the search's own polygon, geospatial-issue filter, licences and years, no checklist, and its API count is the card's
+  // record total.
   const areaLink = async (label, card, searchHref) => {
     const link = parse(card?.href);
     const sent = parse(searchHref);
@@ -765,6 +766,7 @@ if (CHECKS.has('portal-link')) {
     const checks = {
       geometryIsPolygon: /^POLYGON\(\(/.test(link.searchParams.get('geometry') || ''),
       geometryEqual: link.searchParams.get('geometry') === sent.searchParams.get('geometry'),
+      issueFilterEqual: link.searchParams.get('hasGeospatialIssue') === 'false' && sent.searchParams.get('hasGeospatialIssue') === 'false',
       licencesEqual: licencesOk(link) && licencesOk(sent),
       yearEqual: sent.searchParams.get('year') !== null && link.searchParams.get('year') === sent.searchParams.get('year'),
       noDistanceParam: noDistance(link) && noDistance(sent),

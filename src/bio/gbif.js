@@ -63,7 +63,7 @@ export const MAX_POLYGON_LAT = 85;
  * Vertices of the circle's polygon: the what-lives-here search, its gbif.org link and the outline drawn on the globe (whatLivesHere.js) all
  * use it, so the card's count, the link and the outline describe the same area. In a real browser on 2026-09-14 gbif.org opened area
  * links of up to 1,253 characters to records and a 1,508-character one (10 km, 64 vertices) to 0 results or an error; the cause is unknown
- * upstream (nothing in gbif-web's source and no replayed request fails). At 32 vertices a 50 km circle gives a link of about 821
+ * upstream (nothing in gbif-web's source and no replayed request fails). At 32 vertices a 50 km circle gives a link of about 846
  * characters, and gbif.test.mjs keeps every radius under 1,000 at the longest coordinates.
  */
 export const SEARCH_POLYGON_VERTICES = 32;
@@ -188,11 +188,13 @@ export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) 
 
 /**
  * The same search on gbif.org, where a visitor can browse the records and request a citable download. It carries the
- * search's own `geometry` value: gbif.org drops `geo_distance`, which would open the link with no location filter.
+ * search's own `geometry` value: gbif.org drops `geo_distance`, which would open the link with no location filter. It carries the search's
+ * `hasGeospatialIssue=false` too, so gbif.org counts the records the card counts (gbif-web lists hasGeospatialIssue among its occurrence
+ * search fields; on 2026-09-14 a 50 km link without it counted 222,689 records where the card said 217,508).
  */
 export function gbifPortalUrl({ lat, lon, radiusKm, years, now = new Date() }) {
   checkPoint(lat, lon, radiusKm);
-  const params = new URLSearchParams({ geometry: circlePolygonWkt({ lat, lon, radiusKm }) });
+  const params = new URLSearchParams({ geometry: circlePolygonWkt({ lat, lon, radiusKm }), hasGeospatialIssue: 'false' });
   appendRecordFilters(params, years, now);
   return `https://www.gbif.org/occurrence/search?${params}`;
 }
