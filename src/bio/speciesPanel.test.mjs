@@ -330,6 +330,30 @@ test('turning the map off while a dataset search is out aborts it and empties th
   assert.equal(box.children.length, 0, 'nothing fills the hidden block');
 });
 
+// M-1: a failed search is searched again when the map returns; a finished list is kept (positive control in the same test).
+test('after a failed dataset search, turning the map off and on searches again once and clears the failure; a finished list is kept', async () => {
+  const answers = [new Error('HTTP 503'), { total: 306, datasets: [{ key: OTHER_DATASET, count: 306 }] }];
+  const original = console.error;
+  console.error = () => {};
+  try {
+    const { panel, els, calls } = panelRig({ taxonDatasets: async () => { await settle(2); const next = answers.shift(); if (next instanceof Error) throw next; return next; } });
+    const toggle = async () => { els['species-toggle'].listeners.click(); await settle(); };
+    await panel.choose(MONARCH);
+    await settle();
+    assert.equal(els['species-datasets-status'].textContent, 'GBIF dataset search failed (HTTP 503)');
+    await toggle();
+    await toggle();
+    assert.equal(calls.taxonDatasets.length, 2, 'exactly one new search when the map returns after a failure');
+    assert.equal(els['species-datasets-status'].textContent, '', 'and the failure is gone');
+    assert.deepEqual(datasetRowsIn(els['species-datasets-content']).map((row) => row[1]), ['Dataset without a DOI']);
+    await toggle();
+    await toggle();
+    assert.equal(calls.taxonDatasets.length, 2, 'positive control: a finished list is kept, with no new search');
+  } finally {
+    console.error = original;
+  }
+});
+
 test('a failed dataset lookup is a row naming its error', async () => {
   const logged = [];
   const original = console.error;
