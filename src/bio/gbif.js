@@ -204,12 +204,15 @@ export function parseSpeciesNear(json) {
 }
 
 /**
- * The 3 datasets with the most CC0 / CC BY records of a taxon in the chosen years: the datasets behind the species map (R-7u). No location
- * filter, like the map.
+ * The 3 datasets with the most CC0 / CC BY records of a taxon in the chosen years: the datasets behind the species map (R-7u), with the
+ * record filters the map's adhoc tiles apply. Those tiles add hasCoordinate=true and no geospatial-issue filter (github.com/gbif/occurrence
+ * BaseEsHeatmapRequestBuilder.buildHeatmapRequest, at c590689), and live on 2026-09-14 the monarch z0 tile totalled 42,244 records: the
+ * search with hasCoordinate=true gave 42,244 and with hasGeospatialIssue=false as well 42,240. So hasCoordinate=true, and not
+ * hasGeospatialIssue=false, which would drop records the map draws. No location filter, like the map.
  */
 export function taxonDatasetsUrl({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`taxonDatasetsUrl: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), facet: 'datasetKey', 'datasetKey.facetLimit': String(TAXON_DATASET_LIMIT), limit: '0' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), hasCoordinate: 'true', facet: 'datasetKey', 'datasetKey.facetLimit': String(TAXON_DATASET_LIMIT), limit: '0' });
   appendRecordFilters(params, years, now);
   return `${GBIF_API}/v1/occurrence/search?${params}`;
 }
@@ -219,10 +222,14 @@ export function parseTaxonDatasets(json) {
   return { total: json.count, datasets: parseDatasetFacet(json) };
 }
 
-/** The taxon's records on gbif.org with the same licences and years as the map. */
+/**
+ * The taxon's records on gbif.org with the map's record filters: coordinates, licences and years (see taxonDatasetsUrl). gbif.org rewrites
+ * snake_case keys to camelCase (gbif-web useNormalizedSearchParams) and lists taxonKey and hasCoordinate among its occurrence search fields
+ * (gbif-web routes/occurrence/search filters.tsx and searchConfig.ts, main at 3ae5128).
+ */
 export function gbifPortalTaxonUrl({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`gbifPortalTaxonUrl: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxon_key: String(taxonKey) });
+  const params = new URLSearchParams({ taxon_key: String(taxonKey), has_coordinate: 'true' });
   appendRecordFilters(params, years, now);
   return `https://www.gbif.org/occurrence/search?${params}`;
 }

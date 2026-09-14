@@ -206,7 +206,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         const link = doc.createElement('a');
         link.href = footerHref;
         link.target = '_blank';
-        link.rel = 'noopener';
+        link.rel = 'noopener noreferrer';
         link.textContent = footer;
         foot.appendChild(link);
       });

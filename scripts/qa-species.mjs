@@ -334,8 +334,8 @@ if (CHECKS.has('panel-datasets')) {
     mapOn: state.enabled && Boolean(state.params?.taxonKey),
     rowsOk: datasetRowsOk(rows, 3),
     visible: panel.visible && panel.heading === 'Top datasets',
-    searchOk: Boolean(sent) && sent.searchParams.get('taxonKey') === String(state.params?.taxonKey) && sent.searchParams.get('datasetKey.facetLimit') === '3' && sent.searchParams.get('limit') === '0' && JSON.stringify(sent.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']),
-    linkOk: Boolean(link) && link.origin + link.pathname === 'https://www.gbif.org/occurrence/search' && link.searchParams.get('taxon_key') === String(state.params?.taxonKey) && JSON.stringify(link.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']) && link.searchParams.get('year') === years && panel.link.target === '_blank' && /\bnoopener\b/.test(panel.link.rel || ''),
+    searchOk: Boolean(sent) && sent.searchParams.get('taxonKey') === String(state.params?.taxonKey) && sent.searchParams.get('hasCoordinate') === 'true' && !sent.searchParams.has('hasGeospatialIssue') && sent.searchParams.get('datasetKey.facetLimit') === '3' && sent.searchParams.get('limit') === '0' && JSON.stringify(sent.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']),
+    linkOk: Boolean(link) && link.origin + link.pathname === 'https://www.gbif.org/occurrence/search' && link.searchParams.get('taxon_key') === String(state.params?.taxonKey) && link.searchParams.get('has_coordinate') === 'true' && JSON.stringify(link.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']) && link.searchParams.get('year') === years && panel.link.target === '_blank' && /\bnoopener\b/.test(panel.link.rel || '') && /\bnoreferrer\b/.test(panel.link.rel || ''),
   };
   await shot('panel-datasets');
   report('panel-datasets', Object.values(checks).every(Boolean), { ...checks, waited, state, panel, rows, sent: sent ? String(sent) : null });
@@ -365,6 +365,7 @@ if (CHECKS.has('here')) {
     filter: document.querySelector('#bio-card .bio-card-filter')?.textContent || '',
     text: document.getElementById('bio-card').innerText.slice(0, 400),
     link: document.querySelector('#bio-card .bio-card-foot > a')?.href || null,
+    footRel: document.querySelector('#bio-card .bio-card-foot > a')?.getAttribute('rel') ?? null,
     footOrder: [...(document.querySelector('#bio-card .bio-card-foot')?.children || [])].map((child) => child.className || child.tagName.toLowerCase()),
   }));
   const cardDatasets = await readDatasetRows('#bio-card .bio-card-foot .dataset-row');
@@ -426,7 +427,9 @@ if (CHECKS.has('here')) {
   const hereUrl = hereSearch ? new URL(hereSearch) : null;
   const facetsOk = Boolean(hereUrl) && hereUrl.searchParams.getAll('facet').join() === 'speciesKey,datasetKey' && hereUrl.searchParams.get('speciesKey.facetLimit') === '20' && hereUrl.searchParams.get('datasetKey.facetLimit') === '5' && !hereUrl.searchParams.has('facetLimit');
   const orderOk = result.footOrder.indexOf('dataset-list') === 0 && result.footOrder.at(-1) === 'a';
-  report('card-datasets', datasetRowsOk(cardDatasets, 5) && facetsOk && orderOk, { rows: cardDatasets, facetsOk, footOrder: result.footOrder, orderOk });
+  // M3: the gbif.org link in the same foot opens with no opener and no referrer, like the dataset rows.
+  const footRelOk = /\bnoopener\b/.test(result.footRel || '') && /\bnoreferrer\b/.test(result.footRel || '');
+  report('card-datasets', datasetRowsOk(cardDatasets, 5) && facetsOk && orderOk && footRelOk, { rows: cardDatasets, facetsOk, footOrder: result.footOrder, orderOk, footRel: result.footRel, footRelOk });
 }
 
 if (CHECKS.has('portal-link')) {

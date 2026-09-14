@@ -251,6 +251,11 @@ test('the top datasets of a taxon: an occurrence search with the taxon, both lic
   assert.equal(url.searchParams.get('year'), '2017,2026');
   assert.deepEqual(url.searchParams.getAll('facet'), ['datasetKey']);
   assert.equal(url.searchParams.get('datasetKey.facetLimit'), '3');
+  // M1: the same records the map tiles count. adhoc tiles filter hasCoordinate=true and nothing on geospatial issues (gbif/occurrence
+  // BaseEsHeatmapRequestBuilder; live 2026-09-14: the z0 tile totals 42,244 = the search with hasCoordinate=true, 42,240 with
+  // hasGeospatialIssue=false as well), so the facet search adds hasCoordinate and not hasGeospatialIssue.
+  assert.equal(url.searchParams.get('hasCoordinate'), 'true');
+  assert.equal(url.searchParams.has('hasGeospatialIssue'), false, 'adhoc tiles keep records with geospatial issues');
   assert.equal(url.searchParams.get('limit'), '0');
   assert.equal(new URL(taxonDatasetsUrl({ taxonKey: 5133088, years: 'all', now: NOW })).searchParams.has('year'), false);
   assert.throws(() => taxonDatasetsUrl({ taxonKey: 0, years: 'all', now: NOW }), /taxonKey/);
@@ -263,8 +268,10 @@ test('the top datasets of a taxon: an occurrence search with the taxon, both lic
   assert.throws(() => parseTaxonDatasets({ facets: [] }), /count/);
   const portal = new URL(gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'recent', now: NOW }));
   assert.equal(portal.origin + portal.pathname, 'https://www.gbif.org/occurrence/search');
-  assert.deepEqual([...portal.searchParams.entries()], [['taxon_key', '5133088'], ['license', 'CC0_1_0'], ['license', 'CC_BY_4_0'], ['year', '2017,2026']]);
-  assert.deepEqual([...new URL(gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'all', now: NOW })).searchParams.keys()], ['taxon_key', 'license', 'license']);
+  // M1: the gbif.org link carries the map's coordinate filter too (gbif-web lists hasCoordinate among its occurrence search fields and
+  // rewrites snake_case keys to camelCase).
+  assert.deepEqual([...portal.searchParams.entries()], [['taxon_key', '5133088'], ['has_coordinate', 'true'], ['license', 'CC0_1_0'], ['license', 'CC_BY_4_0'], ['year', '2017,2026']]);
+  assert.deepEqual([...new URL(gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'all', now: NOW })).searchParams.keys()], ['taxon_key', 'has_coordinate', 'license', 'license']);
   assert.throws(() => gbifPortalTaxonUrl({ taxonKey: -1, years: 'all', now: NOW }), /taxonKey/);
 });
 

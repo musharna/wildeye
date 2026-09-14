@@ -189,6 +189,8 @@ test('a list footer can carry a plain-text note before its link; without one the
     ['a', '', 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations'],
   ]);
   assert.equal(foot.children[1].href, 'https://www.gbif.org/occurrence/search?license=CC0_1_0');
+  // M3: the gbif.org link opens in a new tab with no opener and no referrer, like the dataset links beside it.
+  assert.deepEqual([foot.children[1].target, foot.children[1].rel], ['_blank', 'noopener noreferrer']);
   card.showList({ ...base, footer: 'Occurrence data: GBIF.org, CC0 and CC BY records only', footerHref: 'https://www.gbif.org/occurrence/search?geometry=x' });
   assert.deepEqual(foot.children.map((c) => c.tag), ['a'], 'no note, just the link');
 });
