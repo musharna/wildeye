@@ -120,7 +120,8 @@ export function createWhatLivesHere({
     try {
       area = drawArea({ lat, lon, radiusKm });
     } catch (error) {
-      // The outline is a visual aid: a failure to draw it is logged with its context, and the search goes on without it.
+      // The outline is a visual aid: a synchronous failure to build or add it is logged with its context, and the search goes on
+      // without it. Failures inside the primitive's update() or its geometry workers come later and are not caught here.
       console.error('[what-lives-here] could not outline the searched circle', { lat, lon, radiusKm, error });
       area = null;
     }

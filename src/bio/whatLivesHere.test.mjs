@@ -502,8 +502,10 @@ test('arming again removes the previous outline (fake card)', async () => {
   assert.deepEqual(r.areas.cleared, [r.areas.drawn[0]]);
 });
 
-test('a failure drawing the outline is logged with its context and does not stop the search', async () => {
-  const r = rig({ drawArea: () => { throw new Error('WebGL context lost'); } });
+// run() catches only synchronous failures, such as positions Cesium's GroundPolylineGeometry refuses at construction. Failures inside
+// the primitive's update() or its geometry workers happen later, outside that try/catch.
+test('a synchronous failure building the outline is logged with its context and does not stop the search', async () => {
+  const r = rig({ drawArea: () => { throw new Error('At least two positions are required.'); } });
   r.controller.arm();
   const logged = await captureConsoleError(() => r.controller.handleClick(CLICK));
   assert.equal(r.calls.near.length, 1, 'the search was sent');
@@ -513,7 +515,7 @@ test('a failure drawing the outline is logged with its context and does not stop
   assert.match(label, /could not outline the searched circle/);
   assert.ok(Math.abs(context.lat - 44.46) < 1e-6 && Math.abs(context.lon + 110.83) < 1e-6, 'logs the point');
   assert.equal(context.radiusKm, 10);
-  assert.equal(context.error.message, 'WebGL context lost');
+  assert.equal(context.error.message, 'At least two positions are required.');
   r.controller.cancel();
   assert.deepEqual(r.areas.cleared, [], 'nothing was drawn, so nothing is removed');
 });
