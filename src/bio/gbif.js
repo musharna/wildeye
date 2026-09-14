@@ -135,23 +135,27 @@ export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }
 
+/** Species rows in a what-lives-here list, dataset rows under it, and dataset rows under the species map legend (R-7u). */
+export const NEAR_SPECIES_LIMIT = 20;
+export const NEAR_DATASET_LIMIT = 5;
+export const TAXON_DATASET_LIMIT = 3;
+
 /**
- * The 20 species with the most CC0 / CC BY records within `radiusKm` of a point: the circlePolygonWkt polygon, or GBIF's
- * geoDistance where the circle cannot be a polygon (polygonRefusal), as every search did before the polygon.
+ * The 20 species and the 5 datasets with the most CC0 / CC BY records within `radiusKm` of a point, as two facets of one search, each
+ * with its own limit: the circlePolygonWkt polygon, or GBIF's geoDistance where the circle cannot be a polygon (polygonRefusal), as every
+ * search did before the polygon.
  */
 export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) {
   checkPoint(lat, lon, radiusKm);
   const area = polygonRefusal({ lat, lon, radiusKm }) === null
     ? { geometry: circlePolygonWkt({ lat, lon, radiusKm }) }
     : { geoDistance: `${lat.toFixed(4)},${lon.toFixed(4)},${radiusKm}km` };
-  const params = new URLSearchParams({
-    ...area,
-    hasCoordinate: 'true',
-    hasGeospatialIssue: 'false',
-    facet: 'speciesKey',
-    facetLimit: '20',
-    limit: '0',
-  });
+  const params = new URLSearchParams({ ...area, hasCoordinate: 'true', hasGeospatialIssue: 'false' });
+  params.append('facet', 'speciesKey');
+  params.append('facet', 'datasetKey');
+  params.set('speciesKey.facetLimit', String(NEAR_SPECIES_LIMIT));
+  params.set('datasetKey.facetLimit', String(NEAR_DATASET_LIMIT));
+  params.set('limit', '0');
   appendRecordFilters(params, years, now);
   return `${GBIF_API}/v1/occurrence/search?${params}`;
 }
@@ -174,13 +178,77 @@ export function gbifPortalAnyLocationUrl({ years, now = new Date() }) {
   return `https://www.gbif.org/occurrence/search?${params}`;
 }
 
+/** A GBIF dataset key: a lowercase UUID, as the DATASET_KEY facet and /v1/dataset return it. */
+const DATASET_KEY_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function checkDatasetKey(key) {
+  if (typeof key !== 'string' || !DATASET_KEY_PATTERN.test(key)) throw new Error(`GBIF dataset key must be a dataset UUID, got ${JSON.stringify(key)}`);
+  return key;
+}
+
+/** The DATASET_KEY facet in facet order. A key becomes a request path and a link, so anything but a dataset UUID with a count is dropped. */
+function parseDatasetFacet(json) {
+  const facet = (json.facets || []).find((f) => f && f.field === 'DATASET_KEY');
+  return (facet?.counts || [])
+    .map((c) => ({ key: c.name, count: Number(c.count) }))
+    .filter((d) => typeof d.key === 'string' && DATASET_KEY_PATTERN.test(d.key) && Number.isFinite(d.count));
+}
+
 export function parseSpeciesNear(json) {
   if (!json || !Number.isFinite(json.count)) throw new Error('GBIF occurrence search: response has no count');
   const facet = (json.facets || []).find((f) => f && f.field === 'SPECIES_KEY');
   const species = (facet?.counts || [])
     .map((c) => ({ key: Number(c.name), count: Number(c.count) }))
     .filter((s) => Number.isInteger(s.key) && s.key > 0 && Number.isFinite(s.count));
-  return { total: json.count, species };
+  return { total: json.count, species, datasets: parseDatasetFacet(json) };
+}
+
+/**
+ * The 3 datasets with the most CC0 / CC BY records of a taxon in the chosen years: the datasets behind the species map (R-7u). No location
+ * filter, like the map.
+ */
+export function taxonDatasetsUrl({ taxonKey, years, now = new Date() }) {
+  if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`taxonDatasetsUrl: bad taxonKey ${taxonKey}`);
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), facet: 'datasetKey', 'datasetKey.facetLimit': String(TAXON_DATASET_LIMIT), limit: '0' });
+  appendRecordFilters(params, years, now);
+  return `${GBIF_API}/v1/occurrence/search?${params}`;
+}
+
+export function parseTaxonDatasets(json) {
+  if (!json || !Number.isFinite(json.count)) throw new Error('GBIF occurrence search: response has no count');
+  return { total: json.count, datasets: parseDatasetFacet(json) };
+}
+
+/** The taxon's records on gbif.org with the same licences and years as the map. */
+export function gbifPortalTaxonUrl({ taxonKey, years, now = new Date() }) {
+  if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`gbifPortalTaxonUrl: bad taxonKey ${taxonKey}`);
+  const params = new URLSearchParams({ taxon_key: String(taxonKey) });
+  appendRecordFilters(params, years, now);
+  return `https://www.gbif.org/occurrence/search?${params}`;
+}
+
+export function datasetUrl(key) {
+  return `${GBIF_API}/v1/dataset/${checkDatasetKey(key)}`;
+}
+
+/**
+ * A dataset's title and DOI (null when it has none). Its licence is left out on purpose: a dataset's licence is not the licence of the
+ * records shown (the iNaturalist Research-grade dataset is CC BY-NC while its CC BY records pass the record filter), so it is never shown.
+ */
+export function parseDataset(json) {
+  if (!json || typeof json !== 'object') throw new Error('GBIF dataset: response is not an object');
+  if (typeof json.key !== 'string' || !DATASET_KEY_PATTERN.test(json.key)) throw new Error('GBIF dataset: response has no dataset key');
+  if (typeof json.title !== 'string' || !json.title.trim()) throw new Error(`GBIF dataset ${json.key}: response has no title`);
+  return { key: json.key, title: json.title.trim(), doi: typeof json.doi === 'string' && json.doi ? json.doi : null };
+}
+
+/** "10.", a 4-9 digit registrant, "/", and a suffix of the characters Crossref recommends matching: nothing that can leave doi.org's path. */
+const DOI_PATTERN = /^10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+$/;
+
+/** A dataset's link: its DOI on doi.org, or its gbif.org page when it has no DOI or one outside DOI_PATTERN. Always https. */
+export function datasetHref({ key, doi }) {
+  checkDatasetKey(key);
+  return typeof doi === 'string' && DOI_PATTERN.test(doi) ? `https://doi.org/${doi}` : `https://www.gbif.org/dataset/${key}`;
 }
 
 export function inatSuggestUrl(q) {
@@ -301,6 +369,7 @@ export function createBioClient({
   timeoutMs = REQUEST_TIMEOUT_MS,
 } = {}) {
   const names = new Map();
+  const datasets = new Map();
   const get = (url, signal) => fetchJson(url, { signal, timeoutMs, fetchImpl });
   return {
     /** Name suggestions: iNaturalist first; GBIF scientific names, with a notice, when iNaturalist fails. */
@@ -329,6 +398,9 @@ export function createBioClient({
     async speciesNear(args, { signal = null } = {}) {
       return parseSpeciesNear(await get(speciesNearUrl(args), signal));
     },
+    async taxonDatasets(args, { signal = null } = {}) {
+      return parseTaxonDatasets(await get(taxonDatasetsUrl(args), signal));
+    },
     /**
      * Cached per key for the session and shared by every caller; a failed lookup is forgotten so a retry can succeed.
      * The shared lookup carries no caller signal (timeout only), so one caller's abort rejects only that caller.
@@ -340,6 +412,15 @@ export function createBioClient({
         pending.catch(() => names.delete(key));
       }
       return untilCallerAborts(names.get(key), signal);
+    },
+    /** A dataset's title and DOI, looked up like speciesName: one shared, pooled lookup per key for the session, a failure forgotten. */
+    dataset(key, { signal = null } = {}) {
+      if (!datasets.has(key)) {
+        const pending = pool.run(() => get(datasetUrl(key), null)).then(parseDataset);
+        datasets.set(key, pending);
+        pending.catch(() => datasets.delete(key));
+      }
+      return untilCallerAborts(datasets.get(key), signal);
     },
   };
 }

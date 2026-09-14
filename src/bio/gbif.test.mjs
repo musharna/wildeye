@@ -6,11 +6,22 @@ import {
   inatSuggestUrl, parseInatSuggest, gbifSuggestUrl, parseGbifSuggest, gbifMatchUrl, parseGbifMatch,
   speciesUrl, parseSpeciesName, createRateLimiter, createPool, fetchJson, RequestError, createBioClient, circlePolygonWkt, RADII_KM,
   polygonRefusal, gbifPortalAnyLocationUrl, SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX,
+  datasetUrl, parseDataset, datasetHref, taxonDatasetsUrl, parseTaxonDatasets, gbifPortalTaxonUrl,
 } from './gbif.js';
 
 const NOW = new Date('2026-09-13T12:00:00Z');
 const ok = (body) => ({ ok: true, status: 200, json: async () => body });
 const httpError = (status) => ({ ok: false, status, json: async () => ({}) });
+const INAT_RG = '50c9509d-22c7-4a22-a47d-8c48425ef4a7'; // iNaturalist Research-grade Observations
+const EBIRD_EOD = '4fa7b334-ce0d-4e88-aaae-2e0c138d049e';
+// R-7u: one what-lives-here search lists the top 20 species and the top 5 datasets, each facet with its own limit (live 2026-09-14:
+// SPECIES_KEY 20 counts and DATASET_KEY 5 counts from one request with the polygon).
+const assertNearFacets = (url, where) => {
+  assert.deepEqual(url.searchParams.getAll('facet'), ['speciesKey', 'datasetKey'], where);
+  assert.equal(url.searchParams.get('speciesKey.facetLimit'), '20', where);
+  assert.equal(url.searchParams.get('datasetKey.facetLimit'), '5', where);
+  assert.equal(url.searchParams.has('facetLimit'), false, `${where}: per-facet limits only`);
+};
 
 test('years: recent is the last 10 calendar years including this one; all has no filter', () => {
   assert.deepEqual(yearRange('recent', NOW), { from: 2017, to: 2026 });
@@ -77,9 +88,10 @@ test('species near a point: a polygon around it, both licences, years, clean coo
   assert.equal(url.searchParams.has('geoDistance'), false);
   assert.deepEqual(url.searchParams.getAll('license'), LICENSES);
   assert.equal(url.searchParams.get('year'), '2017,2026');
-  for (const [key, value] of [['hasCoordinate', 'true'], ['hasGeospatialIssue', 'false'], ['facet', 'speciesKey'], ['facetLimit', '20'], ['limit', '0']]) {
+  for (const [key, value] of [['hasCoordinate', 'true'], ['hasGeospatialIssue', 'false'], ['limit', '0']]) {
     assert.equal(url.searchParams.get(key), value, key);
   }
+  assertNearFacets(url, 'polygon search');
   assert.throws(() => speciesNearUrl({ lat: 44, lon: -110, radiusKm: 5, years: 'all', now: NOW }), /radius/);
   assert.throws(() => speciesNearUrl({ lat: Number.NaN, lon: -110, radiusKm: 10, years: 'all', now: NOW }), /lat/);
 });
@@ -168,9 +180,10 @@ test('a circle that cannot be a polygon (beyond 85° or across ±180°) is searc
     assert.equal(url.searchParams.get('geoDistance'), `${args.lat.toFixed(4)},${args.lon.toFixed(4)},${args.radiusKm}km`, where);
     assert.deepEqual(url.searchParams.getAll('license'), LICENSES, where);
     assert.equal(url.searchParams.get('year'), '2017,2026', where);
-    for (const [key, value] of [['hasCoordinate', 'true'], ['hasGeospatialIssue', 'false'], ['facet', 'speciesKey'], ['facetLimit', '20'], ['limit', '0']]) {
+    for (const [key, value] of [['hasCoordinate', 'true'], ['hasGeospatialIssue', 'false'], ['limit', '0']]) {
       assert.equal(url.searchParams.get(key), value, `${where} ${key}`);
     }
+    assertNearFacets(url, where);
   }
   const ordinary = new URL(speciesNearUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'recent', now: NOW }));
   assert.equal(ordinary.searchParams.has('geoDistance'), false, 'positive control: an ordinary point sends no geoDistance');
@@ -186,12 +199,73 @@ test('the gbif.org link with no location filter keeps both licences and the year
   assert.deepEqual([...new URL(gbifPortalAnyLocationUrl({ years: 'all', now: NOW })).searchParams.keys()], ['license', 'license']);
 });
 
-test('parseSpeciesNear reads the total and the SPECIES_KEY facet; no count is an error', () => {
-  // shape of a live response, 2026-09-13 (10 km around 44.46,-110.83)
-  const live = { offset: 0, limit: 0, endOfRecords: false, count: 39210, results: [], facets: [{ field: 'SPECIES_KEY', counts: [{ name: '2482492', count: 3524 }, { name: '2490935', count: 2122 }] }] };
-  assert.deepEqual(parseSpeciesNear(live), { total: 39210, species: [{ key: 2482492, count: 3524 }, { key: 2490935, count: 2122 }] });
-  assert.deepEqual(parseSpeciesNear({ count: 0, facets: [] }), { total: 0, species: [] });
+test('parseSpeciesNear reads the total, the SPECIES_KEY facet and the DATASET_KEY facet; no count is an error', () => {
+  // shape of a live response, 2026-09-14 (the 10 km polygon around 44.46,-110.83, both facets)
+  const live = { offset: 0, limit: 0, endOfRecords: false, count: 28953, results: [], facets: [
+    { field: 'SPECIES_KEY', counts: [{ name: '2482492', count: 2743 }, { name: '2490935', count: 1553 }] },
+    { field: 'DATASET_KEY', counts: [{ name: EBIRD_EOD, count: 27513 }, { name: INAT_RG, count: 1179 }] },
+  ] };
+  assert.deepEqual(parseSpeciesNear(live), {
+    total: 28953,
+    species: [{ key: 2482492, count: 2743 }, { key: 2490935, count: 1553 }],
+    datasets: [{ key: EBIRD_EOD, count: 27513 }, { key: INAT_RG, count: 1179 }],
+  });
+  assert.deepEqual(parseSpeciesNear({ count: 0, facets: [] }), { total: 0, species: [], datasets: [] });
+  // A dataset key becomes a request path and a link, so anything but a GBIF dataset UUID with a count is dropped.
+  const odd = { count: 2, facets: [{ field: 'DATASET_KEY', counts: [{ name: '../occurrence/1', count: 1 }, { name: INAT_RG, count: 'x' }, { name: INAT_RG.toUpperCase(), count: 1 }] }] };
+  assert.deepEqual(parseSpeciesNear(odd).datasets, []);
   assert.throws(() => parseSpeciesNear({ facets: [] }), /count/);
+});
+
+// R-7u: the GBIF data user agreement asks users to acknowledge the publishers whose data they use, with a DOI where appropriate, so each
+// listed dataset is looked up for its title and DOI. A dataset's licence is not the licence of the records shown (the iNaturalist dataset
+// is CC BY-NC while its CC BY records pass the record filter), so the parser does not keep it.
+test('dataset lookups: the URL takes only a GBIF dataset UUID; the parser keeps key, title and DOI and refuses a response with no title', () => {
+  assert.equal(datasetUrl(INAT_RG), `https://api.gbif.org/v1/dataset/${INAT_RG}`);
+  for (const bad of ['', '../occurrence/1', '50c9509d', null, 7]) assert.throws(() => datasetUrl(bad), /dataset key/, String(bad));
+  // fields of the live response, 2026-09-14
+  const live = { key: INAT_RG, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x', license: 'http://creativecommons.org/licenses/by-nc/4.0/legalcode', publishingOrganizationKey: '28eb1a3f-1c15-4a95-931a-4af90ecb574d' };
+  assert.deepEqual(parseDataset(live), { key: INAT_RG, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' });
+  assert.deepEqual(parseDataset({ key: EBIRD_EOD, title: 'EOD – eBird Observation Dataset' }), { key: EBIRD_EOD, title: 'EOD – eBird Observation Dataset', doi: null });
+  assert.deepEqual(parseDataset({ key: EBIRD_EOD, title: 'EOD', doi: '' }).doi, null);
+  assert.throws(() => parseDataset({ key: INAT_RG, doi: '10.15468/ab3s5x' }), /title/);
+  assert.throws(() => parseDataset({ key: INAT_RG, title: '   ' }), /title/);
+  assert.throws(() => parseDataset({ title: 'x' }), /key/);
+  assert.throws(() => parseDataset(null), /GBIF dataset/);
+});
+
+test('a dataset links to its DOI on doi.org, or to its gbif.org page when it has no DOI or an odd one', () => {
+  assert.equal(datasetHref({ key: INAT_RG, doi: '10.15468/ab3s5x' }), 'https://doi.org/10.15468/ab3s5x');
+  assert.equal(datasetHref({ key: INAT_RG, doi: '10.1234/a.b-c_d(1);2:3/4' }), 'https://doi.org/10.1234/a.b-c_d(1);2:3/4');
+  for (const doi of [null, undefined, '', 'javascript:alert(1)', 'doi:10.15468/ab3s5x', 'https://evil.example/10.1234/x', '10.15468/ab 3s5x', '10.15468/<b>', '10.1/x', '10.15468/ab3s5x?x=1', '10.15468/ab3s5x#frag']) {
+    assert.equal(datasetHref({ key: INAT_RG, doi }), `https://www.gbif.org/dataset/${INAT_RG}`, String(doi));
+  }
+  assert.throws(() => datasetHref({ key: 'x', doi: '10.15468/ab3s5x' }), /dataset key/);
+});
+
+test('the top datasets of a taxon: an occurrence search with the taxon, both licences, the years and a 3-dataset facet, and its gbif.org link', () => {
+  const url = new URL(taxonDatasetsUrl({ taxonKey: 5133088, years: 'recent', now: NOW }));
+  assert.equal(url.origin + url.pathname, 'https://api.gbif.org/v1/occurrence/search');
+  assert.equal(url.searchParams.get('taxonKey'), '5133088');
+  assert.deepEqual(url.searchParams.getAll('license'), LICENSES);
+  assert.equal(url.searchParams.get('year'), '2017,2026');
+  assert.deepEqual(url.searchParams.getAll('facet'), ['datasetKey']);
+  assert.equal(url.searchParams.get('datasetKey.facetLimit'), '3');
+  assert.equal(url.searchParams.get('limit'), '0');
+  assert.equal(new URL(taxonDatasetsUrl({ taxonKey: 5133088, years: 'all', now: NOW })).searchParams.has('year'), false);
+  assert.throws(() => taxonDatasetsUrl({ taxonKey: 0, years: 'all', now: NOW }), /taxonKey/);
+  // live 2026-09-14 (monarch, 2017-2026, both licences): count 42534, DATASET_KEY 3 counts
+  assert.deepEqual(
+    parseTaxonDatasets({ count: 42534, facets: [{ field: 'DATASET_KEY', counts: [{ name: INAT_RG, count: 41111 }, { name: '6ac3f774-d9fb-4796-b3e9-92bf6c81c084', count: 306 }] }] }),
+    { total: 42534, datasets: [{ key: INAT_RG, count: 41111 }, { key: '6ac3f774-d9fb-4796-b3e9-92bf6c81c084', count: 306 }] },
+  );
+  assert.deepEqual(parseTaxonDatasets({ count: 0, facets: [] }), { total: 0, datasets: [] });
+  assert.throws(() => parseTaxonDatasets({ facets: [] }), /count/);
+  const portal = new URL(gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'recent', now: NOW }));
+  assert.equal(portal.origin + portal.pathname, 'https://www.gbif.org/occurrence/search');
+  assert.deepEqual([...portal.searchParams.entries()], [['taxon_key', '5133088'], ['license', 'CC0_1_0'], ['license', 'CC_BY_4_0'], ['year', '2017,2026']]);
+  assert.deepEqual([...new URL(gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'all', now: NOW })).searchParams.keys()], ['taxon_key', 'license', 'license']);
+  assert.throws(() => gbifPortalTaxonUrl({ taxonKey: -1, years: 'all', now: NOW }), /taxonKey/);
 });
 
 test('name parsers keep the fields the panel shows', () => {
@@ -298,6 +372,51 @@ test('suggest: iNaturalist first; GBIF names with a visible notice when it fails
   const limited = createBioClient({ fetchImpl: async () => ok(inatBody), inatLimiter: createRateLimiter({ maxPerWindow: 1, now: () => t }) });
   await limited.suggest('monarch');
   await assert.rejects(limited.suggest('monarch'), /iNaturalist limit reached/);
+});
+
+test('the client looks up a taxon\'s top datasets with one search', async () => {
+  const seen = [];
+  const body = { count: 42534, facets: [{ field: 'DATASET_KEY', counts: [{ name: INAT_RG, count: 41111 }] }] };
+  const client = createBioClient({ fetchImpl: async (url) => { seen.push(url); return ok(body); } });
+  assert.deepEqual(await client.taxonDatasets({ taxonKey: 5133088, years: 'recent', now: NOW }), { total: 42534, datasets: [{ key: INAT_RG, count: 41111 }] });
+  assert.deepEqual(seen, [taxonDatasetsUrl({ taxonKey: 5133088, years: 'recent', now: NOW })]);
+});
+
+// R-7u: dataset lookups behave like name lookups: one shared lookup per key for the session, through the same pool, with no caller
+// signal on the shared fetch, a failure forgotten, and a caller's abort rejecting only that caller.
+test('dataset lookups go through the pool, cache per key, forget a failure, and an abort rejects only its caller', async () => {
+  const base = createPool(4);
+  let runs = 0;
+  const pool = { run: (job) => { runs += 1; return base.run(job); } };
+  let fail = true;
+  const urls = [];
+  const client = createBioClient({ pool, fetchImpl: async (url) => { urls.push(url); return fail ? httpError(503) : ok({ key: INAT_RG, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x', license: 'CC BY-NC' }); } });
+  await assert.rejects(client.dataset(INAT_RG), /HTTP 503/);
+  fail = false;
+  assert.deepEqual(await client.dataset(INAT_RG), { key: INAT_RG, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' });
+  await client.dataset(INAT_RG);
+  assert.deepEqual(urls, [datasetUrl(INAT_RG), datasetUrl(INAT_RG)], 'retried after the failure, cached after the success');
+  assert.equal(runs, 2, 'each fetch ran through the pool');
+  await assert.rejects(client.dataset('../occurrence/1'), /dataset key/);
+  assert.equal(urls.length, 2, 'a bad key sends nothing');
+
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+  const releases = [];
+  const signals = [];
+  const pending = createBioClient({ fetchImpl: (url, { signal }) => new Promise((resolve, reject) => {
+    signals.push(signal);
+    releases.push(() => resolve(ok({ key: EBIRD_EOD, title: 'EOD – eBird Observation Dataset' })));
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  }) });
+  const settle = (p) => p.then((value) => value.title, (error) => error.name);
+  const callerA = new AbortController();
+  const a = settle(pending.dataset(EBIRD_EOD, { signal: callerA.signal }));
+  const b = settle(pending.dataset(EBIRD_EOD, { signal: new AbortController().signal }));
+  while (releases.length === 0) await tick();
+  callerA.abort();
+  releases[0]();
+  assert.deepEqual([await a, await b, releases.length, signals[0].aborted], ['AbortError', 'EOD – eBird Observation Dataset', 1, false]);
+  assert.equal(await settle(pending.dataset(EBIRD_EOD, { signal: AbortSignal.abort() })), 'AbortError', 'an aborted signal rejects at once, even for a cached key');
 });
 
 test('speciesName caches per key and forgets a failure so a retry can succeed', async () => {
