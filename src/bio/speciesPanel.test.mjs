@@ -20,7 +20,7 @@ function fakeElement() {
 
 const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-years', 'species-radius', 'species-what-lives-here'];
 
-function panelRig({ match = async () => 5133088 } = {}) {
+function panelRig({ match = async () => 5133088, suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0 } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
   const doc = { getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag }) };
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
@@ -37,10 +37,10 @@ function panelRig({ match = async () => 5133088 } = {}) {
   const client = {
     match: async (name) => { calls.match.push(name); return match(name); },
     speciesName: async (key) => ({ key, scientificName: 'x', commonName: null }),
-    suggest: async () => ({ source: 'none', items: [] }),
+    suggest: (q, options) => suggest(q, options),
   };
   const whatLivesHere = { armed: false, arm() {}, disarm() {} };
-  const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer: () => 0, clearTimer: () => {} });
+  const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer: () => {} });
   return { panel, els, calls };
 }
 
@@ -68,24 +68,47 @@ test('a GBIF suggestion skips the match; a name GBIF lacks says so and changes n
 });
 
 test('suggestion text puts the common name first', () => {
-  assert.equal(suggestionText({ commonName: 'Monarch', scientificName: 'Danaus plexippus', rank: 'species' }), 'Monarch · Danaus plexippus (species)');
-  assert.equal(suggestionText({ commonName: null, scientificName: 'Danaus plexaure', rank: 'species' }), 'Danaus plexaure (species)');
+  assert.equal(suggestionText({ commonName: 'Monarch', scientificName: 'Danaus plexippus', rank: 'species' }, 'monarch'), 'Monarch · Danaus plexippus (species)');
+  assert.equal(suggestionText({ commonName: null, scientificName: 'Danaus plexaure', rank: 'species' }, 'danaus'), 'Danaus plexaure (species)');
+  assert.throws(() => suggestionText({ commonName: 'Monarch', scientificName: 'Danaus plexippus', rank: 'species' }), /query/, 'the typed query is required');
 });
 
-// iNaturalist also matches other common names (q=hump, 2026-09-13: Swamp Cicada matched "Hump-back Cicada"), so a row
-// says what matched when that is not a name the row already shows.
-test('suggestion text names the matched term only when it differs from the common and the scientific name', () => {
+// iNaturalist also matches other common names (q=hump, 2026-09-13: Swamp Cicada matched "Hump-back Cicada"). A row says what matched
+// only when neither name it shows contains the typed query, so "Humpback Whale" (matched "Hump Whale") needs no note for "hump".
+test('suggestion text names the matched term only when neither shown name contains the typed query', () => {
+  const whale = { commonName: 'Humpback Whale', scientificName: 'Megaptera novaeangliae', rank: 'species', matchedTerm: 'Hump Whale' };
   const cases = [
-    [{ commonName: 'Swamp Cicada', scientificName: 'Neotibicen tibicen', rank: 'species', matchedTerm: 'Hump-back Cicada' }, 'Swamp Cicada · Neotibicen tibicen (species) — matched "Hump-back Cicada"'],
-    [{ commonName: 'Humpback Whale', scientificName: 'Megaptera novaeangliae', rank: 'species', matchedTerm: 'Hump Whale' }, 'Humpback Whale · Megaptera novaeangliae (species) — matched "Hump Whale"'],
-    [{ commonName: 'Humpback Whales', scientificName: 'Megaptera', rank: 'genus', matchedTerm: 'Humpback Whales' }, 'Humpback Whales · Megaptera (genus)'],
-    [{ commonName: 'Humpback Whales', scientificName: 'Megaptera', rank: 'genus', matchedTerm: 'humpback WHALES' }, 'Humpback Whales · Megaptera (genus)'],
-    [{ commonName: 'Monarch', scientificName: 'Danaus plexippus', rank: 'species', matchedTerm: 'danaus plexippus' }, 'Monarch · Danaus plexippus (species)'],
-    [{ commonName: null, scientificName: 'Danaus plexaure', rank: 'species', matchedTerm: 'Danaus plexaure' }, 'Danaus plexaure (species)'],
-    [{ commonName: null, scientificName: 'Danaus plexaure', rank: 'species', matchedTerm: null }, 'Danaus plexaure (species)'],
-    [{ commonName: null, scientificName: 'Danaus plexaure', rank: 'species', matchedTerm: 'Soldier' }, 'Danaus plexaure (species) — matched "Soldier"'],
+    ['hump', { commonName: 'Swamp Cicada', scientificName: 'Neotibicen tibicen', rank: 'species', matchedTerm: 'Hump-back Cicada' }, 'Swamp Cicada · Neotibicen tibicen (species) — matched "Hump-back Cicada"'],
+    ['hump', whale, 'Humpback Whale · Megaptera novaeangliae (species)'],
+    ['HUMP', whale, 'Humpback Whale · Megaptera novaeangliae (species)'],
+    ['  megaptera NOV ', whale, 'Humpback Whale · Megaptera novaeangliae (species)'],
+    ['whale hump', whale, 'Humpback Whale · Megaptera novaeangliae (species) — matched "Hump Whale"'],
+    ['monarca', { commonName: 'Monarch', scientificName: 'Danaus plexippus', rank: 'species', matchedTerm: 'Monarca' }, 'Monarch · Danaus plexippus (species) — matched "Monarca"'],
+    ['hump wh', { commonName: 'Humpback Whale', scientificName: 'Megaptera novaeangliae', rank: 'species', matchedTerm: 'humpback WHALE' }, 'Humpback Whale · Megaptera novaeangliae (species)'],
+    ['soldier', { commonName: null, scientificName: 'Danaus plexaure', rank: 'species', matchedTerm: 'Soldier' }, 'Danaus plexaure (species) — matched "Soldier"'],
+    ['plexaure', { commonName: null, scientificName: 'Danaus plexaure', rank: 'species', matchedTerm: null }, 'Danaus plexaure (species)'],
   ];
-  assert.deepEqual(cases.map(([item]) => suggestionText(item)), cases.map(([, text]) => text));
+  assert.deepEqual(cases.map(([query, item]) => suggestionText(item, query)), cases.map(([, , text]) => text));
+});
+
+test('suggestion rows are worded for the query that was sent, even when the box changed while it was out', async () => {
+  let answer = null;
+  const sent = [];
+  const items = [
+    { id: 1, gbifKey: null, scientificName: 'Megaptera novaeangliae', commonName: 'Humpback Whale', rank: 'species', matchedTerm: 'Hump Whale' },
+    { id: 2, gbifKey: null, scientificName: 'Neotibicen tibicen', commonName: 'Swamp Cicada', rank: 'species', matchedTerm: 'Hump-back Cicada' },
+  ];
+  const { els } = panelRig({ suggest: (q) => { sent.push(q); return new Promise((resolve) => { answer = resolve; }); }, setTimer: (fn) => { fn(); return 1; } });
+  els['species-search'].value = 'hump';
+  els['species-search'].listeners.input();
+  assert.deepEqual(sent, ['hump']);
+  els['species-search'].value = 'swamp'; // typed on before the answer came back
+  answer({ source: 'inaturalist', items });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(els['species-suggestions'].children.map((li) => li.children[0].textContent), [
+    'Humpback Whale · Megaptera novaeangliae (species)',
+    'Swamp Cicada · Neotibicen tibicen (species) — matched "Hump-back Cicada"',
+  ]);
 });
 
 // R-7k: GBIF colours hexagons by absolute record counts, so the legend names each class: a swatch in the colour the globe draws it

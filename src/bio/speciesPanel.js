@@ -7,13 +7,20 @@ import { SPECIES_MAP_LEGEND } from './gbif.js';
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
 
-/** "Common · Scientific (rank)", plus the term iNaturalist matched when it is neither name (it matches other common names too). */
-export function suggestionText(item) {
+/**
+ * "Common · Scientific (rank)", plus the term iNaturalist matched, which can be another common name ("Hump-back Cicada" for Swamp
+ * Cicada). The term shows only when neither shown name contains the typed query and the term is not itself a shown name, so a row
+ * whose name already explains the match ("Humpback Whale" for "hump") carries no note.
+ */
+export function suggestionText(item, query) {
+  if (typeof query !== 'string') throw new TypeError(`suggestionText: the typed query is required (got ${typeof query})`);
   const text = `${item.commonName ? `${item.commonName} · ` : ''}${item.scientificName} (${item.rank})`;
   const term = item.matchedTerm;
   if (!term) return text;
-  const isTerm = (name) => typeof name === 'string' && name.toLowerCase() === term.toLowerCase();
-  return isTerm(item.commonName) || isTerm(item.scientificName) ? text : `${text} — matched "${term}"`;
+  const typed = query.trim().toLowerCase();
+  const names = [item.commonName, item.scientificName].filter((name) => typeof name === 'string').map((name) => name.toLowerCase());
+  const explained = names.some((name) => name === term.toLowerCase() || (typed !== '' && name.includes(typed)));
+  return explained ? text : `${text} — matched "${term}"`;
 }
 
 const compactCount = (count) => (count >= 1000 ? `${count / 1000}k` : String(count));
@@ -113,7 +120,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
     list.hidden = true;
   }
 
-  function showSuggestions(result) {
+  function showSuggestions(result, query) {
     list.replaceChildren();
     status.textContent = result.notice || '';
     for (const item of result.items) {
@@ -121,13 +128,13 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
       const button = doc.createElement('button');
       button.type = 'button';
       button.className = 'species-suggestion';
-      button.textContent = suggestionText(item);
+      button.textContent = suggestionText(item, query);
       button.addEventListener('click', () => { void choose(item); });
       li.appendChild(button);
       list.appendChild(li);
     }
     list.hidden = result.items.length === 0;
-    if (result.items.length === 0 && result.source !== 'none') status.textContent = `No names match "${input.value.trim()}".`;
+    if (result.items.length === 0 && result.source !== 'none') status.textContent = `No names match "${query}".`;
   }
 
   async function requestSuggestions() {
@@ -139,7 +146,8 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
     }
     suggestAbort = new AbortController();
     try {
-      showSuggestions(await client.suggest(query, { signal: suggestAbort.signal }));
+      // Worded for the query that was sent: the box may have changed while it was out.
+      showSuggestions(await client.suggest(query, { signal: suggestAbort.signal }), query);
     } catch (error) {
       if (error?.name === 'AbortError') return;
       console.error('[species] name search failed', { query, error });
