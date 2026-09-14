@@ -420,7 +420,12 @@ if (CHECKS.has('left-stack')) {
   // the show, the data panel's transitions are held at 150 ms, half their duration, because a capture under swiftshader takes longer than the
   // whole fade; its opacity and height are read just before and after the capture, and the transitions then play on.
   await step('F hide before the mid-fade shot', pressKey('f'), { transition: true });
-  const midFadeRead = () => page.evaluate(() => { const data = document.getElementById('data-panel'); const cs = getComputedStyle(data); return { visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: document.getElementById('left-panel-stack').dataset.layoutMode }; });
+  const midFadeRead = () => page.evaluate(() => {
+    const data = document.getElementById('data-panel');
+    const cs = getComputedStyle(data);
+    const pill = (id) => { const el = document.getElementById(id); return { display: getComputedStyle(el).display, height: +el.getBoundingClientRect().height.toFixed(1) }; };
+    return { visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: document.getElementById('left-panel-stack').dataset.layoutMode, scene: pill('scene-panel'), species: pill('species-panel') };
+  });
   await page.keyboard.press('f');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const held = await page.evaluate(() => { const animations = document.getElementById('data-panel').getAnimations(); for (const animation of animations) { animation.pause(); animation.currentTime = 150; } return animations.map((animation) => animation.transitionProperty); });
@@ -448,8 +453,13 @@ if (CHECKS.has('left-stack')) {
   const hideOk = (result) => result.visibleFrames.every((frame) => frame.height >= 100) && result.settled.data.visibility === 'hidden' && result.settled.mode !== 'focus' && !result.settled.focusClass && laidOut(result.settled.scene) && laidOut(result.settled.species);
   // A showing step: every frame where the panel can be seen is already in the shown mode, at 100 px or more, with both pills out of layout.
   const showOk = (result) => result.firstVisible !== null && result.visibleFrames.every((frame) => frame.mode === shown.mode && frame.height >= 100 && frame.scene.display === 'none' && frame.species.display === 'none') && result.settled.data.visibility === 'visible' && result.settled.mode === shown.mode;
+  // R11-M1 (final review M7): the sampled show steps need a visible frame but not one mid-fade, and swiftshader can draw a 300 ms fade in no frame
+  // at all. The frame held at 150 ms of the F show is mid-fade by construction, so it is gated: visible, 0 < opacity < 1, at least 100 px tall,
+  // in the shown state's mode, and both pills out of layout, on the reads just before and just after its capture.
+  const heldFrameOk = (frame) => frame.visibility === 'visible' && frame.opacity > 0 && frame.opacity < 1 && frame.height >= 100 && frame.mode === shown.mode && frame.scene.display === 'none' && frame.species.display === 'none';
   const checks = {
     shownOk,
+    midFadeOk: heldFrameOk(midFadeBefore) && heldFrameOk(midFadeAfter),
     hideFOk: hideOk(hideF) && pillShown(hideF.settled.scene) && pillShown(hideF.settled.species),
     cleanFromHiddenOk: cleanOnHidden.settled.cleanView && !cleanOffHidden.settled.cleanView && cleanOnHidden.settled.mode === hideF.settled.mode && cleanOffHidden.settled.mode === hideF.settled.mode && pillShown(cleanOffHidden.settled.scene) && pillShown(cleanOffHidden.settled.species),
     showFOk: showOk(showF),
