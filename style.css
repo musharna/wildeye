@@ -9559,9 +9559,11 @@ body.scene-playback-mode #key-setup {
 .bio-card-row { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; width: 100%; text-align: left; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: inherit; padding: 5px 8px; margin-bottom: 3px; }
 .bio-card-row:hover, .bio-card-row:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }
 .bio-card-row-primary { grid-column: 1; }
-.bio-card-row-secondary { grid-column: 1; color: var(--text-secondary); font-style: italic; font-size: 11px; }
+/* List rows only: the card is translucent, so the scientific name and count use 0.8 white rather than --text-secondary (0.5), which fell
+   to about 3:1 where a light basemap shows through. Over a white basemap the card ground is about rgb(81,81,86): 0.8 gives 4.8:1. */
+.bio-card-row-secondary { grid-column: 1; color: rgba(232, 234, 237, 0.8); font-style: italic; font-size: 11px; }
 .bio-card-row-secondary:empty { display: none; }
-.bio-card-row-count { grid-column: 2; grid-row: 1; color: var(--text-secondary); font: 10px/1.6 var(--font-mono); }
+.bio-card-row-count { grid-column: 2; grid-row: 1; color: rgba(232, 234, 237, 0.8); font: 10px/1.6 var(--font-mono); }
 .bio-card-row-note { grid-column: 1 / -1; color: #ffb86b; font-size: 11px; }
 .bio-card-status { margin: 0 0 6px; color: var(--text-secondary); }
 .bio-card-retry { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: var(--text-secondary); cursor: pointer; font: 9px var(--font-mono); letter-spacing: 1.2px; padding: 5px 9px; }
@@ -9630,6 +9632,19 @@ body.recording-mode #bio-card { display: none !important; }
 .species-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; max-height: 150px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.35) transparent; }
 .species-suggestions > li { flex: 0 0 auto; }
 .species-suggestions[hidden] { display: none; }
+/* A list taller than its cap fades out at the bottom, so it reads as scrollable, and the fade goes as the end is reached. A scroll
+   timeline with nothing to scroll is inactive, so a short list keeps --species-suggestions-fade at 0px and gets no fade; browsers
+   without scroll timelines get no fade either. */
+@property --species-suggestions-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes species-suggestions-fade { from { --species-suggestions-fade: 28px; } to { --species-suggestions-fade: 0px; } }
+@supports (animation-timeline: scroll()) {
+  .species-suggestions {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--species-suggestions-fade)), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--species-suggestions-fade)), transparent);
+    animation: species-suggestions-fade linear both;
+    animation-timeline: scroll(self);
+  }
+}
 .species-suggestion { width: 100%; text-align: left; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans); padding: 5px 8px; }
 .species-suggestion:hover, .species-suggestion:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }
 .species-status { color: var(--text-secondary); font-size: 11px; }
@@ -9647,10 +9662,17 @@ body.recording-mode #bio-card { display: none !important; }
    at 400x800 the pointer sat on ALL YEARS. Hover on an unpressed chip only lightens it; a pressed chip stays pressed under hover. */
 .species-chip:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.38); background: rgba(255, 255, 255, 0.09); }
 .species-chip[aria-pressed="true"], .species-chip[aria-pressed="true"]:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-/* The action is not a toggle: a full-width accent pill at rest, filled while armed (aria-pressed="true"). */
-.species-action { flex: 0 0 auto; border-radius: 999px; color: var(--accent); border-color: rgba(0, 212, 255, 0.75); background: rgba(0, 212, 255, 0.06); font-size: 10px; font-weight: 700; letter-spacing: 1.6px; padding: 8px 12px; }
-.species-action:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-.species-action[aria-pressed="true"], .species-action[aria-pressed="true"]:hover:not(:disabled) { color: #03141b; border-color: var(--accent); background: var(--accent); }
+/* MAP ON / MAP OFF is a switch, not a chip: a track whose knob sits left on grey while the map is off and right on the accent while it is
+   on. The words still say the state, and aria-pressed carries it. */
+.scene-btn.species-switch { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 4px 10px 4px 5px; color: var(--text-primary); }
+.scene-btn.species-switch::before { content: ""; flex: 0 0 auto; width: 24px; height: 14px; border-radius: 999px; background: radial-gradient(circle at 7px 50%, #e8eaed 0 4px, transparent 4.5px), rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32); }
+.scene-btn.species-switch[aria-pressed="true"]::before { background: radial-gradient(circle at 17px 50%, #03141b 0 4px, transparent 4.5px), var(--accent); box-shadow: none; }
+.scene-btn.species-switch:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.38); background: rgba(255, 255, 255, 0.09); }
+/* The action is not a toggle: a full-width accent pill at rest, filled while armed (aria-pressed="true"). Every selector carries .scene-btn,
+   so it out-ranks the shared .scene-btn rules by specificity, not by source order (hover 0,4,0 > .scene-btn:hover:not(:disabled) 0,3,0). */
+.scene-btn.species-action { flex: 0 0 auto; border-radius: 999px; color: var(--accent); border-color: rgba(0, 212, 255, 0.75); background: rgba(0, 212, 255, 0.06); font-size: 10px; font-weight: 700; letter-spacing: 1.6px; padding: 8px 12px; }
+.scene-btn.species-action:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.scene-btn.species-action[aria-pressed="true"], .scene-btn.species-action[aria-pressed="true"]:hover:not(:disabled) { color: #03141b; border-color: var(--accent); background: var(--accent); }
 /* The two credits break between each other, never inside one. */
 .species-credit { margin: 0; color: rgba(232, 234, 237, 0.78); font-size: 11px; line-height: 1.4; }
 .species-credit > span { white-space: nowrap; }
