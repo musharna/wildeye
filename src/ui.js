@@ -115,6 +115,7 @@ import {
   panelStackAutoCollapseIndices,
   resolveLeftStackBottomBoundary,
   resolvePanelStackCorridor,
+  measureLeftPanelNaturalHeight,
 } from './panelStackLayout.js';
 import {
   resolveCockpitUtilityAnchor,
@@ -2184,6 +2185,7 @@ export class StyleManager {
     this._leftStackResizeObserver = null;
     this._leftStackMutationObserver = null;
     this._leftStackHudTransitionHandler = null;
+    this._leftStackPanelTransitionHandler = null;
     this._leftStackCollapsedHeights = new Map();
     this._leftStackPreferredPanelId = null;
     this._rightPanelStack = document.getElementById('right-context-rail');
@@ -7109,6 +7111,14 @@ export class StyleManager {
       transitionHud.addEventListener('transitionend', this._leftStackHudTransitionHandler);
     }
 
+    // R9-I1: the lane reads each panel's computed visibility, and a visibility transition (the data panel's F toggle, clean view) changes it
+    // only at an end: a hiding panel reads visible until the transition ends, and a showing panel reads hidden as it starts. The class
+    // change's pass runs as it starts, so the transition's end schedules another; without it the lane kept the mode it had before the change.
+    this._leftStackPanelTransitionHandler = (event) => {
+      if (event.propertyName === 'visibility' && event.target.parentElement === stack) this._scheduleLeftPanelLayout();
+    };
+    stack.addEventListener('transitionend', this._leftStackPanelTransitionHandler);
+
     this._leftStackCockpitModeHandler = () => {
       // Cockpit mode repositions the peripheral HUD and reveals its own
       // bottom-left context card. Measure after those styles have committed so
@@ -7151,35 +7161,7 @@ export class StyleManager {
    * @returns {number} Natural height in rendered CSS pixels.
    */
   _measureLeftPanelNaturalHeight(panel) {
-    const inner = [...panel.children].find((child) => !child.classList.contains('panel-glow'));
-    if (!inner) return Math.ceil(panel.scrollHeight || panel.getBoundingClientRect().height);
-
-    const innerRect = inner.getBoundingClientRect();
-    const panelStyle = getComputedStyle(panel);
-    const innerStyle = getComputedStyle(inner);
-    const paddingBottom = parseFloat(innerStyle.paddingBottom) || 0;
-    let contentBottom = parseFloat(innerStyle.paddingTop) || 0;
-
-    for (const child of inner.children) {
-      const childStyle = getComputedStyle(child);
-      // A visibility: hidden child still takes its layout space (the SPECIES panel's scroll cue is hidden while nothing is below), so only
-      // display: none is left out; skipping hidden children left the panel short by that child, and its body overflowed.
-      if (childStyle.display === 'none') continue;
-      const childRect = child.getBoundingClientRect();
-      const marginBottom = parseFloat(childStyle.marginBottom) || 0;
-      const naturalChildHeight = Math.max(childRect.height, child.scrollHeight || 0);
-      const childBottom = childRect.top - innerRect.top + naturalChildHeight + marginBottom;
-      contentBottom = Math.max(contentBottom, childBottom);
-    }
-
-    const wrapperChrome = (parseFloat(panelStyle.borderTopWidth) || 0)
-      + (parseFloat(panelStyle.borderBottomWidth) || 0)
-      + (parseFloat(panelStyle.paddingTop) || 0)
-      + (parseFloat(panelStyle.paddingBottom) || 0);
-    // contentBottom runs from the inner's border-box top, so it holds the inner's top border; the bottom border is added here. Without it a
-    // panel with a bordered inner came out 1 px short, and the SPECIES body overflowed by 1 px on tall windows (I2).
-    const borderBottom = parseFloat(innerStyle.borderBottomWidth) || 0;
-    return Math.ceil(contentBottom + paddingBottom + borderBottom + wrapperChrome);
+    return measureLeftPanelNaturalHeight(panel);
   }
 
   /**
@@ -10279,6 +10261,10 @@ export class StyleManager {
         this._leftStackHudTransitionHandler,
       );
       this._leftStackHudTransitionHandler = null;
+    }
+    if (this._leftStackPanelTransitionHandler) {
+      this._leftPanelStack?.removeEventListener('transitionend', this._leftStackPanelTransitionHandler);
+      this._leftStackPanelTransitionHandler = null;
     }
     if (this._rightStackHudTransitionHandler) {
       document.getElementById('intel-hud')?.removeEventListener(

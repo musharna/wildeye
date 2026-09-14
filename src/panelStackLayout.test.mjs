@@ -5,6 +5,7 @@ import {
   allocatePanelStackHeights,
   panelStackAutoCollapseIndices,
   resolveLeftStackBottomBoundary,
+  measureLeftPanelNaturalHeight,
   resolvePanelStackCorridor,
 } from './panelStackLayout.js';
 
@@ -169,14 +170,18 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     /expandedPanels[\s\S]*?removeProperty\('--left-panel-allocated-height'\)[\s\S]*?_measureLeftPanelNaturalHeight/,
     'left intrinsic measurement must clear the prior allocation first',
   );
-  // I2: a visibility: hidden child still takes layout space (the SPECIES panel's scroll cue), and the inner's bottom border is part of the
-  // height; without either the SPECIES body overflowed on tall windows (by the cue's 16 px, and then by 1 px).
+  // The left lane's natural height comes from measureLeftPanelNaturalHeight (panelStackLayout.js), tested on fake panels below.
   assert.match(
     ui,
-    /_measureLeftPanelNaturalHeight\(panel\) \{[\s\S]*?if \(childStyle\.display === 'none'\) continue;[\s\S]*?const borderBottom = parseFloat\(innerStyle\.borderBottomWidth\) \|\| 0;\s*return Math\.ceil\(contentBottom \+ paddingBottom \+ borderBottom \+ wrapperChrome\);/,
-    'the natural height counts hidden-but-laid-out children and the bottom border',
+    /_measureLeftPanelNaturalHeight\(panel\) \{\s*return measureLeftPanelNaturalHeight\(panel\);\s*\}/,
+    'the left lane measures with the tested function',
   );
-  assert.doesNotMatch(ui, /childStyle\.visibility === 'hidden'\) continue/);
+  // R9-I1: a visibility transition on a stack panel ends after the class change's pass, so its end schedules another (qa-species left-stack).
+  assert.match(
+    ui,
+    /this\._leftStackPanelTransitionHandler = \(event\) => \{\s*if \(event\.propertyName === 'visibility' && event\.target\.parentElement === stack\) this\._scheduleLeftPanelLayout\(\);\s*\};\s*stack\.addEventListener\('transitionend', this\._leftStackPanelTransitionHandler\);/,
+    'the end of a stack panel\'s visibility transition schedules a lane pass',
+  );
   assert.match(
     ui,
     /panel !== this\._ppToggles[\s\S]*?removeProperty\('--right-panel-allocated-height'\)[\s\S]*?const naturalHeight/,
@@ -294,4 +299,38 @@ test('expanded right panels highlight the title divider without changing collaps
     css,
     /#param-slider-panel:not\(\.collapsed\) \.param-panel-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\);/,
   );
+});
+
+// A fake expanded panel for measureLeftPanelNaturalHeight: a glow, then an inner (14 px top and 12 px bottom padding, a 1 px bottom border)
+// holding a list and a 14 px cue row below it. Computed visibility is inherited, so a hidden panel gives every child hidden too.
+function fakeLeftPanel({ panelVisibility = 'visible', cueVisibility = panelVisibility, listScrollHeight }) {
+  const styles = new Map();
+  const node = ({ top, height, scrollHeight = 0, className = '', children = [] }, style) => {
+    const element = { classList: { contains: (name) => name === className }, children, scrollHeight, getBoundingClientRect: () => ({ top, height }) };
+    styles.set(element, { display: 'block', visibility: panelVisibility, marginBottom: '0px', paddingTop: '0px', paddingBottom: '0px', borderTopWidth: '0px', borderBottomWidth: '0px', ...style });
+    return element;
+  };
+  const list = node({ top: 114, height: 300, scrollHeight: listScrollHeight }, {});
+  const cue = node({ top: 414, height: 14 }, { visibility: cueVisibility });
+  const inner = node({ top: 100, height: 400, children: [list, cue] }, { paddingTop: '14px', paddingBottom: '12px', borderBottomWidth: '1px' });
+  const glow = node({ top: 80, height: 440, className: 'panel-glow' }, {});
+  const panel = node({ top: 100, height: 400, children: [glow, inner] }, {});
+  return { panel, getStyle: (element) => styles.get(element) };
+}
+
+// R9-I1: the data panel is visibility: hidden without .active, which the F key toggles, and every panel is hidden in clean view. A hidden
+// panel draws nothing, so it measures as its inner padding and chrome only, as it did at d4d4ec3 (26 px for the data panel at 1400x900).
+// Measured in full it took the whole left lane (3,286 px) and focus mode hid the collapsed SCENE and SPECIES pills.
+test('a hidden panel measures as its padding only; the same panel visible measures its content', () => {
+  const hidden = fakeLeftPanel({ panelVisibility: 'hidden', listScrollHeight: 3000 });
+  assert.equal(measureLeftPanelNaturalHeight(hidden.panel, { getStyle: hidden.getStyle }), 26);
+  const visible = fakeLeftPanel({ panelVisibility: 'visible', listScrollHeight: 3000 });
+  assert.equal(measureLeftPanelNaturalHeight(visible.panel, { getStyle: visible.getStyle }), 14 + 3000 + 12 + 1, 'positive control: the list\'s scroll extent and the bottom border');
+});
+
+// I2 (round 9): a visibility: hidden child of a visible panel still takes its layout space, like the SPECIES panel's scroll cue while
+// nothing is below; left out, the panel came out short by that row and its body overflowed.
+test('a hidden child of a visible panel still counts', () => {
+  const rig = fakeLeftPanel({ panelVisibility: 'visible', cueVisibility: 'hidden', listScrollHeight: 300 });
+  assert.equal(measureLeftPanelNaturalHeight(rig.panel, { getStyle: rig.getStyle }), 314 + 14 + 12 + 1);
 });

@@ -147,3 +147,48 @@ export function resolvePanelStackCorridor({
 
   return { safeTop: top, safeBottom: bottom };
 }
+
+/**
+ * Estimates an expanded left-stack panel's unconstrained content height from its
+ * direct children and their scroll extents. This avoids treating a flex-grown
+ * panel as naturally tall while still accounting for nested lists.
+ * @param {HTMLElement} panel Expanded accordion panel.
+ * @param {object} [options]
+ * @param {(element: Element) => CSSStyleDeclaration} [options.getStyle] getComputedStyle in the page; a fake in tests.
+ * @returns {number} Natural height in rendered CSS pixels.
+ */
+export function measureLeftPanelNaturalHeight(panel, { getStyle = (element) => getComputedStyle(element) } = {}) {
+  const inner = [...panel.children].find((child) => !child.classList.contains('panel-glow'));
+  if (!inner) return Math.ceil(panel.scrollHeight || panel.getBoundingClientRect().height);
+
+  const innerRect = inner.getBoundingClientRect();
+  const panelStyle = getStyle(panel);
+  const innerStyle = getStyle(inner);
+  const paddingBottom = parseFloat(innerStyle.paddingBottom) || 0;
+  let contentBottom = parseFloat(innerStyle.paddingTop) || 0;
+  const wrapperChrome = (parseFloat(panelStyle.borderTopWidth) || 0)
+    + (parseFloat(panelStyle.borderBottomWidth) || 0)
+    + (parseFloat(panelStyle.paddingTop) || 0)
+    + (parseFloat(panelStyle.paddingBottom) || 0);
+  // R9-I1: a panel that is itself visibility: hidden (the data panel without .active, which the F key toggles; every panel in clean view)
+  // draws nothing, and its children inherit hidden. It measures as its padding and wrapper chrome only, as before round 9: measured in
+  // full, a hidden data panel took the whole left lane (3,286 px at 1400x900) and focus mode hid the collapsed SCENE and SPECIES pills.
+  if (panelStyle.visibility === 'hidden') return Math.ceil(contentBottom + paddingBottom + wrapperChrome);
+
+  for (const child of inner.children) {
+    const childStyle = getStyle(child);
+    // A visibility: hidden child of a visible panel still takes its layout space (the SPECIES panel's scroll cue is hidden while nothing is below), so only
+    // display: none is left out; skipping hidden children left the panel short by that child, and its body overflowed.
+    if (childStyle.display === 'none') continue;
+    const childRect = child.getBoundingClientRect();
+    const marginBottom = parseFloat(childStyle.marginBottom) || 0;
+    const naturalChildHeight = Math.max(childRect.height, child.scrollHeight || 0);
+    const childBottom = childRect.top - innerRect.top + naturalChildHeight + marginBottom;
+    contentBottom = Math.max(contentBottom, childBottom);
+  }
+
+  // contentBottom runs from the inner's border-box top, so it holds the inner's top border; the bottom border is added here. Without it a
+  // panel with a bordered inner came out 1 px short, and the SPECIES body overflowed by 1 px on tall windows (I2).
+  const borderBottom = parseFloat(innerStyle.borderBottomWidth) || 0;
+  return Math.ceil(contentBottom + paddingBottom + borderBottom + wrapperChrome);
+}
