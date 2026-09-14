@@ -524,4 +524,16 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(credit.html, /the top datasets behind each list and map are named with a DOI link where GBIF has one, and a gbif\.org dataset page otherwise\./);
   assert.match(panelHtml, /<p class="species-credit">[\s\S]*<span>Top datasets: a DOI link where GBIF has one,<\/span> <span>otherwise a gbif\.org dataset page<\/span><\/p>/);
   assert.doesNotMatch(html + credit.html, /named with (their )?DOIs/);
+  // M4 (final review): names come from iNaturalist and from GBIF (the suggest fallback, the match, and /v1/species/{key} common names), so both
+  // credits name both; DATA_SOURCES.md lists every endpoint and states the name-search cap as what it is: one client-side limiter per page load.
+  assert.match(credit.html, /Names: <a href="https:\/\/www\.inaturalist\.org"[^>]*>iNaturalist<\/a> and <a href="https:\/\/www\.gbif\.org"[^>]*>GBIF<\/a>\./);
+  assert.doesNotMatch(credit.html, /suggested by/);
+  assert.match(panelHtml, /<p class="species-credit"><span>Names: iNaturalist and GBIF<\/span>/);
+  const sources = readFileSync(new URL('../../DATA_SOURCES.md', import.meta.url), 'utf8').split('\n');
+  const speciesRow = sources.find((line) => line.startsWith('| Species map and "what lives here"')) ?? '';
+  for (const endpoint of ['`/v1/taxa/autocomplete`', '`/v1/species/match`', '`/v1/species/{key}`', '`/v1/species/suggest`']) assert.ok(speciesRow.includes(endpoint), `DATA_SOURCES species row names ${endpoint}`);
+  const inatRow = sources.find((line) => line.startsWith('| iNaturalist taxon autocomplete')) ?? '';
+  assert.ok(inatRow.includes('≤ 60 name searches a minute per page load (client-side; resets on reload, not shared across tabs)'), 'the rate cell says what the limiter covers');
+  assert.doesNotMatch(inatRow, /requests\/min per browser/);
+  assert.ok(inatRow.includes('"Names: iNaturalist and GBIF" in the SPECIES panel'), 'the attribution cell quotes the panel credit');
 });
