@@ -129,13 +129,17 @@ What the build changed from the design above, and why.
   monarch's at `hexPerTile=30`, zooms 3, 6 and 9), and the coarse per-zoom sizes that avoided that painted wide stretches of ocean
   (114,954 px more than 8 px from land at the 12,000 km view).
 - On the final template (2026-09-14), 0 record-bearing cells went undrawn in the tiles measured at zooms 2, 3, 5, 6, 8 and 9 for the
-  monarch and for Bombus affinis, and 1,614 species pixels lay more than 8 px from land at the 12,000 km view.
+  monarch and for Bombus affinis. At the 12,000 km view, five captures of the same setup gave 1,614–1,909 species pixels more than 8 px
+  from land and a median smallest-class circle core of 10.65–12.05 px; the spread comes from which tiles had loaded at capture time.
 - GBIF serves `@1x` tiles 512 px square, and `UrlTemplateImageryProvider` assumes 256 px unless told, so it drew every GBIF pixel at about
   half size. The provider declares 512: the smallest circles at the Upper Midwest view measured 4.4 px across at 256 and
   8.9 px declared 512 (median core diameter).
-- The legend lists the five classes as circles at the style's width in CSS px, in its fill, opacity and line, under the caption "records
-  per circle". It shows the style's values, not colours sampled from the globe, because semi-transparent circles mix with the imagery under
-  them. `SPECIES_MAP_LEGEND` in `src/bio/gbif.js` holds the classes, and `src/bio/gbif.test.mjs` pins them to the style file.
+- The legend lists the five classes as solid circles at the style's width in CSS px, each in the colour the globe draws that class at the
+  default 12,000 km view: the median rendered colour of lone circles over land, each circle's class read from its tile's own record count,
+  over three runs. Solid style fills at their opacity on the dark panel showed colours the map never has (CIEDE2000 16.6–23.0 from the
+  rendered classes); the swatches are 0–3.5. The two highest classes had no circle to sample at that view, so their colours are predicted
+  from the others. The caption says bigger, darker circles hold more records and circle sizes change with zoom. `SPECIES_MAP_LEGEND` in
+  `src/bio/gbif.js` holds the classes and colours, and `src/bio/gbif.test.mjs` pins the classes to the style file.
 - Limitation: circle size and count follow GBIF's cell size, which changes with tile zoom, so circles change size where Cesium draws two
   tile zooms side by side. At the equator in the 400×800 phone view, where GBIF zoom 2 meets zoom 1, the median circle width goes from
   11.5 px to 39.5 px (3.4×), an edge in density that the records do not have.
@@ -146,12 +150,17 @@ What the build changed from the design above, and why.
   acknowledge ... the Data Publishers whose biodiversity data they have used, where appropriate through use of a Digital Object
   Identifier (DOI)". "What lives here" asks its one occurrence search for a second facet, `datasetKey` (5, with per-facet limits so
   species stay 20), and the SPECIES panel asks the taxon's top 3 (`facet=datasetKey&datasetKey.facetLimit=3`) for the chosen years and
-  licences. Each dataset is looked up at `/v1/dataset/{key}` (one pooled lookup per key for the session) and listed as its title linked to
+  licences, with `hasCoordinate=true` like the map tiles (GBIF's adhoc tiles add that filter and no geospatial-issue filter: the monarch
+  z0 tile totalled 42,244 records, the search with hasCoordinate=true 42,244, and with hasGeospatialIssue=false as well 42,240). A failed
+  panel search shows inside the block with Retry. Each dataset is looked up at `/v1/dataset/{key}` (one pooled lookup per key for the session) and listed as its title linked to
   its DOI on doi.org, or to its gbif.org page, with its record count. The panel links the taxon's records on gbif.org with `taxon_key`,
   which gbif.org rewrites to its `taxonKey` filter (gbif-web `useNormalizedSearchParams`). A dataset's licence is never shown: the
   iNaturalist Research-grade dataset is CC BY-NC while its CC BY records pass the record filter.
 - The GBIF and iNaturalist terms pages answer scripts with 403, so their text was read from Internet Archive captures, which the user
   accepted on 2026-09-14. DATA_SOURCES.md quotes them with the capture timestamps.
+- The SPECIES panel lists, in order, the search, WHAT LIVES HERE, the year and radius chips, the legend, the Top datasets and the credit.
+  Its body scrolls under a fixed header and fades out at the bottom while more is below. On a 400x800 phone the left panel stack ends at
+  half height, so the panel tightens its spacing to keep the action and both chip rows whole without scrolling.
 - The details card sanitizes layer descriptions with DOMPurify. Only http, https and mailto links survive, and each opens in a new
   tab with `rel="noopener noreferrer"`.
 - Only HTTP and network errors count as tile failures. GBIF answers an empty tile with 204, which Cesium reports as an error of
