@@ -34,6 +34,8 @@ function panelRig({ match = async () => 5133088, suggest = async () => ({ source
   // I-2: the block holds a polite live region that exists before any message; replacing the block's children would remove it.
   els['species-datasets'].replaceChildren = () => { throw new Error('#species-datasets.replaceChildren would remove its live region'); };
   Object.assign(els['species-body'], { scrollTop: 0, scrollHeight: 0, clientHeight: 0 });
+  // The body's content, as its direct children in index.html (the chip groups and the credit line have no id here).
+  els['species-body'].children = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-what-lives-here', 'species-legend', 'species-datasets'].map((id) => els[id]);
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
   let enabled = initiallyEnabled;
   const calls = { params: [], enable: [], match: [], taxonDatasets: [], dataset: [] };
@@ -389,6 +391,9 @@ test('the scroll cue shows while more of the panel body is below, hides at the e
   const cue = els['species-more'];
   assert.equal(cue.style.visibility, 'hidden', 'nothing to scroll');
   assert.ok(resizes.length === 1 && resizes[0].targets.includes(body), 'the body\'s size is observed');
+  // R9-M1: the content is observed too. The datasets load after the panel is sized, so the body's box does not change and only an observer on
+  // its children sees the content grow past it.
+  assert.ok(resizes[0].targets.includes(els['species-datasets']), 'the Top datasets block, content inside the body, is observed');
   Object.assign(body, { scrollHeight: 616, clientHeight: 500 });
   resizes[0].onChange();
   assert.equal(cue.style.visibility, 'visible', 'content grew past the body');
