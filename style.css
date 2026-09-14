@@ -9666,10 +9666,10 @@ body.recording-mode #bio-card { display: none !important; }
 .species-chip:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.38); background: rgba(255, 255, 255, 0.09); }
 .species-chip[aria-pressed="true"], .species-chip[aria-pressed="true"]:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 /* MAP ON / MAP OFF is a switch, not a chip: a track whose knob sits left on grey while the map is off and right on the accent while it is
-   on. The words still say the state, and aria-pressed carries it. */
+   on. The words still say the state; role="switch" with aria-checked carries it under the fixed name "Species map". */
 .scene-btn.species-switch { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 4px 10px 4px 5px; color: var(--text-primary); }
 .scene-btn.species-switch::before { content: ""; flex: 0 0 auto; width: 24px; height: 14px; border-radius: 999px; background: radial-gradient(circle at 7px 50%, #e8eaed 0 4px, transparent 4.5px), rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32); }
-.scene-btn.species-switch[aria-pressed="true"]::before { background: radial-gradient(circle at 17px 50%, #03141b 0 4px, transparent 4.5px), var(--accent); box-shadow: none; }
+.scene-btn.species-switch[aria-checked="true"]::before { background: radial-gradient(circle at 17px 50%, #03141b 0 4px, transparent 4.5px), var(--accent); box-shadow: none; }
 .scene-btn.species-switch:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.38); background: rgba(255, 255, 255, 0.09); }
 /* The action is not a toggle: a full-width accent pill at rest, filled while armed (aria-pressed="true"). Every selector carries .scene-btn,
    so it out-ranks the shared .scene-btn rules by specificity, not by source order (hover 0,4,0 > .scene-btn:hover:not(:disabled) 0,3,0). */

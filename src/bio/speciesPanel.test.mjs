@@ -52,6 +52,9 @@ test('choosing an iNaturalist suggestion matches it in GBIF, sets the taxon and 
   assert.deepEqual(calls.enable, [{ id: 'species', on: true, origin: 'user' }]);
   assert.equal(els['species-chosen-name'].textContent, 'Monarch');
   assert.equal(els['species-toggle'].textContent, 'MAP ON');
+  // A switch: aria-checked carries the state; its accessible name stays "Species map" (index.html) while the words change.
+  assert.equal(els['species-toggle'].attrs['aria-checked'], 'true');
+  assert.equal(Object.hasOwn(els['species-toggle'].attrs, 'aria-pressed'), false, 'a switch carries aria-checked, not aria-pressed');
 });
 
 test('a GBIF suggestion skips the match; a name GBIF lacks says so and changes nothing', async () => {
@@ -142,6 +145,7 @@ test('the colour legend shows only while the map is on', async () => {
   els['species-toggle'].listeners.click();
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(els['species-toggle'].textContent, 'MAP OFF');
+  assert.equal(els['species-toggle'].attrs['aria-checked'], 'false');
   assert.equal(els['species-legend'].hidden, true, 'map off again');
 });
 
@@ -160,6 +164,10 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
   // The legend's content is rendered from SPECIES_MAP_LEGEND (speciesPanel.js), so the markup holds an empty container.
   assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<div id="species-legend" class="species-legend" hidden><\/div>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"/);
+  // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
+  const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
+  for (const attr of ['role="switch"', 'aria-checked="false"', 'aria-label="Species map"']) assert.ok(toggleTag.includes(attr), `${attr} in ${toggleTag}`);
+  assert.equal(toggleTag.includes('aria-pressed'), false, `no aria-pressed on the switch: ${toggleTag}`);
   const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-legend"', 'id="species-what-lives-here"', 'id="species-years"', 'id="species-radius"', 'class="species-credit"'];
   const positions = order.map((marker) => panelHtml.indexOf(marker));
   assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);
@@ -172,6 +180,8 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // R-7k: the swatch colours come from SPECIES_MAP_LEGEND, so no legend colour is written in the CSS.
   assert.doesNotMatch(css, /\.species-legend-ramp|#e4e737|#b41c5b/i);
   assert.match(css, /\.species-legend-swatch \{[^}]*height: \d+px;/);
+  assert.match(css, /\.scene-btn\.species-switch\[aria-checked="true"\]::before \{/);
+  assert.doesNotMatch(css, /species-switch\[aria-pressed/);
   assert.match(main, /dataManager\.register\(speciesLayer\);/);
   assert.match(main, /createDetailsCard\(\{/);
   assert.match(main, /createDetailsCard\(\{[^\n]*onDismiss: \(\) => whatLivesHere\?\.cancel\(\), onListEnd: \(\) => whatLivesHere\?\.listEnded\(\) \}\)/, 'the card ends the what-lives-here outline');

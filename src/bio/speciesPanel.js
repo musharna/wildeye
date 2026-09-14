@@ -105,7 +105,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
       });
     }
     toggle.textContent = on ? 'MAP ON' : 'MAP OFF';
-    toggle.setAttribute('aria-pressed', String(on));
+    toggle.setAttribute('aria-checked', String(on));
     legend.hidden = !on;
     for (const chip of yearChips.querySelectorAll('[data-years]')) chip.setAttribute('aria-pressed', String(chip.dataset.years === p.years));
     for (const chip of radiusChips.querySelectorAll('[data-radius]')) chip.setAttribute('aria-pressed', String(Number(chip.dataset.radius) === p.radiusKm));
