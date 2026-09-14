@@ -170,11 +170,19 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
   for (const attr of ['role="switch"', 'aria-checked="false"', 'aria-label="Species map"']) assert.ok(toggleTag.includes(attr), `${attr} in ${toggleTag}`);
   assert.equal(toggleTag.includes('aria-pressed'), false, `no aria-pressed on the switch: ${toggleTag}`);
-  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-legend"', 'id="species-years"', 'id="species-radius"', 'class="species-credit"'];
+  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-legend"', 'id="species-years-label"', 'id="species-years"', 'id="species-radius-label"', 'id="species-radius"', 'class="species-credit"'];
   const positions = order.map((marker) => panelHtml.indexOf(marker));
   assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'markup order');
   assert.doesNotMatch(panelHtml.slice(panelHtml.indexOf('class="species-credit"')), /<button|<input|id="species-/, 'nothing after the credit line');
+  // R-7o: each chip row has a visible label directly above it that also names its group, so "1 / 10 / 50 KM" does not read as a
+  // hexagon size.
+  for (const [group, text] of [['species-years', 'Years'], ['species-radius', 'What lives here radius']]) {
+    assert.match(panelHtml, new RegExp(`<span id="${group}-label" class="species-label">${text}</span>\\s*<div id="${group}"`), `${group}: its visible label comes first`);
+    const tag = panelHtml.match(new RegExp(`<div id="${group}"[^>]*>`))?.[0] ?? '';
+    assert.ok(tag.includes('role="group"') && tag.includes(`aria-labelledby="${group}-label"`), `${group} is a group named by its visible label: ${tag}`);
+    assert.equal(tag.includes('aria-label='), false, `${group} takes its name from the visible label only: ${tag}`);
+  }
   assert.match(css, /#left-panel-stack > #species-panel \{[^}]*order: 5;/);
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);

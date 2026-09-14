@@ -1,6 +1,6 @@
 /**
  * SPECIES panel (spec: docs/superpowers/specs/2026-09-13-species-search-design.md): name search with
- * suggestions, the chosen species with a map switch, the "What lives here" button, the record-count legend, and year and radius chips.
+ * suggestions, the chosen species with a map switch, the "What lives here" button, the record-count legend, and the labelled year and radius chips.
  */
 import { SPECIES_MAP_LEGEND } from './gbif.js';
 
