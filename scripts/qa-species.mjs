@@ -488,11 +488,12 @@ if (CHECKS.has('left-stack')) {
 //   real GBIF match that answers FUZZY (iNaturalist's suggestion is answered in the page as "Danaus plexippa"), so its note is measured too (M1).
 // - Method: each text node's line boxes, clipped to their scroll view and the window, are read with the text's colour and opacity. The text is
 //   then made transparent and the page captured, so each pixel under a line box is the ground that text is drawn on. The text colour is
-//   composited over each of those pixels, and the lowest WCAG ratio is the text's. The body of each surface is scrolled through, so every text
-//   is measured where it can be seen. Text needs 4.5:1, the card's close × (non-text) 3:1.
+//   composited over each of those pixels, and the lowest WCAG ratio is the text's. Each scroll container of a surface (the card's body and its
+//   foot) is stepped through, and text that no position shows fails as unmeasured. Text needs 4.5:1, the card's close × (non-text) 3:1.
 // - The host header (the SPECIES title and its button, parked with R-7ii S2) is measured and reported, not gated.
 // - Controls in the same check: each forced message is present; the map behind each surface, captured with the surface hidden, has a median
-//   relative luminance of at least 0.5; and a 0.3-white control line placed in each surface measures under 4.5:1.
+//   relative luminance of at least 0.5; a 0.3-white control line placed in each surface measures under 4.5:1; and a control line laid out where
+//   no scroll position shows it comes back unmeasured.
 if (CHECKS.has('contrast')) {
   const VIEWPORTS = [[1400, 900], [375, 667]];
   const AUSTIN = [-97.74, 30.27, 3000]; // central Austin from 3 km: OSM blocks, streets and parks
@@ -570,10 +571,12 @@ if (CHECKS.has('contrast')) {
         // Text kept for screen readers only (a 1 px box, like the phone's "Find a species" label) is reported, not gated: nobody sees it.
         const screenReaderOnly = (el) => { const r = el.getBoundingClientRect(); return r.width <= 1 || r.height <= 1; };
         const add = (el, text, rects, color) => {
-          if (!rects.length) return;
+          // Text with no layout box (display: none, a hidden list) is not on the page. Text laid out but clipped out of view at this scroll
+          // position is registered with no boxes, so text that no scroll position shows is reported unmeasured instead of being skipped.
+          if (el.getClientRects().length === 0) return;
           const key = `${describe(el)}|${text.slice(0, 60)}`;
           const hiddenFromSight = screenReaderOnly(el);
-          const item = items.get(key) || { key, label: describe(el), text: text.slice(0, 60), color, opacity: opacityOf(el), rects: [], gate: !hiddenFromSight && !(parkedSelector && el.closest(parkedSelector)), screenReaderOnly: hiddenFromSight, min: el.closest(nonTextSelector) ? 3 : 4.5, control: el.id === 'qa-contrast-control' };
+          const item = items.get(key) || { key, label: describe(el), text: text.slice(0, 60), color, opacity: opacityOf(el), rects: [], gate: !hiddenFromSight && !(parkedSelector && el.closest(parkedSelector)), screenReaderOnly: hiddenFromSight, min: el.closest(nonTextSelector) ? 3 : 4.5, control: el.id === 'qa-contrast-control' ? 'dim' : el.id === 'qa-contrast-unseen-control' ? 'unseen' : false };
           item.rects.push(...rects);
           // Text drawn outside its surface's box is not on the surface's ground.
           item.outside = Boolean(item.outside) || rects.some((r) => r.left < rootBox.left - 0.5 || r.right > rootBox.right + 0.5 || r.top < rootBox.top - 0.5 || r.bottom > rootBox.bottom + 0.5);
@@ -642,8 +645,9 @@ if (CHECKS.has('contrast')) {
       },
     };
   });
-  // One surface in its current state: the map behind it, then every text at each scroll position of its body, then a capture for the critic.
-  const measureSurface = async (name, { root, scroller, parked = null, nonText = '.bio-card-close' }) => {
+  // One surface in its current state: the map behind it, then every text at each scroll position of each of its scroll containers, then a
+  // capture for the critic.
+  const measureSurface = async (name, { root, scrollers = [], parked = null, nonText = '.bio-card-close' }) => {
     const { width, height } = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
     await page.mouse.move(Math.round(width / 2), Math.round(height * 0.45)); // no hover on a surface
     await page.evaluate(() => document.activeElement?.blur?.());
@@ -659,15 +663,27 @@ if (CHECKS.has('contrast')) {
       span.textContent = 'qa control, 0.3 white';
       span.style.cssText = 'position: absolute; left: 16px; bottom: 3px; font: 11px/1 var(--font-sans); color: rgba(232, 234, 237, 0.3); pointer-events: none; white-space: nowrap;';
       document.querySelector(root).appendChild(span);
+      // The unseen control: laid out far above the surface, where no scroll position shows it, so it must come back unmeasured.
+      const unseen = document.createElement('span');
+      unseen.id = 'qa-contrast-unseen-control';
+      unseen.textContent = 'qa unseen control';
+      unseen.style.cssText = 'position: absolute; left: 16px; top: -4000px; font: 11px/1 var(--font-sans); color: rgba(232, 234, 237, 0.8); pointer-events: none; white-space: nowrap;';
+      document.querySelector(root).appendChild(unseen);
     }, root);
     await frames();
     await sleep(500);
-    const range = scroller ? await page.evaluate((s) => { const el = document.querySelector(s); return el ? { max: el.scrollHeight - el.clientHeight, step: Math.max(40, Math.floor(el.clientHeight * 0.8)) } : null; }, scroller) : null;
-    const positions = [0];
-    if (range && range.max > 0) { for (let p = range.step; p < range.max; p += range.step) positions.push(p); positions.push(range.max); }
+    // Each scroll container is stepped through its range in turn, with the others at their top.
+    const steps = [{ scroller: null, position: 0 }];
+    for (const scroller of scrollers) {
+      const range = await page.evaluate((s) => { const el = document.querySelector(s); return el ? { max: el.scrollHeight - el.clientHeight, step: Math.max(40, Math.floor(el.clientHeight * 0.8)) } : null; }, scroller);
+      if (!range || range.max <= 0) continue;
+      for (let p = range.step; p < range.max; p += range.step) steps.push({ scroller, position: p });
+      steps.push({ scroller, position: range.max });
+    }
     const merged = new Map();
-    for (const position of positions) {
-      if (scroller) { await page.evaluate((s, p) => { const el = document.querySelector(s); if (el) el.scrollTop = p; }, scroller, position); await sleep(400); }
+    for (const { scroller, position } of steps) {
+      await page.evaluate((scrollers, active, p) => { for (const s of scrollers) { const el = document.querySelector(s); if (el) el.scrollTop = s === active ? p : 0; } }, scrollers, scroller, position);
+      await sleep(400);
       const items = await page.evaluate((root, parked, nonText) => window.__qaContrast.collect(root, parked, nonText), root, parked, nonText);
       await addStyle('qa-contrast-hide-text', hideText(root));
       await frames();
@@ -684,19 +700,23 @@ if (CHECKS.has('contrast')) {
       await frames();
       await sleep(500); // the colours transition back before the next read
     }
-    await page.evaluate((s) => { document.getElementById('qa-contrast-control')?.remove(); const el = s && document.querySelector(s); if (el) el.scrollTop = 0; }, scroller);
+    await page.evaluate((scrollers) => {
+      for (const id of ['qa-contrast-control', 'qa-contrast-unseen-control']) document.getElementById(id)?.remove();
+      for (const s of scrollers) { const el = document.querySelector(s); if (el) el.scrollTop = 0; }
+    }, scrollers);
     await sleep(400);
     await shot(`contrast-${name}`);
     const items = [...merged.values()];
-    const control = items.find((item) => item.control) || null;
+    const control = items.find((item) => item.control === 'dim') || null;
+    const unseenControl = items.find((item) => item.control === 'unseen') || null;
     const gated = items.filter((item) => item.gate && !item.control);
     const classes = {};
     for (const item of gated) { if (!classes[item.label] || (item.ratio ?? 0) < (classes[item.label].ratio ?? Infinity)) classes[item.label] = { ratio: item.ratio, min: item.min, text: item.text, worstBg: item.worstBg }; }
     const failing = gated.filter((item) => item.ratio !== null && item.ratio < item.min).map(({ key, ratio, min, color, worstBg }) => ({ key, ratio, min, color, worstBg }));
     const unmeasured = gated.filter((item) => item.ratio === null).map((item) => item.key);
     const outside = gated.filter((item) => item.outside).map((item) => item.key);
-    const ok = behind.medianL !== null && behind.medianL >= MAP_BEHIND_MIN_L && gated.length >= 4 && failing.length === 0 && unmeasured.length === 0 && outside.length === 0 && control?.ratio != null && control.ratio < TEXT_MIN;
-    return { name, ok, behind, positions: positions.length, measured: gated.length, classes, failing, unmeasured, outside, control: control && { ratio: control.ratio, pixels: control.pixels }, parked: items.filter((item) => !item.gate && !item.control).map(({ key, ratio, screenReaderOnly }) => ({ key, ratio, ...(screenReaderOnly ? { screenReaderOnly } : {}) })) };
+    const ok = behind.medianL !== null && behind.medianL >= MAP_BEHIND_MIN_L && gated.length >= 4 && failing.length === 0 && unmeasured.length === 0 && outside.length === 0 && control?.ratio != null && control.ratio < TEXT_MIN && unseenControl !== null && unseenControl.ratio === null && unseenControl.pixels === 0;
+    return { name, ok, behind, positions: steps.length, measured: gated.length, classes, failing, unmeasured, outside, control: control && { ratio: control.ratio, pixels: control.pixels }, unseenControl: unseenControl && { ratio: unseenControl.ratio, pixels: unseenControl.pixels }, parked: items.filter((item) => !item.gate && !item.control).map(({ key, ratio, screenReaderOnly }) => ({ key, ratio, ...(screenReaderOnly ? { screenReaderOnly } : {}) })) };
   };
   const initial = await page.evaluate(() => {
     const view = window.__godsEyeView;
@@ -738,7 +758,7 @@ if (CHECKS.has('contrast')) {
       await page.waitForFunction(() => /^Name search failed/.test(document.getElementById('species-status')?.textContent || ''), { timeout: 30000 });
       const panelForced = await page.evaluate(() => ({ status: document.getElementById('species-status').textContent, datasets: document.getElementById('species-datasets-status').textContent, retry: Boolean(document.querySelector('#species-datasets .species-datasets-retry')), note: document.getElementById('species-chosen-note').textContent }));
       const panelTiles = await waitForMapTiles();
-      const panel = await measureSurface(`panel-${size}`, { root: '#species-panel .species-panel-inner', scroller: '#species-body', parked: '#species-panel .panel-header' });
+      const panel = await measureSurface(`panel-${size}`, { root: '#species-panel .species-panel-inner', scrollers: ['#species-body'], parked: '#species-panel .panel-header' });
       surfaces.push({ ...panel, ok: panel.ok && panelForced.retry && panelForced.note === "shown as GBIF's Danaus plexippus" && Boolean(panel.classes['span#species-chosen-note.species-chosen-note']), viewport: size, forced: { ...panelForced, requests: await forcedCount() }, tiles: panelTiles.settled });
       // A status card: the what-lives-here search fails. The panel is collapsed, so the map is what shows behind the card.
       await setFailures(['^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*facet=speciesKey)']);
@@ -750,7 +770,7 @@ if (CHECKS.has('contrast')) {
       await page.waitForFunction(() => /^GBIF search failed/.test(document.querySelector('#bio-card .bio-card-status')?.textContent || ''), { timeout: 45000 });
       const statusForced = await page.evaluate(() => ({ status: document.querySelector('#bio-card .bio-card-status').textContent, retry: Boolean(document.querySelector('#bio-card .bio-card-retry')) }));
       const statusTiles = await waitForMapTiles();
-      const statusCard = await measureSurface(`card-status-${size}`, { root: '#bio-card', scroller: '#bio-card .bio-card-body' });
+      const statusCard = await measureSurface(`card-status-${size}`, { root: '#bio-card', scrollers: ['#bio-card .bio-card-body', '#bio-card .bio-card-foot'] });
       surfaces.push({ ...statusCard, ok: statusCard.ok && statusForced.retry, viewport: size, forced: { ...statusForced, requests: await forcedCount() }, tiles: statusTiles.settled });
       await closeCard();
       // A list card across the antimeridian: every name and dataset lookup fails, and the foot says gbif.org can't show the area as a circle.
@@ -765,7 +785,7 @@ if (CHECKS.has('contrast')) {
       await page.waitForFunction(() => document.querySelector('#bio-card .bio-card-foot-note') && document.querySelectorAll('#bio-card .bio-card-row').length > 0, { timeout: 60000 });
       const listForced = await page.evaluate(() => ({ rows: document.querySelectorAll('#bio-card .bio-card-row').length, rowNotes: document.querySelectorAll('#bio-card .bio-card-row-note').length, datasetNotes: document.querySelectorAll('#bio-card .dataset-row-note').length, footNote: document.querySelector('#bio-card .bio-card-foot-note')?.textContent ?? null }));
       const listTiles = await waitForMapTiles();
-      const listCard = await measureSurface(`card-list-${size}`, { root: '#bio-card', scroller: '#bio-card .bio-card-body' });
+      const listCard = await measureSurface(`card-list-${size}`, { root: '#bio-card', scrollers: ['#bio-card .bio-card-body', '#bio-card .bio-card-foot'] });
       // The species rows themselves must be seen and measured, not only the foot.
       surfaces.push({ ...listCard, ok: listCard.ok && Boolean(listCard.classes['span.bio-card-row-primary']) && listForced.rowNotes > 0 && listForced.datasetNotes > 0 && listForced.footNote === "gbif.org can't show this area as a circle", viewport: size, forced: { ...listForced, requests: await forcedCount() }, tiles: listTiles.settled });
       await closeCard();
