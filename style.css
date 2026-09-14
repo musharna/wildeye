@@ -9552,7 +9552,8 @@ body.scene-playback-mode #key-setup {
 .bio-card-title { flex: 1; min-width: 0; font: 10px/1.3 var(--font-mono); letter-spacing: 1px; color: var(--accent); }
 .bio-card-close { background: none; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: var(--text-secondary); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 8px; }
 .bio-card-close:hover { color: var(--accent); border-color: var(--accent); }
-.bio-card-filter { color: var(--text-secondary); font-size: 11px; }
+/* 0.8 white: the shared --text-secondary (0.5 white) measured 4.09:1 over the card (visual critic 5). */
+.bio-card-filter { color: rgba(232, 234, 237, 0.8); font-size: 11px; }
 .bio-card-filter:empty { display: none; }
 .bio-card-body { overflow-y: auto; min-height: 0; }
 /* A list longer than the card fades out at the bottom while more is below, like the species suggestions; with nothing to scroll the
@@ -9642,6 +9643,10 @@ body.recording-mode #bio-card { display: none !important; }
 .species-label { margin-bottom: -4px; color: rgba(232, 234, 237, 0.8); font: 9px var(--font-mono); letter-spacing: 1.2px; }
 #species-search { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: var(--text-primary); padding: 6px 8px; font: 12px var(--font-sans); }
 #species-search:focus { outline: none; border-color: var(--accent); }
+/* The browser's default placeholder measured 3.55:1 and its clear cross 1.33:1 (visual critic 5): a 0.65 white placeholder, and the native
+   clear button kept (same click and keyboard behaviour) but drawn as a light cross. */
+#species-search::placeholder { color: rgba(232, 234, 237, 0.65); }
+#species-search::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; margin-left: 6px; cursor: pointer; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' fill='none' stroke='%23e8eaed' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 12px 12px no-repeat; }
 /* About five one-line rows, then the list scrolls on its own, so the chips and the action below stay in view. */
 .species-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; max-height: 150px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.35) transparent; }
 .species-suggestions > li { flex: 0 0 auto; }

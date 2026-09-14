@@ -372,6 +372,10 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // chips' 0.8 white.
   assert.match(css, /\.species-label \{[^}]*color: rgba\(232, 234, 237, 0\.8\);/);
   assert.doesNotMatch(css, /\.species-label \{[^}]*var\(--text-secondary\)/);
+  // S4: the search placeholder is 0.65 white (the browser default measured 3.55:1), and the native clear button is replaced by a light
+  // cross that measures at least 3:1, keeping the native control and its keyboard behaviour.
+  assert.match(css, /#species-search::placeholder \{ color: rgba\(232, 234, 237, 0\.65\); \}/);
+  assert.match(css, /#species-search::-webkit-search-cancel-button \{[^}]*-webkit-appearance: none;[^}]*background: url\("data:image\/svg\+xml,[^"]*stroke='%23e8eaed'[^"]*"\)/);
   assert.match(css, /#left-panel-stack > #species-panel \{[^}]*order: 5;/);
   assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);

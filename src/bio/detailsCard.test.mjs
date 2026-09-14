@@ -24,6 +24,8 @@ test('the card opens for a biology marker with details and stays shut for anythi
 // when nothing scrolls.
 test('the card body fades at the bottom while more of the list is below', () => {
   const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+  // S4: the filter line under the heading is 0.8 white; the shared 0.5 white measured 4.09:1 over the card.
+  assert.match(css, /\.bio-card-filter \{ color: rgba\(232, 234, 237, 0\.8\);/);
   assert.match(css, /@property --bio-card-body-fade \{[^}]*initial-value: 0px;/);
   assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-body \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-body-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
 });
