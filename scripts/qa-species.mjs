@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,card,search,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,card,suggestion-fade,search,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs';
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
-const CHECKS = new Set(arg('--checks', 'panel-layout,card,search,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,card,suggestion-fade,search,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -192,6 +192,70 @@ if (CHECKS.has('card')) {
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', false, { origin: 'user' }));
 }
 
+if (CHECKS.has('suggestion-fade')) {
+  // A suggestion list taller than its cap fades out at the bottom (a scroll-driven mask); a list that fits must not fade. Each list is
+  // screenshotted, and rows compare by their brightest text pixels (99th-percentile luminance): the bottom visible row against the
+  // first. Positive control in the same check: "hump" overflows the cap, so its bottom row must read dimmer; an unfaded short list
+  // therefore cannot come from a blind probe. The short query must return rows that fit the cap: "sialia currucoides" gives 3;
+  // "megaptera nov" gives 4, but its subspecies names wrap past the cap and the list fades, as it should.
+  const clearSearch = async () => {
+    await page.click('#species-search', { clickCount: 3 });
+    await page.keyboard.press('Backspace');
+    await page.waitForFunction(() => document.getElementById('species-suggestions').hidden, { timeout: 5000 });
+  };
+  const listFor = async (query) => {
+    await clearSearch();
+    await page.type('#species-search', query, { delay: 40 });
+    await page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
+    await page.mouse.move(700, 120); // no hover highlight on a row
+    await sleep(1000);
+    const box = await page.evaluate(() => {
+      const list = document.getElementById('species-suggestions');
+      const r = list.getBoundingClientRect();
+      const rows = [...list.querySelectorAll('li')]
+        .map((li) => { const b = li.getBoundingClientRect(); return { top: Math.max(b.top, r.top) - r.top, bottom: Math.min(b.bottom, r.bottom) - r.top }; })
+        .filter((row) => row.bottom - row.top >= 8);
+      return { x: r.left, y: r.top, width: r.width, height: r.height, rows, total: list.querySelectorAll('li').length, scrollHeight: list.scrollHeight, clientHeight: list.clientHeight, fade: getComputedStyle(list).getPropertyValue('--species-suggestions-fade').trim(), texts: [...list.querySelectorAll('button')].map((b) => b.textContent) };
+    });
+    const png = await page.screenshot({ clip: { x: box.x, y: box.y, width: box.width, height: box.height }, encoding: 'base64' });
+    const peaks = await page.evaluate(async (png, rows, cssWidth) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${png}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const scale = img.width / cssWidth;
+      return rows.map(({ top, bottom }) => {
+        const y0 = Math.round(top * scale);
+        const { data } = ctx.getImageData(0, y0, img.width, Math.max(1, Math.round(bottom * scale) - y0));
+        const lum = [];
+        for (let i = 0; i < data.length; i += 4) lum.push(0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]);
+        lum.sort((a, b) => a - b);
+        return Number(lum[Math.floor(lum.length * 0.99)].toFixed(1));
+      });
+    }, png, box.rows, box.width);
+    return { query, rows: box.total, visibleRows: box.rows.length, overflows: box.scrollHeight > box.clientHeight, scrollHeight: box.scrollHeight, clientHeight: box.clientHeight, fade: box.fade, peaks, bottomToFirst: Number((peaks.at(-1) / peaks[0]).toFixed(3)), texts: box.texts };
+  };
+  let control = null;
+  let short = null;
+  let error = null;
+  await openSpeciesPanel();
+  try {
+    control = await listFor('hump');
+    short = await listFor("sialia currucoides");
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await clearSearch().catch((caught) => { error = `${error ?? ''} clearing the search box: ${caught}`; });
+  }
+  const controlOk = Boolean(control?.overflows) && control.fade !== '0px' && control.bottomToFirst < 0.85;
+  const shortOk = short !== null && short.rows < 5 && !short.overflows && short.fade === '0px' && short.visibleRows === short.rows && short.bottomToFirst >= 0.95;
+  report('suggestion-fade', error === null && controlOk && shortOk, { control, short, controlOk, shortOk, ...(error ? { error } : {}) });
+}
+
 if (CHECKS.has('search')) {
   await openSpeciesPanel();
   requests.length = 0;
@@ -347,69 +411,88 @@ if (CHECKS.has('here')) {
   // replaces it with the marker's details (the outline must go), and a real click on empty globe then deselects and closes the card
   // (nothing may come back). The marker is a point added to the occurrences data source inside the circle; the empty spot is one
   // where the canvas is on top and the scene picks nothing.
-  await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', true, { origin: 'user' }));
-  await page.click('#species-what-lives-here');
-  const centre = await page.evaluate(() => {
-    const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect();
-    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-  });
-  await page.mouse.click(centre.x, centre.y);
-  await page.waitForFunction(() => document.querySelectorAll('#bio-card .bio-card-row').length > 0 || /failed|No CC0/.test(document.getElementById('bio-card')?.innerText || ''), { timeout: 45000 });
-  const listed = { ...(await countOutlines()), rows: await page.evaluate(() => document.querySelectorAll('#bio-card .bio-card-row').length) };
-  const spots = await page.evaluate(async () => {
-    const viewer = window.__godsEyeView.viewer;
-    const scene = viewer.scene;
-    const Cartesian3 = viewer.camera.position.constructor;
-    const Cartographic = viewer.camera.positionCartographic.constructor;
-    let ds = null;
-    for (let i = 0; i < viewer.dataSources.length; i += 1) if (viewer.dataSources.get(i).name === 'occurrences') ds = viewer.dataSources.get(i);
-    if (!ds) return { error: 'no occurrences data source' };
-    const rect = scene.canvas.getBoundingClientRect();
-    const onScreen = (lon, lat) => {
-      const height = scene.globe.getHeight(Cartographic.fromDegrees(lon, lat)) ?? 0;
-      const xy = scene.cartesianToCanvasCoordinates(Cartesian3.fromDegrees(lon, lat, height));
-      return xy ? { lon, lat, height, xy, page: { x: rect.left + xy.x, y: rect.top + xy.y } } : null;
-    };
-    const centreCarto = Cartographic.fromCartesian(viewer.camera.pickEllipsoid({ x: rect.width / 2, y: rect.height / 2 }, scene.globe.ellipsoid));
-    const lon0 = centreCarto.longitude * (180 / Math.PI);
-    const lat0 = centreCarto.latitude * (180 / Math.PI);
-    const marker = onScreen(lon0, lat0 + 0.045); // about 5 km north of the clicked point, inside the 10 km circle
-    ds.entities.removeById('qa-here-detail-marker');
-    ds.entities.add({ id: 'qa-here-detail-marker', position: Cartesian3.fromDegrees(marker.lon, marker.lat, marker.height + 10), point: { pixelSize: 18, disableDepthTestDistance: Number.POSITIVE_INFINITY }, description: '<b>qa-here-detail marker</b>' });
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    let empty = null;
-    for (const [dLon, dLat] of [[0, -0.05], [0.06, -0.05], [-0.06, -0.05], [0.06, 0.02], [-0.06, 0.02], [0, -0.09]]) {
-      const spot = onScreen(lon0 + dLon, lat0 + dLat);
-      if (!spot || document.elementFromPoint(spot.page.x, spot.page.y) !== scene.canvas) continue;
-      if (scene.pick(spot.xy) === undefined) { empty = spot; break; }
-    }
-    const markerPick = scene.pick(marker.xy);
-    return {
-      marker: { page: marker.page, onCanvas: document.elementFromPoint(marker.page.x, marker.page.y) === scene.canvas, picksMarker: markerPick?.id?.id === 'qa-here-detail-marker' },
-      empty: empty && { page: empty.page, lon: empty.lon, lat: empty.lat },
-    };
-  });
-  const cardState = () => page.evaluate(() => ({ selected: window.__godsEyeView.viewer.selectedEntity?.id ?? null, hidden: document.getElementById('bio-card').hidden, text: document.getElementById('bio-card').innerText.slice(0, 120) }));
+  // Any error becomes a failing line, and the cleanup runs in finally, so the occurrences layer, the selection and the qa marker are
+  // restored either way; the line reports what the cleanup left.
+  let listed = null;
+  let spots = null;
   let detail = null;
   let closed = null;
-  if (spots.marker?.picksMarker && spots.empty) {
-    await page.mouse.click(spots.marker.page.x, spots.marker.page.y);
-    await sleep(2000);
-    detail = { ...(await cardState()), outlines: await countOutlines() };
-    await page.mouse.click(spots.empty.page.x, spots.empty.page.y);
-    await sleep(2000);
-    closed = { ...(await cardState()), outlines: await countOutlines() };
+  let error = null;
+  let restored = null;
+  try {
+    await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', true, { origin: 'user' }));
+    await page.click('#species-what-lives-here');
+    const centre = await page.evaluate(() => {
+      const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    });
+    await page.mouse.click(centre.x, centre.y);
+    await page.waitForFunction(() => document.querySelectorAll('#bio-card .bio-card-row').length > 0 || /failed|No CC0/.test(document.getElementById('bio-card')?.innerText || ''), { timeout: 45000 });
+    listed = { ...(await countOutlines()), rows: await page.evaluate(() => document.querySelectorAll('#bio-card .bio-card-row').length) };
+    spots = await page.evaluate(async () => {
+      const viewer = window.__godsEyeView.viewer;
+      const scene = viewer.scene;
+      const Cartesian3 = viewer.camera.position.constructor;
+      const Cartographic = viewer.camera.positionCartographic.constructor;
+      let ds = null;
+      for (let i = 0; i < viewer.dataSources.length; i += 1) if (viewer.dataSources.get(i).name === 'occurrences') ds = viewer.dataSources.get(i);
+      if (!ds) return { error: 'no occurrences data source' };
+      const rect = scene.canvas.getBoundingClientRect();
+      const onScreen = (lon, lat) => {
+        const height = scene.globe.getHeight(Cartographic.fromDegrees(lon, lat)) ?? 0;
+        const xy = scene.cartesianToCanvasCoordinates(Cartesian3.fromDegrees(lon, lat, height));
+        return xy ? { lon, lat, height, xy, page: { x: rect.left + xy.x, y: rect.top + xy.y } } : null;
+      };
+      const centreCarto = Cartographic.fromCartesian(viewer.camera.pickEllipsoid({ x: rect.width / 2, y: rect.height / 2 }, scene.globe.ellipsoid));
+      const lon0 = centreCarto.longitude * (180 / Math.PI);
+      const lat0 = centreCarto.latitude * (180 / Math.PI);
+      const marker = onScreen(lon0, lat0 + 0.045); // about 5 km north of the clicked point, inside the 10 km circle
+      ds.entities.removeById('qa-here-detail-marker');
+      ds.entities.add({ id: 'qa-here-detail-marker', position: Cartesian3.fromDegrees(marker.lon, marker.lat, marker.height + 10), point: { pixelSize: 18, disableDepthTestDistance: Number.POSITIVE_INFINITY }, description: '<b>qa-here-detail marker</b>' });
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      let empty = null;
+      for (const [dLon, dLat] of [[0, -0.05], [0.06, -0.05], [-0.06, -0.05], [0.06, 0.02], [-0.06, 0.02], [0, -0.09]]) {
+        const spot = onScreen(lon0 + dLon, lat0 + dLat);
+        if (!spot || document.elementFromPoint(spot.page.x, spot.page.y) !== scene.canvas) continue;
+        if (scene.pick(spot.xy) === undefined) { empty = spot; break; }
+      }
+      const markerPick = scene.pick(marker.xy);
+      return {
+        marker: { page: marker.page, onCanvas: document.elementFromPoint(marker.page.x, marker.page.y) === scene.canvas, picksMarker: markerPick?.id?.id === 'qa-here-detail-marker' },
+        empty: empty && { page: empty.page, lon: empty.lon, lat: empty.lat },
+      };
+    });
+    const cardState = () => page.evaluate(() => ({ selected: window.__godsEyeView.viewer.selectedEntity?.id ?? null, hidden: document.getElementById('bio-card').hidden, text: document.getElementById('bio-card').innerText.slice(0, 120) }));
+    if (spots.marker?.picksMarker && spots.empty) {
+      await page.mouse.click(spots.marker.page.x, spots.marker.page.y);
+      await sleep(2000);
+      detail = { ...(await cardState()), outlines: await countOutlines() };
+      await page.mouse.click(spots.empty.page.x, spots.empty.page.y);
+      await sleep(2000);
+      closed = { ...(await cardState()), outlines: await countOutlines() };
+    }
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    restored = await page.evaluate(async () => {
+      const viewer = window.__godsEyeView.viewer;
+      viewer.selectedEntity = undefined;
+      let qaMarkerLeft = false;
+      for (let i = 0; i < viewer.dataSources.length; i += 1) {
+        const ds = viewer.dataSources.get(i);
+        if (ds.name !== 'occurrences') continue;
+        ds.entities.removeById('qa-here-detail-marker');
+        qaMarkerLeft = ds.entities.getById('qa-here-detail-marker') !== undefined;
+      }
+      await window.__godsEyeView.dataManager.setEnabled('occurrences', false, { origin: 'user' });
+      return { occurrencesEnabled: window.__godsEyeView.dataManager.isEnabled('occurrences'), selected: viewer.selectedEntity?.id ?? null, qaMarkerLeft };
+    }).catch((caught) => ({ error: String(caught?.stack || caught).slice(0, 300) }));
   }
-  await page.evaluate(() => {
-    const viewer = window.__godsEyeView.viewer;
-    viewer.selectedEntity = undefined;
-    for (let i = 0; i < viewer.dataSources.length; i += 1) if (viewer.dataSources.get(i).name === 'occurrences') viewer.dataSources.get(i).entities.removeById('qa-here-detail-marker');
-  });
-  await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', false, { origin: 'user' }));
-  const ok = listed.groundPrimitives === 1 && listed.rows >= 1
+  const restoredOk = restored?.occurrencesEnabled === false && restored.selected === null && restored.qaMarkerLeft === false;
+  const ok = error === null && restoredOk && listed?.groundPrimitives === 1 && listed.rows >= 1
     && detail?.selected === 'qa-here-detail-marker' && detail.hidden === false && detail.text.includes('qa-here-detail marker') && detail.outlines.groundPrimitives === 0
     && closed?.selected === null && closed.hidden === true && closed.outlines.groundPrimitives === 0 && closed.outlines.primitives === 0;
-  report('here-detail', ok, { listed, spots, detail, closed });
+  report('here-detail', ok, { listed, spots, detail, closed, restored, ...(error ? { error } : {}) });
 }
 
 report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10), upstreamTileErrors: upstreamTileErrors.slice(0, 10) });
