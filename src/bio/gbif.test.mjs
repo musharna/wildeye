@@ -5,7 +5,7 @@ import {
   LICENSES, yearRange, yearLabel, densityTileTemplate, speciesNearUrl, gbifPortalUrl, parseSpeciesNear,
   inatSuggestUrl, parseInatSuggest, gbifSuggestUrl, parseGbifSuggest, gbifMatchUrl, parseGbifMatch,
   speciesUrl, parseSpeciesName, createRateLimiter, createPool, fetchJson, RequestError, createBioClient, circlePolygonWkt, RADII_KM,
-  polygonRefusal, gbifPortalAnyLocationUrl, SPECIES_MAP_LEGEND,
+  polygonRefusal, gbifPortalAnyLocationUrl, SPECIES_MAP_LEGEND, hexPerTileForZoom, SPECIES_TILE_TAGS,
 } from './gbif.js';
 
 const NOW = new Date('2026-09-13T12:00:00Z');
@@ -34,10 +34,23 @@ test('density tiles use the adhoc endpoint with both licence filters and the yea
   // view its colours were fitted at
   assert.equal(recent.searchParams.get('style'), 'classic-noborder.poly');
   assert.equal(recent.searchParams.get('bin'), 'hex');
-  assert.equal(recent.searchParams.get('hexPerTile'), '30');
+  assert.equal(recent.searchParams.get('hexPerTile'), '{hexPerTile}', 'R-7m: Cesium fills in the hexagon count for each zoom (SPECIES_TILE_TAGS)');
   assert.equal(tile('all').searchParams.has('year'), false);
-  assert.ok(densityTileTemplate({ taxonKey: 1, years: 'all', now: NOW }).includes('/{z}/{x}/{y}@1x.png?'), 'Cesium placeholders stay unencoded');
+  const template = densityTileTemplate({ taxonKey: 1, years: 'all', now: NOW });
+  assert.ok(template.includes('/{z}/{x}/{y}@1x.png?') && template.includes('&hexPerTile={hexPerTile}&'), `Cesium placeholders stay unencoded: ${template}`);
   assert.throws(() => densityTileTemplate({ taxonKey: 0, years: 'all', now: NOW }), /taxonKey/);
+});
+
+// R-7m: adhoc bins one point per Elasticsearch geohash cell into hexagons, so a hexagon no point lands in draws empty even when it
+// holds records. Measured 2026-09-13 against the point-level density tiles (monarch, and Bombus affinis with under 5,000 CC0/CC BY
+// records in 2017-2026): no single hexPerTile kept that share at or under 1% at zooms 3, 6 and 9 for both species; 6 at zooms 4-6,
+// where GBIF's geohash length is 4, and 4 at every other zoom did (spec: Implementation notes).
+test('hexagons per tile are 6 at zooms 4 to 6 and 4 at every other zoom, filled in for each tile through a Cesium custom tag', () => {
+  assert.deepEqual(Array.from({ length: 15 }, (_, z) => hexPerTileForZoom(z)), [4, 4, 4, 4, 6, 6, 6, 4, 4, 4, 4, 4, 4, 4, 4]);
+  for (const bad of [-1, 1.5, '3', null]) assert.throws(() => hexPerTileForZoom(bad), /zoom/, String(bad));
+  assert.equal(SPECIES_TILE_TAGS.hexPerTile({}, 0, 0, 5), 6);
+  assert.equal(SPECIES_TILE_TAGS.hexPerTile({}, 0, 0, 9), 4);
+  assert.ok(Object.isFrozen(SPECIES_TILE_TAGS));
 });
 
 // R-7k: GBIF colours each hexagon by its absolute record count, in classes set by the tile style (github.com/gbif/maps,

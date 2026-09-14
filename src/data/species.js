@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { densityTileTemplate, RADII_KM } from '../bio/gbif.js';
+import { densityTileTemplate, RADII_KM, SPECIES_TILE_TAGS } from '../bio/gbif.js';
 import { setStackedImagery } from './rasterDrape.js';
 
 /**
@@ -43,7 +43,7 @@ export function mergeSpeciesParams(current, request = {}) {
 }
 
 export function createSpeciesLayer({
-  providerFor = (url) => new Cesium.UrlTemplateImageryProvider({ url, maximumLevel: 14, credit: 'GBIF.org' }),
+  providerFor = (url, options) => new Cesium.UrlTemplateImageryProvider({ url, maximumLevel: 14, credit: 'GBIF.org', ...options }),
   imageryLayerFor = (provider, options) => new Cesium.ImageryLayer(provider, options),
   stack = setStackedImagery,
   now = () => new Date(),
@@ -73,7 +73,7 @@ export function createSpeciesLayer({
     _lastError = null;
     if (!_viewer || !_params.taxonKey) return;
     const generation = _generation;
-    const provider = providerFor(densityTileTemplate({ taxonKey: _params.taxonKey, years: _params.years, now: now() }));
+    const provider = providerFor(densityTileTemplate({ taxonKey: _params.taxonKey, years: _params.years, now: now() }), { customTags: SPECIES_TILE_TAGS });
     provider.errorEvent.addEventListener((tileError) => {
       if (generation !== _generation) return;
       const error = tileError?.error ?? tileError;

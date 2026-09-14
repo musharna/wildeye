@@ -140,7 +140,10 @@ What the build changed from the design above, and why.
 - Hexagons can mismatch where Cesium mixes GBIF zoom levels across the view. Square bins were tested at 128 px (empty stripes)
   and 256 px (a blurred map) and rejected.
 - The `adhoc` endpoint aggregates records into Elasticsearch geohash cells whose size depends on the zoom, and bins one point per
-  cell into hexagons (github.com/gbif/maps `AdHocMapsResource`, github.com/gbif/occurrence `BaseEsHeatmapRequestBuilder`).
-  Where a hexagon is about one cell wide or smaller, some hexagons that hold records draw empty: with `hexPerTile=30`, 19% of the
-  hexagons with monarch records in tile 3/2/2, 53% in 6/16/23 and 74% in 9/130/190 (compared with the point-level `density`
-  tiles, 2026-09-13).
+  cell into hexagons (github.com/gbif/maps `AdHocMapsResource`, github.com/gbif/occurrence `BaseEsHeatmapRequestBuilder`), so a
+  hexagon that no cell's point falls in draws empty even when it holds records.
+- Measured against the point-level `density` tiles for the monarch and for Bombus affinis (2017–2026, 2026-09-13), `hexPerTile=30`
+  drew 19% to 69% of the hexagons with monarch records empty at zooms 3, 6 and 9, no single `hexPerTile` kept that share at or
+  under 1% at all three zooms for both species, and so the tiles use 6 hexagons per tile at zooms 4–6, where GBIF's geohash
+  length is 4, and 4 at every other zoom, which drew at most 0.56% empty at zooms 3, 6 and 9 and up to 3.4% for Bombus affinis
+  at zooms 7 and 8.

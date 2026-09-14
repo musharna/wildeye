@@ -6,6 +6,7 @@
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
+import { hexPerTileForZoom } from '../src/bio/gbif.js';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -275,12 +276,16 @@ if (CHECKS.has('search')) {
     const q = new URL(u).searchParams;
     return u.includes('/v2/map/occurrence/adhoc/') && q.getAll('license').includes('CC0_1_0') && q.getAll('license').includes('CC_BY_4_0') && q.get('taxonKey') === '5133088' && q.get('srs') === 'EPSG:3857';
   });
+  // R-7m: Cesium fills hexPerTile for each tile's zoom (SPECIES_TILE_TAGS), so every requested tile carries the value for its own zoom.
+  const zoomOf = (u) => new URL(u).pathname.split('/')[5];
+  const hexMismatches = tiles.filter((u) => new URL(u).searchParams.get('hexPerTile') !== String(hexPerTileForZoom(Number(zoomOf(u))))).map((u) => ({ z: zoomOf(u), hexPerTile: new URL(u).searchParams.get('hexPerTile') }));
+  const hexPerTileByZoom = Object.fromEntries([...new Set(tiles.map(zoomOf))].sort((a, b) => a - b).map((z) => [z, [...new Set(tiles.filter((u) => zoomOf(u) === z).map((u) => new URL(u).searchParams.get('hexPerTile')))]]));
   const params = await page.evaluate(() => window.__godsEyeView.dataManager.getLayerParams('species'));
   // Ruling R-2a: the species layer counts only real HTTP/network tile errors (GBIF answers empty tiles with 204),
   // so after the tiles load its status must carry no error.
   const stats = await page.evaluate(() => window.__godsEyeView.dataManager.layers.get('species')?.module?.getStats() ?? null);
   await shot('search');
-  report('search', first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && stats?.error === null, { first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, srs: tiles[0] ? new URL(tiles[0]).searchParams.get('srs') : null, sample: tiles[0] || null });
+  report('search', first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && hexMismatches.length === 0 && stats?.error === null, { first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, hexPerTileByZoom, hexMismatches: hexMismatches.slice(0, 5), srs: tiles[0] ? new URL(tiles[0]).searchParams.get('srs') : null, sample: tiles[0] || null });
 }
 
 let hereSearch = null;

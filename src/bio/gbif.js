@@ -117,17 +117,31 @@ export const SPECIES_MAP_LEGEND = Object.freeze({
 });
 
 /**
+ * Hexagons per tile side at GBIF zoom `z`. `adhoc` aggregates records into Elasticsearch geohash cells whose length GBIF sets by zoom
+ * (github.com/gbif/occurrence BaseEsHeatmapRequestBuilder PRECISION_LOOKUP: 4 at zooms 4-6) and bins one point per cell, so a hexagon
+ * no point lands in draws empty even when it holds records. 6 at zooms 4-6 and 4 at every other zoom are the finest values measured
+ * to keep that share at or under 1% at zooms 3, 6 and 9 for a common and a sparse species (spec: Implementation notes).
+ */
+export function hexPerTileForZoom(z) {
+  if (!Number.isInteger(z) || z < 0) throw new Error(`hexPerTileForZoom: bad zoom ${z}`);
+  return z >= 4 && z <= 6 ? 6 : 4;
+}
+
+/** Cesium UrlTemplateImageryProvider `customTags` that fill densityTileTemplate's {hexPerTile} with the value for each tile's zoom. */
+export const SPECIES_TILE_TAGS = Object.freeze({ hexPerTile: (imageryProvider, x, y, level) => hexPerTileForZoom(level) });
+
+/**
  * Cesium URL template for GBIF hexagon tiles of one taxon. `adhoc`, because `density` ignores `license=`. `srs=EPSG:3857`,
  * because `adhoc` defaults to EPSG:4326 while Cesium's UrlTemplateImageryProvider tiles in Web Mercator. The style comes from
  * SPECIES_MAP_LEGEND: `classic-noborder.poly`, whose fills are opaque, so with SPECIES_ALPHA 1 a hexagon's colour no longer depends
  * on the imagery under it. The legend colours match the map at the 12,000 km view they were fitted at; the top class is predicted,
- * not sampled (spec: Implementation notes).
+ * not sampled (spec: Implementation notes). SPECIES_TILE_TAGS fills `{hexPerTile}` for each tile's zoom (hexPerTileForZoom).
  */
 export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`densityTileTemplate: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: SPECIES_MAP_LEGEND.style, bin: 'hex', hexPerTile: '30', srs: 'EPSG:3857' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: SPECIES_MAP_LEGEND.style, bin: 'hex', hexPerTile: '{hexPerTile}', srs: 'EPSG:3857' });
   appendRecordFilters(params, years, now);
-  return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
+  return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${String(params).replace('%7BhexPerTile%7D', '{hexPerTile}')}`;
 }
 
 /**
