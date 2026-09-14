@@ -192,6 +192,7 @@ test('circlePolygonWkt: a closed counter-clockwise ring of SEARCH_POLYGON_VERTIC
 // longest links have the longest coordinates: every vertex with a 3-digit negative longitude and a 2-digit negative latitude, which a ring
 // just inside the ±85° and ±180° refusal limits gives.
 test('gbif.org area links stay at most 1,000 characters at every radius, for the longest coordinates a polygon can have', () => {
+  const lengths = [];
   for (const radiusKm of RADII_KM) {
     const lat = -84.9;
     let lon = -180;
@@ -202,7 +203,18 @@ test('gbif.org area links stay at most 1,000 characters at every radius, for the
     assert.equal(pairs.length, SEARCH_POLYGON_VERTICES + 1);
     for (const pair of pairs) assert.match(pair, /^-1\d\d\.\d+ -8\d\.\d+$/, `${radiusKm} km: the longest coordinates`);
     assert.ok(href.length <= 1000, `${radiusKm} km at ${lat},${lon}: the gbif.org link is ${href.length} characters`);
+    lengths.push(href.length);
   }
+  // R9-M2: the cases above reach 869–875 characters, and nearby centres 889. The bound over every polygon puts each of the ring's
+  // SEARCH_POLYGON_VERTICES + 1 vertices at the longest a vertex can be, a 3-digit negative longitude and a 2-digit negative latitude with
+  // 5 decimals, in the link with the most filters (the recent years).
+  const longestVertex = '-179.99999 -84.99999';
+  assert.match(longestVertex, /^-1\d\d\.\d{5} -8\d\.\d{5}$/);
+  const bound = new URL(gbifPortalUrl({ lat: 0, lon: 0, radiusKm: 50, years: 'recent', now: NOW }));
+  bound.searchParams.set('geometry', `POLYGON((${Array(SEARCH_POLYGON_VERTICES + 1).fill(longestVertex).join(',')}))`);
+  assert.ok(Math.max(...lengths) <= bound.href.length, `the bound (${bound.href.length}) is at least every case (${lengths.join(', ')})`);
+  assert.ok(bound.href.length <= 1000, `every ${SEARCH_POLYGON_VERTICES}-vertex gbif.org area link is at most ${bound.href.length} characters`);
+  console.log(`longest possible gbif.org area link at ${SEARCH_POLYGON_VERTICES} vertices: ${bound.href.length} characters; cases: ${lengths.join(', ')}`);
 });
 
 // F9: a circle that cannot be a polygon was searched with geoDistance before the polygon change, and still is.
