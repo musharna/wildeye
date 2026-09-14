@@ -27,7 +27,7 @@ const yearsChip = (years) => ({ target: { closest: () => ({ dataset: { years } }
 // The rows in the block's content element, a list labelled by the block's heading in index.html: [link href, link text, count, note or null].
 const datasetRowsIn = (content) => content.children[0].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
 
-function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' }), suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
+function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' }), suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, clearTimer = () => {}, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
   const doc = { activeElement: null, getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag, focus() { doc.activeElement = this; } }) };
   for (const node of Object.values(els)) node.focus = () => { doc.activeElement = node; };
@@ -64,7 +64,7 @@ function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', can
   };
   const whatLivesHere = { armed: false, arm() {}, disarm() {} };
   const resizes = [];
-  const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer: () => {}, observeSize: (targets, onChange) => { resizes.push({ targets, onChange }); } });
+  const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer, observeSize: (targets, onChange) => { resizes.push({ targets, onChange }); } });
   return { panel, els, calls, doc, resizes };
 }
 
@@ -183,6 +183,84 @@ test('Escape hides a visible suggestion list and marks the key handled; with no 
   const second = keydown('Escape');
   input.listeners.keydown(second);
   assert.equal(second.prevented, 0, 'with no list showing, Escape is left for the card and WHAT LIVES HERE');
+});
+
+// Injected timers for the suggestion debounce: scheduled callbacks run only when the test fires them.
+function fakeTimers() {
+  let next = 1;
+  const pending = new Map();
+  return {
+    setTimer: (fn) => { const id = next; next += 1; pending.set(id, fn); return id; },
+    clearTimer: (id) => { pending.delete(id); },
+    pending: () => pending.size,
+    fireAll: () => { const due = [...pending.values()]; pending.clear(); for (const fn of due) fn(); },
+  };
+}
+
+// M3 (final review): choosing ends the name search. "mona" was sent and is still out; "monarch" is typed and a suggestion chosen within the
+// 300 ms debounce, while its GBIF match is looked up. The pending debounce must not send another search, and the old answer must not reopen
+// the list under the choice.
+test('choosing a suggestion cancels the pending debounce and aborts the name search still out, so no list reopens under the choice', async () => {
+  const timers = fakeTimers();
+  const sent = [];
+  let finishMatch = null;
+  const { panel, els } = panelRig({
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+    suggest: (q, { signal }) => new Promise((resolve, reject) => {
+      sent.push({ q, signal, resolve });
+      signal.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')), { once: true });
+    }),
+    match: () => new Promise((resolve) => { finishMatch = resolve; }),
+  });
+  const input = els['species-search'];
+  input.value = 'mona';
+  input.listeners.input();
+  timers.fireAll();
+  assert.deepEqual(sent.map((s) => s.q), ['mona'], 'the first search is out');
+  input.value = 'monarch';
+  input.listeners.input();
+  assert.equal(timers.pending(), 1, 'the next search waits for the debounce');
+  const choosing = panel.choose({ gbifKey: null, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' });
+  assert.equal(timers.pending(), 0, 'the choice clears the pending search');
+  assert.equal(sent[0].signal.aborted, true, 'and aborts the search still out');
+  timers.fireAll();
+  sent[0].resolve({ source: 'inaturalist', items: [MONARCH] });
+  await settle();
+  assert.deepEqual(sent.map((s) => s.q), ['mona'], 'no search is sent while the choice is looked up');
+  assert.equal(els['species-suggestions'].hidden, true, 'no list reopens under the choice');
+  finishMatch({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' });
+  assert.equal(await choosing, true);
+});
+
+// M3: Enter picks the first suggestion only from a list built for what the box holds now. A list for "mona" is showing when "monarch" is typed
+// and Enter pressed before its search runs: nothing is chosen. Positive control: once the list for "monarch" shows, Enter chooses its first row.
+test('Enter chooses only from a suggestion list built for the query in the box', async () => {
+  const timers = fakeTimers();
+  const rows = {
+    mona: [{ gbifKey: null, scientificName: 'Monarda fistulosa', commonName: 'Wild Bergamot', rank: 'species' }],
+    monarch: [{ gbifKey: null, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' }],
+  };
+  const { els, calls } = panelRig({ setTimer: timers.setTimer, clearTimer: timers.clearTimer, suggest: async (q) => ({ source: 'inaturalist', items: rows[q] }) });
+  const list = els['species-suggestions'];
+  // The fake list finds its first row's button like the real one, and clicking it runs the row's listener.
+  list.querySelector = (selector) => { const button = selector === 'button' ? list.children[0]?.children[0] : null; return button ? { click: () => button.listeners.click() } : null; };
+  const input = els['species-search'];
+  input.value = 'mona';
+  input.listeners.input();
+  timers.fireAll();
+  await settle();
+  assert.equal(list.hidden, false, 'the list for "mona" shows');
+  input.value = 'monarch';
+  input.listeners.input();
+  input.listeners.keydown({ key: 'Enter' });
+  await settle();
+  assert.deepEqual(calls.match, [], 'Enter does not choose from the list built for "mona"');
+  timers.fireAll();
+  await settle();
+  input.listeners.keydown({ key: 'Enter' });
+  await settle();
+  assert.deepEqual(calls.match, ['Danaus plexippus'], 'positive control: Enter chooses from the list built for "monarch"');
 });
 
 // R-7t: GBIF draws each cell as a circle sized, filled and faded by its record count, so the legend names each class: a circle at the

@@ -106,6 +106,7 @@ export function createSpeciesPanel({
   const more = el('species-more');
   let timer = null;
   let suggestAbort = null;
+  let listQuery = null; // M3: the query the suggestion list showing was built for
   let chooseAbort = null;
   let lookingUpKey = null;
   // M1: { taxonKey, canonicalName } while the chosen taxon came from a GBIF match that was not EXACT.
@@ -243,6 +244,7 @@ export function createSpeciesPanel({
   function clearSuggestions() {
     list.replaceChildren();
     list.hidden = true;
+    listQuery = null;
   }
 
   function showSuggestions(result, query) {
@@ -259,6 +261,7 @@ export function createSpeciesPanel({
       list.appendChild(li);
     }
     list.hidden = result.items.length === 0;
+    listQuery = query;
     if (result.items.length === 0 && result.source !== 'none') status.textContent = `No names match "${query}".`;
   }
 
@@ -298,6 +301,10 @@ export function createSpeciesPanel({
   async function choose(item) {
     chooseAbort?.abort();
     chooseAbort = new AbortController();
+    // M3: a choice ends the name search. A pending debounce or a request still out would reopen the list under the choice.
+    clearTimer(timer);
+    timer = null;
+    suggestAbort?.abort();
     clearSuggestions();
     status.textContent = `Looking up ${item.scientificName} in GBIF…`;
     try {
@@ -330,7 +337,8 @@ export function createSpeciesPanel({
     timer = setTimer(() => { void requestSuggestions(); }, SUGGEST_DEBOUNCE_MS);
   });
   input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') list.querySelector('button')?.click();
+    // M3: Enter picks the first row only of a list showing for what the box holds now, not of one built for an earlier query.
+    if (event.key === 'Enter' && !list.hidden && listQuery === input.value.trim()) list.querySelector('button')?.click();
     // M2: an Escape that hides a visible list does only that, and says so, so the card and WHAT LIVES HERE leave it alone.
     if (event.key === 'Escape' && !list.hidden) {
       clearSuggestions();
