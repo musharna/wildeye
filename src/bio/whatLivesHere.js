@@ -4,7 +4,7 @@ import { EARTH_RADIUS_KM, gbifPortalAnyLocationUrl, gbifPortalUrl, polygonRefusa
 /**
  * "What lives here" (spec: docs/superpowers/specs/2026-09-13-species-search-design.md). The SPECIES panel
  * arms a one-shot click. A click on the ground lists the 20 species with the most CC0 and CC BY GBIF records
- * within the chosen radius. A click on a marker is left to the normal click; a click on the sky stays armed. The searched
+ * within the chosen radius, and names the 5 datasets with the most of those records, with DOI links (R-7u). A click on a marker is left to the normal click; a click on the sky stays armed. The searched
  * circle is outlined on the ground with a small cross at the clicked point, neither pickable, while the card shows that search's
  * status or list: the outline goes when the card
  * stops showing it for any reason (closed, dismissed, or replaced by a marker's details), when WHAT LIVES HERE is armed again, and
@@ -132,11 +132,17 @@ export function createWhatLivesHere({
         card.showStatus({ heading: HEADING, message: `No CC0/CC BY records within ${radiusKm} km for ${yearLabel(years)}. Try a larger radius or all years.` });
         return near;
       }
-      const names = await Promise.all(near.species.map((s) => client.speciesName(s.key, { signal }).catch((error) => {
+      // Names and datasets are looked up together under the search's signal, so a newer search or a cancel aborts both. A failed lookup
+      // is logged and listed with its error; an abort ends the search.
+      const lookUp = (items, find, what, failed) => Promise.all(items.map((item) => find(item.key).catch((error) => {
         if (error?.name === 'AbortError') throw error;
-        console.error('[what-lives-here] name lookup failed', { key: s.key, error });
-        return { key: s.key, scientificName: `GBIF taxon ${s.key}`, commonName: null, error: error.message };
+        console.error(`[what-lives-here] ${what} lookup failed`, { key: item.key, error });
+        return failed(item, error);
       })));
+      const [names, datasets] = await Promise.all([
+        lookUp(near.species, (key) => client.speciesName(key, { signal }), 'name', (s, error) => ({ key: s.key, scientificName: `GBIF taxon ${s.key}`, commonName: null, error: error.message })),
+        lookUp(near.datasets, (key) => client.dataset(key, { signal }), 'dataset', (d, error) => ({ key: d.key, title: null, doi: null, error: error.message })),
+      ]);
       // gbif.org's location filter is a polygon. Where the circle cannot be one (the search used geoDistance), the card says
       // so and links the same licences and years with no location filter.
       const circleOnGbif = polygonRefusal({ lat, lon, radiusKm }) === null;
@@ -144,6 +150,7 @@ export function createWhatLivesHere({
         heading: HEADING,
         filterLine: `CC0 and CC BY records · ${yearLabel(years)} · within ${radiusKm} km · ${near.total.toLocaleString('en-US')} records`,
         entries: near.species.map((s, i) => ({ key: s.key, count: s.count, scientificName: names[i].scientificName, commonName: names[i].commonName, error: names[i].error })),
+        datasets: near.datasets.map((d, i) => ({ key: d.key, count: d.count, title: datasets[i].title, doi: datasets[i].doi, error: datasets[i].error })),
         footer: circleOnGbif ? 'Occurrence data: GBIF.org, CC0 and CC BY records only' : 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations',
         footerHref: circleOnGbif ? gbifPortalUrl({ lat, lon, radiusKm, years }) : gbifPortalAnyLocationUrl({ years }),
         footerNote: circleOnGbif ? null : "gbif.org can't show this area as a circle",

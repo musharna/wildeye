@@ -3,9 +3,11 @@
  * Cesium's info box is off (src/main.js `infoBox: false`), so until this card the details each biology layer
  * attaches to its entities, citation and licence included, never reached the screen (verified on the live
  * site 2026-09-13). Detail mode shows the clicked entity's description, which the layer builds with escaped
- * fields and the card passes through DOMPurify (see sanitizeDescription). List mode shows "what lives here"; GBIF and iNaturalist strings only ever go through textContent.
+ * fields and the card passes through DOMPurify (see sanitizeDescription). List mode shows "what lives here", with its top datasets in the
+ * foot; GBIF and iNaturalist strings only ever go through textContent.
  */
 import DOMPurify from 'dompurify';
+import { createDatasetList } from './datasetList.js';
 
 export const BIO_CARD_LAYER_IDS = new Set([
   'arbonet', 'birds', 'cetaceans', 'drought', 'ecoregions', 'fires', 'fishing', 'gfw', 'h5n1', 'hpai',
@@ -189,10 +191,12 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         }
       });
     },
-    showList({ heading, filterLine, entries, footer, footerHref, footerNote = null, onRow }) {
+    /** `datasets` ({ key, count, title, doi, error }, facet order) are named above the foot's gbif.org link (R-7u). */
+    showList({ heading, filterLine, entries, datasets = [], footer, footerHref, footerNote = null, onRow }) {
       showListContent(heading, () => {
         filter.textContent = filterLine;
         renderListInto(body, listRows(entries), doc, onRow);
+        if (datasets.length) foot.appendChild(createDatasetList(doc, datasets));
         if (footerNote) {
           const note = doc.createElement('span');
           note.className = 'bio-card-foot-note';

@@ -1,8 +1,10 @@
 /**
  * SPECIES panel (spec: docs/superpowers/specs/2026-09-13-species-search-design.md): name search with
- * suggestions, the chosen species with a map switch, the "What lives here" button, the record-count legend, and the labelled year and radius chips.
+ * suggestions, the chosen species with a map switch, the "What lives here" button, the record-count legend with the top datasets behind the
+ * map, and the labelled year and radius chips.
  */
-import { SPECIES_MAP_LEGEND } from './gbif.js';
+import { SPECIES_MAP_LEGEND, gbifPortalTaxonUrl, yearLabel } from './gbif.js';
+import { createDatasetList } from './datasetList.js';
 
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
@@ -80,6 +82,7 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
   const chosenName = el('species-chosen-name');
   const toggle = el('species-toggle');
   const legend = el('species-legend');
+  const datasetsBox = el('species-datasets');
   const yearChips = el('species-years');
   const radiusChips = el('species-radius');
   const armButton = el('species-what-lives-here');
@@ -87,6 +90,12 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
   let suggestAbort = null;
   let chooseAbort = null;
   let lookingUpKey = null;
+  // The top datasets block (R-7u): the taxon and years its content or its search in flight is for, that search's controller, and whether
+  // it has finished (shown, or failed into the status line).
+  let datasetsFor = null;
+  let datasetsAbort = null;
+  let datasetsSettled = false;
+  let datasetsFailed = false;
   renderLegendInto(legend, doc);
 
   const params = () => dataManager.getLayerParams('species') || { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
@@ -111,13 +120,76 @@ export function createSpeciesPanel({ doc = document, dataManager, speciesLayer, 
     }
     toggle.textContent = on ? 'MAP ON' : 'MAP OFF';
     toggle.setAttribute('aria-checked', String(on));
-    legend.hidden = !(on && p.taxonKey); // below the action, outside the chosen-species block
+    const mapped = Boolean(on && p.taxonKey);
+    legend.hidden = !mapped; // below the action, outside the chosen-species block
+    datasetsBox.hidden = !mapped; // the datasets behind the map show and hide with its legend
+    if (mapped) void showDatasets(p);
+    else stopDatasets();
     for (const chip of yearChips.querySelectorAll('[data-years]')) chip.setAttribute('aria-pressed', String(chip.dataset.years === p.years));
     for (const chip of radiusChips.querySelectorAll('[data-radius]')) chip.setAttribute('aria-pressed', String(Number(chip.dataset.radius) === p.radiusKm));
     const stats = speciesLayer.getStats();
     if (stats.error) status.textContent = `GBIF ${stats.error} (${stats.tileFailures} tile errors)`;
     armButton.setAttribute('aria-pressed', String(whatLivesHere.armed));
     armButton.textContent = whatLivesHere.armed ? 'CLICK THE GLOBE · ESC CANCELS' : 'WHAT LIVES HERE';
+  }
+
+  /**
+   * R-7u: the 3 datasets with the most CC0 / CC BY records of the mapped taxon in the chosen years, named with DOI links, then a link to
+   * those records on gbif.org. One search per taxon and years: a change aborts the search in flight, and an answer for anything but the
+   * current taxon and years is dropped. A failed search shows in the status line; a failed dataset lookup shows in its row.
+   */
+  async function showDatasets({ taxonKey, years }) {
+    const key = `${taxonKey}|${years}`;
+    if (key === datasetsFor) return;
+    datasetsAbort?.abort();
+    const controller = new AbortController();
+    datasetsAbort = controller;
+    datasetsFor = key;
+    datasetsSettled = false;
+    datasetsFailed = false;
+    const loading = doc.createElement('span');
+    loading.className = 'species-datasets-loading';
+    loading.textContent = 'Top datasets: looking them up…';
+    datasetsBox.replaceChildren(loading);
+    const { signal } = controller;
+    try {
+      const { datasets } = await client.taxonDatasets({ taxonKey, years }, { signal });
+      if (signal.aborted) return;
+      const found = await Promise.all(datasets.map((d) => client.dataset(d.key, { signal }).then(
+        (info) => ({ key: d.key, count: d.count, title: info.title, doi: info.doi, error: undefined }),
+        (error) => {
+          if (error?.name === 'AbortError') throw error;
+          console.error('[species] dataset lookup failed', { key: d.key, taxonKey, years, error });
+          return { key: d.key, count: d.count, title: null, doi: null, error: error.message };
+        },
+      )));
+      if (signal.aborted) return;
+      const link = doc.createElement('a');
+      link.className = 'species-datasets-link';
+      link.href = gbifPortalTaxonUrl({ taxonKey, years });
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = years === 'all' ? 'All CC0/CC BY records on GBIF.org' : `All ${yearLabel(years)} CC0/CC BY records on GBIF.org`;
+      datasetsBox.replaceChildren(createDatasetList(doc, found), link);
+      datasetsSettled = true;
+    } catch (error) {
+      if (error?.name === 'AbortError' || signal.aborted) return;
+      console.error('[species] dataset search failed', { taxonKey, years, error });
+      datasetsBox.replaceChildren();
+      status.textContent = `GBIF dataset search failed (${error.message})`;
+      datasetsSettled = true;
+      datasetsFailed = true;
+    }
+  }
+
+  /** The block is hidden: abort a search still in flight; a finished list is kept, a failed one is searched again when the map returns. */
+  function stopDatasets() {
+    if (datasetsFor === null) return;
+    if (!datasetsSettled) datasetsAbort?.abort();
+    if (!datasetsSettled || datasetsFailed) {
+      datasetsFor = null;
+      datasetsBox.replaceChildren();
+    }
   }
 
   function clearSuggestions() {

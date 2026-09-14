@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createSpeciesPanel, suggestionText } from './speciesPanel.js';
-import { SPECIES_MAP_LEGEND } from './gbif.js';
+import { SPECIES_MAP_LEGEND, gbifPortalTaxonUrl, yearLabel } from './gbif.js';
 import { DATA_CREDITS } from '../data/dataCredits.js';
 
 function fakeElement() {
@@ -18,14 +18,21 @@ function fakeElement() {
   };
 }
 
-const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-years', 'species-radius', 'species-what-lives-here'];
+const PANEL_IDS = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-chosen-name', 'species-toggle', 'species-legend', 'species-datasets', 'species-years', 'species-radius', 'species-what-lives-here'];
+const INAT_RG = '50c9509d-22c7-4a22-a47d-8c48425ef4a7';
+const OTHER_DATASET = '6ac3f774-d9fb-4796-b3e9-92bf6c81c084';
+const settle = async (turns = 20) => { for (let i = 0; i < turns; i += 1) await new Promise((resolve) => setImmediate(resolve)); };
+const MONARCH = { gbifKey: 5133088, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' };
+const yearsChip = (years) => ({ target: { closest: () => ({ dataset: { years } }) } });
+// The rows under "Top datasets": [link href, link text, count, note or null].
+const datasetRowsIn = (box) => box.children[0].children[1].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
 
-function panelRig({ match = async () => 5133088, suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, enabled: initiallyEnabled = false } = {}) {
+function panelRig({ match = async () => 5133088, suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
   const doc = { getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag }) };
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
   let enabled = initiallyEnabled;
-  const calls = { params: [], enable: [], match: [] };
+  const calls = { params: [], enable: [], match: [], taxonDatasets: [], dataset: [] };
   const dataManager = {
     getLayerParams: () => ({ ...params }),
     setLayerParams: (id, p, options) => { calls.params.push({ id, p, origin: options.origin }); params = { ...params, ...p }; return true; },
@@ -38,6 +45,16 @@ function panelRig({ match = async () => 5133088, suggest = async () => ({ source
     match: async (name) => { calls.match.push(name); return match(name); },
     speciesName: async (key) => ({ key, scientificName: 'x', commonName: null }),
     suggest: (q, options) => suggest(q, options),
+    taxonDatasets: async (args, options) => {
+      calls.taxonDatasets.push({ args, signal: options?.signal });
+      if (taxonDatasets) return taxonDatasets(args, options);
+      return { total: 42534, datasets: [{ key: INAT_RG, count: 41111 }, { key: OTHER_DATASET, count: 306 }] };
+    },
+    dataset: async (key, options) => {
+      calls.dataset.push(key);
+      if (dataset) return dataset(key, options);
+      return key === INAT_RG ? { key, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' } : { key, title: 'Dataset without a DOI', doi: null };
+    },
   };
   const whatLivesHere = { armed: false, arm() {}, disarm() {} };
   const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer: () => {} });
@@ -157,6 +174,81 @@ test('the colour legend shows only while the map of a chosen species is on', asy
   assert.equal(els['species-legend'].hidden, true, 'map off again');
 });
 
+// R-7u: while the map of a chosen species is on, the panel names the top 3 datasets behind it (that taxon, the chosen years, CC0 and CC BY
+// records) with DOI links, and links the same records on gbif.org. The block hides with the legend.
+test('the panel lists the top datasets of the mapped taxon with a gbif.org link to its records, and hides them with the legend', async () => {
+  const { panel, els, calls } = panelRig();
+  const box = els['species-datasets'];
+  assert.equal(box.hidden, true, 'no species chosen');
+  await panel.choose(MONARCH);
+  await settle();
+  assert.deepEqual(calls.taxonDatasets.map((c) => c.args), [{ taxonKey: 5133088, years: 'recent' }]);
+  assert.deepEqual(calls.dataset, [INAT_RG, OTHER_DATASET], 'each listed dataset is looked up, in facet order');
+  assert.equal(box.hidden, false);
+  assert.deepEqual(box.children.map((child) => [child.tag, child.className]), [['div', 'dataset-list'], ['a', 'species-datasets-link']]);
+  assert.deepEqual(datasetRowsIn(box), [
+    ['https://doi.org/10.15468/ab3s5x', 'iNaturalist Research-grade Observations', '41,111', null],
+    [`https://www.gbif.org/dataset/${OTHER_DATASET}`, 'Dataset without a DOI', '306', null],
+  ]);
+  const link = box.children[1];
+  assert.deepEqual([link.href, link.target, link.rel, link.textContent], [gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'recent' }), '_blank', 'noopener noreferrer', `All ${yearLabel('recent')} CC0/CC BY records on GBIF.org`]);
+  panel.render();
+  await settle();
+  assert.equal(calls.taxonDatasets.length, 1, 'a render with the same taxon and years sends nothing new');
+  els['species-toggle'].listeners.click();
+  await settle();
+  assert.equal(els['species-legend'].hidden, true);
+  assert.equal(box.hidden, true, 'map off hides the datasets with the legend');
+  assert.equal(calls.taxonDatasets.length, 1);
+});
+
+test('new years or a new taxon abort the stale dataset search, and its late answer is never shown', async () => {
+  // A client that answers even after its signal aborted: the panel itself must drop the stale answer.
+  const pending = [];
+  const { panel, els } = panelRig({ taxonDatasets: (args, { signal }) => new Promise((resolve) => { pending.push({ args, signal, resolve }); }) });
+  const box = els['species-datasets'];
+  await panel.choose(MONARCH);
+  await settle();
+  assert.deepEqual(pending.map((p) => p.args), [{ taxonKey: 5133088, years: 'recent' }]);
+  els['species-years'].listeners.click(yearsChip('all'));
+  await settle();
+  assert.deepEqual(pending.map((p) => [p.args, p.signal.aborted]), [[{ taxonKey: 5133088, years: 'recent' }, true], [{ taxonKey: 5133088, years: 'all' }, false]]);
+  pending[1].resolve({ total: 306, datasets: [{ key: OTHER_DATASET, count: 306 }] });
+  pending[0].resolve({ total: 41111, datasets: [{ key: INAT_RG, count: 41111 }] });
+  await settle();
+  assert.deepEqual(datasetRowsIn(box).map((row) => row[1]), ['Dataset without a DOI'], 'the answer for the current years only');
+  assert.equal(box.children[1].href, gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'all' }));
+  await panel.chooseTaxon({ taxonKey: 5220086, name: 'Humpback Whale' });
+  await settle();
+  assert.deepEqual(pending[2].args, { taxonKey: 5220086, years: 'all' });
+  els['species-years'].listeners.click(yearsChip('recent'));
+  await settle();
+  assert.equal(pending[2].signal.aborted, true, 'a change while a search is in flight aborts it');
+  pending[2].resolve({ total: 1, datasets: [{ key: INAT_RG, count: 1 }] });
+  await settle();
+  assert.notEqual(box.children[1]?.href, gbifPortalTaxonUrl({ taxonKey: 5220086, years: 'all' }), 'the aborted answer is not shown');
+  assert.deepEqual(pending[3].args, { taxonKey: 5220086, years: 'recent' });
+});
+
+test('a failed dataset search shows in the panel status; a failed dataset lookup is a row naming its error', async () => {
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => { logged.push(args); };
+  try {
+    const failing = panelRig({ taxonDatasets: async () => { await settle(2); throw new Error('HTTP 503'); } });
+    await failing.panel.choose(MONARCH);
+    await settle();
+    assert.equal(failing.els['species-status'].textContent, 'GBIF dataset search failed (HTTP 503)');
+    const lookup = panelRig({ dataset: async (key) => { if (key === OTHER_DATASET) throw new Error('timeout'); return { key, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }; } });
+    await lookup.panel.choose(MONARCH);
+    await settle();
+    assert.deepEqual(datasetRowsIn(lookup.els['species-datasets'])[1], [`https://www.gbif.org/dataset/${OTHER_DATASET}`, `GBIF dataset ${OTHER_DATASET}`, '306', 'dataset lookup failed: timeout']);
+  } finally {
+    console.error = original;
+  }
+  assert.deepEqual(logged.map(([label]) => label), ['[species] dataset search failed', '[species] dataset lookup failed']);
+});
+
 test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits are in place', () => {
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
@@ -176,7 +268,9 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
   for (const attr of ['role="switch"', 'aria-checked="false"', 'aria-label="Species map"']) assert.ok(toggleTag.includes(attr), `${attr} in ${toggleTag}`);
   assert.equal(toggleTag.includes('aria-pressed'), false, `no aria-pressed on the switch: ${toggleTag}`);
-  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-legend"', 'id="species-years-label"', 'id="species-years"', 'id="species-radius-label"', 'id="species-radius"', 'class="species-credit"'];
+  // R-7u: the top datasets sit directly under the legend, which they hide with.
+  assert.match(panelHtml, /<div id="species-legend" class="species-legend" hidden><\/div>\s*<div id="species-datasets" class="species-datasets" hidden><\/div>/);
+  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-legend"', 'id="species-datasets"', 'id="species-years-label"', 'id="species-years"', 'id="species-radius-label"', 'id="species-radius"', 'class="species-credit"'];
   const positions = order.map((marker) => panelHtml.indexOf(marker));
   assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'markup order');
@@ -209,4 +303,7 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(cockpit[1], /'species-panel'/);
   const credit = DATA_CREDITS.find((entry) => entry.key === 'species');
   assert.ok(credit && /GBIF\.org/.test(credit.html) && /iNaturalist/.test(credit.html) && /CC0 and CC BY/.test(credit.html));
+  // R-7u: the credits say the top datasets are named with their DOIs, in the attribution lightbox and in the panel's credit line.
+  assert.match(credit.html, /top datasets[^<]*DOIs/i);
+  assert.match(panelHtml, /<p class="species-credit">[\s\S]*<span>Top datasets named with DOIs<\/span>[\s\S]*<\/p>/);
 });

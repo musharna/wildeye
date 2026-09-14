@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,card,suggestion-fade,search,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,card,suggestion-fade,search,panel-datasets,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -11,7 +11,7 @@ import { SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX } from '../src/bio/gbif.js';
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
-const CHECKS = new Set(arg('--checks', 'panel-layout,card,suggestion-fade,search,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,card,suggestion-fade,search,panel-datasets,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -42,6 +42,13 @@ let bad = 0;
 const report = (check, ok, detail = {}) => { if (!ok) bad += 1; console.log(JSON.stringify({ check, ok, ...detail })); };
 const shot = async (name) => { if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` }); };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// R-7u: dataset rows link a DOI on doi.org or the dataset page on gbif.org, always https, in a new tab with no opener or referrer.
+const DATASET_HREF = /^https:\/\/(?:doi\.org\/10\.\d{4,9}\/[-._;()/:A-Za-z0-9]+|www\.gbif\.org\/dataset\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+const readDatasetRows = (selector) => page.evaluate((selector) => [...document.querySelectorAll(selector)].map((li) => {
+  const a = li.querySelector('a');
+  return { href: a?.getAttribute('href') ?? null, target: a?.getAttribute('target') ?? null, rel: a?.getAttribute('rel') ?? null, text: a?.textContent ?? '', count: li.querySelector('.dataset-row-count')?.textContent ?? null, note: li.querySelector('.dataset-row-note')?.textContent ?? null };
+}), selector);
+const datasetRowsOk = (rows, max) => rows.length >= 1 && rows.length <= max && rows.every((row) => DATASET_HREF.test(row.href || '') && row.target === '_blank' && /\bnoopener\b/.test(row.rel || '') && /\bnoreferrer\b/.test(row.rel || '') && row.text.trim() !== '' && /^[\d,]+$/.test(row.count || '') && row.note === null);
 const flyTo = (lon, lat, height) => page.evaluate(async (lon, lat, height) => {
   const viewer = window.__godsEyeView.viewer;
   const Cartesian3 = viewer.camera.position.constructor;
@@ -305,6 +312,35 @@ if (CHECKS.has('search')) {
   report('search', first.startsWith('Monarch') && params?.taxonKey === 5133088 && tiles.length > 0 && filtered.length === tiles.length && styleMismatches.length === 0 && layoutOk && stats?.error === null, { first, params, stats, tiles: tiles.length, adhocWithBothLicences: filtered.length, zooms: [...new Set(tiles.map(zoomOf))].sort((a, b) => a - b), styleMismatches: styleMismatches.length, styleMismatchSample: styleMismatches.slice(0, 3), layout, layoutOk, srs: tiles[0] ? new URL(tiles[0]).searchParams.get('srs') : null, sample: tiles[0] || null });
 }
 
+if (CHECKS.has('panel-datasets')) {
+  // R-7u: with the map of a taxon on, the panel lists that taxon's top 1-3 datasets for the years and licences, each a DOI or gbif.org
+  // dataset link, then a link to the same records on gbif.org; the search the page sent carries the taxon, both licences, the years and a
+  // 3-dataset facet. Never passes by skipping: without the map on it fails with a reason.
+  const state = await page.evaluate(() => ({ enabled: window.__godsEyeView.dataManager.isEnabled('species'), params: window.__godsEyeView.dataManager.getLayerParams('species') }));
+  let waited = null;
+  if (state.enabled && state.params?.taxonKey) {
+    waited = await page.waitForFunction(() => document.querySelectorAll('#species-datasets .dataset-row').length > 0 || /dataset search failed/.test(document.getElementById('species-status')?.textContent || ''), { timeout: 45000 }).then(() => 'settled', (error) => String(error).slice(0, 120));
+  }
+  const panel = await page.evaluate(() => {
+    const box = document.getElementById('species-datasets');
+    const link = box?.querySelector('.species-datasets-link');
+    return { hidden: box?.hidden ?? null, visible: Boolean(box && !box.hidden && box.getBoundingClientRect().height > 0), heading: box?.querySelector('.dataset-list-heading')?.textContent ?? null, link: link ? { href: link.getAttribute('href'), target: link.getAttribute('target'), rel: link.getAttribute('rel'), text: link.textContent } : null, status: document.getElementById('species-status')?.textContent ?? '' };
+  });
+  const rows = await readDatasetRows('#species-datasets .dataset-row');
+  const sent = requests.map((u) => { try { return new URL(u); } catch { return null; } }).filter((u) => u && u.hostname === 'api.gbif.org' && u.pathname === '/v1/occurrence/search' && u.searchParams.getAll('facet').join() === 'datasetKey').at(-1) || null;
+  const link = panel.link ? new URL(panel.link.href) : null;
+  const years = sent?.searchParams.get('year') ?? null;
+  const checks = {
+    mapOn: state.enabled && Boolean(state.params?.taxonKey),
+    rowsOk: datasetRowsOk(rows, 3),
+    visible: panel.visible && panel.heading === 'Top datasets',
+    searchOk: Boolean(sent) && sent.searchParams.get('taxonKey') === String(state.params?.taxonKey) && sent.searchParams.get('datasetKey.facetLimit') === '3' && sent.searchParams.get('limit') === '0' && JSON.stringify(sent.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']),
+    linkOk: Boolean(link) && link.origin + link.pathname === 'https://www.gbif.org/occurrence/search' && link.searchParams.get('taxon_key') === String(state.params?.taxonKey) && JSON.stringify(link.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']) && link.searchParams.get('year') === years && panel.link.target === '_blank' && /\bnoopener\b/.test(panel.link.rel || ''),
+  };
+  await shot('panel-datasets');
+  report('panel-datasets', Object.values(checks).every(Boolean), { ...checks, waited, state, panel, rows, sent: sent ? String(sent) : null });
+}
+
 let hereSearch = null;
 const isHereSearch = (url) => { let u; try { u = new URL(url); } catch { return false; } return u.hostname === 'api.gbif.org' && u.pathname === '/v1/occurrence/search' && u.searchParams.get('facet') === 'speciesKey'; };
 const AREA_OUTLINE_ROLE = 'what-lives-here-area'; // src/bio/whatLivesHere.js
@@ -328,8 +364,10 @@ if (CHECKS.has('here')) {
     rows: document.querySelectorAll('#bio-card .bio-card-row').length,
     filter: document.querySelector('#bio-card .bio-card-filter')?.textContent || '',
     text: document.getElementById('bio-card').innerText.slice(0, 400),
-    link: document.querySelector('#bio-card .bio-card-foot a')?.href || null,
+    link: document.querySelector('#bio-card .bio-card-foot > a')?.href || null,
+    footOrder: [...(document.querySelector('#bio-card .bio-card-foot')?.children || [])].map((child) => child.className || child.tagName.toLowerCase()),
   }));
+  const cardDatasets = await readDatasetRows('#bio-card .bio-card-foot .dataset-row');
   hereSearch = requests.slice(hereRequestsFrom).filter(isHereSearch).at(-1) || null;
   // The searched circle has one outline: a ground polyline that cannot be picked. The polygon vertices of the GBIF search lie
   // on it, so the probe uses one that no page element covers. Positive control: a pickable clamped polyline entity along the
@@ -383,13 +421,19 @@ if (CHECKS.has('here')) {
   await shot('what-lives-here');
   const outlineOk = outline.count === 1 && outline.inPrimitives === 0 && outline.allowPicking === false && outline.controlHit === true && outline.outlineHit === false && click?.selectedAfter === null && click?.cardUnchanged === true;
   report('here', result.rows >= 1 && Boolean(result.link) && outlineOk, { ...result, outline, click, outlineOk });
+  // R-7u: after a real search the card foot names 1-5 top datasets, each a DOI or gbif.org dataset link, above the gbif.org link; the search
+  // asked for both facets with their own limits.
+  const hereUrl = hereSearch ? new URL(hereSearch) : null;
+  const facetsOk = Boolean(hereUrl) && hereUrl.searchParams.getAll('facet').join() === 'speciesKey,datasetKey' && hereUrl.searchParams.get('speciesKey.facetLimit') === '20' && hereUrl.searchParams.get('datasetKey.facetLimit') === '5' && !hereUrl.searchParams.has('facetLimit');
+  const orderOk = result.footOrder.indexOf('dataset-list') === 0 && result.footOrder.at(-1) === 'a';
+  report('card-datasets', datasetRowsOk(cardDatasets, 5) && facetsOk && orderOk, { rows: cardDatasets, facetsOk, footOrder: result.footOrder, orderOk });
 }
 
 if (CHECKS.has('portal-link')) {
   // gbif.org answers scripts with a bot check, so the footer link is compared with the GBIF search the page really sent
   // (R-7b): gbif.org's location filter is `geometry` and it drops `geo_distance`, so the link must carry the search's
   // geometry exactly, with the same licences and years.
-  const href = await page.evaluate(() => document.querySelector('#bio-card .bio-card-foot a')?.getAttribute('href') ?? null);
+  const href = await page.evaluate(() => document.querySelector('#bio-card .bio-card-foot > a')?.getAttribute('href') ?? null);
   const parse = (url) => { try { return new URL(url); } catch { return null; } };
   const link = href ? parse(href) : null;
   const sent = hereSearch ? parse(hereSearch) : null;

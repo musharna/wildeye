@@ -9661,6 +9661,20 @@ body.recording-mode #bio-card { display: none !important; }
 .species-legend-class { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; min-width: 0; }
 .species-legend-swatch { display: block; flex: 0 0 auto; border-radius: 50%; box-sizing: border-box; }
 .species-legend-label { font: 10px var(--font-mono); text-align: center; white-space: nowrap; }
+/* Top datasets (src/bio/datasetList.js), under the legend and in the what-lives-here card: a small heading, then one row per dataset with
+   its title as a link and its record count; a failed lookup adds a note on its own line. */
+.species-datasets { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+.species-datasets[hidden] { display: none; }
+.species-datasets-loading { color: rgba(232, 234, 237, 0.8); }
+.species-datasets-link { color: var(--accent); }
+.dataset-list { display: flex; flex-direction: column; gap: 3px; }
+.dataset-list-heading { color: rgba(232, 234, 237, 0.8); font: 9px var(--font-mono); letter-spacing: 1.2px; }
+.dataset-list-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.dataset-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; font-size: 11px; line-height: 1.35; }
+.dataset-row-link { flex: 1 1 0; min-width: 0; color: var(--accent); overflow-wrap: anywhere; }
+.dataset-row-count { flex: 0 0 auto; color: rgba(232, 234, 237, 0.8); font: 10px var(--font-mono); }
+.dataset-row-note { flex: 1 0 100%; color: #ffb86b; font-size: 10px; }
+.bio-card-foot .dataset-list { margin-bottom: 6px; }
 .species-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 /* Unpressed chips: the shared .scene-btn text (0.5 white) measured 4.00 to 4.55:1 over the panel, so species chips use 0.8 white. The
    pressed rule below has the same specificity and comes later, so it still wins. */

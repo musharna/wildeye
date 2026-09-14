@@ -12,6 +12,17 @@ const YELLOWSTONE = Cesium.Cartesian3.fromDegrees(-110.83, 44.46);
 const DENALI = Cesium.Cartesian3.fromDegrees(-151.0074, 63.0692);
 const CLICK = { position: { x: 1, y: 1 } };
 const MARKER = { id: 'occ:blue-whale:2026-09-01:0', entityCollection: { owner: { name: 'occurrences' } }, description: { getValue: () => '<b>Blue whale</b>' } };
+const INAT_RG = '50c9509d-22c7-4a22-a47d-8c48425ef4a7';
+const OTHER_DATASET = '6ac3f774-d9fb-4796-b3e9-92bf6c81c084';
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+// Waits a bounded number of turns for a condition, so a lookup that never starts fails the test instead of hanging it.
+async function until(condition, what) {
+  for (let i = 0; i < 500; i += 1) {
+    if (condition()) return;
+    await tick();
+  }
+  assert.fail(`still waiting for ${what} after 500 turns`);
+}
 
 // The browser pieces createDetailsCard touches (as in detailsCard.test.mjs), so the real card can drive the controller.
 function fakeCardDoc() {
@@ -31,8 +42,8 @@ function fakeCardDoc() {
 }
 
 // realCard: the real details card, wired to the controller as src/main.js wires them (onDismiss → cancel, onListEnd → listEnded).
-function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, client: clientOverride = null, defaultArea = false, realCard = false, drawArea = null, depthTexture = true } = {}) {
-  const calls = { near: [], names: [], status: [], list: [], card: [], picked: [], armed: [] };
+function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }], datasets: [{ key: INAT_RG, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, dataset = null, client: clientOverride = null, defaultArea = false, realCard = false, drawArea = null, depthTexture = true } = {}) {
+  const calls = { near: [], names: [], datasets: [], status: [], list: [], card: [], picked: [], armed: [] };
   const params = { years: 'recent', radiusKm: 10 };
   // groundPrimitives stands in for Cesium's collection, for the default outline; `areas` records the injected outline seam.
   const groundPrimitives = { items: [], add(p) { this.items.push(p); return p; }, remove(p) { const i = this.items.indexOf(p); if (i >= 0) this.items.splice(i, 1); return i >= 0; } };
@@ -66,6 +77,11 @@ function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, spec
       calls.names.push(key);
       if (speciesName) return speciesName(key, options);
       return { key, scientificName: 'Branta canadensis', commonName: 'Canada Goose' };
+    },
+    dataset: async (key, options) => {
+      calls.datasets.push(key);
+      if (dataset) return dataset(key, options);
+      return { key, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' };
     },
   };
   // calls.card keeps status and list calls in one ordered log (fake card only).
@@ -158,10 +174,63 @@ test('a ground click sends exactly one GBIF search at the clicked point and list
   assert.match(list.footerHref, /^https:\/\/www\.gbif\.org\/occurrence\/search\?/);
   assert.equal(list.footer, 'Occurrence data: GBIF.org, CC0 and CC BY records only');
   assert.deepEqual(list.entries, [{ key: 5232437, count: 5, scientificName: 'Branta canadensis', commonName: 'Canada Goose', error: undefined }]);
+  assert.deepEqual(list.datasets, [{ key: INAT_RG, count: 5, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x', error: undefined }], 'R-7u: the top datasets, looked up');
   list.onRow({ key: 5232437, primary: 'Canada Goose' });
   assert.deepEqual(calls.picked, [{ taxonKey: 5232437, name: 'Canada Goose' }]);
   assert.equal(controller.handleClick(CLICK), null, 'one query per arming');
   assert.equal(calls.near.length, 1);
+});
+
+// R-7u: the listed datasets are looked up for their title and DOI beside the names; a failed lookup is listed with its error and logged.
+test('dataset lookups run beside the name lookups, in facet order; a failed one is listed with its error', async () => {
+  const { controller, calls } = rig({
+    near: { total: 9, species: [{ key: 5232437, count: 9 }], datasets: [{ key: INAT_RG, count: 7 }, { key: OTHER_DATASET, count: 2 }] },
+    dataset: async (key) => {
+      if (key === OTHER_DATASET) throw new Error('HTTP 503');
+      return { key, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' };
+    },
+  });
+  controller.arm();
+  const logged = await captureConsoleError(() => controller.handleClick(CLICK));
+  assert.deepEqual(calls.datasets, [INAT_RG, OTHER_DATASET]);
+  assert.equal(calls.list.length, 1);
+  assert.deepEqual(calls.list[0].datasets, [
+    { key: INAT_RG, count: 7, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x', error: undefined },
+    { key: OTHER_DATASET, count: 2, title: null, doi: null, error: 'HTTP 503' },
+  ]);
+  assert.deepEqual(logged.map(([label, context]) => [label, context.key, context.error?.message]), [['[what-lives-here] dataset lookup failed', OTHER_DATASET, 'HTTP 503']]);
+});
+
+// R-7u: dataset lookups take the search's signal, like the name lookups: a cancel, or arming for a new search, aborts them, and the aborted
+// search lists nothing; the next search lists normally.
+test('a cancel or a new arming aborts pending dataset lookups, and only the search that finishes is listed', async () => {
+  const lookups = [];
+  const dataset = (key, { signal }) => new Promise((resolve, reject) => {
+    lookups.push({ key, signal, resolve });
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  });
+  const { controller, calls } = rig({ dataset });
+  controller.arm();
+  const cancelled = controller.handleClick(CLICK);
+  await until(() => lookups.length >= 1, 'the first dataset lookup');
+  controller.cancel();
+  assert.equal(lookups[0].signal.aborted, true, 'cancel aborts the dataset lookup');
+  assert.equal(await cancelled, null);
+
+  controller.arm();
+  const replaced = controller.handleClick(CLICK);
+  await until(() => lookups.length >= 2, 'the second dataset lookup');
+  controller.arm();
+  assert.equal(lookups[1].signal.aborted, true, 'arming for a new search aborts the lookup in flight');
+  assert.equal(await replaced, null);
+
+  const finished = controller.handleClick(CLICK);
+  await until(() => lookups.length >= 3, 'the third dataset lookup');
+  assert.equal(lookups[2].signal.aborted, false);
+  lookups[2].resolve({ key: INAT_RG, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' });
+  assert.notEqual(await finished, null);
+  assert.equal(calls.list.length, 1, 'only the finished search is listed');
+  assert.equal(calls.list[0].datasets[0].title, 'iNaturalist Research-grade Observations');
 });
 
 test('sky keeps it armed; zero records and failures are different messages', async () => {
@@ -171,7 +240,7 @@ test('sky keeps it armed; zero records and failures are different messages', asy
   assert.equal(sky.controller.armed, true);
   assert.match(sky.calls.status.at(-1).message, /Click on the globe/);
 
-  const empty = rig({ near: { total: 0, species: [] } });
+  const empty = rig({ near: { total: 0, species: [], datasets: [] } });
   empty.controller.arm();
   await empty.controller.handleClick(CLICK);
   assert.match(empty.calls.status.at(-1).message, /^No CC0\/CC BY records within 10 km for \d{4}–\d{4}\. Try a larger radius or all years\.$/);
@@ -204,9 +273,9 @@ test('re-arming and clicking again supersedes a pending search: only the second 
     const second = r.controller.handleClick(CLICK);
     assert.equal(pending.searches.length, 2, 'two searches were sent');
     const [a, b] = pending.searches;
-    b.resolve({ total: 7, species: [{ key: 5232437, count: 7 }] });
+    b.resolve({ total: 7, species: [{ key: 5232437, count: 7 }], datasets: [] });
     await second;
-    a.resolve({ total: 3, species: [{ key: 5232437, count: 3 }] });
+    a.resolve({ total: 3, species: [{ key: 5232437, count: 3 }], datasets: [] });
     await first;
     assert.equal(a.signal.aborted, true, 'the first search was aborted');
   });
@@ -233,9 +302,9 @@ test('a Retry started while an earlier search is still pending supersedes it', a
   const newer = retry();
   assert.equal(pending.searches.length, 3, 'each Retry sends a search');
   const [, olderSearch, newerSearch] = pending.searches;
-  newerSearch.resolve({ total: 7, species: [{ key: 5232437, count: 7 }] });
+  newerSearch.resolve({ total: 7, species: [{ key: 5232437, count: 7 }], datasets: [] });
   await newer;
-  olderSearch.resolve({ total: 3, species: [{ key: 5232437, count: 3 }] });
+  olderSearch.resolve({ total: 3, species: [{ key: 5232437, count: 3 }], datasets: [] });
   await older;
   assert.equal(r.calls.list.length, 1, 'only one list reaches the card');
   assert.match(r.calls.list[0].filterLine, / · 7 records$/, 'and it is the newer search');
@@ -250,7 +319,7 @@ test('arming again cancels a search still in flight, so the prompt stays on the 
   const first = r.controller.handleClick(CLICK);
   r.controller.arm();
   const [old] = pending.searches;
-  old.resolve({ total: 5, species: [{ key: 5232437, count: 5 }] });
+  old.resolve({ total: 5, species: [{ key: 5232437, count: 5 }], datasets: [] });
   await first;
   const last = r.calls.card.at(-1);
   assert.deepEqual({ kind: last.kind, message: last.message }, { kind: 'status', message: 'Click a spot on the globe. Esc cancels.' }, 'the prompt is still the last card call');
@@ -278,7 +347,7 @@ test('Retry on a failed search sends a new search at the same point, with the ra
     speciesNear: async () => {
       attempts += 1;
       if (attempts === 1) throw new Error('HTTP 503');
-      return { total: 2, species: [{ key: 5232437, count: 2 }] };
+      return { total: 2, species: [{ key: 5232437, count: 2 }], datasets: [] };
     },
   });
   r.controller.arm();
@@ -312,7 +381,7 @@ test('Escape while armed disarms (cursor back, onArmedChange(false)); other keys
 
 test('a failed name lookup falls back to the taxon key and logs the key; the other names still resolve', async () => {
   const r = rig({
-    near: { total: 9, species: [{ key: 5232437, count: 5 }, { key: 2480528, count: 4 }] },
+    near: { total: 9, species: [{ key: 5232437, count: 5 }, { key: 2480528, count: 4 }], datasets: [] },
     speciesName: async (key) => {
       if (key === 2480528) throw new Error('HTTP 503');
       return { key, scientificName: 'Branta canadensis', commonName: 'Canada Goose' };
@@ -340,7 +409,7 @@ test('cancel() aborts the search in flight and disarms; the settled search calls
   const cardCallsAtCancel = r.calls.card.length;
   const logged = await captureConsoleError(async () => {
     r.controller.cancel();
-    pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }] });
+    pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }], datasets: [] });
     await search;
   });
   assert.equal(pending.searches[0].signal.aborted, true, 'cancel aborted the search');
@@ -399,7 +468,7 @@ test('a search outlines its circle from the start; a second search replaces the 
   const [a] = r.areas.drawn;
   assert.ok(Math.abs(a.lat - 44.46) < 1e-6 && Math.abs(a.lon + 110.83) < 1e-6, 'at the clicked point');
   assert.equal(a.radiusKm, 10);
-  pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }] });
+  pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }], datasets: [] });
   await first;
   assert.deepEqual(r.areas.cleared, [], 'the listed search keeps its outline');
 
@@ -456,7 +525,7 @@ test("a marker's details replacing a search still in flight abort it, so it cann
   assert.equal(r.card.mode, 'list', 'the Searching status shows');
   const logged = await captureConsoleError(async () => {
     r.viewer.selectedEntity = MARKER;
-    pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }] });
+    pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }], datasets: [] });
     await search;
   });
   assert.equal(pending.searches[0].signal.aborted, true, 'the search was aborted');
@@ -565,7 +634,7 @@ test('centreMark: two crossing arms through the clicked point, each end on a cir
 
 test('a Retry replaces the failed search outline with its own', async () => {
   let attempts = 0;
-  const r = rig({ speciesNear: async () => { attempts += 1; if (attempts === 1) throw new Error('HTTP 503'); return { total: 2, species: [{ key: 5232437, count: 2 }] }; } });
+  const r = rig({ speciesNear: async () => { attempts += 1; if (attempts === 1) throw new Error('HTTP 503'); return { total: 2, species: [{ key: 5232437, count: 2 }], datasets: [] }; } });
   r.controller.arm();
   await captureConsoleError(() => r.controller.handleClick(CLICK));
   assert.equal(r.areas.drawn.length, 1, 'a failed search keeps the outline of the spot Retry would search');

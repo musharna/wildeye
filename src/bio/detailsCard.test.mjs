@@ -193,6 +193,31 @@ test('a list footer can carry a plain-text note before its link; without one the
   assert.deepEqual(foot.children.map((c) => c.tag), ['a'], 'no note, just the link');
 });
 
+const INAT_RG = '50c9509d-22c7-4a22-a47d-8c48425ef4a7';
+const OTHER_DATASET = '6ac3f774-d9fb-4796-b3e9-92bf6c81c084';
+
+// R-7u: the what-lives-here list names its top datasets with DOI links above the gbif.org link (GBIF data user agreement: acknowledge the
+// data publishers, with a DOI where appropriate). The note about the link stays next to the link.
+test('a list foot names the top datasets above the gbif.org link; with none it is just the link', () => {
+  const doc = cardDoc();
+  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html });
+  const foot = card.element.querySelector('.bio-card-foot');
+  const base = { heading: 'What lives here', filterLine: 'CC0 and CC BY records', entries: [], onRow: () => {}, footer: 'Occurrence data: GBIF.org, CC0 and CC BY records only', footerHref: 'https://www.gbif.org/occurrence/search?geometry=x' };
+  card.showList({ ...base, datasets: [{ key: INAT_RG, count: 1179, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }, { key: OTHER_DATASET, count: 3, error: 'HTTP 503' }] });
+  assert.deepEqual(foot.children.map((c) => [c.tag, c.className]), [['div', 'dataset-list'], ['a', '']]);
+  const [heading, list] = foot.children[0].children;
+  assert.equal(heading.textContent, 'Top datasets');
+  assert.deepEqual(list.children.map((li) => li.children.map((c) => c.href || c.textContent)), [
+    ['https://doi.org/10.15468/ab3s5x', '1,179'],
+    [`https://www.gbif.org/dataset/${OTHER_DATASET}`, '3', 'dataset lookup failed: HTTP 503'],
+  ]);
+  assert.deepEqual(list.children.map((li) => [li.children[0].target, li.children[0].rel]), [['_blank', 'noopener noreferrer'], ['_blank', 'noopener noreferrer']]);
+  card.showList({ ...base, footerNote: "gbif.org can't show this area as a circle", datasets: [{ key: INAT_RG, count: 1, title: 'iNaturalist Research-grade Observations', doi: null }] });
+  assert.deepEqual(foot.children.map((c) => c.className), ['dataset-list', 'bio-card-foot-note', ''], 'the datasets, then the note about the link, then the link');
+  card.showList(base);
+  assert.deepEqual(foot.children.map((c) => c.tag), ['a'], 'no datasets: no block');
+});
+
 // R-7e: the what-lives-here outline lives exactly as long as the card shows list or status content, so the card tells its
 // owner (onListEnd) whenever that content stops showing: dismissed, closed, or replaced by a marker's details.
 test('onListEnd fires once whenever list or status content stops showing, and never for other changes', () => {
