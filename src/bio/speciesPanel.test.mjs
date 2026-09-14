@@ -390,7 +390,9 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(cockpit[1], /'species-panel'/);
   const credit = DATA_CREDITS.find((entry) => entry.key === 'species');
   assert.ok(credit && /GBIF\.org/.test(credit.html) && /iNaturalist/.test(credit.html) && /CC0 and CC BY/.test(credit.html));
-  // R-7u: the credits say the top datasets are named with their DOIs, in the attribution lightbox and in the panel's credit line.
-  assert.match(credit.html, /top datasets[^<]*DOIs/i);
-  assert.match(panelHtml, /<p class="species-credit">[\s\S]*<span>Top datasets named with DOIs<\/span>[\s\S]*<\/p>/);
+  // M4: a dataset links its DOI where GBIF has one and its gbif.org page otherwise, and the credits say exactly that, in the attribution
+  // lightbox and in the panel's credit line.
+  assert.match(credit.html, /the top datasets behind each list and map are named with a DOI link where GBIF has one, and a gbif\.org dataset page otherwise\./);
+  assert.match(panelHtml, /<p class="species-credit">[\s\S]*<span>Top datasets: a DOI link where GBIF has one,<\/span> <span>otherwise a gbif\.org dataset page<\/span><\/p>/);
+  assert.doesNotMatch(html + credit.html, /named with (their )?DOIs/);
 });

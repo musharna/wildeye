@@ -147,7 +147,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'species',
-    html: 'Species maps and "what lives here": <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF.org</a> occurrence search and maps (CC0 and CC BY records only); the top datasets behind each list and map are named with their DOIs. Species names suggested by <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a>.',
+    html: 'Species maps and "what lives here": <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF.org</a> occurrence search and maps (CC0 and CC BY records only); the top datasets behind each list and map are named with a DOI link where GBIF has one, and a gbif.org dataset page otherwise. Species names suggested by <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a>.',
   },
   {
     key: 'rivers',

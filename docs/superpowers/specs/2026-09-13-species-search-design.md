@@ -67,7 +67,7 @@ Pages build (no `/api`).
    - Search box: suggestions after 3 letters and a 300 ms pause (common name, scientific name, rank).
    - Chosen species chip with on/off (enables/disables the `species` layer).
    - Year chips: last 10 years (default) / all years. Radius chips: 1 / 10 (default) / 50 km.
-   - "What lives here" button. Credit line: names from iNaturalist, records from GBIF.org, top datasets named with DOIs.
+   - "What lives here" button. Credit line: names from iNaturalist, records from GBIF.org, top datasets named with a DOI link where GBIF has one and a gbif.org dataset page otherwise.
    - While the map is on: the record-count legend, then the taxon's top 3 datasets (see Implementation notes).
 5. `src/bio/whatLivesHere.js` — arm, then click.
    - Button arms a one-shot `LEFT_CLICK`; cursor becomes a crosshair; Escape disarms.
