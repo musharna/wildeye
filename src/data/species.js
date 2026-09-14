@@ -11,7 +11,7 @@ export const SPECIES_ZRANK = 1000;
 /**
  * Opaque, chosen by measurement (spec: Implementation notes): at 0.7 the same class changed colour with the ground under it and the
  * sparsest class blended into light land; opaque classic-noborder.poly fills give the highest lowest-class contrast of the styles
- * measured and the colours the legend shows.
+ * measured and, at the 12,000 km view the legend colours were fitted at, the colours the legend shows.
  */
 export const SPECIES_ALPHA = 1;
 export const SPECIES_YEARS = Object.freeze(['recent', 'all']);

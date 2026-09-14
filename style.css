@@ -9662,7 +9662,7 @@ body.recording-mode #bio-card { display: none !important; }
 .species-legend-swatch { display: block; height: 8px; border-radius: 1px; }
 .species-legend-label { font: 10px var(--font-mono); text-align: center; white-space: nowrap; }
 .species-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
-/* Unpressed chips: the shared .scene-btn text (0.5 white) measured 3.5 to 4.3:1 over the panel, so species chips use 0.8 white. The
+/* Unpressed chips: the shared .scene-btn text (0.5 white) measured 4.00 to 4.55:1 over the panel, so species chips use 0.8 white. The
    pressed rule below has the same specificity and comes later, so it still wins. */
 .scene-btn.species-chip { color: rgba(232, 234, 237, 0.8); }
 /* .scene-btn:hover paints exactly the pressed look, so a hovered chip (a resting pointer, a sticky touch hover) read as pressed:

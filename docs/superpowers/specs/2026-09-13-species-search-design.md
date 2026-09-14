@@ -50,7 +50,7 @@ Pages build (no `/api`).
      `style=classic.poly&bin=hex`. Never `density`. (Built differently: see Implementation notes.)
    - `speciesNear({lat, lon, radiusKm, years})`: `/v1/occurrence/search?geoDistance=lat,lon,Rkm`,
      both licences, year range, `hasCoordinate=true&hasGeospatialIssue=false&facet=speciesKey&facetLimit=20&limit=0`
-     → `{total, species:[{key, count}]}`.
+     → `{total, species:[{key, count}]}`. (Searched differently: see Implementation notes.)
    - `speciesName(key)`: `/v1/species/{key}` → `{scientificName, vernacularName, class}`; session cache,
      at most 4 in flight.
    - Every request: 8 s timeout, `AbortController`; a newer search aborts the older one.
@@ -120,8 +120,8 @@ What the build changed from the design above, and why.
   `UrlTemplateImageryProvider` lays tiles out in Web Mercator, so without it the hexagons are drawn in the wrong place.
 - The map style is `classic-noborder.poly` at layer alpha 1, not `classic.poly` at 0.7. Opaque fills keep a hexagon's colour
   independent of the imagery under it. Against the Esri basemap at the 12,000 km view, the sparsest class has a median contrast
-  of 2.36:1 over land and 2.78:1 over ocean (1.90:1 and 2.18:1 with `classic.poly` at 0.7). No fill reaches 3:1 there: the
-  globe's ground atmosphere lightens the basemap so much that even white measures 2.54:1 over that land.
+  of 2.36:1 over land and 2.78:1 over ocean (1.90:1 and 2.18:1 with `classic.poly` at 0.7). None of the GBIF styles measured
+  reaches 3:1 for its sparsest class over that land; even a white fill measures 2.54:1 there.
 - The legend lists the record-count classes of that style (github.com/gbif/maps,
   `mapnik-server/src/main/node/cartocss/classic-noborder-poly.mss`): up to 10, 100, 1,000, 10,000 and 100,000 records per
   hexagon, and more. Each swatch is its class colour as the globe draws it, fitted at the 12,000 km view as

@@ -502,7 +502,8 @@ test('arming again removes the previous outline (fake card)', async () => {
   assert.deepEqual(r.areas.cleared, [r.areas.drawn[0]]);
 });
 
-// run() catches only synchronous failures, such as positions Cesium's GroundPolylineGeometry refuses at construction. Failures inside
+// run() catches only synchronous failures, such as the DeveloperError a debug build of Cesium's GroundPolylineGeometry throws at
+// construction for fewer than two positions (the release build strips that check). Failures inside
 // the primitive's update() or its geometry workers happen later, outside that try/catch.
 test('a synchronous failure building the outline is logged with its context and does not stop the search', async () => {
   const r = rig({ drawArea: () => { throw new Error('At least two positions are required.'); } });

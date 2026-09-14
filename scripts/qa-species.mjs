@@ -196,7 +196,8 @@ if (CHECKS.has('suggestion-fade')) {
   // A suggestion list taller than its cap fades out at the bottom (a scroll-driven mask); a list that fits must not fade. Each list is
   // screenshotted, and rows compare by their brightest text pixels (99th-percentile luminance): the bottom visible row against the
   // first. Positive control in the same check: "hump" overflows the cap, so its bottom row must read dimmer; an unfaded short list
-  // therefore cannot come from a blind probe. The short query must return rows that fit the cap: "sialia currucoides" gives 3;
+  // therefore cannot come from a blind probe. The short query must return at least two rows that fit the cap (one row compares with
+  // itself, so its ratio is 1 by construction): "sialia currucoides" gives 3;
   // "megaptera nov" gives 4, but its subspecies names wrap past the cap and the list fades, as it should.
   const clearSearch = async () => {
     await page.click('#species-search', { clickCount: 3 });
@@ -252,7 +253,7 @@ if (CHECKS.has('suggestion-fade')) {
     await clearSearch().catch((caught) => { error = `${error ?? ''} clearing the search box: ${caught}`; });
   }
   const controlOk = Boolean(control?.overflows) && control.fade !== '0px' && control.bottomToFirst < 0.85;
-  const shortOk = short !== null && short.rows < 5 && !short.overflows && short.fade === '0px' && short.visibleRows === short.rows && short.bottomToFirst >= 0.95;
+  const shortOk = short !== null && short.rows >= 2 && short.rows < 5 && !short.overflows && short.fade === '0px' && short.visibleRows === short.rows && short.bottomToFirst >= 0.95;
   report('suggestion-fade', error === null && controlOk && shortOk, { control, short, controlOk, shortOk, ...(error ? { error } : {}) });
 }
 
