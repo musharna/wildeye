@@ -111,6 +111,8 @@ export function createSpeciesPanel({
   let lookingUpKey = null;
   // M1: { taxonKey, canonicalName } while the chosen taxon came from a GBIF match that was not EXACT.
   let shownAs = null;
+  // N-d: the status written for that choice ("No exact GBIF match …; shown as GBIF's …"), which goes when the note does.
+  let shownAsStatus = null;
   // The top datasets block (R-7u): the taxon and years its content or its search in flight is for, that search's controller, and whether
   // it has finished (shown, or failed into the block).
   let datasetsFor = null;
@@ -136,6 +138,10 @@ export function createSpeciesPanel({
     const note = shownAs && shownAs.taxonKey === p.taxonKey ? `shown as GBIF's ${shownAs.canonicalName}` : '';
     chosenNote.textContent = note;
     chosenNote.hidden = !note;
+    if (shownAsStatus !== null && !note) {
+      if (status.textContent === shownAsStatus) status.textContent = '';
+      shownAsStatus = null;
+    }
     if (p.taxonKey && !p.name && lookingUpKey !== p.taxonKey) {
       // A share link carries only the key; look the name up once.
       lookingUpKey = p.taxonKey;
@@ -328,6 +334,7 @@ export function createSpeciesPanel({
       await chooseTaxon({ taxonKey, name: item.commonName || item.scientificName, shownAsName });
       input.value = '';
       status.textContent = shownAsName ? `No exact GBIF match for ${item.scientificName}; shown as GBIF's ${shownAsName}.` : '';
+      shownAsStatus = shownAsName ? status.textContent : null;
       return true;
     } catch (error) {
       if (error?.name === 'AbortError') return false;

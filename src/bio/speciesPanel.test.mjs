@@ -75,7 +75,7 @@ function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', can
   const whatLivesHere = { armed: false, arm() {}, disarm() {} };
   const resizes = [];
   const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer, observeSize: (targets, onChange) => { resizes.push({ targets, onChange }); } });
-  return { panel, els, calls, doc, resizes };
+  return { panel, els, calls, doc, resizes, dataManager };
 }
 
 test('choosing an iNaturalist suggestion matches it in GBIF, sets the taxon and turns the map on', async () => {
@@ -266,6 +266,31 @@ test('a failed name search names each failure once in the status', async () => {
   }
   assert.equal(els['species-status'].textContent, 'Name search failed: iNaturalist HTTP 503, GBIF HTTP 503');
   assert.equal(logged.length, 1, 'the failure is logged once');
+});
+
+// Critic 10 N-d: the status that says a choice is shown as GBIF's name belongs to that choice. It stayed after the taxon was replaced (a
+// what-lives-here row) or cleared (a restore, or qa's own reset), describing a species no longer chosen; it now goes with the note. A change that
+// keeps the taxon, and a status about something else, leave it alone.
+test("the \"shown as GBIF's\" status goes when the taxon it describes is replaced or cleared, and stays while that taxon is chosen", async () => {
+  const fuzzy = { match: async () => ({ key: 5133088, matchType: 'FUZZY', canonicalName: 'Danaus plexippus' }) };
+  const item = { gbifKey: null, scientificName: 'Danaus plexippa', commonName: 'Monarch', rank: 'species' };
+  const STATUS = "No exact GBIF match for Danaus plexippa; shown as GBIF's Danaus plexippus.";
+  const replaced = panelRig(fuzzy);
+  await replaced.panel.choose(item);
+  assert.equal(replaced.els['species-status'].textContent, STATUS);
+  replaced.dataManager.setLayerParams('species', { years: 'all' }, { origin: 'user' });
+  assert.equal(replaced.els['species-status'].textContent, STATUS, 'a change that keeps the taxon keeps the status');
+  await replaced.panel.chooseTaxon({ taxonKey: 1340481, name: 'Rusty-patched Bumble Bee' });
+  assert.equal(replaced.els['species-status'].textContent, '', 'another taxon chosen: the status goes');
+  const cleared = panelRig(fuzzy);
+  await cleared.panel.choose(item);
+  cleared.dataManager.setLayerParams('species', { taxonKey: null }, { origin: 'programmatic' });
+  assert.equal(cleared.els['species-status'].textContent, '', 'the taxon cleared: the status goes');
+  const other = panelRig(fuzzy);
+  await other.panel.choose(item);
+  other.els['species-status'].textContent = 'GBIF name lookup failed (HTTP 503)';
+  other.dataManager.setLayerParams('species', { taxonKey: null }, { origin: 'programmatic' });
+  assert.equal(other.els['species-status'].textContent, 'GBIF name lookup failed (HTTP 503)', 'a status about something else stays');
 });
 
 // Injected timers for the suggestion debounce: scheduled callbacks run only when the test fires them.
