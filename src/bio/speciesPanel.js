@@ -288,7 +288,7 @@ export function createSpeciesPanel({
       if (error?.name === 'AbortError') return;
       console.error('[species] name search failed', { query, error });
       clearSuggestions();
-      status.textContent = `Name search failed (${error.message})`;
+      status.textContent = `Name search failed: ${error.message}`;
     }
   }
 

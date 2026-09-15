@@ -458,7 +458,8 @@ test('suggest: iNaturalist first; GBIF names with a visible notice when it fails
   assert.equal(fallback.items[0].gbifKey, 5133088);
 
   const bothDown = createBioClient({ fetchImpl: async () => httpError(500) });
-  await assert.rejects(bothDown.suggest('monarch'), /iNaturalist \(HTTP 500\) and GBIF \(HTTP 500\) both failed/);
+  // Critic 10 N-a: each source's failure once, no nested parentheses.
+  await assert.rejects(bothDown.suggest('monarch'), { message: 'iNaturalist HTTP 500, GBIF HTTP 500' });
 
   let t = 0;
   const limited = createBioClient({ fetchImpl: async () => ok(inatBody), inatLimiter: createRateLimiter({ maxPerWindow: 1, now: () => t }) });

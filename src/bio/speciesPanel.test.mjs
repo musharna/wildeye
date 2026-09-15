@@ -251,6 +251,23 @@ test('Escape that hides the suggestion list cancels the pending debounce and abo
   assert.equal(list.hidden, true, 'no list reopens');
 });
 
+// Critic 10 N-a: a failed name search names each source's failure once, with no nested parentheses; the codes stay visible.
+test('a failed name search names each failure once in the status', async () => {
+  const { els } = panelRig({ suggest: async () => { throw new Error('iNaturalist HTTP 503, GBIF HTTP 503'); }, setTimer: (fn) => { fn(); return 1; } });
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => { logged.push(args); };
+  try {
+    els['species-search'].value = 'monarch';
+    els['species-search'].listeners.input();
+    await settle();
+  } finally {
+    console.error = original;
+  }
+  assert.equal(els['species-status'].textContent, 'Name search failed: iNaturalist HTTP 503, GBIF HTTP 503');
+  assert.equal(logged.length, 1, 'the failure is logged once');
+});
+
 // Injected timers for the suggestion debounce: scheduled callbacks run only when the test fires them.
 function fakeTimers() {
   let next = 1;

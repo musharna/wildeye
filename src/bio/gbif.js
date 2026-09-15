@@ -442,7 +442,7 @@ export function createBioClient({
         return { source: 'gbif', notice: `iNaturalist didn't answer (${inatError.message}); showing GBIF scientific names`, items };
       } catch (error) {
         if (error?.name === 'AbortError') throw error;
-        throw new RequestError(`iNaturalist (${inatError.message}) and GBIF (${error.message}) both failed`);
+        throw new RequestError(`iNaturalist ${inatError.message}, GBIF ${error.message}`); // N-a: each failure once, the codes visible
       }
     },
     /** GBIF's strict match; a synonym whose accepted name the response does not carry is named by looking the accepted key up (R12-M3). */
