@@ -38,6 +38,23 @@ Live site: https://musharna.github.io/wildeye/
 
 Most of these layers follow a shared time bar covering the last 30 days.
 
+## Species search
+
+The SPECIES panel finds a species by common or scientific name. Name suggestions come from
+iNaturalist, with GBIF as a fallback. The map draws GBIF occurrence records under CC0 or CC BY as
+circles whose size and colour show how many records each circle holds, for the last 10 years or
+for all years. The panel names the three datasets with the most of those records, with a DOI link
+where GBIF has one.
+
+"What lives here" lists the 20 species with the most CC0 and CC BY records within 1, 10 or 50 km
+of a point you click, and the five datasets they come from. Each list links to the same search on
+gbif.org, where the records can be browsed and downloaded with a citation.
+
+Clicking a marker from a biology layer opens a card with that record's details, citation and
+licence.
+
+These features run in the browser and work on the hosted site.
+
 ## Where the data comes from
 
 The scripts in `pipeline/` run on a schedule, download each source, and write plain data files to `public/data/`. API keys stay on the machine running the pipelines and never reach the browser. `pipeline/README.md` lists each script and its schedule. A fresh clone shows data without running anything, because `pipeline/seed.sh` copies small committed snapshots into place.
