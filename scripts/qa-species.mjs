@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -943,6 +943,106 @@ if (CHECKS.has('card-foot-rest')) {
     await sleep(2000);
   }
   report('card-foot-rest', error === null && results.length === STATES.length && results.every((r) => r.ok) && restored?.fetchRestored === true, { results, restored, ...(error ? { error } : {}) });
+}
+
+// Critic 10 S1: the collapsed SPECIES pill is the material of the collapsed DATA LAYERS and SCENES pills. With all three collapsed, the scope mask
+// off, over the OSM street map (central Austin from 3 km) and over open ocean (the Pacific from 800 km, OSM), at 1400x900 and 375x667: the three
+// pills' computed backgrounds and backdrop filters are equal, and the SPECIES pill's fill (the median pixel of the pill 10 px in from its edges,
+// with every header's contents hidden) is within 15 levels per channel of the mean of the other two pills' fills. Positive control in the same
+// check: the open SPECIES panel's computed background is the 0.86 floor, not the pills' glass.
+if (CHECKS.has('collapsed-pills')) {
+  const PLACES = [['light', -97.74, 30.27, 3000], ['ocean', -140, -10, 800000]];
+  const PILLS = [['data', 'data-panel', '.data-panel-inner'], ['scene', 'scene-panel', '.scene-panel-inner'], ['species', 'species-panel', '.species-panel-inner']];
+  const MAX_LEVELS = 15;
+  const setCollapsed = (id, collapsed) => page.evaluate((id, collapsed) => { const panel = document.getElementById(id); if (panel.classList.contains('collapsed') !== collapsed) panel.querySelector(`[data-collapse-target="${id}"]`).click(); }, id, collapsed);
+  const initial = await page.evaluate(() => {
+    const view = window.__godsEyeView;
+    const c = view.viewer.camera;
+    window.__qaPillCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll };
+    return { stack: view.mapStackController.getState().activeId, scope: document.getElementById('scope-toggle')?.getAttribute('aria-pressed') ?? null, collapsed: Object.fromEntries(['data-panel', 'scene-panel', 'species-panel'].map((id) => [id, document.getElementById(id).classList.contains('collapsed')])) };
+  });
+  const samples = [];
+  let control = null;
+  let error = null;
+  let restored = null;
+  try {
+    const stack = await page.evaluate(async () => (await window.__godsEyeView.mapStackController.setStack('osm')).activeId);
+    if (stack !== 'osm') throw new Error(`collapsed-pills: the OSM stack did not become active (${stack})`);
+    const scope = await page.evaluate(() => { const button = document.getElementById('scope-toggle'); if (button.getAttribute('aria-pressed') === 'true') button.click(); return button.getAttribute('aria-pressed'); });
+    if (scope !== 'false') throw new Error(`collapsed-pills: the scope mask did not turn off (aria-pressed ${scope})`);
+    for (const [, id] of PILLS) await setCollapsed(id, true);
+    await sleep(1000);
+    for (const [width, height] of [[1400, 900], [375, 667]]) {
+      await page.setViewport({ width, height });
+      await sleep(2500);
+      for (const [place, lon, lat, alt] of PLACES) {
+        await flyTo(lon, lat, alt);
+        const tiles = await waitForMapTiles();
+        await page.evaluate(() => { const style = document.createElement('style'); style.id = 'qa-pill-hide'; style.textContent = '#left-panel-stack .panel-header > * { opacity: 0 !important; transition: none !important; }'; document.head.appendChild(style); });
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        await sleep(300);
+        const png = await page.screenshot({ encoding: 'base64' });
+        await page.evaluate(() => document.getElementById('qa-pill-hide')?.remove());
+        await sleep(300);
+        await shot(`collapsed-pills-${place}-${width}x${height}`);
+        const pills = await page.evaluate(async (png, pills) => {
+          const img = new Image();
+          img.src = `data:image/png;base64,${png}`;
+          await img.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(img, 0, 0);
+          const scale = img.width / innerWidth;
+          return pills.map(([name, id, inner]) => {
+            const el = document.querySelector(`#${id} ${inner}`);
+            const r = el.getBoundingClientRect();
+            const x0 = Math.ceil((r.left + 10) * scale);
+            const y0 = Math.ceil((r.top + 10) * scale);
+            const w = Math.max(1, Math.floor((r.right - 10) * scale) - x0);
+            const h = Math.max(1, Math.floor((r.bottom - 10) * scale) - y0);
+            const { data } = ctx.getImageData(x0, y0, w, h);
+            const channels = [[], [], []];
+            for (let i = 0; i < data.length; i += 4) for (let k = 0; k < 3; k += 1) channels[k].push(data[i + k]);
+            const rgb = channels.map((values) => { values.sort((a, b) => a - b); return values[Math.floor(values.length / 2)]; });
+            const cs = getComputedStyle(el);
+            return { name, rgb, box: { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }, background: cs.backgroundColor, backdrop: cs.backdropFilter, collapsed: document.getElementById(id).classList.contains('collapsed') };
+          });
+        }, png, PILLS);
+        const [data, scene, species] = pills;
+        const mean = [0, 1, 2].map((k) => (data.rgb[k] + scene.rgb[k]) / 2);
+        const maxLevels = Math.max(...species.rgb.map((value, k) => Math.abs(value - mean[k])));
+        const ok = pills.every((p) => p.collapsed && p.box.width > 40 && p.box.height > 20 && p.background === data.background && p.backdrop === data.backdrop) && maxLevels <= MAX_LEVELS;
+        samples.push({ viewport: `${width}x${height}`, place, tiles: tiles.settled, ok, maxLevels: +maxLevels.toFixed(1), pills });
+      }
+    }
+    await setCollapsed('species-panel', false);
+    await sleep(1200);
+    control = await page.evaluate(() => ({ open: !document.getElementById('species-panel').classList.contains('collapsed'), background: getComputedStyle(document.querySelector('#species-panel .species-panel-inner')).backgroundColor }));
+    await setCollapsed('species-panel', true);
+    await sleep(800);
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    restored = await page.evaluate(async (initial) => {
+        for (const id of Object.keys(initial.collapsed)) { const panel = document.getElementById(id); if (panel.classList.contains('collapsed') !== initial.collapsed[id]) panel.querySelector(`[data-collapse-target="${id}"]`).click(); }
+        const scope = document.getElementById('scope-toggle');
+        if (scope && initial.scope !== null && scope.getAttribute('aria-pressed') !== initial.scope) scope.click();
+        const view = window.__godsEyeView;
+        const stack = (await view.mapStackController.setStack(initial.stack)).activeId;
+        const s = window.__qaPillCamera;
+        view.viewer.camera.setView({ destination: s.position, orientation: { heading: s.heading, pitch: s.pitch, roll: s.roll } });
+        return { stack, scope: scope?.getAttribute('aria-pressed') ?? null };
+      }, initial).catch((caught) => ({ error: String(caught?.stack || caught).slice(0, 300) }));
+    await page.setViewport({ width: 1400, height: 900 });
+    await sleep(2000);
+  }
+  const controlOk = Boolean(control?.open) && control.background === 'rgba(12, 12, 20, 0.86)' && samples.length > 0 && control.background !== samples[0].pills[0].background;
+  report('collapsed-pills', error === null && samples.length === 4 && samples.every((s) => s.ok) && controlOk && restored?.stack === initial.stack && restored.scope === initial.scope, {
+    samples: samples.map((s) => ({ viewport: s.viewport, place: s.place, tiles: s.tiles, ok: s.ok, maxLevels: s.maxLevels, pills: s.pills.map((p) => ({ name: p.name, rgb: p.rgb, background: p.background, box: p.box })) })),
+    initial, control, controlOk, restored, ...(error ? { error } : {}),
+  });
 }
 
 // M1 (final review): a strict GBIF match that answers FUZZY is mapped and says so. The page's fetch answers iNaturalist's autocomplete with one

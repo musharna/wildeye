@@ -9636,10 +9636,9 @@ body.recording-mode #bio-card { display: none !important; }
   opacity: 0.25;
   pointer-events: none;
 }
-/* I1: the 0.86 background floor, as on the card. */
 .species-panel-inner {
   position: relative;
-  background: rgba(12, 12, 20, 0.86);
+  background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   padding: 14px;
@@ -9650,6 +9649,9 @@ body.recording-mode #bio-card { display: none !important; }
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
+/* I1 and critic 10 S1: the 0.86 background floor, as on the card, for the open panel only. The collapsed SPECIES pill keeps the shared glass of
+   the DATA LAYERS and SCENES pills, which the floor had made about 30 levels darker over a light map. */
+#species-panel:not(.collapsed) .species-panel-inner { background: rgba(12, 12, 20, 0.86); }
 /* B1/S1: the header stays put and the body scrolls inside the panel. 4 px of left padding inside the scroller, taken back by the margin, keep a
    focused link's ring from being cut at the scroller's left edge. */
 #left-panel-stack > #species-panel:not(.collapsed) .species-panel-inner { height: 100%; max-height: 100%; overflow: hidden; }

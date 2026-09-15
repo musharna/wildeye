@@ -572,10 +572,10 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   // The cap buys species rows only on windows up to 800 px tall (probe in the residual report: none at 900 and 1,100 px), so it applies up to 850 px.
   assert.doesNotMatch(feature.find((r) => r.selector === '.bio-card-foot').body, /max-height/, 'the foot has no cap on tall windows');
   assert.match(css, /@media \(max-height: 850px\) \{\s*\.bio-card-foot \{ max-height: 26vh; \}\s*\}/, 'the cap applies on windows up to 850 px tall');
-  for (const selector of ['.species-panel-inner', '.bio-card']) {
-    const rule = feature.find((r) => r.selector === selector);
-    assert.ok(rule, `${selector} rule`);
-    assert.match(rule.body, /(?:^|[;\s])background: rgba\(12, 12, 20, 0\.86\);/, `${selector} has the 0.86 background floor`);
+  // Critic 10 S1: the floor is for the open SPECIES panel and the card; the collapsed SPECIES pill keeps the shared glass of its sibling pills.
+  assert.ok(bodyOf('.species-panel-inner').includes('background: var(--glass-bg);'), '.species-panel-inner keeps the shared glass');
+  for (const selector of ['#species-panel:not(.collapsed) .species-panel-inner', '.bio-card']) {
+    assert.match(bodyOf(selector), /(?:^|[;\s])background: rgba\(12, 12, 20, 0\.86\);/, `${selector} has the 0.86 background floor`);
   }
 });
 
