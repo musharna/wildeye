@@ -323,9 +323,16 @@ export function parseGbifMatch(json) {
   if (typeof matchType !== 'string') throw new Error(`GBIF match: response has no matchType (${String(JSON.stringify(json)).slice(0, 120)})`);
   if (matchType === 'NONE') return { key: null, matchType, canonicalName: null };
   if (!Number.isInteger(json.usageKey)) throw new Error(`GBIF match: a ${matchType} match has no usageKey`);
+  if (Number.isInteger(json.acceptedUsageKey)) {
+    // R12-M3: a synonym is mapped as its accepted taxon, so it is named as that taxon: the classification field for its rank ("species" for a
+    // SPECIES synonym) when that field's key is the accepted key; otherwise null, and client.match looks the accepted key up.
+    const field = typeof json.rank === 'string' ? json.rank.toLowerCase() : null;
+    const accepted = field && json[`${field}Key`] === json.acceptedUsageKey && typeof json[field] === 'string' && json[field] ? json[field] : null;
+    return { key: json.acceptedUsageKey, matchType, canonicalName: accepted };
+  }
   const canonicalName = json.canonicalName || json.scientificName;
   if (typeof canonicalName !== 'string' || !canonicalName) throw new Error(`GBIF match: a ${matchType} match for key ${json.usageKey} has no name`);
-  return { key: Number.isInteger(json.acceptedUsageKey) ? json.acceptedUsageKey : json.usageKey, matchType, canonicalName };
+  return { key: json.usageKey, matchType, canonicalName };
 }
 
 export function speciesUrl(key) {
@@ -438,8 +445,12 @@ export function createBioClient({
         throw new RequestError(`iNaturalist (${inatError.message}) and GBIF (${error.message}) both failed`);
       }
     },
+    /** GBIF's strict match; a synonym whose accepted name the response does not carry is named by looking the accepted key up (R12-M3). */
     async match(scientificName, { signal = null } = {}) {
-      return parseGbifMatch(await get(gbifMatchUrl(scientificName), signal));
+      const match = parseGbifMatch(await get(gbifMatchUrl(scientificName), signal));
+      if (match.key === null || match.canonicalName !== null) return match;
+      const accepted = await this.speciesName(match.key, { signal });
+      return { ...match, canonicalName: accepted.scientificName };
     },
     async speciesNear(args, { signal = null } = {}) {
       return parseSpeciesNear(await get(speciesNearUrl(args), signal));
