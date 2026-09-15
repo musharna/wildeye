@@ -9584,11 +9584,18 @@ body.scene-playback-mode #key-setup {
 .bio-card-row-note { grid-column: 1 / -1; color: #ffb86b; font-size: 11px; }
 .bio-card-status { margin: 0 0 6px; color: rgba(232, 234, 237, 0.8); }
 .bio-card-retry { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: rgba(232, 234, 237, 0.8); cursor: pointer; font: 9px var(--font-mono); letter-spacing: 1.2px; padding: 5px 9px; }
-/* The foot keeps its content height up to half the card's 52vh and scrolls beyond it, and never shrinks below that: at 375x667 a list with five
-   failed dataset lookups made the foot taller than the card, the species list above it shrank to 0 px and the foot ran out of the card's box. */
-.bio-card-foot { flex: 0 0 auto; max-height: 26vh; overflow-y: auto; font-size: 11px; color: rgba(232, 234, 237, 0.8); border-top: 1px solid var(--glass-border); padding-top: 6px; }
+/* R12-I1: the foot is a column that never shrinks below its content or its cap: only its Top datasets rows shrink and scroll, with a fade while
+   more of them is below, and its heading, note and gbif.org credit link never shrink, so the credit is visible at rest. (One scrolling foot
+   capped at 26vh hid the credit below its scroll with no cue.) */
+.bio-card-foot { display: flex; flex-direction: column; flex: 0 0 auto; font-size: 11px; color: rgba(232, 234, 237, 0.8); border-top: 1px solid var(--glass-border); padding-top: 6px; }
 .bio-card-foot:empty { display: none; }
-.bio-card-foot-note { display: block; margin-bottom: 2px; }
+.bio-card-foot-note { display: block; flex: none; margin-bottom: 2px; }
+.bio-card-foot > a { flex: none; align-self: flex-start; }
+/* The cap: on windows up to 850 px tall the foot is at most half the card's 52vh, which buys a species row when failed dataset lookups make the
+   foot tall (measured on the Taveuni list: 2 rows against 1 at 800 px, 1 against 0 at 720 and 667 px). At 900 and 1,100 px it bought none. */
+@media (max-height: 850px) {
+  .bio-card-foot { max-height: 26vh; }
+}
 body.ui-clean-view #bio-card,
 body.recording-mode #bio-card { display: none !important; }
 /* ── SPECIES panel (src/bio/speciesPanel.js) ── */
@@ -9723,7 +9730,21 @@ body.recording-mode #bio-card { display: none !important; }
 .dataset-row-link { flex: 1 1 0; min-width: 0; color: var(--accent); overflow-wrap: anywhere; }
 .dataset-row-count { flex: 0 0 auto; color: rgba(232, 234, 237, 0.8); font: 10px var(--font-mono); }
 .dataset-row-note { flex: 1 0 100%; color: #ffb86b; font-size: 10px; }
-.bio-card-foot .dataset-list { margin-bottom: 6px; }
+.bio-card-foot .dataset-list { flex: 0 1 auto; min-height: 0; margin-bottom: 6px; }
+.bio-card-foot .dataset-list-heading { flex: none; }
+.bio-card-foot .dataset-list-rows { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
+/* The rows fade out at the bottom while more of them is below, as the card body does; with nothing to scroll the timeline is inactive and the
+   fade stays 0 px. */
+@property --bio-card-datasets-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes bio-card-datasets-fade { from { --bio-card-datasets-fade: 20px; } to { --bio-card-datasets-fade: 0px; } }
+@supports (animation-timeline: scroll()) {
+  .bio-card-foot .dataset-list-rows {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--bio-card-datasets-fade)), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--bio-card-datasets-fade)), transparent);
+    animation: bio-card-datasets-fade linear both;
+    animation-timeline: scroll(self);
+  }
+}
 .species-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 /* Unpressed chips: the shared .scene-btn text (0.5 white) measured 4.00 to 4.55:1 over the panel, so species chips use 0.8 white. The
    pressed rule below has the same specificity and comes later, so it still wins. */

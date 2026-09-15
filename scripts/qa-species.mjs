@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -770,7 +770,7 @@ if (CHECKS.has('contrast')) {
       await page.waitForFunction(() => /^GBIF search failed/.test(document.querySelector('#bio-card .bio-card-status')?.textContent || ''), { timeout: 45000 });
       const statusForced = await page.evaluate(() => ({ status: document.querySelector('#bio-card .bio-card-status').textContent, retry: Boolean(document.querySelector('#bio-card .bio-card-retry')) }));
       const statusTiles = await waitForMapTiles();
-      const statusCard = await measureSurface(`card-status-${size}`, { root: '#bio-card', scrollers: ['#bio-card .bio-card-body', '#bio-card .bio-card-foot'] });
+      const statusCard = await measureSurface(`card-status-${size}`, { root: '#bio-card', scrollers: ['#bio-card .bio-card-body', '#bio-card .bio-card-foot', '#bio-card .bio-card-foot .dataset-list-rows'] });
       surfaces.push({ ...statusCard, ok: statusCard.ok && statusForced.retry, viewport: size, forced: { ...statusForced, requests: await forcedCount() }, tiles: statusTiles.settled });
       await closeCard();
       // A list card across the antimeridian: every name and dataset lookup fails, and the foot says gbif.org can't show the area as a circle.
@@ -785,7 +785,7 @@ if (CHECKS.has('contrast')) {
       await page.waitForFunction(() => document.querySelector('#bio-card .bio-card-foot-note') && document.querySelectorAll('#bio-card .bio-card-row').length > 0, { timeout: 60000 });
       const listForced = await page.evaluate(() => ({ rows: document.querySelectorAll('#bio-card .bio-card-row').length, rowNotes: document.querySelectorAll('#bio-card .bio-card-row-note').length, datasetNotes: document.querySelectorAll('#bio-card .dataset-row-note').length, footNote: document.querySelector('#bio-card .bio-card-foot-note')?.textContent ?? null }));
       const listTiles = await waitForMapTiles();
-      const listCard = await measureSurface(`card-list-${size}`, { root: '#bio-card', scrollers: ['#bio-card .bio-card-body', '#bio-card .bio-card-foot'] });
+      const listCard = await measureSurface(`card-list-${size}`, { root: '#bio-card', scrollers: ['#bio-card .bio-card-body', '#bio-card .bio-card-foot', '#bio-card .bio-card-foot .dataset-list-rows'] });
       // The species rows themselves must be seen and measured, not only the foot.
       surfaces.push({ ...listCard, ok: listCard.ok && Boolean(listCard.classes['span.bio-card-row-primary']) && listForced.rowNotes > 0 && listForced.datasetNotes > 0 && listForced.footNote === "gbif.org can't show this area as a circle", viewport: size, forced: { ...listForced, requests: await forcedCount() }, tiles: listTiles.settled });
       await closeCard();
@@ -819,6 +819,130 @@ if (CHECKS.has('contrast')) {
   }
   const restoredOk = restored?.stack === initial.stack && restored.scope === initial.scope && restored.fetchRestored === true && restored.speciesEnabled === initial.speciesEnabled;
   report('contrast', error === null && restoredOk && surfaces.length === VIEWPORTS.length * 3 && surfaces.every((s) => s.ok), { settings, surfaces, restored, ...(error ? { error } : {}) });
+}
+
+// R12-I1 (re-review), critic 10 B1: the gbif.org credit link and its note are visible at rest. A what-lives-here list at Taveuni (a 50 km circle
+// across the antimeridian, so the foot carries its note) is read with every scroll container in the card set to scroll 0, and nothing is scrolled
+// after that: the link's box must be whole inside the card, the foot and every clipping ancestor, and the page must hit the link at the centre
+// of each of its boxes; the note must be whole too. States: the list with every dataset lookup failed (HTTP 503 answered in the page's fetch) and the normal
+// list, at 1400x900 and 375x667. The failed states run first: finished dataset lookups are cached for the session, failures are not. Positive
+// control in the same check: at rest at least one species row and the first line of at least one dataset link are whole, so the credit is not
+// bought by hiding the lists, and where the dataset rows overflow their fade is on. qa contrast scrolls to find text and cannot see this.
+if (CHECKS.has('card-foot-rest')) {
+  const TAVEUNI = [179.97, -16.8, 10000];
+  const STATES = [[1400, 900, true], [375, 667, true], [1400, 900, false], [375, 667, false]];
+  const setDatasetFailures = (on) => page.evaluate((on) => {
+    if (on && !window.__qaRestFetch) {
+      window.__qaRestFetch = window.fetch;
+      window.fetch = (input, init) => {
+        const url = String(input?.url ?? input);
+        if (url.startsWith('https://api.gbif.org/v1/dataset/')) return Promise.resolve(new Response('{"qa":"forced failure"}', { status: 503, headers: { 'content-type': 'application/json' } }));
+        return window.__qaRestFetch.call(window, input, init);
+      };
+    }
+    if (!on && window.__qaRestFetch) { window.fetch = window.__qaRestFetch; delete window.__qaRestFetch; }
+  }, on);
+  const closeCard = () => page.evaluate(() => { const card = document.getElementById('bio-card'); if (card && !card.hidden) card.querySelector('.bio-card-close').click(); });
+  const readRest = () => page.evaluate(() => {
+    const card = document.getElementById('bio-card');
+    const all = [card, ...card.querySelectorAll('*')];
+    const scrolledBeforeReset = all.filter((el) => el.scrollTop !== 0).length;
+    for (const el of all) el.scrollTop = 0;
+    const cardBox = card.getBoundingClientRect();
+    // What of a box can be seen: clipped by every clipping ancestor, the card and the window.
+    const seenOf = (el, box) => {
+      let b = { left: box.left, top: box.top, right: box.right, bottom: box.bottom };
+      for (let node = el.parentElement; node; node = node.parentElement) {
+        const cs = getComputedStyle(node);
+        if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+        const r = node.getBoundingClientRect();
+        b = { left: Math.max(b.left, r.left + node.clientLeft), top: Math.max(b.top, r.top + node.clientTop), right: Math.min(b.right, r.left + node.clientLeft + node.clientWidth), bottom: Math.min(b.bottom, r.top + node.clientTop + node.clientHeight) };
+      }
+      return { left: Math.max(b.left, cardBox.left, 0), top: Math.max(b.top, cardBox.top, 0), right: Math.min(b.right, cardBox.right, innerWidth), bottom: Math.min(b.bottom, cardBox.bottom, innerHeight) };
+    };
+    const wholeBox = (el, box) => { if (!el || !box || box.width === 0 || box.height === 0) return false; const s = seenOf(el, box); return s.left <= box.left + 0.5 && s.top <= box.top + 0.5 && s.right >= box.right - 0.5 && s.bottom >= box.bottom - 0.5; };
+    const round = (box) => box && { top: +box.top.toFixed(1), bottom: +box.bottom.toFixed(1), height: +box.height.toFixed(1) };
+    const link = card.querySelector('.bio-card-foot > a');
+    const note = card.querySelector('.bio-card-foot-note');
+    const foot = card.querySelector('.bio-card-foot');
+    const body = card.querySelector('.bio-card-body');
+    const rows = card.querySelector('.bio-card-foot .dataset-list-rows');
+    const linkBox = link?.getBoundingClientRect() ?? null;
+    // Each box of the link (one per line while it is inline) is what the page hits at its centre.
+    const hit = Boolean(link) && [...link.getClientRects()].every((r) => { const at = document.elementFromPoint((r.left + r.right) / 2, (r.top + r.bottom) / 2); return Boolean(at && (at === link || link.contains(at))); });
+    const footCs = foot && getComputedStyle(foot);
+    return {
+      scrolledBeforeReset,
+      link: link && { text: link.textContent, box: round(linkBox), seenBottom: +seenOf(link, linkBox).bottom.toFixed(1), whole: wholeBox(link, linkBox), hit },
+      note: note && { text: note.textContent, box: round(note.getBoundingClientRect()), whole: wholeBox(note, note.getBoundingClientRect()) },
+      card: round(cardBox),
+      foot: foot && { box: round(foot.getBoundingClientRect()), maxHeight: footCs.maxHeight, overflowY: footCs.overflowY, scrollHeight: foot.scrollHeight, clientHeight: foot.clientHeight },
+      body: body && { clientHeight: body.clientHeight, scrollHeight: body.scrollHeight },
+      speciesRows: card.querySelectorAll('.bio-card-row').length,
+      speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter((row) => wholeBox(row, row.getBoundingClientRect())).length,
+      datasetRows: card.querySelectorAll('.bio-card-foot .dataset-row').length,
+      datasetNotes: card.querySelectorAll('.bio-card-foot .dataset-row-note').length,
+      datasetFirstLinesWhole: [...card.querySelectorAll('.bio-card-foot .dataset-row-link')].filter((a) => wholeBox(a, a.getClientRects()[0])).length,
+      datasetList: rows && { overflowY: getComputedStyle(rows).overflowY, scrollHeight: rows.scrollHeight, clientHeight: rows.clientHeight, fade: getComputedStyle(rows).getPropertyValue('--bio-card-datasets-fade').trim() },
+    };
+  });
+  const restOk = (s, failed) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && s.speciesRowsWhole >= 1 && s.datasetFirstLinesWhole >= 1
+    && (!s.datasetList || s.datasetList.scrollHeight - s.datasetList.clientHeight <= 1 || /^[1-9][\d.]*px$/.test(s.datasetList.fade))
+    && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0);
+  const saved = await page.evaluate(() => {
+    const c = window.__godsEyeView.viewer.camera;
+    window.__qaRestCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll };
+    return { speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed'), radiusKm: window.__godsEyeView.dataManager.getLayerParams('species')?.radiusKm ?? 10 };
+  });
+  const results = [];
+  let error = null;
+  let restored = null;
+  try {
+    for (const [width, height, failed] of STATES) {
+      await page.setViewport({ width, height });
+      await sleep(2500);
+      await closeCard();
+      await setDatasetFailures(failed);
+      await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { radiusKm: 50 }, { origin: 'user' })) throw new Error('species radius rejected'); });
+      await flyTo(...TAVEUNI);
+      await openSpeciesPanel();
+      await page.click('#species-what-lives-here');
+      await page.evaluate(() => { const panel = document.getElementById('species-panel'); if (!panel.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click(); });
+      await sleep(800);
+      const centre = await page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
+      await page.mouse.click(centre.x, centre.y);
+      await page.waitForFunction((failed) => {
+        const card = document.getElementById('bio-card');
+        const rows = card.querySelectorAll('.bio-card-foot .dataset-row').length;
+        const notes = card.querySelectorAll('.bio-card-foot .dataset-row-note').length;
+        return Boolean(card.querySelector('.bio-card-foot-note')) && card.querySelectorAll('.bio-card-row').length > 0 && rows > 0 && (failed ? notes === rows : notes === 0);
+      }, { timeout: 60000 }, failed);
+      await page.mouse.move(Math.round(width / 2), Math.round(height * 0.3));
+      await sleep(1000);
+      const rest = await readRest();
+      await shot(`card-foot-rest-${failed ? 'failed' : 'normal'}-${width}x${height}`);
+      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed), ...rest });
+      await closeCard();
+    }
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    restored = await page.evaluate(async (saved) => {
+      if (window.__qaRestFetch) { window.fetch = window.__qaRestFetch; delete window.__qaRestFetch; }
+      const card = document.getElementById('bio-card');
+      if (card && !card.hidden) card.querySelector('.bio-card-close').click();
+      const dm = window.__godsEyeView.dataManager;
+      dm.setLayerParams('species', { radiusKm: saved.radiusKm }, { origin: 'user' });
+      const s = window.__qaRestCamera;
+      window.__godsEyeView.viewer.camera.setView({ destination: s.position, orientation: { heading: s.heading, pitch: s.pitch, roll: s.roll } });
+      const panel = document.getElementById('species-panel');
+      if (panel.classList.contains('collapsed') !== saved.speciesCollapsed) panel.querySelector('[data-collapse-target="species-panel"]').click();
+      return { fetchRestored: !window.__qaRestFetch, radiusKm: dm.getLayerParams('species')?.radiusKm ?? null };
+    }, saved).catch((caught) => ({ error: String(caught?.stack || caught).slice(0, 300) }));
+    await page.setViewport({ width: 1400, height: 900 });
+    await sleep(2000);
+  }
+  report('card-foot-rest', error === null && results.length === STATES.length && results.every((r) => r.ok) && restored?.fetchRestored === true, { results, restored, ...(error ? { error } : {}) });
 }
 
 // M1 (final review): a strict GBIF match that answers FUZZY is mapped and says so. The page's fetch answers iNaturalist's autocomplete with one

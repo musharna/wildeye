@@ -559,9 +559,19 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
     assert.ok(rule, `${selector} rule`);
     assert.match(rule.body, /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.8\);/, `${selector} is 0.8 white`);
   }
-  // The card foot is capped at half the card's height and scrolls, so a tall foot cannot squeeze the species list to nothing or leave the card.
-  const foot = feature.find((r) => r.selector === '.bio-card-foot');
-  for (const declaration of ['flex: 0 0 auto;', 'max-height: 26vh;', 'overflow-y: auto;']) assert.ok(foot.body.includes(declaration), `.bio-card-foot has ${declaration}`);
+  // R12-I1 (re-review): only the Top datasets rows scroll inside the card foot; the heading, the note and the gbif.org credit never shrink, so
+  // the credit is visible at rest. The rows fade at the bottom while more of them is below, like the card body.
+  const bodyOf = (selector) => feature.filter((r) => r.selector === selector).map((r) => r.body).join(' ');
+  const foot = bodyOf('.bio-card-foot');
+  for (const declaration of ['display: flex;', 'flex-direction: column;', 'flex: 0 0 auto;']) assert.ok(foot.includes(declaration), `.bio-card-foot has ${declaration}`);
+  assert.doesNotMatch(foot, /overflow-y: auto/, 'the foot itself does not scroll');
+  for (const declaration of ['flex: 0 1 auto;', 'min-height: 0;']) assert.ok(bodyOf('.bio-card-foot .dataset-list').includes(declaration), `.bio-card-foot .dataset-list has ${declaration}`);
+  for (const declaration of ['min-height: 0;', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
+  for (const selector of ['.bio-card-foot-note', '.bio-card-foot > a', '.bio-card-foot .dataset-list-heading']) assert.ok(bodyOf(selector).includes('flex: none;'), `${selector} never shrinks`);
+  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-foot \.dataset-list-rows \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-datasets-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
+  // The cap buys species rows only on windows up to 800 px tall (probe in the residual report: none at 900 and 1,100 px), so it applies up to 850 px.
+  assert.doesNotMatch(feature.find((r) => r.selector === '.bio-card-foot').body, /max-height/, 'the foot has no cap on tall windows');
+  assert.match(css, /@media \(max-height: 850px\) \{\s*\.bio-card-foot \{ max-height: 26vh; \}\s*\}/, 'the cap applies on windows up to 850 px tall');
   for (const selector of ['.species-panel-inner', '.bio-card']) {
     const rule = feature.find((r) => r.selector === selector);
     assert.ok(rule, `${selector} rule`);
