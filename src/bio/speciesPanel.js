@@ -248,6 +248,13 @@ export function createSpeciesPanel({
     listQuery = null;
   }
 
+  /** Ends the name search (M3, R12-M1): a pending debounce or a request still out would otherwise reopen the list. */
+  function endSearch() {
+    clearTimer(timer);
+    timer = null;
+    suggestAbort?.abort();
+  }
+
   function showSuggestions(result, query) {
     list.replaceChildren();
     status.textContent = result.notice || '';
@@ -302,10 +309,7 @@ export function createSpeciesPanel({
   async function choose(item) {
     chooseAbort?.abort();
     chooseAbort = new AbortController();
-    // M3: a choice ends the name search. A pending debounce or a request still out would reopen the list under the choice.
-    clearTimer(timer);
-    timer = null;
-    suggestAbort?.abort();
+    endSearch(); // M3: a choice ends the name search
     clearSuggestions();
     status.textContent = `Looking up ${item.scientificName} in GBIF…`;
     try {
@@ -342,6 +346,7 @@ export function createSpeciesPanel({
     if (event.key === 'Enter' && !list.hidden && listQuery === input.value.trim()) list.querySelector('button')?.click();
     // M2: an Escape that hides a visible list does only that, and says so, so the card and WHAT LIVES HERE leave it alone.
     if (event.key === 'Escape' && !list.hidden) {
+      endSearch(); // R12-M1: the search for the text in the box must not reopen the list Escape hid
       clearSuggestions();
       event.preventDefault();
     }

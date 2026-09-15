@@ -195,6 +195,47 @@ test('Escape hides a visible suggestion list and marks the key handled; with no 
   assert.equal(second.prevented, 0, 'with no list showing, Escape is left for the card and WHAT LIVES HERE');
 });
 
+// R12-M1 (re-review): Escape that hides the list also ends the name search. The list for "mona" shows, a search for "monar" is out and one
+// for "monarch" waits for the debounce: Escape clears the timer and aborts the request, or the list reopens under the card.
+test('Escape that hides the suggestion list cancels the pending debounce and aborts the name search still out', async () => {
+  const timers = fakeTimers();
+  const sent = [];
+  const { els } = panelRig({
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+    suggest: (q, { signal }) => new Promise((resolve, reject) => {
+      sent.push({ q, signal, resolve });
+      signal.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')), { once: true });
+    }),
+  });
+  const input = els['species-search'];
+  const list = els['species-suggestions'];
+  input.value = 'mona';
+  input.listeners.input();
+  timers.fireAll();
+  sent[0].resolve({ source: 'inaturalist', items: [MONARCH] });
+  await settle();
+  assert.equal(list.hidden, false, 'the list for "mona" shows');
+  input.value = 'monar';
+  input.listeners.input();
+  timers.fireAll();
+  input.value = 'monarch';
+  input.listeners.input();
+  assert.deepEqual(sent.map((s) => s.q), ['mona', 'monar'], 'the search for "monar" is out');
+  assert.equal(timers.pending(), 1, 'the search for "monarch" waits for the debounce');
+  const escape = { key: 'Escape', defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  input.listeners.keydown(escape);
+  assert.equal(list.hidden, true, 'Escape hides the list');
+  assert.equal(escape.defaultPrevented, true, 'marked handled');
+  assert.equal(timers.pending(), 0, 'and clears the pending search');
+  assert.equal(sent[1].signal.aborted, true, 'and aborts the search still out');
+  timers.fireAll();
+  sent[1].resolve({ source: 'inaturalist', items: [MONARCH] });
+  await settle();
+  assert.deepEqual(sent.map((s) => s.q), ['mona', 'monar'], 'no search is sent after Escape');
+  assert.equal(list.hidden, true, 'no list reopens');
+});
+
 // Injected timers for the suggestion debounce: scheduled callbacks run only when the test fires them.
 function fakeTimers() {
   let next = 1;
