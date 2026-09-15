@@ -17,6 +17,11 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
   temperature and flow, sea surface temperature, chlorophyll-a, sea ice, coral
   heat stress and bleaching alerts, and surface oxygen and pH.
 - wildeye: a shared 30-day time bar that most of these layers follow.
+- wildeye: species search. Any species can be mapped from GBIF records (CC0 and CC BY only), and
+  "what lives here" lists the species recorded near a clicked point. Both name the GBIF datasets
+  the records come from, with DOI links.
+- wildeye: clicking a biology marker opens a card with the record's details, citation and licence.
+  Before this, those details were attached to the markers but never shown.
 - wildeye: scheduled pipelines under `pipeline/`, a licence ledger in
   `DATA_SOURCES.md`, and a GitHub Pages deploy script.
 
