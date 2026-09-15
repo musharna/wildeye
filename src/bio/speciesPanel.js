@@ -344,10 +344,13 @@ export function createSpeciesPanel({
   input.addEventListener('keydown', (event) => {
     // M3: Enter picks the first row only of a list showing for what the box holds now, not of one built for an earlier query.
     if (event.key === 'Enter' && !list.hidden && listQuery === input.value.trim()) list.querySelector('button')?.click();
-    // M2: an Escape that hides a visible list does only that, and says so, so the card and WHAT LIVES HERE leave it alone.
-    if (event.key === 'Escape' && !list.hidden) {
-      endSearch(); // R12-M1: the search for the text in the box must not reopen the list Escape hid
-      clearSuggestions();
+    // M2, R12-M1, R12-M2: Escape does one thing at a time and says so (preventDefault), so the card and WHAT LIVES HERE leave that key alone. It
+    // hides a visible list and keeps the text; with no list it clears the text in the box; either way it ends the name search. With neither, the
+    // key is theirs: the next Escape closes the card and disarms.
+    if (event.key === 'Escape' && (!list.hidden || input.value !== '')) {
+      endSearch();
+      if (!list.hidden) clearSuggestions();
+      else input.value = '';
       event.preventDefault();
     }
   });

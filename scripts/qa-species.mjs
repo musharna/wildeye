@@ -1257,9 +1257,11 @@ if (CHECKS.has('suggestion-fade')) {
   report('suggestion-fade', error === null && controlOk && shortOk, { control, short, controlOk, shortOk, ...(error ? { error } : {}) });
 }
 
-// M2 (final review): one Escape does one thing in the real page, where the search box's keydown listener runs before the document's. With
-// WHAT LIVES HERE armed (its prompt card showing) and suggestions showing, the first Escape only hides the list: the card stays and it stays
-// armed. Positive control in the same check: the second Escape, with no list showing, closes the card and disarms.
+// M2 (final review), R12-M1 and R12-M2 (re-review): Escape in the real page, where the search box's keydown listener runs before the document's.
+// WHAT LIVES HERE is armed (its prompt card showing) and suggestions for "monarch" show; "s" is typed and Escape pressed at once, then 2.5 s pass.
+// The first Escape only hides the list, and the search for "monarchs" it ended does not reopen it (R12-M1); the text, the card and the armed
+// state stay. The second Escape, with text and no list, only clears the text (R12-M2). The third, with neither, closes the card and disarms: the
+// positive control that Escape still reaches them.
 if (CHECKS.has('escape')) {
   const read = () => page.evaluate(() => ({
     listHidden: document.getElementById('species-suggestions').hidden,
@@ -1281,12 +1283,16 @@ if (CHECKS.has('escape')) {
     await page.type('#species-search', 'monarch', { delay: 40 });
     await page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
     states.before = await read();
+    await page.keyboard.type('s');
     await page.keyboard.press('Escape');
-    await sleep(700);
+    await sleep(2500);
     states.first = await read();
     await page.keyboard.press('Escape');
     await sleep(700);
     states.second = await read();
+    await page.keyboard.press('Escape');
+    await sleep(700);
+    states.third = await read();
   } catch (caught) {
     error = String(caught?.stack || caught).slice(0, 500);
   } finally {
@@ -1301,9 +1307,10 @@ if (CHECKS.has('escape')) {
     }).catch((caught) => { error = `${error ?? ''} restoring: ${caught}`; });
     await sleep(500);
   }
-  const firstOk = Boolean(states.first) && states.before.listHidden === false && states.before.cardHidden === false && states.before.armed && states.first.listHidden === true && states.first.cardHidden === false && states.first.armed;
-  const secondOk = Boolean(states.second) && states.second.cardHidden === true && states.second.armed === false;
-  report('escape', error === null && firstOk && secondOk, { ...states, firstOk, secondOk, ...(error ? { error } : {}) });
+  const firstOk = Boolean(states.first) && states.before.listHidden === false && states.before.cardHidden === false && states.before.armed && states.first.listHidden === true && states.first.value === 'monarchs' && states.first.cardHidden === false && states.first.armed;
+  const secondOk = Boolean(states.second) && states.second.value === '' && states.second.listHidden === true && states.second.cardHidden === false && states.second.armed;
+  const thirdOk = Boolean(states.third) && states.third.cardHidden === true && states.third.armed === false;
+  report('escape', error === null && firstOk && secondOk && thirdOk, { ...states, firstOk, secondOk, thirdOk, ...(error ? { error } : {}) });
 }
 
 if (CHECKS.has('search')) {

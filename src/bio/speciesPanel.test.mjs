@@ -176,23 +176,38 @@ test("a FUZZY match is mapped and says it is shown as GBIF's name; EXACT says no
   assert.equal(none.els['species-chosen-note'].hidden, true);
 });
 
-// M2 (final review): Escape in the search box hides a visible suggestion list and marks the key handled (a recorded keydown), so the details
-// card and WHAT LIVES HERE, which listen on the document after it, leave that key alone; with no list showing, Escape is left for them.
-test('Escape hides a visible suggestion list and marks the key handled; with no list showing it is left unhandled', async () => {
-  const { els } = panelRig({ suggest: async () => ({ source: 'inaturalist', items: [MONARCH] }), setTimer: (fn) => { fn(); return 1; } });
+// M2 (final review), R12-M2 (re-review): Escape in the search box does one thing at a time and marks it handled (a recorded keydown), so the
+// details card and WHAT LIVES HERE, which listen on the document after it, leave that key alone. With a list showing it hides the list and keeps
+// the text; with text and no list it clears the text; either way it ends the name search. With neither, Escape is theirs.
+test('Escape hides a visible list, then clears the text, each marked handled and ending the search; with neither it is left unhandled', async () => {
+  const timers = fakeTimers();
+  const { els } = panelRig({ suggest: async () => ({ source: 'inaturalist', items: [MONARCH] }), setTimer: timers.setTimer, clearTimer: timers.clearTimer });
   const input = els['species-search'];
   input.value = 'monarch';
   input.listeners.input();
+  timers.fireAll();
   await settle();
   assert.equal(els['species-suggestions'].hidden, false, 'the list shows');
   const keydown = (key) => ({ key, defaultPrevented: false, prevented: 0, preventDefault() { this.defaultPrevented = true; this.prevented += 1; } });
   const first = keydown('Escape');
   input.listeners.keydown(first);
-  assert.equal(els['species-suggestions'].hidden, true, 'Escape hides the list');
+  assert.equal(els['species-suggestions'].hidden, true, 'the first Escape hides the list');
+  assert.equal(input.value, 'monarch', 'and keeps the text');
   assert.equal(first.prevented, 1, 'and marks the key handled');
+  input.value = 'monarchs';
+  input.listeners.input();
+  assert.equal(timers.pending(), 1, 'a search for "monarchs" waits for the debounce');
   const second = keydown('Escape');
   input.listeners.keydown(second);
-  assert.equal(second.prevented, 0, 'with no list showing, Escape is left for the card and WHAT LIVES HERE');
+  assert.equal(input.value, '', 'with text and no list, Escape clears the text');
+  assert.equal(timers.pending(), 0, 'and ends the search');
+  assert.equal(second.prevented, 1, 'and marks the key handled');
+  timers.fireAll();
+  await settle();
+  assert.equal(els['species-suggestions'].hidden, true, 'no list comes back');
+  const third = keydown('Escape');
+  input.listeners.keydown(third);
+  assert.equal(third.prevented, 0, 'with no list and no text, Escape is left for the card and WHAT LIVES HERE');
 });
 
 // R12-M1 (re-review): Escape that hides the list also ends the name search. The list for "mona" shows, a search for "monar" is out and one
