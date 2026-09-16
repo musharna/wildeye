@@ -45,16 +45,22 @@ def process_site(site: dict, workdir: Path, ppi_dir: Path | None, key: str | Non
     if not key:
         raise RuntimeError(f"{site['id']}: no volume found")
     vol = download_volume(key, workdir / site["id"])
-    rec = reduce_profile(parse_profile(run_vol2bird(vol)))
-    if ppi_dir is None:
-        from .ppi import bio_grid
-        import pyart
-        grid, bounds = bio_grid(pyart.io.read_nexrad_archive(str(vol)))
-        png = None
-    else:
-        grid, bounds = ppi_for_volume(vol, ppi_dir / f"{site['id']}.png")
-        png = f"data/birds_ppi/{site['id']}.png"
-    return build_feature(site, rec, key), {"png": png, "bounds": bounds, "grid": grid}
+    # keys are timestamped, so every run downloads a new volume and the cache never
+    # re-hits; without this the workdir grew ~23 GB/day and filled the disk (2026-09-15).
+    # unlink in finally also drops a partial download so a retry re-fetches it.
+    try:
+        rec = reduce_profile(parse_profile(run_vol2bird(vol)))
+        if ppi_dir is None:
+            from .ppi import bio_grid
+            import pyart
+            grid, bounds = bio_grid(pyart.io.read_nexrad_archive(str(vol)))
+            png = None
+        else:
+            grid, bounds = ppi_for_volume(vol, ppi_dir / f"{site['id']}.png")
+            png = f"data/birds_ppi/{site['id']}.png"
+        return build_feature(site, rec, key), {"png": png, "bounds": bounds, "grid": grid}
+    finally:
+        vol.unlink(missing_ok=True)
 
 def site_entry(feature: dict, meta: dict | None) -> dict:
     p = feature["properties"]
