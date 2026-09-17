@@ -56,7 +56,7 @@ function record(name, ok, detail) {
 }
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
-const chrome = (() => { try { return puppeteer.executablePath(); } catch { return undefined; } })();
+const chrome = await (async () => { try { return await puppeteer.executablePath(); } catch { return undefined; } })();
 const browser = await puppeteer.launch({
   headless: HEADFUL ? false : 'new',
   executablePath: chrome,

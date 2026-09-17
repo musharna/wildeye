@@ -1,7 +1,7 @@
 # Gap-layer builder brief (read fully before touching anything)
 
-Repo: /home/mjarnold/wildeye, branch main-wildeye. Node: `export PATH=~/.local/node24/bin:$PATH`. Python: `/home/mjarnold/miniconda3/bin/python3 -B`.
-Tests: `npm test` (JS, node:test; count `ℹ pass`), `/home/mjarnold/miniconda3/bin/python3 -B -m pytest pipeline/tests -q`.
+Repo: ~/wildeye, branch main-wildeye. Node: `export PATH=~/.local/node24/bin:$PATH`. Python: `~/miniconda3/bin/python3 -B`.
+Tests: `npm test` (JS, node:test; count `ℹ pass`), `~/miniconda3/bin/python3 -B -m pytest pipeline/tests -q`.
 
 ## Read first (the contracts you are cloning — read every file, not just the first)
 - Polygon contract: `pipeline/whispers.py`, `pipeline/tests/test_whispers.py`, `src/data/whispers.js`, `src/data/whispers.test.mjs`, `src/data/hpai.js` (binsAt/LIVE_WEEKS), `pipeline/gfw.py` + `src/data/gfw.js` (country polygons, key-in-query-string lesson).
