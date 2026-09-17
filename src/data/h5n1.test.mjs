@@ -96,11 +96,15 @@ test('layer: contract, live window, observed week, chips, legend states record e
   } finally { globalThis.fetch = saved; }
 });
 
-test('real file: the gitignored live run public/data/h5n1.geojson loads through the layer (fails if absent — never the seed)', async () => {
+test('real file: the gitignored live run public/data/h5n1.geojson loads through the layer (skips loud if absent — never the seed)', async (t) => {
   // Mutant: reading public/data/seed/h5n1.geojson instead — the path assertion below catches it.
   const path = new URL('../../public/data/h5n1.geojson', import.meta.url);
   assert.ok(path.pathname.endsWith('/public/data/h5n1.geojson') && !path.pathname.includes('/seed/'));
-  assert.ok(existsSync(path), 'public/data/h5n1.geojson missing: run pipeline/run_h5n1.sh first');
+  // The file is gitignored, so on a CI runner it is ALWAYS absent: asserting
+  // it exists made this the one test that could never pass there, and every
+  // PR's check went red for that reason alone. Same convention as fires/rivers:
+  // skip out loud, never fall back to the seed.
+  if (!existsSync(path)) { t.skip('public/data/h5n1.geojson absent (gitignored) — run pipeline/run_h5n1.sh'); return; }
   const text = readFileSync(path, 'utf8');
   const gj = JSON.parse(text);
   const saved = globalThis.fetch;

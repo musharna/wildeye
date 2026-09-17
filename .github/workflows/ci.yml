@@ -3,7 +3,9 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    # The default branch is main-wildeye. With [main] this workflow had never
+    # run on a push: zero runs on the default branch since it was created.
+    branches: [main-wildeye]
 
 permissions:
   contents: read
