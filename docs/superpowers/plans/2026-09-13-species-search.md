@@ -22,7 +22,7 @@
 - The species feature must work on the static host: no `/api` calls, no `requiresBackend`, no `data-requires-backend`.
 - Node 24: `export PATH=~/.local/node24/bin:$PATH`. Single test file: `node --test <file>`. Full suite: `npm test`.
 - Public prose (README, CHANGELOG): plain declarative sentences; goes in a draft PR.
-- Visual output (card, panel, map) passes an independent critic subagent before deploy. The user cannot see inline images: copy screenshots to `/mnt/c/Users/a2b32/Downloads`.
+- Visual output (card, panel, map) passes an independent critic subagent before deploy. The user cannot see inline images: copy screenshots to `the Windows Downloads folder`.
 - Before the Pages deploy, the GBIF terms and the iNaturalist Terms of Service are read in a browser and quoted in `DATA_SOURCES.md`.
 
 ## File Structure
@@ -2207,7 +2207,7 @@ Expected: last line `0 controls produced failed requests or errors; 0 reloaded o
 
 - [ ] **Step 3: Independent visual review**
 
-Copy the screenshots for the user: `cp .qa-static/shots/*.png /mnt/c/Users/a2b32/Downloads/`.
+Copy the screenshots for the user: `cp .qa-static/shots/*.png the Windows Downloads folder/`.
 Dispatch an independent critic subagent (Agent tool, general-purpose, default model) with this brief: "You are reviewing three screenshots of a Cesium globe web app: `.qa-static/shots/card.png` (a details card opened by clicking a wildlife sighting), `search.png` (SPECIES panel after choosing Monarch, GBIF hexagon density map drawn over the globe), `what-lives-here.png` (the card listing species recorded within 10 km of a point in Yellowstone). Read each image. For each, report PASS or FAIL with concrete defects: text that is cut off, overlapping other HUD elements, too small to read at 1400×900, low contrast against the dark globe, a map layer that hides the markers or looks like a rendering error, controls whose state (pressed / not pressed) cannot be told apart. Do not assume anything the image does not show." Fix every FAIL defect (CSS in `style.css`, or `SPECIES_ALPHA` in `src/data/species.js`), rebuild, re-run Step 1 with `--checks card,search,here`, and dispatch a fresh critic until all three PASS.
 
 - [ ] **Step 4: Read the terms in a real browser and record them**

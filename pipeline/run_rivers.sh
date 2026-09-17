@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # cron PATH has no miniconda; bare python3 there lacks the deps (2026-09-11 outage)
-PY="${WILDEYE_PYTHON:-/home/mjarnold/miniconda3/bin/python3}"
+PY="${WILDEYE_PYTHON:-$HOME/miniconda3/bin/python3}"
 # No key needed (~17 requests/run vs the keyless api.data.gov hourly limit); an optional
 # USGS_WATER_API_KEY in the env file raises that limit.
 if [ -f "$HOME/.config/wildeye/env" ]; then

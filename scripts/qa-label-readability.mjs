@@ -157,7 +157,7 @@ const CHROME_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
   // Pin puppeteer's Chrome-for-Testing: system Chrome auto-updates underneath
   // the harnesses and its software-GL behaviour shifts across majors.
-  (() => { try { return puppeteer.executablePath(); } catch { return null; } })(),
+  await (async () => { try { return await puppeteer.executablePath(); } catch { return null; } })(),
 ].filter(Boolean);
 
 function findChrome() {

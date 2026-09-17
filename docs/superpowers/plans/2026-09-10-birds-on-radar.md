@@ -124,7 +124,7 @@ def download_volume(key: str, dest_dir: Path) -> Path:
 
 - [ ] **Step 4: Run tests; then real-execution check**
 Run: `python3 -m pytest pipeline/tests -q` → PASS.
-Run: `python3 -c "from pipeline.nexrad import *; from pathlib import Path; k=latest_volume_key('KOKX'); print(k); print(download_volume(k, Path('/home/mjarnold/.claude/jobs/19dcbb5d/tmp/vol')))"` → prints a key and a file path; `ls -la` the file (expect 5–20 MB).
+Run: `python3 -c "from pipeline.nexrad import *; from pathlib import Path; k=latest_volume_key('KOKX'); print(k); print(download_volume(k, Path('$CLAUDE_JOB_DIR/tmp/vol')))"` → prints a key and a file path; `ls -la` the file (expect 5–20 MB).
 
 - [ ] **Step 5: Commit** `git add pipeline && git commit -m "feat(pipeline): NEXRAD latest-volume locator and downloader"`
 
@@ -143,7 +143,7 @@ Run: `python3 -c "from pipeline.nexrad import *; from pathlib import Path; k=lat
 - [ ] **Step 1: Produce a real fixture FIRST (this is the external control)**
 Run vol2bird in Docker on the file from Task 1:
 ```bash
-V=/home/mjarnold/.claude/jobs/19dcbb5d/tmp/vol
+V=$CLAUDE_JOB_DIR/tmp/vol
 docker run --rm -v "$V":/data adokter/vol2bird vol2bird /data/$(ls $V | head -1) > pipeline/tests/fixtures/KOKX_profile.txt
 head -20 pipeline/tests/fixtures/KOKX_profile.txt
 ```
@@ -591,7 +591,7 @@ exec timeout 540 python3 -m pipeline.build_birds --out public/data/birds.geojson
 ```
 `chmod +x pipeline/run_birds.sh`; run it once by hand on all 20 sites, record wall time in `pipeline/README.md`. If wall > 480 s, lower `--workers` or sites and record why.
 
-- [ ] **Step 2: Cron** — `crontab -l` first, then append `*/10 * * * * /home/mjarnold/wildeye/pipeline/run_birds.sh >> /home/mjarnold/wildeye/pipeline/cron.log 2>&1`. Add `pipeline/cron.log` and `/tmp` workdir to `.gitignore`. Verify after 10 min: `tail pipeline/cron.log` shows a "wrote" line and `generated_at` advanced.
+- [ ] **Step 2: Cron** — `crontab -l` first, then append `*/10 * * * * ~/wildeye/pipeline/run_birds.sh >> ~/wildeye/pipeline/cron.log 2>&1`. Add `pipeline/cron.log` and `/tmp` workdir to `.gitignore`. Verify after 10 min: `tail pipeline/cron.log` shows a "wrote" line and `generated_at` advanced.
 
 - [ ] **Step 3: Docs** — `pipeline/README.md`: prerequisites (docker, boto3), commands, output schema (property names from Task 3), cadence, known limits (CONUS, nocturnal, 20 sites). README top section: what wildeye is, upstream credit, the birds layer. DATA_SOURCES.md row for NEXRAD (public domain) + vol2bird (LGPL).
 

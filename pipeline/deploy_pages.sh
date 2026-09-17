@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/node24/bin:$PATH"
 BASE="${PAGES_BASE:-/wildeye/}"
 KEEP_NIGHTS="${KEEP_NIGHTS:-2}"   # pushes above ~50 MB get dropped by GitHub on this uplink (2026-09-12)
-PY="${WILDEYE_PYTHON:-/home/mjarnold/miniconda3/bin/python3}"
+PY="${WILDEYE_PYTHON:-$HOME/miniconda3/bin/python3}"
 BRANCH=gh-pages
 WT="$(mktemp -d "${TMPDIR:-/tmp}/wildeye-pages.XXXXXX")"
 trap 'git worktree remove --force "$WT" >/dev/null 2>&1 || true; git worktree prune' EXIT
