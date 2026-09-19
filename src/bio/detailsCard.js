@@ -8,6 +8,7 @@
  */
 import DOMPurify from 'dompurify';
 import { createDatasetList } from './datasetList.js';
+import { observeSizeWithResizeObserver, watchMoreBelow } from './moreCue.js';
 
 export const BIO_CARD_LAYER_IDS = new Set([
   'arbonet', 'birds', 'cetaceans', 'drought', 'ecoregions', 'fires', 'fishing', 'gfw', 'h5n1', 'hpai',
@@ -94,7 +95,7 @@ export function renderListInto(container, rows, doc, onRow) {
   }
 }
 
-export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {} }) {
+export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {}, observeSize = observeSizeWithResizeObserver }) {
   const root = doc.createElement('aside');
   root.id = 'bio-card';
   root.className = 'bio-card';
@@ -118,6 +119,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   const body = root.querySelector('.bio-card-body');
   const foot = root.querySelector('.bio-card-foot');
   let mode = null;
+  // Brief B S-1: stops the Top datasets rows' "more ↓" cue from watching a list the card no longer shows.
+  let stopDatasetsCue = null;
   // The owner is told (onListEnd), after the change, whenever list or status content stops showing for any reason: the card
   // is closed or dismissed, or a marker's details replace it. "What lives here" keeps its outline exactly that long (R-7e).
   // The owner's handler runs inside the card's own state change, so its failure is logged here under its own label: a dismiss still
@@ -134,6 +137,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   };
 
   const reset = (heading) => {
+    stopDatasetsCue?.();
+    stopDatasetsCue = null;
     title.textContent = heading;
     filter.textContent = '';
     body.replaceChildren();
@@ -213,7 +218,11 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
       showListContent(heading, () => {
         filter.textContent = filterLine;
         renderListInto(body, listRows(entries), doc, onRow);
-        if (datasets.length) foot.appendChild(createDatasetList(doc, datasets, { heading: 'Top datasets in this area' }));
+        if (datasets.length) {
+          const block = foot.appendChild(createDatasetList(doc, datasets, { heading: 'Top datasets in this area' }));
+          // [heading, rows, cue] (createDatasetList): the panel's cue, shown while more rows are below the rows' view.
+          stopDatasetsCue = watchMoreBelow(block.children[1], block.children[2], observeSize);
+        }
         if (footerNote) {
           const note = doc.createElement('span');
           note.className = 'bio-card-foot-note';

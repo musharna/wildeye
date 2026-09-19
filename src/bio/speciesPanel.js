@@ -5,19 +5,12 @@
  */
 import { SPECIES_MAP_LEGEND, gbifPortalTaxonUrl, yearLabel } from './gbif.js';
 import { createDatasetRows } from './datasetList.js';
+import { MORE_SLACK_PX, hasMoreBelow, watchMoreBelow } from './moreCue.js';
 
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
-/**
- * I2: scrollHeight and clientHeight are whole pixels rounded from fractional layout, so a scroll range of up to 2 px is rounding, not content,
- * and the scroll cue stays hidden.
- */
-export const MORE_SLACK_PX = 2;
-
-/** Whether more of a scroll container's content is below its view: more than MORE_SLACK_PX of its scroll range is left. */
-export function hasMoreBelow({ scrollTop, scrollHeight, clientHeight }) {
-  return scrollHeight - clientHeight - scrollTop > MORE_SLACK_PX;
-}
+// The scroll cue's rule lives in moreCue.js, shared with the details card's Top datasets rows; re-exported for existing importers.
+export { MORE_SLACK_PX, hasMoreBelow };
 
 /**
  * "Common · Scientific (rank)", plus the term iNaturalist matched, which can be another common name ("Hump-back Cicada" for Swamp
@@ -120,11 +113,8 @@ export function createSpeciesPanel({
   let datasetsSettled = false;
   let datasetsFailed = false;
   renderLegendInto(legend, doc);
-  const updateMore = () => { more.style.visibility = hasMoreBelow(body) ? 'visible' : 'hidden'; };
-  body.addEventListener('scroll', updateMore, { passive: true });
   // The body's size follows the window and the panel stack; its content's follows the legend, the datasets and the suggestions.
-  observeSize([body, ...body.children], updateMore);
-  updateMore();
+  watchMoreBelow(body, more, observeSize);
 
   const params = () => dataManager.getLayerParams('species') || { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
 

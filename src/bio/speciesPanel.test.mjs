@@ -782,7 +782,10 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   // R13-M2: the rows are inset by the focus ring's reach (padding taken back by the margin), so a focused link's ring is not cut by their scroll clip.
   for (const declaration of ['grid-row: datasets-rows;', 'margin: 0 -3px;', 'padding: 3px;', 'scroll-padding: 3px;', 'min-height: calc(11px * 1.35 + 6px);', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
   for (const [selector, track] of [['.bio-card-foot-note', 'foot-note'], ['.bio-card-foot > a', 'foot-link'], ['.bio-card-foot .dataset-list-heading', 'datasets-heading']]) assert.ok(bodyOf(selector).includes(`grid-row: ${track};`), `${selector} sits on its own fixed track`);
-  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-foot \.dataset-list-rows \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-datasets-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
+  // Brief B S-1: the rows' "more below" cue is the panel's "more ↓" (same rule as .species-more), on the heading's line; the rows' fade is gone.
+  assert.match(css, /\.species-more, \.dataset-list-more \{[^}]*visibility: hidden;[^}]*pointer-events: none;/);
+  for (const declaration of ['grid-row: datasets-heading;', 'justify-self: end;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-more').includes(declaration), `the rows' cue has ${declaration}`);
+  assert.doesNotMatch(css, /--bio-card-datasets-fade|\.dataset-list-rows \{[^}]*mask-image/, 'no fade on the dataset rows');
   // Critic 10 S1: the floor is for the open SPECIES panel and the card; the collapsed SPECIES pill keeps the shared glass of its sibling pills.
   assert.ok(bodyOf('.species-panel-inner').includes('background: var(--glass-bg);'), '.species-panel-inner keeps the shared glass');
   for (const selector of ['#species-panel:not(.collapsed) .species-panel-inner', '.bio-card']) {
@@ -852,8 +855,8 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // never positioned over the body, and gone with the collapsed body. I1: the Top datasets heading scrolls with its links (sticky covered the
   // top link on a phone).
   assert.doesNotMatch(css, /--species-body-fade|--species-more|\.species-body::after|#species-panel \.species-body \{[^}]*mask-image/);
-  assert.match(css, /\.species-more \{[^}]*flex: 0 0 auto;[^}]*height: \d+px;[^}]*color: var\(--accent\);[^}]*visibility: hidden;/);
-  assert.doesNotMatch(css, /\.species-more \{[^}]*(?:position:|margin-top: -)/);
+  assert.match(css, /\.species-more(?:, \.dataset-list-more)? \{[^}]*flex: 0 0 auto;[^}]*height: \d+px;[^}]*color: var\(--accent\);[^}]*visibility: hidden;/);
+  assert.doesNotMatch(css, /\.species-more(?:, \.dataset-list-more)? \{[^}]*(?:position:|margin-top: -)/);
   assert.match(css, /#species-panel\.collapsed \.species-more \{ display: none !important; \}/);
   assert.doesNotMatch(css, /dataset-list-heading \{[^}]*sticky/);
   assert.match(css, /\.species-legend \{[^}]*background: rgb\(13, 15, 22\);/);

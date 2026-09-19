@@ -85,7 +85,7 @@ function cardDoc() {
   const make = (tag) => {
     const parts = {};
     return {
-      tag, hidden: false, id: '', className: '', textContent: '', innerHTML: '', attributes: {}, children: [], listeners: {},
+      tag, hidden: false, id: '', className: '', textContent: '', innerHTML: '', attributes: {}, children: [], listeners: {}, style: {},
       setAttribute(name, value) { this.attributes[name] = String(value); },
       appendChild(child) { this.children.push(child); return child; },
       replaceChildren(...kids) { this.children = kids; this.innerHTML = ''; },
@@ -251,6 +251,33 @@ test('a list foot names the top datasets above the gbif.org link; with none it i
   assert.deepEqual(foot.children.map((c) => c.className), ['dataset-list', 'bio-card-foot-note', ''], 'the datasets, then the note about the link, then the link');
   card.showList(base);
   assert.deepEqual(foot.children.map((c) => c.tag), ['a'], 'no datasets: no block');
+});
+
+// Brief B S-1: the Top datasets rows carry the panel's "more ↓" cue (moreCue.js): shown while more rows are below their view, hidden at the
+// end and when nothing is cut, on scroll and on a size change; a new list stops the old list's watcher. Positive control in the same test:
+// the cue shows for a cut list before it is asserted hidden anywhere.
+test('the Top datasets rows in the card show the SPECIES panel "more" cue while more rows are below', () => {
+  const doc = cardDoc();
+  const watched = [];
+  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html, observeSize: (targets, onChange) => { const entry = { targets, onChange, stopped: false }; watched.push(entry); return () => { entry.stopped = true; }; } });
+  const foot = card.element.querySelector('.bio-card-foot');
+  const base = { heading: 'What lives here', filterLine: 'CC0 and CC BY records', entries: [], onRow: () => {}, footer: 'Occurrence data: GBIF.org', footerHref: 'https://www.gbif.org/occurrence/search?geometry=x' };
+  card.showList({ ...base, datasets: [{ key: INAT_RG, count: 1179, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }] });
+  const [, rows, cue] = foot.children[0].children;
+  assert.deepEqual([cue.tag, cue.className, cue.textContent, cue.attributes['aria-hidden']], ['span', 'dataset-list-more', 'more ↓', 'true']);
+  assert.equal(watched.length, 1);
+  assert.deepEqual(watched[0].targets, [rows, ...rows.children], 'the rows and each row are watched for size changes');
+  Object.assign(rows, { scrollTop: 0, scrollHeight: 185, clientHeight: 98 });
+  watched[0].onChange();
+  assert.equal(cue.style.visibility, 'visible', 'cut rows: the cue shows');
+  rows.scrollTop = 87;
+  rows.listeners.scroll();
+  assert.equal(cue.style.visibility, 'hidden', 'scrolled to the end: the cue goes');
+  Object.assign(rows, { scrollTop: 0, scrollHeight: 118, clientHeight: 118 });
+  watched[0].onChange();
+  assert.equal(cue.style.visibility, 'hidden', 'nothing cut: no cue');
+  card.showList(base);
+  assert.equal(watched[0].stopped, true, 'a new list stops the old watcher');
 });
 
 // R-7e: the what-lives-here outline lives exactly as long as the card shows list or status content, so the card tells its

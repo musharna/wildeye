@@ -9673,7 +9673,7 @@ body.recording-mode #bio-card { display: none !important; }
 /* B1: the scroll cue is a row of its own under the body's scroll container, inside the panel, so it can never cover content (the fade and the
    overlaying "more ↓" hint it replaces hid a dataset count and a footer line). Its height is always laid out, and speciesPanel.js changes only
    its visibility, shown while more of the body is below and hidden at the end, so nothing moves. aria-hidden in index.html. */
-.species-more { flex: 0 0 auto; height: 14px; margin-top: 2px; color: var(--accent); font: 9px/14px var(--font-mono); letter-spacing: 1.2px; text-align: right; visibility: hidden; pointer-events: none; }
+.species-more, .dataset-list-more { flex: 0 0 auto; height: 14px; margin-top: 2px; color: var(--accent); font: 9px/14px var(--font-mono); letter-spacing: 1.2px; text-align: right; visibility: hidden; pointer-events: none; }
 /* Each chip row sits beside its label when they fit on one line, and under it when they do not. */
 .species-chip-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .species-chip-group > .species-label { margin-bottom: 0; }
@@ -9750,21 +9750,13 @@ body.recording-mode #bio-card { display: none !important; }
 /* The rows' floor is one line of a dataset link (11 px at line-height 1.35) inside the ring inset, so one dataset line stays whole at every
    size. R13-M2: 3 px of padding inside the scroller, taken back by the margin, as on .species-body, keep a focused link's ring (the UA's auto
    ring, 2 px out from the link) inside the scroll clip on every side; scroll-padding keeps that inset when focus scrolls a link into view.
-   The padding also replaces the 3 px the rows sat under their heading. The fade's mask is on the border box, so it now ends 3 px outside
-   the links, not on their edges. */
+   The padding also replaces the 3 px the rows sat under their heading. The rows carry no mask, so nothing clips or dims the ring. */
 .bio-card-foot .dataset-list-rows { grid-row: datasets-rows; margin: 0 -3px; padding: 3px; scroll-padding: 3px; min-height: calc(11px * 1.35 + 6px); overflow-y: auto; }
-/* The rows fade out at the bottom while more of them is below, as the card body does; with nothing to scroll the timeline is inactive and the
-   fade stays 0 px. */
-@property --bio-card-datasets-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
-@keyframes bio-card-datasets-fade { from { --bio-card-datasets-fade: 20px; } to { --bio-card-datasets-fade: 0px; } }
-@supports (animation-timeline: scroll()) {
-  .bio-card-foot .dataset-list-rows {
-    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--bio-card-datasets-fade)), transparent);
-    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--bio-card-datasets-fade)), transparent);
-    animation: bio-card-datasets-fade linear both;
-    animation-timeline: scroll(self);
-  }
-}
+/* Brief B S-1: the rows' "more below" cue is the SPECIES panel's: the same "more ↓" label and style (.species-more), shown by moreCue.js while
+   more rows are below their view and hidden at the end, only its visibility changing. It sits on the heading's line at the right, so it
+   covers no row and takes no height from the rows or the species list (at 667x375 the card has 4 px to spare). It replaces the 20 px fade,
+   which between rows read as the end of the list. */
+.bio-card-foot .dataset-list-more { grid-row: datasets-heading; justify-self: end; align-self: end; height: auto; margin-top: 0; line-height: 12px; }
 .species-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 /* Unpressed chips: the shared .scene-btn text (0.5 white) measured 4.00 to 4.55:1 over the panel, so species chips use 0.8 white. The
    pressed rule below has the same specificity and comes later, so it still wins. */

@@ -836,6 +836,8 @@ if (CHECKS.has('contrast')) {
 // R13-M2: at 1400x900 and 375x667, in both states, the first and the last dataset link take keyboard focus (Shift+Tab, then Tab back, so
 // :focus-visible applies and the browser scrolls the rows as it would) and the focus ring (the link's box grown by its outline width and
 // offset; Chrome paints the UA's auto 1px ring 2 px out from the box) is whole inside every clipping ancestor, the card and the window.
+// Brief B S-1: while the dataset rows are cut at rest, the card shows the panel's "more ↓" cue for them (visible, aria-hidden, overlapping
+// no text of the block), and it goes when the rows are scrolled to their end; with nothing cut there is no cue.
 if (CHECKS.has('card-foot-rest')) {
   const RING_SIZES = new Set(['1400x900', '375x667']);
   const TAVEUNI = [179.97, -16.8, 10000];
@@ -896,6 +898,16 @@ if (CHECKS.has('card-foot-rest')) {
       // The first text line of each dataset link (a link is a flex item, so its own box holds every line it wraps to).
       datasetFirstLinesWhole: [...card.querySelectorAll('.bio-card-foot .dataset-row-link')].filter((a) => { const range = document.createRange(); range.selectNodeContents(a); return wholeBox(a, range.getClientRects()[0]); }).length,
       datasetList: rows && { overflowY: getComputedStyle(rows).overflowY, scrollHeight: rows.scrollHeight, clientHeight: rows.clientHeight, minHeight: parseFloat(getComputedStyle(rows).minHeight) || 0, fade: getComputedStyle(rows).getPropertyValue('--bio-card-datasets-fade').trim() },
+      cue: (() => {
+        const cue = card.querySelector('.bio-card-foot .dataset-list-more');
+        if (!cue) return null;
+        const c = cue.getBoundingClientRect();
+        const cs = getComputedStyle(cue);
+        // Visible text of the block the cue could cover: the heading's text and every dataset link's and count's text inside the rows' view.
+        const texts = [...card.querySelectorAll('.bio-card-foot .dataset-list-heading, .bio-card-foot .dataset-row-link, .bio-card-foot .dataset-row-count')].flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()].map((r) => ({ el, r })); });
+        const overlaps = texts.filter(({ r }) => Math.min(r.right, c.right) - Math.max(r.left, c.left) > 0.5 && Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top) > 0.5).map(({ el }) => el.className);
+        return { text: cue.textContent, visibility: cs.visibility, display: cs.display, ariaHidden: cue.getAttribute('aria-hidden'), box: round(c), overlaps };
+      })(),
       cardMaxHeight: parseFloat(getComputedStyle(card).maxHeight),
       speciesRowHeight: card.querySelector('.bio-card-row')?.getBoundingClientRect().height ?? null,
     };
@@ -948,8 +960,27 @@ if (CHECKS.has('card-foot-rest')) {
     await page.evaluate(() => { document.activeElement?.blur?.(); for (const el of document.querySelectorAll('#bio-card *')) el.scrollTop = 0; });
     return { rings, ok: rings.length >= 2 && rings.every((r) => r.focused && r.focusVisible && r.outline.startsWith('auto') && r.inside) };
   };
-  const restOk = (s, failed) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s).ok && s.datasetFirstLinesWhole >= 1
-    && (!s.datasetList || s.datasetList.scrollHeight - s.datasetList.clientHeight <= 1 || /^[1-9][\d.]*px$/.test(s.datasetList.fade))
+  // The cue while the rows are cut: shown at rest, gone at their scroll end; with nothing cut, not shown.
+  const cueAtEnd = () => page.evaluate(async () => {
+    const rows = document.querySelector('#bio-card .bio-card-foot .dataset-list-rows');
+    const cue = document.querySelector('#bio-card .bio-card-foot .dataset-list-more');
+    if (!rows || !cue) return null;
+    rows.scrollTop = rows.scrollHeight;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const visibility = getComputedStyle(cue).visibility;
+    rows.scrollTop = 0;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return { visibility, backAtTop: getComputedStyle(cue).visibility };
+  });
+  const cueOk = (s) => {
+    const cut = Boolean(s.datasetList) && s.datasetList.scrollHeight - s.datasetList.clientHeight > MORE_SLACK_PX;
+    if (!cut) return !s.cue || s.cue.visibility === 'hidden';
+    return Boolean(s.cue) && s.cue.visibility === 'visible' && s.cue.display !== 'none' && s.cue.text === 'more ↓' && s.cue.ariaHidden === 'true' && s.cue.overlaps.length === 0 && s.cue.box.height >= 10
+      && s.cueEnd?.visibility === 'hidden' && s.cueEnd.backAtTop === 'visible';
+  };
+  const restOk = (s, failed) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s).ok && s.datasetFirstLinesWhole >= 1 && cueOk(s)
     && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0);
   const saved = await page.evaluate(() => {
     const c = window.__godsEyeView.viewer.camera;
@@ -988,6 +1019,7 @@ if (CHECKS.has('card-foot-rest')) {
       await page.mouse.move(Math.round(width / 2), Math.round(height * 0.3));
       await sleep(1000);
       const rest = await readRest();
+      rest.cueEnd = await cueAtEnd();
       await shot(`card-foot-rest-${failed ? 'failed' : 'normal'}-${width}x${height}`);
       const focus = RING_SIZES.has(`${width}x${height}`) ? await focusRings(`${failed ? 'failed' : 'normal'}-${width}x${height}`) : null;
       results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed) && (focus === null || focus.ok), share: share(rest), focus, ...rest });
