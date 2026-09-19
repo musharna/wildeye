@@ -966,8 +966,26 @@ if (CHECKS.has('card-foot-rest')) {
     const datasetLineOk = viewport === LANDSCAPE ? rowsCut : s.datasetFirstLinesWhole >= 1;
     return { ok: listNotStarved && rowsNotStarved && speciesRowOk && datasetLineOk, bodyCut, rowsCut, listNotStarved, rowsNotStarved, speciesRowOk, datasetLineOk, speciesRowHeight: s.speciesRowHeight && +s.speciesRowHeight.toFixed(1), cardMaxHeight: s.cardMaxHeight };
   };
+  // Fix round 3 (critic r2 S2): the species list as focus in the rows leaves it: its height, and every species text line its bottom edge cuts,
+  // each of which must sit inside the list's fade (mask on, fade at least as tall as the part that shows).
+  const bodyNow = () => page.evaluate(() => {
+    const body = document.querySelector('#bio-card .bio-card-body');
+    const r = body.getBoundingClientRect();
+    const clipBottom = r.top + body.clientTop + body.clientHeight;
+    const cs = getComputedStyle(body);
+    const mask = (cs.maskImage || cs.webkitMaskImage || 'none') !== 'none';
+    const fade = parseFloat(cs.getPropertyValue('--bio-card-body-fade')) || 0;
+    const cut = [...body.querySelectorAll('.bio-card-row-primary, .bio-card-row-secondary, .bio-card-row-count, .bio-card-row-note')]
+      .flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()]; })
+      .filter((line) => line.top < clipBottom - 0.5 && line.bottom > clipBottom + 0.5)
+      .map((line) => { const shows = +(clipBottom - line.top).toFixed(1); return { shows, fade, mask, ok: mask && fade >= shows - 0.5 }; });
+    return { height: body.clientHeight, cut };
+  });
   const focusRings = async (label) => {
     const count = await page.evaluate(() => document.querySelectorAll('#bio-card .bio-card-foot .dataset-row-link').length);
+    const restBody = await bodyNow();
+    const restRows = await page.evaluate(() => document.querySelector('#bio-card .bio-card-foot .dataset-list-rows').clientHeight);
+    const bodies = [];
     const rings = [];
     for (const index of [...new Set([0, count - 1])]) {
       await page.evaluate((i) => document.querySelectorAll('#bio-card .bio-card-foot .dataset-row-link')[i].focus(), index);
@@ -977,6 +995,7 @@ if (CHECKS.has('card-foot-rest')) {
       await page.keyboard.press('Tab');
       await sleep(400);
       await shot(`card-focus-${index === 0 ? 'first' : 'last'}-${label}`);
+      bodies.push(await bodyNow());
       rings.push(await page.evaluate((i) => {
         const card = document.getElementById('bio-card');
         const a = card.querySelectorAll('.bio-card-foot .dataset-row-link')[i];
@@ -1000,7 +1019,10 @@ if (CHECKS.has('card-foot-rest')) {
       }, index));
     }
     await page.evaluate(() => { document.activeElement?.blur?.(); for (const el of document.querySelectorAll('#bio-card *')) el.scrollTop = 0; });
-    return { rings, ok: rings.length >= 2 && rings.every((r) => r.focused && r.focusVisible && r.outline.startsWith('auto') && r.inside && r.boxWhole) };
+    // Where the rows already showed a whole link line at rest (one line inside the 6 px ring inset), focus must not cost the list anything.
+    const rowsHeldALine = restRows >= 11 * 1.35 + 6 - 0.5;
+    const bodyOk = bodies.every((b) => b.cut.every((line) => line.ok) && (!rowsHeldALine || Math.abs(b.height - restBody.height) <= 1));
+    return { rings, restBody, restRows, rowsHeldALine, bodies, bodyOk, ok: rings.length >= 2 && rings.every((r) => r.focused && r.focusVisible && r.outline.startsWith('auto') && r.inside && r.boxWhole) && bodyOk };
   };
   // The cue while the rows are cut: shown at rest, gone at their scroll end; with nothing cut, not shown.
   const cueAtEnd = () => page.evaluate(async () => {

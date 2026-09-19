@@ -832,7 +832,8 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   assert.ok(heightQueries.length > 0, 'positive control: the stylesheet has height queries (for other surfaces)');
   // Brief B fix round 1: one height query may widen the card on a short window; none may set a height, a cap or a share for it.
   const cardQueries = heightQueries.filter((block) => block.includes('.bio-card'));
-  assert.deepEqual(cardQueries.map((block) => block.replace(/\s+/g, ' ')), ['@media (max-height: 480px) { .bio-card { width: min(560px, calc(100vw - 48px)); } }'], 'only the short-window width');
+  const shortCard = (block) => block.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ');
+  assert.deepEqual(cardQueries.map(shortCard), ['@media (max-height: 480px) { .bio-card { width: min(560px, calc(100vw - 48px)); } .bio-card-main:has(.dataset-list-rows:focus-within) .bio-card-body { min-height: 0; max-height: 0; } .bio-card-foot .dataset-list-rows:focus-within { min-height: calc(11px * 1.35 + 6px); } }'], 'only the short-window width and the short card\'s focus share');
   for (const declaration of ['grid-row: datasets-start / datasets-end;', 'grid-template-rows: subgrid;']) assert.ok(bodyOf('.bio-card-foot .dataset-list').includes(declaration), `.bio-card-foot .dataset-list has ${declaration}`);
   // R13-M2: the rows are inset by the focus ring's reach (padding taken back by the margin), so a focused link's ring is not cut by their scroll clip.
   for (const declaration of ['grid-row: datasets-rows;', 'margin: 0 -3px;', 'padding: 3px;', 'scroll-padding: 3px;', 'min-height: 0;', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
@@ -877,8 +878,8 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // the view the collapsed DATA LAYERS and SCENES pills took (116 px at 375x667).
   assert.match(css, /@media \(max-width: 720px\) \{[^@]*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) > \[data-panel-id\]\.collapsed \{ display: none !important; \}/);
   // Critic r1 S-new: focus in the dataset rows gives them one whole link line back, at the species list's expense (qa card-foot-rest rings).
-  assert.match(css, /\n\.bio-card-foot \.dataset-list-rows:focus-within \{ min-height: calc\(11px \* 1\.35 \+ 6px\); \}/, 'focused rows keep one link line');
-  assert.match(css, /\n\.bio-card-main:has\(\.dataset-list-rows:focus-within\) \.bio-card-body \{ min-height: 0; \}/, 'the list gives up its floor meanwhile');
+  // Fix round 3 (critic r2 S2): that focus share lives only in the short-window block above; no rule outside it changes the card on focus.
+  assert.doesNotMatch(css.replace(/@media \(max-height: 480px\) \{[\s\S]*?\n\}/, ''), /dataset-list-rows:focus-within\) \.bio-card-body|dataset-list-rows:focus-within \{ min-height/, 'no unscoped focus share');
   // Final round (critic r1 N2): phone landscape gives the stack the rail's floor above the map credit and a 460 px width (qa panel-fold 667x375).
   assert.match(css, /@media \(max-width: 720px\) and \(max-height: 480px\) \{\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ right: auto; width: min\(460px, calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); \}/);
   assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
