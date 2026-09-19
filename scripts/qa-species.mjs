@@ -849,7 +849,8 @@ if (CHECKS.has('contrast')) {
 // Brief B S-1: while the dataset rows are cut at rest, the card shows the panel's "more ↓" cue for them (visible, aria-hidden, overlapping
 // no text of the block), and it goes when the rows are scrolled to their end; with nothing cut there is no cue.
 if (CHECKS.has('card-foot-rest')) {
-  const RING_SIZES = new Set(['1400x900', '375x667']);
+  // Critic r1 S-new: phone landscape too, where the rows keep only their ring inset at rest and a focused link showed a 7 px slice.
+  const RING_SIZES = new Set(['1400x900', '375x667', '667x375']);
   const TAVEUNI = [179.97, -16.8, 10000];
   // --card-sizes narrows the sizes for a quicker run while developing; the default is every size above.
   const SIZES = arg('--card-sizes', '1400x900,375x667,1400x851,393x852,412x915,430x932,667x375').split(',').map((size) => size.split('x').map(Number));
@@ -995,11 +996,11 @@ if (CHECKS.has('card-foot-rest')) {
         }
         const round = (b) => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, +v.toFixed(1)]));
         const inside = ring.left >= clip.left - 0.05 && ring.top >= clip.top - 0.05 && ring.right <= clip.right + 0.05 && ring.bottom <= clip.bottom + 0.05;
-        return { index: i, focused: document.activeElement === a, focusVisible: a.matches(':focus-visible'), outline: `${cs.outlineStyle} ${cs.outlineWidth} offset ${cs.outlineOffset}`, ring: round(ring), clip: round(clip), clippers, inside };
+        return { index: i, focused: document.activeElement === a, focusVisible: a.matches(':focus-visible'), outline: `${cs.outlineStyle} ${cs.outlineWidth} offset ${cs.outlineOffset}`, ring: round(ring), clip: round(clip), clippers, inside, boxWhole: r.left >= clip.left - 0.05 && r.top >= clip.top - 0.05 && r.right <= clip.right + 0.05 && r.bottom <= clip.bottom + 0.05 };
       }, index));
     }
     await page.evaluate(() => { document.activeElement?.blur?.(); for (const el of document.querySelectorAll('#bio-card *')) el.scrollTop = 0; });
-    return { rings, ok: rings.length >= 2 && rings.every((r) => r.focused && r.focusVisible && r.outline.startsWith('auto') && r.inside) };
+    return { rings, ok: rings.length >= 2 && rings.every((r) => r.focused && r.focusVisible && r.outline.startsWith('auto') && r.inside && r.boxWhole) };
   };
   // The cue while the rows are cut: shown at rest, gone at their scroll end; with nothing cut, not shown.
   const cueAtEnd = () => page.evaluate(async () => {

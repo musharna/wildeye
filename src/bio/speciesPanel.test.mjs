@@ -871,8 +871,11 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // Brief B fix round 1: on a phone-width window an open SPECIES panel is the only panel the left stack shows (an accordion), so its body has
   // the view the collapsed DATA LAYERS and SCENES pills took (116 px at 375x667).
   assert.match(css, /@media \(max-width: 720px\) \{[^@]*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) > \[data-panel-id\]\.collapsed \{ display: none !important; \}/);
+  // Critic r1 S-new: focus in the dataset rows gives them one whole link line back, at the species list's expense (qa card-foot-rest rings).
+  assert.match(css, /\n\.bio-card-foot \.dataset-list-rows:focus-within \{ min-height: calc\(11px \* 1\.35 \+ 6px\); \}/, 'focused rows keep one link line');
+  assert.match(css, /\n\.bio-card-main:has\(\.dataset-list-rows:focus-within\) \.bio-card-body \{ min-height: 0; \}/, 'the list gives up its floor meanwhile');
   // Final round (critic r1 N2): phone landscape gives the stack the rail's floor above the map credit and a 460 px width (qa panel-fold 667x375).
-  assert.match(css, /@media \(max-width: 720px\) and \(max-height: 480px\) \{\s*#left-panel-stack \{ right: auto; width: min\(460px, calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); \}/);
+  assert.match(css, /@media \(max-width: 720px\) and \(max-height: 480px\) \{\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ right: auto; width: min\(460px, calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); \}/);
   assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
