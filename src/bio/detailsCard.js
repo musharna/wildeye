@@ -102,6 +102,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   root.hidden = true;
   // R13-M8: the card is not a live region (a screen reader read all of it each time it filled); it is labelled by its title, and one short line
   // in a visually hidden status region of its own, outside the card so it is heard while the card is hidden too, says what opened.
+  // Fix round 1, I-1: the name holds because the card is an <aside>, role complementary (it supports the map beside it and stands on its own),
+  // which takes a name; a role-less <div> is generic and would drop it.
   root.setAttribute('aria-labelledby', 'bio-card-title');
   const announcer = doc.createElement('div');
   announcer.id = 'bio-card-announce';

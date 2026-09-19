@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,panel-fold,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,panel-fold,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,panel-fold,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,panel-fold,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -1560,6 +1560,38 @@ if (CHECKS.has('escape')) {
   const secondOk = Boolean(states.second) && states.second.value === '' && states.second.listHidden === true && states.second.cardHidden === false && states.second.armed;
   const thirdOk = Boolean(states.third) && states.third.cardHidden === true && states.third.armed === false;
   report('escape', error === null && suggestionOk && firstOk && secondOk && thirdOk, { ...states, suggestionOk, firstOk, secondOk, thirdOk, ...(error ? { error } : {}) });
+}
+
+// Fix round 1, I-1: the card is a landmark named by its title in the browser's accessibility tree (not only an aria-labelledby string), and it is
+// not a live region; the hidden status line beside it says what opened. The card is an <aside> beside the globe, so its role is complementary
+// (content that supports the map and stands on its own), a role that takes a name; a role-less <div> would be generic and drop the name. WHAT LIVES HERE's prompt card is opened, read through the page's
+// accessibility tree, then closed.
+if (CHECKS.has('card-a11y')) {
+  let error = null;
+  let tree = null;
+  let dom = null;
+  try {
+    await openSpeciesPanel();
+    await page.click('#species-what-lives-here');
+    await page.waitForFunction(() => !document.getElementById('bio-card').hidden, { timeout: 10000 });
+    await sleep(300);
+    const handle = await page.$('#bio-card');
+    const node = await page.accessibility.snapshot({ root: handle, interestingOnly: false });
+    tree = node && { role: node.role, name: node.name };
+    dom = await page.evaluate(() => ({ title: document.querySelector('#bio-card .bio-card-title').textContent, live: document.getElementById('bio-card').getAttribute('aria-live'), announce: document.getElementById('bio-card-announce')?.textContent ?? null }));
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await page.evaluate(() => {
+      const card = document.getElementById('bio-card');
+      if (!card.hidden) card.querySelector('.bio-card-close').click();
+      const arm = document.getElementById('species-what-lives-here');
+      if (arm.getAttribute('aria-pressed') === 'true') arm.click();
+    }).catch((caught) => { error = `${error ?? ''} restoring: ${caught}`; });
+    await sleep(500);
+  }
+  const ok = error === null && tree?.role === 'complementary' && tree.name === dom?.title && dom.title !== '' && dom.live === null && dom.announce === `${dom.title}: Click a spot on the globe. Esc cancels.`;
+  report('card-a11y', ok, { tree, dom, ...(error ? { error } : {}) });
 }
 
 if (CHECKS.has('search')) {

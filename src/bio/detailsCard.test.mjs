@@ -365,6 +365,10 @@ test('the card is not a live region; a short line in its own status region annou
   assert.equal(Object.hasOwn(root.attributes, 'aria-live'), false, 'the card is not a live region');
   assert.equal(title.id, 'bio-card-title');
   assert.equal(root.attributes['aria-labelledby'], 'bio-card-title', 'the card is labelled by its title');
+  // Fix round 1, I-1: a name needs a role that takes one. The card is an <aside> with no role override, so its role is complementary; a role-less
+  // <div> would be generic and the browser would drop the name (qa card-a11y reads the resolved role and name from Chrome's accessibility tree).
+  assert.equal(root.tag, 'aside', 'the card is an <aside> (role complementary, which can be named)');
+  assert.equal(Object.hasOwn(root.attributes, 'role'), false, 'no role override');
   const announcer = card.announcer;
   assert.ok(announcer, 'the card has an announcer');
   assert.notEqual(announcer, root);
