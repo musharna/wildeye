@@ -2160,7 +2160,28 @@ if (CHECKS.has('phone-accordion')) {
     await tab.setViewport({ width: 667, height: 375 });
     await sleep(2500);
     steps.landscapeData = await stackState();
-    await shot('phone-accordion-landscape-data');
+    if (SHOTS) await tab.screenshot({ path: `${SHOTS}/phone-accordion-landscape-data.png` }); // the check's own tab, not the main page
+    // Fix round 3 (critic r2 N1): in phone landscape with every panel collapsed, each pill's + is what the page hits at its centre with the
+    // stack unscrolled, and the globe's centre stays on the canvas (positive control for the what-lives-here click).
+    await clickToggle('data-panel');
+    for (const [w, h] of [[667, 375], [640, 360]]) {
+      await tab.setViewport({ width: w, height: h });
+      await sleep(2500);
+      steps[`collapsed${w}x${h}`] = await tab.evaluate(() => {
+        const stack = document.getElementById('left-panel-stack');
+        stack.scrollTop = 0;
+        const canvas = window.__godsEyeView.viewer.scene.canvas;
+        const c = canvas.getBoundingClientRect();
+        const pills = ['data-panel', 'scene-panel', 'species-panel'].map((id) => {
+          const button = document.querySelector(`#${id} [data-collapse-target="${id}"]`);
+          const r = button.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return { id, collapsed: document.getElementById(id).classList.contains('collapsed'), hit: Boolean(hit && (hit === button || button.contains(hit))), top: Math.round(r.top) };
+        });
+        return { pills, scrollTop: stack.scrollTop, centreOnCanvas: document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2) === canvas };
+      });
+      if (SHOTS) await tab.screenshot({ path: `${SHOTS}/phone-accordion-collapsed-${w}x${h}.png` });
+    }
   } catch (caught) {
     error = String(caught?.stack || caught).slice(0, 500);
   } finally {
@@ -2168,7 +2189,8 @@ if (CHECKS.has('phone-accordion')) {
   }
   const only = (state, id) => Boolean(state) && state.filter((p) => p.open).map((p) => p.id).join() === id && state.filter((p) => p.shown).map((p) => p.id).join() === id && state.find((p) => p.id === id).height > 60;
   const pillsBack = Boolean(steps.speciesClosed) && steps.speciesClosed.every((p) => !p.open && p.shown && p.height > 20);
-  report('phone-accordion', error === null && only(steps.shareLink, 'species-panel') && pillsBack && only(steps.dataOpened, 'data-panel') && only(steps.landscapeData, 'data-panel'), { steps, ...(error ? { error } : {}) });
+  const reachable = (state) => Boolean(state) && state.scrollTop === 0 && state.centreOnCanvas && state.pills.every((p) => p.collapsed && p.hit);
+  report('phone-accordion', error === null && only(steps.shareLink, 'species-panel') && pillsBack && only(steps.dataOpened, 'data-panel') && only(steps.landscapeData, 'data-panel') && reachable(steps.collapsed667x375) && reachable(steps.collapsed640x360), { steps, ...(error ? { error } : {}) });
 }
 
 report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10), upstreamTileErrors: upstreamTileErrors.slice(0, 10) });

@@ -881,7 +881,7 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // Fix round 3 (critic r2 S2): that focus share lives only in the short-window block above; no rule outside it changes the card on focus.
   assert.doesNotMatch(css.replace(/@media \(max-height: 480px\) \{[\s\S]*?\n\}/, ''), /dataset-list-rows:focus-within\) \.bio-card-body|dataset-list-rows:focus-within \{ min-height/, 'no unscoped focus share');
   // Final round (critic r1 N2): phone landscape gives the stack the rail's floor above the map credit and a 460 px width (qa panel-fold 667x375).
-  assert.match(css, /@media \(max-width: 720px\) and \(max-height: 480px\) \{\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ right: auto; width: min\(460px, calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); \}/);
+  assert.match(css, /@media \(max-width: 720px\) and \(max-height: 480px\) \{\s*#left-panel-stack \{ right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(460px, calc\(100vw - 32px\)\); \}/);
   assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
