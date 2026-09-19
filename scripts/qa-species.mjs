@@ -1043,9 +1043,21 @@ if (CHECKS.has('card-foot-rest')) {
       await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { radiusKm: 50 }, { origin: 'user' })) throw new Error('species radius rejected'); });
       await flyTo(...TAVEUNI);
       await openSpeciesPanel();
-      // In phone landscape the left stack runs under the HUD, so the action is armed through its own click handler; the card, which this
-      // check is about, still opens from a real click on the globe.
-      await page.evaluate(() => document.getElementById('species-what-lives-here').click());
+      // Final review m-2: a real click on WHAT LIVES HERE at every size (the first-run launcher is dismissed at the start of the run). The page
+      // must hit the button at its centre first; a miss fails the check with what was hit instead of falling back to a JS click.
+      const armAt = await page.evaluate(() => {
+        document.getElementById('species-body').scrollTop = 0;
+        const button = document.getElementById('species-what-lives-here');
+        const r = button.getBoundingClientRect();
+        const x = r.left + r.width / 2;
+        const y = r.top + r.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return { x, y, hits: Boolean(hit && (hit === button || button.contains(hit))), hit: hit ? (hit.id || String(hit.className)) : null };
+      });
+      if (!armAt.hits) throw new Error(`card-foot-rest ${width}x${height}: WHAT LIVES HERE is not what the page hits at its centre (${armAt.hit})`);
+      await page.mouse.click(armAt.x, armAt.y);
+      await sleep(300);
+      if (await page.evaluate(() => document.getElementById('species-what-lives-here').getAttribute('aria-pressed')) !== 'true') throw new Error(`card-foot-rest ${width}x${height}: a real click did not arm WHAT LIVES HERE`);
       await page.evaluate(() => { const panel = document.getElementById('species-panel'); if (!panel.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click(); });
       await sleep(800);
       const centre = await page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
