@@ -27,6 +27,16 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 
 ### Fixed
 
+- wildeye: species search follow-ups. A late suggestion can no longer overwrite a
+  newer what-lives-here pick, Escape does one thing per press (and no longer ends
+  flight or vessel tracking as well), and the details card announces one short
+  line to screen readers instead of reading out the whole card.
+- wildeye: the what-lives-here card keeps its gbif.org credit, at least one species
+  row and whole focus rings at every window size, including phone landscape. On a
+  phone the left panels open one at a time, and pill labels are easier to read.
+- wildeye: every GBIF request that uses a taxon key names the GBIF Backbone
+  checklist, so a change of GBIF's default taxonomy cannot silently empty the map.
+
 - wildeye: the GitHub Pages build could not load Cesium because
   `vite-plugin-cesium` copied it under the base path twice. The deploy now moves
   it into place and fails if any file referenced by `index.html` is missing.
