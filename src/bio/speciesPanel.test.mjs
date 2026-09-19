@@ -870,7 +870,7 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<span id="species-chosen-note" class="species-chosen-note" hidden><\/span>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
   // Brief B fix round 1: on a phone-width window an open SPECIES panel is the only panel the left stack shows (an accordion), so its body has
   // the view the collapsed DATA LAYERS and SCENES pills took (116 px at 375x667).
-  assert.match(css, /@media \(max-width: 720px\) \{[^@]*#left-panel-stack:has\(> #species-panel:not\(\.collapsed\)\) > \[data-panel-id\]:not\(#species-panel\) \{ display: none !important; \}/);
+  assert.match(css, /@media \(max-width: 720px\) \{[^@]*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) > \[data-panel-id\]\.collapsed \{ display: none !important; \}/);
   assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';

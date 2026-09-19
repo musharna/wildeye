@@ -116,6 +116,7 @@ import {
   resolveLeftStackBottomBoundary,
   resolvePanelStackCorridor,
   measureLeftPanelNaturalHeight,
+  phoneAccordionSiblingsToCollapse,
 } from './panelStackLayout.js';
 import {
   resolveCockpitUtilityAnchor,
@@ -7716,6 +7717,15 @@ export class StyleManager {
     if (!nextCollapsed && panelId === 'radio-panel'
         && document.getElementById('global-context-panel')?.classList.contains('collapsed')) {
       this.setPanelCollapsed('global-context-panel', false, { restore, persist, syncShare });
+    }
+    // Final review m-1: at phone width the left stack is an accordion (one open panel; the others' pills are hidden, style.css), so opening a
+    // panel collapses the open ones, whatever opened it; a share link restoring several open panels ends with the last one open.
+    if (!nextCollapsed && leftOwnerPanel && window.matchMedia('(max-width: 720px)').matches) {
+      const stackPanels = [...this._leftPanelStack.querySelectorAll(':scope > [data-panel-id]')]
+        .map((panel) => ({ id: panel.id, collapsed: panel.classList.contains('collapsed') }));
+      for (const siblingId of phoneAccordionSiblingsToCollapse({ panels: stackPanels, openedId: panelId })) {
+        this.setPanelCollapsed(siblingId, true, { restore, persist, syncShare });
+      }
     }
     if (!nextCollapsed && !restore && panelId === 'location-bar') {
       const otherPanel = document.getElementById('control-panel');

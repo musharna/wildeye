@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,panel-fold,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,panel-fold,phone-accordion,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,panel-fold,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,panel-fold,phone-accordion,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -2075,6 +2075,53 @@ if (CHECKS.has('portal-link')) {
     await page.click('#species-radius [data-radius="10"]').catch((caught) => { error = `${error ?? ''} restoring the 10 km radius: ${caught}`; });
   }
   report('portal-link', error === null && results.length === 4 && results.every((r) => r.ok), { results, ...(error ? { error } : {}), forPeople: { card50km: results[1]?.href ?? null, panelTaxon: results[3]?.href ?? null, noLocation: results[2]?.href ?? null } });
+}
+
+// Final review m-1 and critic r1 N3: at phone width the left stack is an accordion, whatever opens a panel. (1) A share link opening DATA
+// LAYERS and SPECIES (#…&v=2&ui=d.c.0_b.c.0), loaded fresh at 375x667: exactly one panel is open (SPECIES, restored last), it has height, and no other
+// panel shows. (2) Collapsing SPECIES brings the three pills back (positive control), and opening DATA LAYERS by a click shows it alone with
+// height. (3) At 667x375, DATA LAYERS opened by a click has height (it had 0 px on main 1f5d591: the pills filled the 110 px stack).
+if (CHECKS.has('phone-accordion')) {
+  const tab = await browser.newPage();
+  const stackState = () => tab.evaluate(() => [...document.querySelectorAll('#left-panel-stack > [data-panel-id]')].map((panel) => {
+    const r = panel.getBoundingClientRect();
+    return { id: panel.id, open: !panel.classList.contains('collapsed'), shown: panel.getClientRects().length > 0 && getComputedStyle(panel).display !== 'none', height: Math.round(r.height) };
+  }).filter((panel) => panel.id !== 'cctv-panel'));
+  const clickToggle = async (id) => {
+    const box = await tab.evaluate((id) => { const b = document.querySelector(`#${id} [data-collapse-target="${id}"]`).getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; }, id);
+    await tab.mouse.click(box.x, box.y);
+    await sleep(1500);
+  };
+  const steps = {};
+  let error = null;
+  try {
+    await tab.setViewport({ width: 375, height: 667 });
+    // A share link is a hash (sharelink.js parseInitialHash); it needs a position to restore anything.
+    const url = new URL(SITE);
+    url.hash = new URLSearchParams({ lat: '30.27', lon: '-97.74', alt: '400000', v: '2', ui: 'd.c.0_b.c.0' }).toString();
+    await tab.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await tab.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
+    await sleep(12000);
+    await tab.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
+    await tab.keyboard.press('Escape');
+    await sleep(1500);
+    steps.shareLink = await stackState();
+    await clickToggle('species-panel');
+    steps.speciesClosed = await stackState();
+    await clickToggle('data-panel');
+    steps.dataOpened = await stackState();
+    await tab.setViewport({ width: 667, height: 375 });
+    await sleep(2500);
+    steps.landscapeData = await stackState();
+    await shot('phone-accordion-landscape-data');
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await tab.close().catch(() => {});
+  }
+  const only = (state, id) => Boolean(state) && state.filter((p) => p.open).map((p) => p.id).join() === id && state.filter((p) => p.shown).map((p) => p.id).join() === id && state.find((p) => p.id === id).height > 60;
+  const pillsBack = Boolean(steps.speciesClosed) && steps.speciesClosed.every((p) => !p.open && p.shown && p.height > 20);
+  report('phone-accordion', error === null && only(steps.shareLink, 'species-panel') && pillsBack && only(steps.dataOpened, 'data-panel') && only(steps.landscapeData, 'data-panel'), { steps, ...(error ? { error } : {}) });
 }
 
 report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10), upstreamTileErrors: upstreamTileErrors.slice(0, 10) });

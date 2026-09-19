@@ -198,3 +198,15 @@ export function measureLeftPanelNaturalHeight(panel, { getStyle = (element) => g
   const borderBottom = parseFloat(innerStyle.borderBottomWidth) || 0;
   return Math.ceil(contentBottom + paddingBottom + borderBottom + wrapperChrome);
 }
+
+/**
+ * Final review m-1: the phone left stack is an accordion. Opening `openedId` collapses every other open panel of the stack, whatever opened it
+ * (a click, a voice command, a share link restoring several panels). The ids to collapse, in stack order.
+ * @param {object} input
+ * @param {{ id: string, collapsed: boolean }[]} input.panels The left stack's panels.
+ * @param {string} input.openedId The panel being opened.
+ * @returns {string[]}
+ */
+export function phoneAccordionSiblingsToCollapse({ panels, openedId }) {
+  return panels.filter((panel) => panel.id !== openedId && !panel.collapsed).map((panel) => panel.id);
+}

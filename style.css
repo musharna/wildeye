@@ -9835,7 +9835,10 @@ body.recording-mode #bio-card { display: none !important; }
      and SCENES pills with their gaps took 116 of its 255 px at 375x667, leaving the body an 85.5 px view: too small for the search, a 2-line
      status, the chosen species with its switch and WHAT LIVES HERE (about 132 px). An open SPECIES panel is the only panel the stack shows, an
      accordion: collapsing it brings the pills back. The panel is not moved or grown past the half-height line, so the species map stays in view. */
-  #left-panel-stack:has(> #species-panel:not(.collapsed)) > [data-panel-id]:not(#species-panel) { display: none !important; }
+  /* Final review m-1 and critic r1 N3: every left-stack panel works the same way (ui.js setPanelCollapsed collapses the others when one opens),
+     so the collapsed pills hide while any panel is open. In phone landscape the stack is 110 px tall and the collapsed pills alone took
+     more, so an opened DATA LAYERS got 0 px (on main 1f5d591 too). */
+  #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) > [data-panel-id].collapsed { display: none !important; }
 }
 #species-panel.collapsed { width: var(--left-collapsed-width); }
 #species-panel.collapsed .species-body { display: none !important; }
