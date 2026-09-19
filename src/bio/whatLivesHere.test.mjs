@@ -465,7 +465,7 @@ test('a click where the circle cannot be a polygon lists species via geoDistance
     assert.equal(list.footer, 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations', where);
     const link = new URL(list.footerHref);
     assert.equal(link.origin + link.pathname, 'https://www.gbif.org/occurrence/search', where);
-    assert.deepEqual([...link.searchParams.keys()], ['license', 'license', 'year'], `${where}: the licences and years, no location`);
+    assert.deepEqual([...link.searchParams.keys()], ['checklistKey', 'license', 'license', 'year'], `${where}: the checklist, licences and years, no location`);
   }
   const ordinary = rig();
   ordinary.controller.arm();

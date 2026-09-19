@@ -1858,8 +1858,8 @@ if (CHECKS.has('portal-link')) {
   const cardTotal = (filter) => { const m = /· ([\d,]+) records$/.exec(filter || ''); return m ? Number(m[1].replace(/,/g, '')) : null; };
   const noDistance = (u) => !u.searchParams.has('geo_distance') && !u.searchParams.has('geoDistance');
   const licencesOk = (u) => JSON.stringify(u.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']);
-  // An area link carries the search's own polygon, geospatial-issue filter, licences and years, no checklist, and its API count is the card's
-  // record total.
+  // An area link carries the search's own polygon, geospatial-issue filter, licences, years and checklist (brief B item 7: the search names
+  // the Backbone, which drops records with no Backbone taxon), and its API count is the card's record total.
   const areaLink = async (label, card, searchHref) => {
     const link = parse(card?.href);
     const sent = parse(searchHref);
@@ -1873,7 +1873,7 @@ if (CHECKS.has('portal-link')) {
       licencesEqual: licencesOk(link) && licencesOk(sent),
       yearEqual: sent.searchParams.get('year') !== null && link.searchParams.get('year') === sent.searchParams.get('year'),
       noDistanceParam: noDistance(link) && noDistance(sent),
-      noChecklist: !link.searchParams.has('checklistKey'),
+      checklistEqual: link.searchParams.get('checklistKey') === GBIF_BACKBONE_CHECKLIST_KEY && sent.searchParams.get('checklistKey') === GBIF_BACKBONE_CHECKLIST_KEY,
       lengthOk: card.href.length <= MAX_PORTAL_URL,
       countEqual: Number.isInteger(api.count) && api.count > 0 && api.count === total,
     };
@@ -1903,14 +1903,15 @@ if (CHECKS.has('portal-link')) {
     // 2. a 50 km search at the same spot: the longest polygon link
     const wide = await searchAt({ lon: -110.83, lat: 44.46, radiusKm: 50 });
     results.push({ ...(await areaLink('card 50 km', wide, wide.search)), rows: wide.rows, filter: wide.filter });
-    // 3. a 50 km search across the antimeridian (Taveuni, Fiji): searched with geoDistance, so the link carries the licences and years only
+    // 3. a 50 km search across the antimeridian (Taveuni, Fiji): searched with geoDistance, so the link carries the checklist, licences and
+    //    years only
     const across = await searchAt({ lon: 179.97, lat: -16.8, radiusKm: 50 });
     const acrossLink = parse(across.href);
     const acrossSent = parse(across.search);
     const acrossApi = across.href ? await apiCount(across.href) : null;
     const acrossChecks = {
       searchUsedDistance: Boolean(acrossSent) && acrossSent.searchParams.has('geoDistance') && !acrossSent.searchParams.has('geometry'),
-      linkHasNoLocation: Boolean(acrossLink) && JSON.stringify([...acrossLink.searchParams.keys()]) === JSON.stringify(['license', 'license', 'year']) && licencesOk(acrossLink) && acrossLink.searchParams.get('year') === acrossSent?.searchParams.get('year'),
+      linkHasNoLocation: Boolean(acrossLink) && JSON.stringify([...acrossLink.searchParams.keys()]) === JSON.stringify(['checklistKey', 'license', 'license', 'year']) && acrossLink.searchParams.get('checklistKey') === GBIF_BACKBONE_CHECKLIST_KEY && licencesOk(acrossLink) && acrossLink.searchParams.get('year') === acrossSent?.searchParams.get('year'),
       noteShown: across.note === "gbif.org can't show this area as a circle",
       lengthOk: Boolean(across.href) && across.href.length <= MAX_PORTAL_URL,
       countPositive: Number.isInteger(acrossApi?.count) && acrossApi.count > 0,

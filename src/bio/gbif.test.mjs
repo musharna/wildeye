@@ -237,13 +237,14 @@ test('a circle that cannot be a polygon (beyond 85° or across ±180°) is searc
   assert.match(ordinary.searchParams.get('geometry') ?? '', /^POLYGON\(\(/, 'positive control: an ordinary point sends the polygon');
 });
 
-test('the gbif.org link with no location filter keeps both licences and the years, and nothing else', () => {
+test('the gbif.org link with no location filter keeps the checklist, both licences and the years, and nothing else', () => {
   const recent = new URL(gbifPortalAnyLocationUrl({ years: 'recent', now: NOW }));
   assert.equal(recent.origin + recent.pathname, 'https://www.gbif.org/occurrence/search');
-  assert.deepEqual([...recent.searchParams.keys()], ['license', 'license', 'year']);
+  assert.deepEqual([...recent.searchParams.keys()], ['checklistKey', 'license', 'license', 'year']);
+  assert.equal(recent.searchParams.get('checklistKey'), GBIF_BACKBONE_CHECKLIST_KEY);
   assert.deepEqual(recent.searchParams.getAll('license'), LICENSES);
   assert.equal(recent.searchParams.get('year'), '2017,2026');
-  assert.deepEqual([...new URL(gbifPortalAnyLocationUrl({ years: 'all', now: NOW })).searchParams.keys()], ['license', 'license']);
+  assert.deepEqual([...new URL(gbifPortalAnyLocationUrl({ years: 'all', now: NOW })).searchParams.keys()], ['checklistKey', 'license', 'license']);
 });
 
 test('parseSpeciesNear reads the total, the SPECIES_KEY facet and the DATASET_KEY facet; no count is an error', () => {
@@ -321,9 +322,11 @@ test('the top datasets of a taxon: an occurrence search with the taxon, both lic
   assert.equal(GBIF_BACKBONE_CHECKLIST_KEY, 'd7dddbf4-2cf0-4f39-9b2a-bb099caae36c');
   assert.deepEqual([...portal.searchParams.entries()], [['taxonKey', '5133088'], ['checklistKey', GBIF_BACKBONE_CHECKLIST_KEY], ['hasCoordinate', 'true'], ['license', 'CC0_1_0'], ['license', 'CC_BY_4_0'], ['year', '2017,2026']]);
   assert.deepEqual([...new URL(gbifPortalTaxonUrl({ taxonKey: 5133088, years: 'all', now: NOW })).searchParams.keys()], ['taxonKey', 'checklistKey', 'hasCoordinate', 'license', 'license']);
-  // The area links filter no taxon, so they carry no checklist.
-  assert.equal(new URL(gbifPortalUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'recent', now: NOW })).searchParams.has('checklistKey'), false);
-  assert.equal(new URL(gbifPortalAnyLocationUrl({ years: 'recent', now: NOW })).searchParams.has('checklistKey'), false);
+  // Brief B item 7: the what-lives-here search names the Backbone checklist, and naming a checklist drops the records with no taxon in it
+  // (live 2026-09-19, Yellowstone 10 km, last 10 years: 28,959 with none, 28,918 under the Backbone, 28,920 under COL XR). The area links
+  // name the same checklist, so the link opens the card's own count.
+  assert.deepEqual(new URL(gbifPortalUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'recent', now: NOW })).searchParams.getAll('checklistKey'), [GBIF_BACKBONE_CHECKLIST_KEY]);
+  assert.deepEqual(new URL(gbifPortalAnyLocationUrl({ years: 'recent', now: NOW })).searchParams.getAll('checklistKey'), [GBIF_BACKBONE_CHECKLIST_KEY]);
   assert.throws(() => gbifPortalTaxonUrl({ taxonKey: -1, years: 'all', now: NOW }), /taxonKey/);
 });
 

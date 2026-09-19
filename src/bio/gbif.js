@@ -11,8 +11,9 @@ export const REQUEST_TIMEOUT_MS = 8000;
 /**
  * The GBIF Backbone Taxonomy's checklist. The app's taxon keys are Backbone keys, the default of api.gbif.org v1 and the map tiles. Since
  * 2026-06-18 www.gbif.org reads taxon keys under Catalogue of Life XR unless a link names a checklist, and there a Backbone key matches
- * no record, so a gbif.org link that filters a taxon carries this key. gbifPortalUrl and gbifPortalAnyLocationUrl filter no taxon and
- * carry none; one that gains a taxon filter needs it.
+ * no record, so a gbif.org link that filters a taxon carries this key. The area links (gbifPortalUrl, gbifPortalAnyLocationUrl) carry it
+ * too: the what-lives-here search names it, and naming a checklist drops the records with no taxon in it, so the card's count and its link's
+ * are counts under the same checklist (below).
  * The API default is still the Backbone, but a key read under another checklist fails just as silently there (live 2026-09-18: HTTP 200
  * count 0 for a search, an empty 204 tile), and the speciesKey facet returns the keys of whichever checklist applies. So every
  * api.gbif.org request that carries a taxonKey or facets by speciesKey names this checklist too (densityTileTemplate, speciesNearUrl,
@@ -197,18 +198,20 @@ export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) 
  * The same search on gbif.org, where a visitor can browse the records and request a citable download. It carries the
  * search's own `geometry` value: gbif.org drops `geo_distance`, which would open the link with no location filter. It carries the search's
  * `hasGeospatialIssue=false` too, so gbif.org counts the records the card counts (gbif-web lists hasGeospatialIssue among its occurrence
- * search fields; on 2026-09-14 a 50 km link without it counted 222,689 records where the card said 217,508).
+ * search fields; on 2026-09-14 a 50 km link without it counted 222,689 records where the card said 217,508). It carries the search's
+ * checklistKey (the Backbone) as well: live on 2026-09-19 the Yellowstone 10 km search counted 28,918 records under the Backbone, 28,920
+ * under COL XR (gbif.org's default) and 28,959 with no checklist, the difference being records with no taxon match.
  */
 export function gbifPortalUrl({ lat, lon, radiusKm, years, now = new Date() }) {
   checkPoint(lat, lon, radiusKm);
-  const params = new URLSearchParams({ geometry: circlePolygonWkt({ lat, lon, radiusKm }), hasGeospatialIssue: 'false' });
+  const params = new URLSearchParams({ geometry: circlePolygonWkt({ lat, lon, radiusKm }), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, hasGeospatialIssue: 'false' });
   appendRecordFilters(params, years, now);
   return `https://www.gbif.org/occurrence/search?${params}`;
 }
 
-/** gbif.org with the same licences and years and no location filter: the card's link where the circle cannot be a polygon. */
+/** gbif.org with the same checklist, licences and years and no location filter: the card's link where the circle cannot be a polygon. */
 export function gbifPortalAnyLocationUrl({ years, now = new Date() }) {
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({ checklistKey: GBIF_BACKBONE_CHECKLIST_KEY });
   appendRecordFilters(params, years, now);
   return `https://www.gbif.org/occurrence/search?${params}`;
 }
