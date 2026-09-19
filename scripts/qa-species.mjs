@@ -2136,9 +2136,13 @@ if (CHECKS.has('landscape-regions')) {
   // Fix round 5 (critic r4 B1): the short model is a height condition, so the wider phone-landscape sizes (740x360, 844x390, 932x430) and a
   // short desktop-width window (1024x500) are in the matrix too.
   // --landscape-sizes narrows the matrix while developing; the default is every size.
-  const SIZES = arg('--landscape-sizes', '667x375,640x360,568x320,740x360,844x390,932x430,1024x500,1024x580,1280x600').split(',').map((size) => size.split('x').map(Number));
+  const SIZES = arg('--landscape-sizes', '667x375,640x360,568x320,740x360,844x390,932x430,1024x500,1024x580,1280x600,1280x610,1366x640,1440x700').split(',').map((size) => size.split('x').map(Number));
   const TAVEUNI = [179.97, -16.8, 10000];
-  const BESIDE = new Set(['1024x500', '1024x580', '1280x600']);
+  const BESIDE = new Set(['1024x500', '1024x580', '1280x600', '1280x610', '1366x640', '1440x700']);
+  // Fix round 6: just above the short threshold (600 px tall) the desktop lane lays out the stack: panel and card sit side by side there too,
+  // and its stack box is a centred lane the pills may overflow by design (10-70 px of scroll range measured), so the two stack-box checks
+  // (no spare scroll range, pills inside the box) belong to the short model only; the pills must still be hit at their +.
+  const DESKTOP_LANE = new Set(['1280x610', '1366x640', '1440x700']);
   const pillIds = ['data-panel', 'scene-panel', 'species-panel'];
   const hitAt = (sel) => page.evaluate((sel) => {
     const el = document.querySelector(sel);
@@ -2255,7 +2259,7 @@ if (CHECKS.has('landscape-regions')) {
       await sleep(900);
       r.keyboardCancel = await page.evaluate(() => ({ armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', onButton: document.activeElement === document.getElementById('species-what-lives-here'), speciesOpen: !document.getElementById('species-panel').classList.contains('collapsed'), cardHidden: document.getElementById('bio-card').hidden }));
       await shot(`landscape-regions-${size}`);
-      const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && st.scrollSlack <= 1 && st.pillsInBox && st.pills.every((p) => p.collapsed && p.hit);
+      const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && (DESKTOP_LANE.has(size) || (st.scrollSlack <= 1 && st.pillsInBox)) && st.pills.every((p) => p.collapsed && p.hit);
       // Fix round 5: no size is exempt from a whole species row (the card folds its Top datasets block and then the note first).
       const headerOk = (h) => Boolean(h) && h.lines >= 2 && h.out.length === 0;
       const turnsOk = beside
