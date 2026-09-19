@@ -919,6 +919,21 @@ if (CHECKS.has('card-foot-rest')) {
       // The first text line of each dataset link (a link is a flex item, so its own box holds every line it wraps to).
       datasetFirstLinesWhole: [...card.querySelectorAll('.bio-card-foot .dataset-row-link')].filter((a) => { const range = document.createRange(); range.selectNodeContents(a); return wholeBox(a, range.getClientRects()[0]); }).length,
       datasetList: rows && { overflowY: getComputedStyle(rows).overflowY, scrollHeight: rows.scrollHeight, clientHeight: rows.clientHeight, minHeight: parseFloat(getComputedStyle(rows).minHeight) || 0, fade: getComputedStyle(rows).getPropertyValue('--bio-card-datasets-fade').trim() },
+      // Brief B fix round 1 (critic S3): a text line cut by a scroller's bottom edge at rest. Each such line must sit inside a fade at that
+      // edge: the scroller carries a mask, and its fade is at least as tall as the part of the line that shows. A line cut with no fade read as
+      // a rendering glitch, with the "more ↓" cue 100-130 px away on the heading line.
+      sliced: [['.bio-card-body', '--bio-card-body-fade', '.bio-card-row-primary, .bio-card-row-secondary, .bio-card-row-count, .bio-card-row-note'], ['.bio-card-foot .dataset-list-rows', '--bio-card-datasets-fade', '.dataset-row-link, .dataset-row-count, .dataset-row-note']].flatMap(([scrollerSel, fadeVar, textSel]) => {
+        const scroller = card.querySelector(scrollerSel);
+        if (!scroller) return [];
+        const r = scroller.getBoundingClientRect();
+        const clipBottom = r.top + scroller.clientTop + scroller.clientHeight;
+        const cs = getComputedStyle(scroller);
+        const mask = cs.maskImage || cs.webkitMaskImage || 'none';
+        const fade = parseFloat(cs.getPropertyValue(fadeVar)) || 0;
+        return [...scroller.querySelectorAll(textSel)].flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()]; })
+          .filter((line) => line.top < clipBottom - 0.5 && line.bottom > clipBottom + 0.5)
+          .map((line) => { const shows = clipBottom - line.top; return { scroller: scrollerSel, shows: +shows.toFixed(1), fade, mask: mask !== 'none', ok: mask !== 'none' && fade >= shows - 0.5 }; });
+      }),
       cue: (() => {
         const cue = card.querySelector('.bio-card-foot .dataset-list-more');
         if (!cue) return null;
@@ -1006,7 +1021,7 @@ if (CHECKS.has('card-foot-rest')) {
     return Boolean(s.cue) && s.cue.visibility === 'visible' && s.cue.display !== 'none' && s.cue.text === 'more ↓' && s.cue.ariaHidden === 'true' && s.cue.overlaps.length === 0 && s.cue.box.height >= 10
       && s.cueEnd?.visibility === 'hidden' && s.cueEnd.backAtTop === 'visible';
   };
-  const restOk = (s, failed, viewport) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s, viewport).ok && cueOk(s)
+  const restOk = (s, failed, viewport) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s, viewport).ok && cueOk(s) && s.sliced.every((line) => line.ok)
     && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0)
     // Fix round 1, item 4: the status line says the failed dataset lookups (and only when some failed).
     && (failed ? new RegExp(`; ${s.datasetRows} dataset lookups? failed \\(HTTP`).test(s.announce ?? '') : !/dataset lookups? failed/.test(s.announce ?? ''));

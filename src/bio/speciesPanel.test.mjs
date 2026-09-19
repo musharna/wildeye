@@ -828,7 +828,8 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   // Brief B S-1: the rows' "more below" cue is the panel's "more ↓" (same rule as .species-more), on the heading's line; the rows' fade is gone.
   assert.match(css, /\.species-more, \.dataset-list-more \{[^}]*visibility: hidden;[^}]*pointer-events: none;/);
   for (const declaration of ['grid-row: datasets-heading;', 'justify-self: end;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-more').includes(declaration), `the rows' cue has ${declaration}`);
-  assert.doesNotMatch(css, /--bio-card-datasets-fade|\.dataset-list-rows \{[^}]*mask-image/, 'no fade on the dataset rows');
+  // Brief B fix round 1 (critic S3): a line cut at the rows' edge fades out there too (scroll-driven, 0 px at the end), and focus inside drops it.
+  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-foot \.dataset-list-rows \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-datasets-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);[^}]*\}\s*\.bio-card-foot \.dataset-list-rows:focus-within \{ -webkit-mask-image: none; mask-image: none; \}/);
   // Brief B: the shared host pill and header label text and its +/− button are 0.8 white (the shared 0.3 white measured 2.1:1 over the collapsed
   // glass on the light map and over ocean); one rule for every pill.
   const hostRule = (selector) => rules.find((r) => r.selector === selector)?.body ?? '';

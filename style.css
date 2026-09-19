@@ -9766,8 +9766,22 @@ body.recording-mode #bio-card { display: none !important; }
 /* The rows' floor is their ring inset only (see .bio-card-body). R13-M2: 3 px of padding inside the scroller, taken back by the margin, as on
    .species-body, keep a focused link's ring (the UA's auto
    ring, 2 px out from the link) inside the scroll clip on every side; scroll-padding keeps that inset when focus scrolls a link into view.
-   The padding also replaces the 3 px the rows sat under their heading. The rows carry no mask, so nothing clips or dims the ring. */
+   The padding also replaces the 3 px the rows sat under their heading. The rows' fade is dropped while focus is inside them (below), so nothing dims the ring. */
 .bio-card-foot .dataset-list-rows { grid-row: datasets-rows; margin: 0 -3px; padding: 3px; scroll-padding: 3px; min-height: 0; overflow-y: auto; }
+/* Brief B fix round 1 (critic S3): where the rows' view cuts a line, the line fades out, as the species list's does: a line sliced at a hard
+   edge read as a rendering glitch, with the "more ↓" cue on the heading line 100-130 px away. The fade is scroll-driven: 20 px while more rows
+   are below, 0 at the end, and nothing when nothing scrolls. A focused link's ring is never dimmed: with focus inside, the rows drop the mask. */
+@property --bio-card-datasets-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
+@keyframes bio-card-datasets-fade { from { --bio-card-datasets-fade: 20px; } to { --bio-card-datasets-fade: 0px; } }
+@supports (animation-timeline: scroll()) {
+  .bio-card-foot .dataset-list-rows {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - var(--bio-card-datasets-fade)), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - var(--bio-card-datasets-fade)), transparent);
+    animation: bio-card-datasets-fade linear both;
+    animation-timeline: scroll(self);
+  }
+  .bio-card-foot .dataset-list-rows:focus-within { -webkit-mask-image: none; mask-image: none; }
+}
 /* Brief B S-1: the rows' "more below" cue is the SPECIES panel's: the same "more ↓" label and style (.species-more), shown by moreCue.js while
    more rows are below their view and hidden at the end, only its visibility changing. It sits on the heading's line at the right, so it
    covers no row and takes no height from the rows or the species list (at 667x375 the card has 4 px to spare). It replaces the 20 px fade,
