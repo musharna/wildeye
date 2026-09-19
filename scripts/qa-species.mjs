@@ -2135,7 +2135,8 @@ if (CHECKS.has('portal-link')) {
 if (CHECKS.has('landscape-regions')) {
   // Fix round 5 (critic r4 B1): the short model is a height condition, so the wider phone-landscape sizes (740x360, 844x390, 932x430) and a
   // short desktop-width window (1024x500) are in the matrix too.
-  const SIZES = [[667, 375], [640, 360], [568, 320], [740, 360], [844, 390], [932, 430], [1024, 500], [1024, 580]];
+  // --landscape-sizes narrows the matrix while developing; the default is every size.
+  const SIZES = arg('--landscape-sizes', '667x375,640x360,568x320,740x360,844x390,932x430,1024x500,1024x580').split(',').map((size) => size.split('x').map(Number));
   const TAVEUNI = [179.97, -16.8, 10000];
   const pillIds = ['data-panel', 'scene-panel', 'species-panel'];
   const hitAt = (sel) => page.evaluate((sel) => {
@@ -2210,7 +2211,8 @@ if (CHECKS.has('landscape-regions')) {
           const lr = link.getBoundingClientRect();
           const lh = document.elementFromPoint((lr.left + lr.right) / 2, (lr.top + lr.bottom) / 2);
           const parts = Object.fromEntries(['.bio-card-head', '.bio-card-filter', '.bio-card-body', '.bio-card-foot', '.bio-card-foot-note', '.bio-card-foot > a'].map((sel) => { const e = card.querySelector(sel); const b = e?.getBoundingClientRect(); return [sel, b ? [Math.round(b.top), Math.round(b.height)] : null]; }));
-          return { card: { left: Math.round(c.left), top: Math.round(c.top), right: Math.round(c.right), bottom: Math.round(c.bottom), maxHeight: getComputedStyle(card).maxHeight }, parts, overlap, linkWhole: whole(link) && lr.bottom <= c.bottom + 0.5, linkHit: Boolean(lh && (lh === link || link.contains(lh))), speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter(whole).length };
+          const folds = [...card.classList].filter((name) => name.startsWith('bio-card--fold-'));
+          return { card: { left: Math.round(c.left), top: Math.round(c.top), right: Math.round(c.right), bottom: Math.round(c.bottom), maxHeight: getComputedStyle(card).maxHeight }, parts, folds, noteTitle: link.getAttribute('title'), overlap, linkWhole: whole(link) && lr.bottom <= c.bottom + 0.5, linkHit: Boolean(lh && (lh === link || link.contains(lh))), speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter(whole).length };
         });
         await shot(`landscape-regions-results-${size}`);
         r.afterPick = await pillsState();
@@ -2230,11 +2232,8 @@ if (CHECKS.has('landscape-regions')) {
       r.keyboardCancel = await page.evaluate(() => ({ armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', onButton: document.activeElement === document.getElementById('species-what-lives-here'), speciesOpen: !document.getElementById('species-panel').classList.contains('collapsed'), cardHidden: document.getElementById('bio-card').hidden }));
       await shot(`landscape-regions-${size}`);
       const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && st.pills.every((p) => p.collapsed && p.hit);
-      // The one pinned exemption: at 568x320 the card's region is 166 px (76 px header, 78 px time bar), its fixed parts at 352 px wide take
-      // 157 px (2-line filter line and credit, the antimeridian note), and a whole species row needs 48 more (205 px), so the list is a faded
-      // 9 px strip there; the credit stays whole. Every other size needs a whole species row.
-      const rowNeeded = size !== '568x320';
-      r.ok = pillsOk(r.collapsed) && r.armed.armed && r.armed.onCanvas && r.picked && Boolean(r.results) && !r.results.overlap && r.results.linkWhole && r.results.linkHit && (!rowNeeded || r.results.speciesRowsWhole >= 1)
+      // Fix round 5: no size is exempt from a whole species row (the card folds its Top datasets block and then the note first).
+      r.ok = pillsOk(r.collapsed) && r.armed.armed && r.armed.onCanvas && r.picked && Boolean(r.results) && !r.results.overlap && r.results.linkWhole && r.results.linkHit && r.results.speciesRowsWhole >= 1
         && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown && r.keyboard.armed && r.keyboard.active !== 'BODY' && !r.keyboardCancel.armed && r.keyboardCancel.onButton && r.keyboardCancel.speciesOpen;
       } catch (caught) {
         // One size's failure is recorded with its cause and the next size still runs.

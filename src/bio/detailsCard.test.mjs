@@ -213,6 +213,35 @@ test('an Escape another control handled leaves the card open; an unhandled Escap
 });
 
 // F9: where gbif.org cannot show the searched circle, the footer says so in plain text before its link.
+// Fix round 5 (critic r4 S1): when the card's content overflows its box (a short window), the parts give way in order before the species list
+// loses its one whole row: first the Top datasets block folds away (the credit stays), then the antimeridian note, whose text moves to the
+// credit link's title (the credit already says "all locations"). With room, nothing folds (positive control), and a later list starts over.
+test('a list too tall for its card folds the Top datasets block, then the note, before the species list gives up its row', () => {
+  const doc = cardDoc();
+  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html });
+  const root = card.element;
+  const classes = new Set();
+  root.classList = { add: (c) => classes.add(c), remove: (...cs) => cs.forEach((c) => classes.delete(c)), contains: (c) => classes.has(c) };
+  const main = root.querySelector('.bio-card-main');
+  let room = 166;
+  Object.defineProperty(main, 'clientHeight', { get: () => room });
+  Object.defineProperty(main, 'scrollHeight', { get: () => 205 - (classes.has('bio-card--fold-datasets') ? 24 : 0) - (classes.has('bio-card--fold-note') ? 18 : 0) });
+  const base = { heading: 'What lives here', filterLine: 'x', entries: [{ key: 1, count: 1, scientificName: 'A b', commonName: null }], onRow: () => {}, footer: 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations', footerHref: 'https://www.gbif.org/occurrence/search', footerNote: "gbif.org can't show this area as a circle", datasets: [{ key: INAT_RG, count: 1, title: 't', doi: null }] };
+  card.showList(base);
+  assert.deepEqual([...classes].sort(), ['bio-card--fold-datasets', 'bio-card--fold-note']);
+  const link = card.element.querySelector('.bio-card-foot').children.at(-1);
+  assert.equal(link.title, "gbif.org can't show this area as a circle", 'the note stays reachable on the credit link');
+  room = 190; // the datasets fold is enough
+  card.showList(base);
+  assert.deepEqual([...classes], ['bio-card--fold-datasets']);
+  assert.equal(card.element.querySelector('.bio-card-foot').children.at(-1).title ?? '', '', 'no title while the note shows');
+  room = 400; // positive control: room for everything
+  card.showList(base);
+  assert.deepEqual([...classes], []);
+  card.showStatus({ heading: 'What lives here', message: 'Click a spot on the globe.' });
+  assert.deepEqual([...classes], [], 'a status card never folds');
+});
+
 test('a list footer can carry a plain-text note before its link; without one the footer is just the link', () => {
   const doc = cardDoc();
   const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html });

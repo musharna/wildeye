@@ -9565,11 +9565,6 @@ body.scene-playback-mode #key-setup {
    take turns (shortViewport.js), so the card never covers a pill and a pill tap after a pick reopens its panel. */
 @media (max-height: 600px) and (orientation: landscape) {
   .bio-card { --short-card-left: 200px; top: 76px; bottom: auto; right: 16px; width: min(560px, calc(100vw - 16px - var(--short-card-left))); max-height: calc(100vh - 76px - 78px); padding: 8px 12px; gap: 4px; }
-  /* The list keeps its one-row floor where the region has room for it above the card's fixed parts at their largest (157 px: the 2-line
-     filter line and credit and the antimeridian note, at the 352 px width of a 568 px window), and gives it up below that (568x320: 166 px of
-     region, 9 px left for the list), so the credit stays whole. A whole species row there would need 205 px: that size is the one pinned
-     exemption in qa landscape-regions. */
-  .bio-card .bio-card-body:has(> .bio-card-row) { min-height: min(calc(12px * 1.45 + 11px * 1.45 + 15px), calc(100vh - 76px - 78px - 157px)); }
   /* Fix round 4: the card's own region leaves the Top datasets rows at least one whole line at rest from 640x360 up (26 px at 667x375), so
      keyboard focus in them changes nothing here either (the round-3 fold of the species list is gone). At 568x320 the rows rest at their
      ring inset: a focused link scrolls into a 6 px view, part of the stated 568x320 exemption. */
@@ -9609,6 +9604,11 @@ body.scene-playback-mode #key-setup {
    status card covered the globe's centre in landscape, where a what-lives-here click goes). */
 .bio-card-body { grid-row: body; overflow-y: auto; min-height: 0; }
 .bio-card-body:has(> .bio-card-row) { min-height: calc(12px * 1.45 + 11px * 1.45 + 15px); }
+/* Fix round 5 (critic r4 S1): the list keeps its one whole row at every size. Where the card's content still overflows its box (a short
+   window), detailsCard.js folds, in order, the Top datasets block and then the antimeridian note (its text goes to the credit link's title);
+   the gbif.org credit is never folded. */
+.bio-card--fold-datasets .bio-card-foot .dataset-list { display: none; }
+.bio-card--fold-note .bio-card-foot-note { display: none; }
 /* A list longer than the card fades out at the bottom while more is below, like the species suggestions; with nothing to scroll the
    timeline is inactive and the fade stays 0 px. */
 @property --bio-card-body-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }

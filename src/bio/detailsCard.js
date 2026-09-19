@@ -158,6 +158,26 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   const filter = root.querySelector('.bio-card-filter');
   const body = root.querySelector('.bio-card-body');
   const foot = root.querySelector('.bio-card-foot');
+  const main = root.querySelector('.bio-card-main');
+  // Fix round 5 (critic r4 S1): what a list's card gives up, in order, when its content does not fit its box (a short window): first the Top
+  // datasets block (secondary, and the gbif.org credit link carries the records), then the antimeridian note (its text moves to the credit
+  // link's title; the credit itself says "all locations"). The species list keeps its one whole row (its min-height), so it gives way last.
+  const FOLDS = ['bio-card--fold-datasets', 'bio-card--fold-note'];
+  let listFoot = null; // { hasDatasets, note, link } of the list showing
+  const fitFoot = () => {
+    root.classList?.remove(...FOLDS);
+    if (listFoot?.link && listFoot.note) listFoot.link.removeAttribute?.('title');
+    if (!listFoot || root.hidden || mode !== 'list') return;
+    const overflows = () => main.scrollHeight > main.clientHeight + 1;
+    for (const fold of FOLDS) {
+      if (!overflows()) return;
+      if (fold === 'bio-card--fold-datasets' && !listFoot.hasDatasets) continue;
+      if (fold === 'bio-card--fold-note' && !listFoot.note) continue;
+      root.classList?.add(fold);
+      if (fold === 'bio-card--fold-note') listFoot.link.title = listFoot.note.textContent;
+    }
+  };
+  doc.defaultView?.addEventListener?.('resize', fitFoot);
   let mode = null;
   // Brief B S-1: stops the Top datasets rows' "more ↓" cue from watching a list the card no longer shows.
   let stopDatasetsCue = null;
@@ -179,6 +199,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
 
   const reset = (heading) => {
     stopCue();
+    listFoot = null;
+    root.classList?.remove(...FOLDS);
     title.textContent = heading;
     filter.textContent = '';
     body.replaceChildren();
@@ -230,6 +252,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     root.hidden = false;
     announce(announcement);
     setMode('list');
+    fitFoot();
   };
   // M2: an Escape another control already handled (the species search hiding its suggestions) is not the card's.
   doc.addEventListener('keydown', (event) => {
@@ -268,8 +291,9 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
           // [heading, rows, cue] (createDatasetList): the panel's cue, shown while more rows are below the rows' view.
           stopDatasetsCue = watchMoreBelow(block.children[1], block.children[2], observeSize);
         }
+        let note = null;
         if (footerNote) {
-          const note = doc.createElement('span');
+          note = doc.createElement('span');
           note.className = 'bio-card-foot-note';
           note.textContent = footerNote;
           foot.appendChild(note);
@@ -280,6 +304,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         link.rel = 'noopener noreferrer';
         link.textContent = footer;
         foot.appendChild(link);
+        listFoot = { hasDatasets: datasets.length > 0, note, link };
       }, `${heading}: ${[`${entries.length} species listed`, failuresLine(entries, 'name lookup'), failuresLine(datasets, 'dataset lookup')].filter(Boolean).join('; ')}`);
     },
   };
