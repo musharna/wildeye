@@ -319,3 +319,39 @@ test('a throwing onListEnd is logged under its own label, and dismiss still reac
   assert.deepEqual(logged.map(([label]) => label), ['[bio-card] onListEnd failed', '[bio-card] onListEnd failed']);
   assert.deepEqual(logged.map(([, context]) => [context.from, context.to, context.error.message]), [['list', null, 'outline already removed'], ['list', 'detail', 'outline already removed']]);
 });
+
+// R13-M8: the card was an aria-live region, so a screen reader read the whole card each time it filled. The card is now a region labelled by its
+// title and not live; a separate, visually hidden status line (outside the card, so it announces while the card is hidden) says in one short line
+// what opened: "<layer> details opened", a status card's heading and message, or a list's heading and how many species it lists.
+test('the card is not a live region; a short line in its own status region announces what opened', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const card = createDetailsCard({ viewer, doc, layerName: (id) => (id === 'occurrences' ? 'GBIF Occurrences' : id), sanitize: (html) => html });
+  const root = card.element;
+  const title = root.querySelector('.bio-card-title');
+  assert.equal(Object.hasOwn(root.attributes, 'aria-live'), false, 'the card is not a live region');
+  assert.equal(title.id, 'bio-card-title');
+  assert.equal(root.attributes['aria-labelledby'], 'bio-card-title', 'the card is labelled by its title');
+  const announcer = card.announcer;
+  assert.ok(announcer, 'the card has an announcer');
+  assert.notEqual(announcer, root);
+  assert.deepEqual([announcer.id, announcer.className, announcer.attributes.role, announcer.attributes['aria-live'], announcer.attributes['aria-atomic']], ['bio-card-announce', 'bio-card-announce', 'status', 'polite', 'true']);
+  assert.equal(announcer.textContent, '', 'nothing is announced before the card opens');
+  viewer.selectedEntity = entityIn('occurrences', '<b>Blue whale</b><p>a long description the card shows</p>');
+  assert.equal(announcer.textContent, 'GBIF Occurrences details opened', 'a detail card announces one line, not its body');
+  card.showStatus({ heading: 'What lives here', message: 'Searching GBIF within 10 km…' });
+  assert.equal(announcer.textContent, 'What lives here: Searching GBIF within 10 km…');
+  const entries = [{ key: 1, count: 3, scientificName: 'Branta canadensis', commonName: 'Canada Goose' }, { key: 2, count: 1, scientificName: 'Salix exigua', commonName: null }];
+  card.showList({ heading: 'What lives here', filterLine: 'CC0 and CC BY records', entries, footer: 'GBIF.org', footerHref: 'https://www.gbif.org/', onRow: () => {} });
+  assert.equal(announcer.textContent, 'What lives here: 2 species listed');
+  card.close();
+  assert.equal(announcer.textContent, '', 'closing clears the line');
+});
+
+test('startup puts the card announcer in the page, and it is visually hidden', () => {
+  const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+  assert.match(main, /document\.body\.appendChild\(bioCard\.element\);\s*document\.body\.appendChild\(bioCard\.announcer\);/);
+  const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+  const rule = css.match(/\.bio-card-announce \{([^}]*)\}/)?.[1] ?? '';
+  for (const declaration of ['position: fixed;', 'width: 1px;', 'height: 1px;', 'overflow: hidden;', 'clip-path: inset(50%);', 'white-space: nowrap;']) assert.ok(rule.includes(declaration), `.bio-card-announce has ${declaration}`);
+});

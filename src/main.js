@@ -310,6 +310,7 @@ async function init() {
     let whatLivesHere = null;
     const bioCard = createDetailsCard({ viewer, layerName: (id) => dataManager.layers.get(id)?.module?.name || id, onDismiss: () => whatLivesHere?.cancel(), onListEnd: () => whatLivesHere?.listEnded() });
     document.body.appendChild(bioCard.element);
+    document.body.appendChild(bioCard.announcer);
     // Species search and "what lives here" (docs/superpowers/specs/2026-09-13-species-search-design.md).
     const bioClient = createBioClient();
     let speciesPanel = null;

@@ -9549,6 +9549,8 @@ body.scene-playback-mode #key-setup {
   font: 12px/1.45 var(--font-sans);
 }
 .bio-card[hidden] { display: none; }
+/* R13-M8: the card's one-line status region, heard by screen readers and not seen. */
+.bio-card-announce { position: fixed; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .bio-card-head { display: flex; align-items: center; gap: 8px; }
 /* No text-transform: uppercase — it maps µ (U+00B5) to M in unit strings. */
 .bio-card-title { flex: 1; min-width: 0; font: 10px/1.3 var(--font-mono); letter-spacing: 1px; color: var(--accent); }

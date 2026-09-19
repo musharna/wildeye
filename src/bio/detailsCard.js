@@ -99,10 +99,20 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   root.id = 'bio-card';
   root.className = 'bio-card';
   root.hidden = true;
-  root.setAttribute('aria-live', 'polite');
+  // R13-M8: the card is not a live region (a screen reader read all of it each time it filled); it is labelled by its title, and one short line
+  // in a visually hidden status region of its own, outside the card so it is heard while the card is hidden too, says what opened.
+  root.setAttribute('aria-labelledby', 'bio-card-title');
+  const announcer = doc.createElement('div');
+  announcer.id = 'bio-card-announce';
+  announcer.className = 'bio-card-announce';
+  announcer.setAttribute('role', 'status');
+  announcer.setAttribute('aria-live', 'polite');
+  announcer.setAttribute('aria-atomic', 'true');
+  const announce = (text) => { announcer.textContent = text; };
   // Static skeleton only; no data is interpolated here.
   root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><div class="bio-card-filter"></div><div class="bio-card-body"></div><div class="bio-card-foot"></div>';
   const title = root.querySelector('.bio-card-title');
+  title.id = 'bio-card-title';
   const filter = root.querySelector('.bio-card-filter');
   const body = root.querySelector('.bio-card-body');
   const foot = root.querySelector('.bio-card-foot');
@@ -128,7 +138,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     body.replaceChildren();
     foot.replaceChildren();
   };
-  const close = () => { root.hidden = true; setMode(null); };
+  const close = () => { root.hidden = true; announce(''); setMode(null); };
 
   viewer.selectedEntityChanged.addEventListener((entity) => {
     try {
@@ -138,9 +148,11 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         return;
       }
       const html = sanitize(decision.html);
-      reset(layerName(decision.layerId));
+      const heading = layerName(decision.layerId);
+      reset(heading);
       body.innerHTML = html;
       root.hidden = false;
+      announce(`${heading} details opened`);
       setMode('detail');
     } catch (error) {
       console.error('[bio-card] could not render details', { layerId: entity?.entityCollection?.owner?.name ?? null, entityId: entity?.id ?? null, error });
@@ -160,11 +172,12 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   root.querySelector('.bio-card-close').addEventListener('click', dismiss);
   // Status or list content replacing a detail card clears the selection too (R-4d), so the card and the selection
   // stay in sync. Deselect first: that raises selectedEntityChanged, whose listener closes the detail card.
-  const showListContent = (heading, render) => {
+  const showListContent = (heading, render, announcement) => {
     if (mode === 'detail' && viewer.selectedEntity) viewer.selectedEntity = undefined;
     reset(heading);
     render();
     root.hidden = false;
+    announce(announcement);
     setMode('list');
   };
   // M2: an Escape another control already handled (the species search hiding its suggestions) is not the card's.
@@ -174,6 +187,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
 
   return {
     element: root,
+    /** The card's status line (R13-M8); the page appends it beside the card. */
+    announcer,
     get mode() { return mode; },
     close,
     showStatus({ heading, message, retry = null }) {
@@ -190,7 +205,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
           button.addEventListener('click', () => retry());
           body.appendChild(button);
         }
-      });
+      }, `${heading}: ${message}`);
     },
     /** `datasets` ({ key, count, title, doi, error }, facet order) are named above the foot's gbif.org link (R-7u). */
     showList({ heading, filterLine, entries, datasets = [], footer, footerHref, footerNote = null, onRow }) {
@@ -210,7 +225,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         link.rel = 'noopener noreferrer';
         link.textContent = footer;
         foot.appendChild(link);
-      });
+      }, `${heading}: ${entries.length} species listed`);
     },
   };
 }
