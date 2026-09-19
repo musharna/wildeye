@@ -99,3 +99,16 @@ test('tall viewport: nothing moves (positive control), and focus stays where it 
   assert.deepEqual(w.calls, [['data-panel', false]], 'only the explicit open');
   assert.equal(w.doc.activeElement, w.action);
 });
+
+// Fix round 6 (critic r5 S1): on a short viewport the stack and the card start below the header boxes that sit over their columns (measured,
+// not a constant): at 844x390 the title and its tagline run to about y 95, and a stack at 70 covered "NO PLACE LEFT".
+test('each short-viewport column starts below the header boxes over it', async () => {
+  const { topBelowHeader } = await import('./shortViewport.js');
+  const box = (left, top, right, bottom) => ({ left, top, right, bottom, width: right - left, height: bottom - top });
+  const header = [box(30, 20, 420, 66), box(24, 74, 300, 96), box(360, 28, 480, 72)]; // title, tagline, the top-centre buttons
+  assert.equal(topBelowHeader({ boxes: header, left: 16, right: 476, viewportHeight: 390 }), 104, 'the stack column: below the tagline, 8 px gap');
+  assert.equal(topBelowHeader({ boxes: header, left: 500, right: 828, viewportHeight: 390 }), 0, 'positive control: nothing above that column');
+  assert.equal(topBelowHeader({ boxes: header, left: 268, right: 828, viewportHeight: 390 }), 104, 'the card column meets the tagline and the buttons');
+  assert.equal(topBelowHeader({ boxes: [box(16, 300, 400, 330)], left: 16, right: 476, viewportHeight: 390 }), 0, 'a box in the lower half is not header');
+  assert.equal(topBelowHeader({ boxes: [box(0, 0, 0, 0)], left: 16, right: 476, viewportHeight: 390 }), 0, 'an empty (hidden) box counts for nothing');
+});

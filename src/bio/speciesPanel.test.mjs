@@ -837,7 +837,7 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   const shortQuery = '(max-height: 600px) and (orientation: landscape)';
   for (const block of cardQueries) assert.ok(block.startsWith(`@media ${shortQuery}`) || block.startsWith(`@media (min-width: 721px) and ${shortQuery}`), block.slice(0, 80));
   const shortBlock = cardQueries.find((block) => block.startsWith(`@media ${shortQuery}`)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ');
-  for (const declaration of ['top: 76px;', 'bottom: auto;', 'width: min(560px, calc(100vw - 16px - var(--short-card-left)));', 'max-height: calc(100vh - 76px - 78px);']) assert.ok(shortBlock.includes(declaration), `short card: ${declaration}`);
+  for (const declaration of ['top: var(--short-card-top, 76px);', 'bottom: auto;', 'width: min(560px, calc(100vw - 16px - var(--short-card-left)));', 'max-height: calc(100vh - var(--short-card-top, 76px) - 78px);']) assert.ok(shortBlock.includes(declaration), `short card: ${declaration}`);
   assert.doesNotMatch(shortBlock, /grid-template-rows/, 'no second share for the short card');
   for (const declaration of ['grid-row: datasets-start / datasets-end;', 'grid-template-rows: subgrid;']) assert.ok(bodyOf('.bio-card-foot .dataset-list').includes(declaration), `.bio-card-foot .dataset-list has ${declaration}`);
   // R13-M2: the rows are inset by the focus ring's reach (padding taken back by the margin), so a focused link's ring is not cut by their scroll clip.
@@ -887,7 +887,7 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.doesNotMatch(css.replace(/@media \(max-height: 600px\) and \(orientation: landscape\) \{[\s\S]*?\n\}/, ''), /dataset-list-rows:focus-within\) \.bio-card-body|dataset-list-rows:focus-within \{ min-height/, 'no unscoped focus share');
   // Final round (critic r1 N2): phone landscape gives the stack the rail's floor above the map credit and a 460 px width (qa panel-fold 667x375).
   // Fix round 5: the short stack is a height condition at every width (the lane engine steps aside there, ui.js), with the phone stack's box.
-  assert.match(css, /@media \(max-height: 600px\) and \(orientation: landscape\) \{(?:\s*\/\*[\s\S]*?\*\/)?\s*#left-panel-stack \{ top: 70px; left: 16px; right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); max-height: none; overflow-y: auto; row-gap: 4px; \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(460px, calc\(100vw - 32px\)\); \}/);
+  assert.match(css, /@media \(max-height: 600px\) and \(orientation: landscape\) \{(?:\s*\/\*[\s\S]*?\*\/)?\s*#left-panel-stack \{ top: var\(--short-stack-top, 70px\); left: 16px; right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); max-height: none; overflow-y: auto; row-gap: 4px; \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(460px, calc\(100vw - 32px\)\); \}/);
   assert.doesNotMatch(css, /@media \(max-width: 720px\) and \(max-height: [0-9]+px\)|@media \(min-width: 721px\) and \(max-height: 480px\)/, 'no width-split short rules');
   const uiSource = readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
   assert.match(uiSource, /window\.matchMedia\('\(max-width: 720px\)'\)\.matches \|\| window\.matchMedia\(SHORT_VIEWPORT_QUERY\)\.matches\) \{\n      stack\.classList\.remove\('layout-focus'\);/, 'the lane engine steps aside on a short viewport');

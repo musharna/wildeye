@@ -9564,7 +9564,7 @@ body.scene-playback-mode #key-setup {
    globe's centre, the pick target, at every short size (its bottom at 151 px; the centre is at 160 px or lower). An open panel and the card
    take turns (shortViewport.js), so the card never covers a pill and a pill tap after a pick reopens its panel. */
 @media (max-height: 600px) and (orientation: landscape) {
-  .bio-card { --short-card-left: 200px; top: 76px; bottom: auto; right: 16px; width: min(560px, calc(100vw - 16px - var(--short-card-left))); max-height: calc(100vh - 76px - 78px); padding: 8px 12px; gap: 4px; }
+  .bio-card { --short-card-left: 200px; top: var(--short-card-top, 76px); bottom: auto; right: 16px; width: min(560px, calc(100vw - 16px - var(--short-card-left))); max-height: calc(100vh - var(--short-card-top, 76px) - 78px); padding: 8px 12px; gap: 4px; }
   /* Fix round 4: the card's own region leaves the Top datasets rows at least one whole line at rest from 640x360 up (26 px at 667x375), so
      keyboard focus in them changes nothing here either (the round-3 fold of the species list is gone). At 568x320 the rows rest at their
      ring inset: a focused link scrolls into a 6 px view, part of the stated 568x320 exemption. */
@@ -9872,7 +9872,7 @@ body.recording-mode #bio-card { display: none !important; }
      header; ui.js now leaves the stack to these rules whenever the viewport is short, as it does on phones. The stack is the phone one: from
      under the header (70 px) down to the rail's floor above the map credit, a 176 px pill column, one open panel at a time (460 px wide), the
      collapsed pills hidden while it is open. */
-  #left-panel-stack { top: 70px; left: 16px; right: auto; width: min(var(--left-collapsed-width), calc(100vw - 32px)); bottom: calc(2vh + 7.5rem); max-height: none; overflow-y: auto; row-gap: 4px; }
+  #left-panel-stack { top: var(--short-stack-top, 70px); left: 16px; right: auto; width: min(var(--left-collapsed-width), calc(100vw - 32px)); bottom: calc(2vh + 7.5rem); max-height: none; overflow-y: auto; row-gap: 4px; }
   #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) { width: min(460px, calc(100vw - 32px)); }
   #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) > [data-panel-id].collapsed { display: none !important; }
   #left-panel-stack > [data-panel-id], #left-panel-stack > [data-panel-id].collapsed { position: relative; top: auto; right: auto; bottom: auto; left: auto; width: 100%; }

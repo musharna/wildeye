@@ -2136,7 +2136,7 @@ if (CHECKS.has('landscape-regions')) {
   // Fix round 5 (critic r4 B1): the short model is a height condition, so the wider phone-landscape sizes (740x360, 844x390, 932x430) and a
   // short desktop-width window (1024x500) are in the matrix too.
   // --landscape-sizes narrows the matrix while developing; the default is every size.
-  const SIZES = arg('--landscape-sizes', '667x375,640x360,568x320,740x360,844x390,932x430,1024x500,1024x580').split(',').map((size) => size.split('x').map(Number));
+  const SIZES = arg('--landscape-sizes', '667x375,640x360,568x320,740x360,844x390,932x430,1024x500,1024x580,1280x600').split(',').map((size) => size.split('x').map(Number));
   const TAVEUNI = [179.97, -16.8, 10000];
   const pillIds = ['data-panel', 'scene-panel', 'species-panel'];
   const hitAt = (sel) => page.evaluate((sel) => {
@@ -2153,6 +2153,15 @@ if (CHECKS.has('landscape-regions')) {
     await page.mouse.click(at.x, at.y);
     await sleep(900);
   };
+  // Fix round 6 (critic r5 S1): the header's text (the title and the "NO PLACE LEFT BEHIND" tagline, its line boxes) is never under a pill or
+  // an open panel. Returns the overlaps, empty when clear.
+  const headerCovered = () => page.evaluate(() => {
+    const lines = [...document.querySelectorAll('#title-bar h1, #title-bar .subtitle')].flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()].map((r) => ({ text: el.textContent.trim().slice(0, 20), r })); });
+    const boxes = [...document.querySelectorAll('#left-panel-stack > [data-panel-id]')].filter((p) => p.getClientRects().length > 0).map((p) => ({ id: p.id, r: p.getBoundingClientRect() }));
+    const out = [];
+    for (const { text, r } of lines) for (const b of boxes) if (Math.min(r.right, b.r.right) - Math.max(r.left, b.r.left) > 0.5 && Math.min(r.bottom, b.r.bottom) - Math.max(r.top, b.r.top) > 0.5) out.push(`${b.id} over "${text}"`);
+    return { lines: lines.length, out };
+  });
   const pillsState = () => page.evaluate((ids) => {
     const stack = document.getElementById('left-panel-stack');
     const sr = stack.getBoundingClientRect();
@@ -2181,7 +2190,9 @@ if (CHECKS.has('landscape-regions')) {
       await flyTo(...TAVEUNI);
       await page.evaluate(() => { document.getElementById('left-panel-stack').scrollTop = 0; });
       r.collapsed = await pillsState();
+      r.headerCollapsed = await headerCovered();
       await realClick('#species-panel [data-collapse-target="species-panel"]', 'the SPECIES +');
+      r.headerOpen = await headerCovered();
       // A person scrolls the SPECIES body to WHAT LIVES HERE when a chosen species and its note sit above it (a 163 px panel at 360 px tall).
       await page.evaluate(() => { const body = document.getElementById('species-body'); body.scrollTop = 0; document.getElementById('species-what-lives-here').scrollIntoView({ block: 'nearest' }); });
       await sleep(300);
@@ -2237,7 +2248,8 @@ if (CHECKS.has('landscape-regions')) {
       await shot(`landscape-regions-${size}`);
       const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && st.scrollSlack <= 1 && st.pillsInBox && st.pills.every((p) => p.collapsed && p.hit);
       // Fix round 5: no size is exempt from a whole species row (the card folds its Top datasets block and then the note first).
-      r.ok = pillsOk(r.collapsed) && r.armed.armed && r.armed.onCanvas && r.picked && Boolean(r.results) && !r.results.overlap && r.results.linkWhole && r.results.linkHit && r.results.speciesRowsWhole >= 1
+      const headerOk = (h) => Boolean(h) && h.lines >= 2 && h.out.length === 0;
+      r.ok = headerOk(r.headerCollapsed) && headerOk(r.headerOpen) && pillsOk(r.collapsed) && r.armed.armed && r.armed.onCanvas && r.picked && Boolean(r.results) && !r.results.overlap && r.results.linkWhole && r.results.linkHit && r.results.speciesRowsWhole >= 1
         && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown && r.keyboard.armed && r.keyboard.active !== 'BODY' && !r.keyboardCancel.armed && r.keyboardCancel.onButton && r.keyboardCancel.speciesOpen;
       } catch (caught) {
         // One size's failure is recorded with its cause and the next size still runs.

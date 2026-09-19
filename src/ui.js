@@ -118,7 +118,7 @@ import {
   measureLeftPanelNaturalHeight,
   phoneAccordionSiblingsToCollapse,
 } from './panelStackLayout.js';
-import { SHORT_VIEWPORT_QUERY } from './bio/shortViewport.js';
+import { SHORT_HEADER_SELECTOR, SHORT_VIEWPORT_QUERY, topBelowHeader } from './bio/shortViewport.js';
 import {
   resolveCockpitUtilityAnchor,
   resolveCockpitUtilityLayout,
@@ -7199,6 +7199,23 @@ export class StyleManager {
       for (const panel of panels) {
         panel.removeAttribute('aria-hidden');
         panel.style.removeProperty('--left-panel-allocated-height');
+      }
+      // Fix round 6 (critic r5 S1): on a short viewport the stack's column and the card's column start below the header boxes over them,
+      // measured here (the title grows with the window), not at a fixed 70/76 px, which covered the tagline on windows wider than 720 px.
+      const root = document.documentElement;
+      if (window.matchMedia(SHORT_VIEWPORT_QUERY).matches) {
+        const boxes = [...document.querySelectorAll(SHORT_HEADER_SELECTOR)].map((element) => element.getBoundingClientRect());
+        const stackLeft = stack.getBoundingClientRect().left;
+        // 4 px below the header, the gap the pills keep between each other: at 568x320 the three 38 px pills need all but 3.6 px of what is left.
+        const stackTop = topBelowHeader({ boxes, left: stackLeft, right: stackLeft + Math.min(460, window.innerWidth - 32), viewportHeight: window.innerHeight, gap: 4 });
+        const card = document.getElementById('bio-card');
+        const cardLeft = parseFloat(card ? getComputedStyle(card).getPropertyValue('--short-card-left') : '') || 200;
+        const cardTop = topBelowHeader({ boxes, left: cardLeft, right: window.innerWidth - 16, viewportHeight: window.innerHeight });
+        root.style.setProperty('--short-stack-top', `${Math.max(stackTop, 8)}px`);
+        root.style.setProperty('--short-card-top', `${Math.max(cardTop, 8)}px`);
+      } else {
+        root.style.removeProperty('--short-stack-top');
+        root.style.removeProperty('--short-card-top');
       }
       return;
     }

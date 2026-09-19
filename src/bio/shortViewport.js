@@ -71,3 +71,21 @@ export function createShortViewportRegions({
   });
   return { stop: typeof stop === 'function' ? stop : () => {} };
 }
+
+/** The selector of the header boxes the short-viewport columns keep clear of: the title, its tagline and the top-centre buttons. */
+export const SHORT_HEADER_SELECTOR = '#title-bar h1, #title-bar .subtitle, #top-center-actions';
+
+/**
+ * Fix round 6 (critic r5 S1): where a column running from `left` to `right` can start: 8 px below the lowest header box over it (a non-empty box
+ * in the top half of the viewport that overlaps the column horizontally), or 0 when none is. Measured from the page's real header, so it
+ * holds as the title grows with the window (at 844x390 the tagline ends near y 96, and a stack at 70 covered it).
+ */
+export function topBelowHeader({ boxes, left, right, viewportHeight, gap = 8 }) {
+  let bottom = null;
+  for (const b of boxes) {
+    if (!(b.width > 0 && b.height > 0) || b.top >= viewportHeight / 2) continue;
+    if (b.right <= left || b.left >= right) continue;
+    bottom = Math.max(bottom ?? -Infinity, b.bottom);
+  }
+  return bottom === null ? 0 : Math.ceil(bottom + gap);
+}
