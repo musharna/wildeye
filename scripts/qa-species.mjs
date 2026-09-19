@@ -1217,11 +1217,12 @@ if (CHECKS.has('collapsed-pills')) {
 // SPECIES body's view. At 375x667 and 400x800, panel open, body at its scroll top, the search box, the status line, the chosen species row
 // with its MAP switch, and WHAT LIVES HERE are each whole inside the body's view and are what the page hits at their corners (a half-cut row
 // fails), in three states per size: (1) a 1-line status, "No names match …" (both name sources answered empty in the page's fetch); (2) a
-// 2-line status: a species chosen through a real FUZZY match (iNaturalist's suggestion answered in the page as "Danaus plexippa"), "No exact
+// 2-line status (1 line on the wider landscape panel): a species chosen through a real FUZZY match (iNaturalist's suggestion answered in the page as "Danaus plexippa"), "No exact
 // GBIF match …; shown as GBIF's …", with the chosen row's note; (3) a failed name search with that species still chosen. Positive controls in
 // the same check: each state's status text is the expected one, with the stated line count, and the note is on screen.
+// Final round (critic r1 N2): phone landscape too, 667x375, where the chosen row showed 13 of its 44 px.
 if (CHECKS.has('panel-fold')) {
-  const SIZES = [[375, 667], [400, 800]];
+  const SIZES = [[375, 667], [400, 800], [667, 375]];
   const FUZZY_SUGGESTION = { total_results: 1, page: 1, per_page: 1, results: [{ id: 48662, name: 'Danaus plexippa', rank: 'species', preferred_common_name: 'Monarch', matched_term: 'Monarch' }] };
   const INAT_AUTOCOMPLETE = '^https://api\\.inaturalist\\.org/v1/taxa/autocomplete';
   const setRules = (rules) => page.evaluate((rules) => {
@@ -1286,7 +1287,7 @@ if (CHECKS.has('panel-fold')) {
       await sleep(1000);
       const fuzzy = await measure();
       await shot(`panel-fold-2line-${width}x${height}`);
-      states.push({ viewport: `${width}x${height}`, state: '2-line status (FUZZY)', ...fuzzy, ok: fuzzy.whole && fuzzy.statusLines >= 1.9 && fuzzy.statusLines <= 2.2 && fuzzy.note === "shown as GBIF's Danaus plexippus" });
+      states.push({ viewport: `${width}x${height}`, state: '2-line status (FUZZY)', ...fuzzy, ok: fuzzy.whole && (width < 450 ? fuzzy.statusLines >= 1.9 && fuzzy.statusLines <= 2.2 : fuzzy.statusLines >= 0.9 && fuzzy.statusLines <= 1.2) && fuzzy.note === "shown as GBIF's Danaus plexippus" });
       await setRules([{ pattern: INAT_AUTOCOMPLETE, body: { total_results: 0, page: 1, per_page: 0, results: [] } }, { pattern: '^https://api\\.gbif\\.org/v1/species/suggest', body: [] }]);
       await typeQuery('zzqx');
       await page.waitForFunction(() => document.getElementById('species-status').textContent === 'No names match "zzqx".', { timeout: 30000 });
