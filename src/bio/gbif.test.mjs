@@ -413,8 +413,11 @@ test('name lookups never run more than 4 at a time', async () => {
   assert.equal(peak, 4);
 });
 
+// Brief B N-e: the status lines show this message ("GBIF search failed (HTTP 503)"), and at 375 px a line wrapped between "HTTP" and
+// "503". The message joins the word and the code with a no-break space (U+00A0), so no status line can split them.
 test('fetchJson: HTTP errors carry the status, a hung request times out, a caller abort stays an AbortError', async () => {
-  await assert.rejects(fetchJson('https://x.test/a', { fetchImpl: async () => httpError(503) }), (e) => e instanceof RequestError && e.status === 503 && e.message === 'HTTP 503');
+  await assert.rejects(fetchJson('https://x.test/a', { fetchImpl: async () => httpError(503) }), (e) => e instanceof RequestError && e.status === 503 && e.message === 'HTTP\u00a0503');
+  await assert.rejects(fetchJson('https://x.test/a', { fetchImpl: async () => httpError(429) }), (e) => e.status === 429 && /^HTTP\u00a0429$/.test(e.message) && !/\s/.test(e.message.replace('\u00a0', '')));
   const hang = (url, { signal }) => new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
   await assert.rejects(fetchJson('https://x.test/b', { fetchImpl: hang, timeoutMs: 20 }), (e) => e instanceof RequestError && e.message === 'timeout');
   const caller = new AbortController();
@@ -458,12 +461,12 @@ test('suggest: iNaturalist first; GBIF names with a visible notice when it fails
   const inatDown = createBioClient({ fetchImpl: async (url) => (url.includes('inaturalist') ? httpError(503) : ok(gbifBody)) });
   const fallback = await inatDown.suggest('monarch');
   assert.equal(fallback.source, 'gbif');
-  assert.match(fallback.notice, /iNaturalist didn't answer \(HTTP 503\)/);
+  assert.match(fallback.notice, /iNaturalist didn't answer \(HTTP\u00a0503\)/);
   assert.equal(fallback.items[0].gbifKey, 5133088);
 
   const bothDown = createBioClient({ fetchImpl: async () => httpError(500) });
   // Critic 10 N-a: each source's failure once, no nested parentheses.
-  await assert.rejects(bothDown.suggest('monarch'), { message: 'iNaturalist HTTP 500, GBIF HTTP 500' });
+  await assert.rejects(bothDown.suggest('monarch'), { message: 'iNaturalist HTTP\u00a0500, GBIF HTTP\u00a0500' });
 
   let t = 0;
   const limited = createBioClient({ fetchImpl: async () => ok(inatBody), inatLimiter: createRateLimiter({ maxPerWindow: 1, now: () => t }) });
@@ -488,7 +491,7 @@ test('dataset lookups go through the pool, cache per key, forget a failure, and 
   let fail = true;
   const urls = [];
   const client = createBioClient({ pool, fetchImpl: async (url) => { urls.push(url); return fail ? httpError(503) : ok({ key: INAT_RG, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x', license: 'CC BY-NC' }); } });
-  await assert.rejects(client.dataset(INAT_RG), /HTTP 503/);
+  await assert.rejects(client.dataset(INAT_RG), /HTTP\u00a0503/);
   fail = false;
   assert.deepEqual(await client.dataset(INAT_RG), { key: INAT_RG, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' });
   await client.dataset(INAT_RG);
@@ -520,7 +523,7 @@ test('speciesName caches per key and forgets a failure so a retry can succeed', 
   let calls = 0;
   let fail = true;
   const client = createBioClient({ fetchImpl: async () => { calls += 1; return fail ? httpError(503) : ok({ key: 7, canonicalName: 'A b', vernacularName: 'Ab' }); } });
-  await assert.rejects(client.speciesName(7), /HTTP 503/);
+  await assert.rejects(client.speciesName(7), /HTTP\u00a0503/);
   fail = false;
   assert.deepEqual(await client.speciesName(7), { key: 7, scientificName: 'A b', commonName: 'Ab', className: null });
   await client.speciesName(7);

@@ -391,7 +391,10 @@ export function createPool(limit = 4) {
   };
 }
 
-/** GET JSON with a timeout. HTTP errors and timeouts become RequestError; a caller abort stays an AbortError. */
+/**
+ * GET JSON with a timeout. HTTP errors and timeouts become RequestError; a caller abort stays an AbortError. An HTTP error's message is
+ * "HTTP" and the status joined by a no-break space: the status lines show it, and a narrow panel wrapped "HTTP" and "503" apart.
+ */
 export async function fetchJson(url, { signal = null, timeoutMs = REQUEST_TIMEOUT_MS, fetchImpl = (...args) => globalThis.fetch(...args) } = {}) {
   const controller = new AbortController();
   const onCallerAbort = () => controller.abort(signal.reason);
@@ -400,7 +403,7 @@ export async function fetchJson(url, { signal = null, timeoutMs = REQUEST_TIMEOU
   const timer = setTimeout(() => controller.abort(new RequestError('timeout', { url })), timeoutMs);
   try {
     const res = await fetchImpl(url, { signal: controller.signal });
-    if (!res.ok) throw new RequestError(`HTTP ${res.status}`, { status: res.status, url });
+    if (!res.ok) throw new RequestError(`HTTP\u00a0${res.status}`, { status: res.status, url });
     return await res.json();
   } catch (error) {
     if (error instanceof RequestError) throw error;
