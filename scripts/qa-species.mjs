@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,panel-fold,phone-accordion,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,panel-fold,phone-accordion,landscape-regions,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,panel-fold,phone-accordion,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,panel-fold,phone-accordion,landscape-regions,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -1082,7 +1082,7 @@ if (CHECKS.has('card-foot-rest')) {
       await sleep(300);
       if (await page.evaluate(() => document.getElementById('species-what-lives-here').getAttribute('aria-pressed')) !== 'true') throw new Error(`card-foot-rest ${width}x${height}: a real click did not arm WHAT LIVES HERE`);
       // Fix round 3 (critic r2 S1): the globe's centre is clicked as armed, with SPECIES left as the page leaves it; the check does not collapse
-      // it. The centre must be the canvas (an open panel over it steps aside while armed, src/bio/pickClearance.js).
+      // it. The centre must be the canvas (on a short viewport the open panel folds while the card shows, src/bio/shortViewport.js).
       await sleep(800);
       const centre = await page.evaluate(() => {
         const canvas = window.__godsEyeView.viewer.scene.canvas;
@@ -2122,6 +2122,148 @@ if (CHECKS.has('portal-link')) {
     await page.click('#species-radius [data-radius="10"]').catch((caught) => { error = `${error ?? ''} restoring the 10 km radius: ${caught}`; });
   }
   report('portal-link', error === null && results.length === 4 && results.every((r) => r.ok), { results, ...(error ? { error } : {}), forPeople: { card50km: results[1]?.href ?? null, panelTaxon: results[3]?.href ?? null, noLocation: results[2]?.href ?? null } });
+}
+
+// Fix round 4 (critic r3 S1', S3, N1, N2): short landscape as one model. At 667x375, 640x360 and 568x320 (and every window up to 480 px tall)
+// the left stack, the details card and the pick target each keep their own region. In each size, with real clicks only: (1) all three collapsed
+// pills are hit at their + with the stack unscrolled; (2) SPECIES opened by its pill, WHAT LIVES HERE armed by a real click, and the globe's centre
+// is what the page hits (nothing covers the pick target) and a real click there lands the pick (the list shows); (3) with the results showing,
+// the card and the stack do not overlap, every collapsed pill's + is hit, the credit link is whole and hit, and at least one species row is
+// whole; (4) one tap on the SPECIES + reopens it (open and shown). (5) Keyboard: WHAT LIVES HERE armed with Enter keeps focus on an element
+// (not BODY), and Escape cancels and puts focus back on WHAT LIVES HERE, with SPECIES open again; the same at 375x667 (positive control, a
+// size where nothing moves).
+if (CHECKS.has('landscape-regions')) {
+  const SIZES = [[667, 375], [640, 360], [568, 320]];
+  const TAVEUNI = [179.97, -16.8, 10000];
+  const pillIds = ['data-panel', 'scene-panel', 'species-panel'];
+  const hitAt = (sel) => page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return { x, y, hits: r.width > 0 && Boolean(hit && (hit === el || el.contains(hit))), hit: hit ? `${hit.tagName.toLowerCase()}#${hit.id}.${String(hit.className).slice(0, 40)}` : null };
+  }, sel);
+  const realClick = async (sel, what) => {
+    const at = await hitAt(sel);
+    if (!at.hits) throw new Error(`landscape-regions: ${what} (${sel}) is under ${at.hit}`);
+    await page.mouse.click(at.x, at.y);
+    await sleep(900);
+  };
+  const pillsState = () => page.evaluate((ids) => {
+    const stack = document.getElementById('left-panel-stack');
+    return { scrollTop: stack.scrollTop, pills: ids.map((id) => {
+      const button = document.querySelector(`#${id} [data-collapse-target="${id}"]`);
+      const r = button.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { id, collapsed: document.getElementById(id).classList.contains('collapsed'), hit: r.width > 0 && Boolean(hit && (hit === button || button.contains(hit))), at: hit ? (hit.id || String(hit.className).slice(0, 30)) : null };
+    }) };
+  }, pillIds);
+  const collapseAll = () => page.evaluate((ids) => { for (const id of ids) { const p = document.getElementById(id); if (!p.classList.contains('collapsed')) p.querySelector(`[data-collapse-target="${id}"]`).click(); } }, pillIds);
+  const closeCard = () => page.evaluate(() => { const card = document.getElementById('bio-card'); if (card && !card.hidden) card.querySelector('.bio-card-close').click(); });
+  const results = [];
+  let error = null;
+  try {
+    for (const [width, height] of SIZES) {
+      const size = `${width}x${height}`;
+      const r = { viewport: size };
+      try {
+      await page.setViewport({ width, height });
+      await sleep(2500);
+      await closeCard();
+      await collapseAll();
+      await page.evaluate(() => window.__godsEyeView.dataManager.setLayerParams('species', { radiusKm: 50 }, { origin: 'user' }));
+      await flyTo(...TAVEUNI);
+      await page.evaluate(() => { document.getElementById('left-panel-stack').scrollTop = 0; });
+      r.collapsed = await pillsState();
+      await realClick('#species-panel [data-collapse-target="species-panel"]', 'the SPECIES +');
+      await page.evaluate(() => { document.getElementById('species-body').scrollTop = 0; });
+      await realClick('#species-what-lives-here', 'WHAT LIVES HERE');
+      await sleep(600);
+      r.armed = await page.evaluate(() => {
+        const canvas = window.__godsEyeView.viewer.scene.canvas;
+        const c = canvas.getBoundingClientRect();
+        const x = c.left + c.width / 2;
+        const y = c.top + c.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        const card = document.getElementById('bio-card').getBoundingClientRect();
+        return { x, y, onCanvas: hit === canvas, hit: hit ? (hit.id || String(hit.className).slice(0, 30)) : null, armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', card: { top: Math.round(card.top), bottom: Math.round(card.bottom), left: Math.round(card.left) } };
+      });
+      if (r.armed.onCanvas) {
+        await page.mouse.click(r.armed.x, r.armed.y);
+        r.picked = await page.waitForFunction(() => document.querySelectorAll('#bio-card .bio-card-row').length > 0 && document.querySelector('#bio-card .bio-card-foot > a'), { timeout: 60000 }).then(() => true, () => false);
+      } else r.picked = false;
+      await page.mouse.move(2, Math.round(height / 2));
+      await sleep(1000);
+      if (r.picked) {
+        r.results = await page.evaluate(() => {
+          const card = document.getElementById('bio-card');
+          const c = card.getBoundingClientRect();
+          const s = document.getElementById('left-panel-stack');
+          const shown = [...s.querySelectorAll(':scope > [data-panel-id]')].filter((p) => p.getClientRects().length > 0).map((p) => p.getBoundingClientRect());
+          const overlap = shown.some((p) => p.right > c.left + 0.5 && p.left < c.right - 0.5 && p.bottom > c.top + 0.5 && p.top < c.bottom - 0.5);
+          const clipOf = (el) => { let t = -Infinity; let b = Infinity; for (let n = el.parentElement; n; n = n.parentElement) { const cs = getComputedStyle(n); if (cs.overflowY === 'visible') continue; const nr = n.getBoundingClientRect(); t = Math.max(t, nr.top + n.clientTop); b = Math.min(b, nr.top + n.clientTop + n.clientHeight); } return [Math.max(t, c.top, 0), Math.min(b, c.bottom, innerHeight)]; };
+          const whole = (el) => { const r = el.getBoundingClientRect(); const [t, b] = clipOf(el); return r.height > 0 && r.top >= t - 0.5 && r.bottom <= b + 0.5; };
+          const link = card.querySelector('.bio-card-foot > a');
+          const lr = link.getBoundingClientRect();
+          const lh = document.elementFromPoint((lr.left + lr.right) / 2, (lr.top + lr.bottom) / 2);
+          const parts = Object.fromEntries(['.bio-card-head', '.bio-card-filter', '.bio-card-body', '.bio-card-foot', '.bio-card-foot-note', '.bio-card-foot > a'].map((sel) => { const e = card.querySelector(sel); const b = e?.getBoundingClientRect(); return [sel, b ? [Math.round(b.top), Math.round(b.height)] : null]; }));
+          return { card: { left: Math.round(c.left), top: Math.round(c.top), right: Math.round(c.right), bottom: Math.round(c.bottom), maxHeight: getComputedStyle(card).maxHeight }, parts, overlap, linkWhole: whole(link) && lr.bottom <= c.bottom + 0.5, linkHit: Boolean(lh && (lh === link || link.contains(lh))), speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter(whole).length };
+        });
+        await shot(`landscape-regions-results-${size}`);
+        r.afterPick = await pillsState();
+        await realClick('#species-panel [data-collapse-target="species-panel"]', 'the SPECIES + after the pick');
+        r.reopened = await page.evaluate(() => { const p = document.getElementById('species-panel'); return { open: !p.classList.contains('collapsed'), shown: p.getBoundingClientRect().height > 60, cardHidden: document.getElementById('bio-card').hidden }; });
+      }
+      // (5) keyboard
+      await closeCard();
+      await page.evaluate(() => { const p = document.getElementById('species-panel'); if (p.classList.contains('collapsed')) p.querySelector('[data-collapse-target="species-panel"]').click(); document.getElementById('species-body').scrollTop = 0; });
+      await sleep(900);
+      await page.evaluate(() => document.getElementById('species-what-lives-here').focus());
+      await page.keyboard.press('Enter');
+      await sleep(900);
+      r.keyboard = await page.evaluate(() => ({ armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', active: document.activeElement === document.body ? 'BODY' : (document.activeElement?.id || document.activeElement?.className || null) }));
+      await page.keyboard.press('Escape');
+      await sleep(900);
+      r.keyboardCancel = await page.evaluate(() => ({ armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', onButton: document.activeElement === document.getElementById('species-what-lives-here'), speciesOpen: !document.getElementById('species-panel').classList.contains('collapsed'), cardHidden: document.getElementById('bio-card').hidden }));
+      await shot(`landscape-regions-${size}`);
+      const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && st.pills.every((p) => p.collapsed && p.hit);
+      // The one pinned exemption: at 568x320 the card's region is 166 px (76 px header, 78 px time bar), its fixed parts at 352 px wide take
+      // 157 px (2-line filter line and credit, the antimeridian note), and a whole species row needs 48 more (205 px), so the list is a faded
+      // 9 px strip there; the credit stays whole. Every other size needs a whole species row.
+      const rowNeeded = size !== '568x320';
+      r.ok = pillsOk(r.collapsed) && r.armed.armed && r.armed.onCanvas && r.picked && Boolean(r.results) && !r.results.overlap && r.results.linkWhole && r.results.linkHit && (!rowNeeded || r.results.speciesRowsWhole >= 1)
+        && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown && r.keyboard.armed && r.keyboard.active !== 'BODY' && !r.keyboardCancel.armed && r.keyboardCancel.onButton && r.keyboardCancel.speciesOpen;
+      } catch (caught) {
+        // One size's failure is recorded with its cause and the next size still runs.
+        r.error = String(caught?.message || caught).slice(0, 300);
+        r.ok = false;
+        await shot(`landscape-regions-${size}-error`);
+      }
+      results.push(r);
+      await page.keyboard.press('Escape');
+      await closeCard();
+    }
+    // Positive control for (5): portrait, where no panel moves; focus stays on the button while armed and after Escape.
+    await page.setViewport({ width: 375, height: 667 });
+    await sleep(2500);
+    await openSpeciesPanel();
+    await page.evaluate(() => { document.getElementById('species-body').scrollTop = 0; document.getElementById('species-what-lives-here').focus(); });
+    await page.keyboard.press('Enter');
+    await sleep(900);
+    const portraitArmed = await page.evaluate(() => document.activeElement === document.getElementById('species-what-lives-here'));
+    await page.keyboard.press('Escape');
+    await sleep(900);
+    const portraitCancel = await page.evaluate(() => document.activeElement === document.getElementById('species-what-lives-here'));
+    results.push({ viewport: '375x667', portraitArmed, portraitCancel, ok: portraitArmed && portraitCancel });
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await closeCard().catch(() => {});
+    await page.setViewport({ width: 1400, height: 900 });
+    await sleep(2000);
+  }
+  report('landscape-regions', error === null && results.length === SIZES.length + 1 && results.every((r) => r.ok), { results, ...(error ? { error } : {}) });
 }
 
 // Final review m-1 and critic r1 N3: at phone width the left stack is an accordion, whatever opens a panel. (1) A share link opening DATA

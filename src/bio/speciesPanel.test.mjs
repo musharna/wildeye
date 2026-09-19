@@ -832,8 +832,13 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   assert.ok(heightQueries.length > 0, 'positive control: the stylesheet has height queries (for other surfaces)');
   // Brief B fix round 1: one height query may widen the card on a short window; none may set a height, a cap or a share for it.
   const cardQueries = heightQueries.filter((block) => block.includes('.bio-card'));
-  const shortCard = (block) => block.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ');
-  assert.deepEqual(cardQueries.map(shortCard), ['@media (max-height: 480px) { .bio-card { width: min(560px, calc(100vw - 48px)); } .bio-card-main:has(.dataset-list-rows:focus-within) .bio-card-body { min-height: 0; max-height: 0; } .bio-card-foot .dataset-list-rows:focus-within { min-height: calc(11px * 1.35 + 6px); } }'], 'only the short-window width and the short card\'s focus share');
+  // Fix round 4: every height query that styles the card is the one short-viewport condition (src/bio/shortViewport.js SHORT_VIEWPORT_QUERY), and
+  // it places the card in its own region (top-anchored, right of the pill column, above the time bar) rather than sharing the height anew.
+  const shortQuery = '(max-height: 480px)';
+  for (const block of cardQueries) assert.ok(block.startsWith(`@media ${shortQuery}`) || block.startsWith(`@media (min-width: 721px) and ${shortQuery}`), block.slice(0, 80));
+  const shortBlock = cardQueries.find((block) => block.startsWith(`@media ${shortQuery}`)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ');
+  for (const declaration of ['top: 76px;', 'bottom: auto;', 'width: min(560px, calc(100vw - 16px - var(--short-card-left)));', 'max-height: calc(100vh - 76px - 78px);']) assert.ok(shortBlock.includes(declaration), `short card: ${declaration}`);
+  assert.doesNotMatch(shortBlock, /grid-template-rows/, 'no second share for the short card');
   for (const declaration of ['grid-row: datasets-start / datasets-end;', 'grid-template-rows: subgrid;']) assert.ok(bodyOf('.bio-card-foot .dataset-list').includes(declaration), `.bio-card-foot .dataset-list has ${declaration}`);
   // R13-M2: the rows are inset by the focus ring's reach (padding taken back by the margin), so a focused link's ring is not cut by their scroll clip.
   for (const declaration of ['grid-row: datasets-rows;', 'margin: 0 -3px;', 'padding: 3px;', 'scroll-padding: 3px;', 'min-height: 0;', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
@@ -881,7 +886,7 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // Fix round 3 (critic r2 S2): that focus share lives only in the short-window block above; no rule outside it changes the card on focus.
   assert.doesNotMatch(css.replace(/@media \(max-height: 480px\) \{[\s\S]*?\n\}/, ''), /dataset-list-rows:focus-within\) \.bio-card-body|dataset-list-rows:focus-within \{ min-height/, 'no unscoped focus share');
   // Final round (critic r1 N2): phone landscape gives the stack the rail's floor above the map credit and a 460 px width (qa panel-fold 667x375).
-  assert.match(css, /@media \(max-width: 720px\) and \(max-height: 480px\) \{\s*#left-panel-stack \{ right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(460px, calc\(100vw - 32px\)\); \}/);
+  assert.match(css, /@media \(max-width: 720px\) and \(max-height: 480px\) \{\s*#left-panel-stack \{ right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); row-gap: 4px; \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(460px, calc\(100vw - 32px\)\); \}/);
   assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';

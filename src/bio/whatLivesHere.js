@@ -104,7 +104,7 @@ export function createWhatLivesHere({
     area = null;
   };
 
-  // reason: 'arm', 'pick' (a ground click ended it) or 'cancel' (Escape, the button, the card dismissed); fix round 3 (pickClearance.js).
+  // reason: 'arm', 'pick' (a ground click ended it) or 'cancel' (Escape, the button, the card dismissed), for owners that care why.
   const setArmed = (value, reason = value ? 'arm' : 'cancel') => {
     if (armed === value) return;
     armed = value;
