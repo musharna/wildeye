@@ -178,7 +178,7 @@ test("a FUZZY match is mapped and says it is shown as GBIF's name; EXACT says no
 
 // R13-M3: the accepted name of a synonym is looked up only where it is shown: a match that is not EXACT. An EXACT synonym maps its accepted key
 // with no lookup, so a failing lookup cannot stop it (live: "Felis concolor coryi", EXACT SUBSPECIES synonym of 6164590, no subspecies field).
-// A FUZZY synonym is named by the lookup, which carries the choice's signal; a lookup that fails maps nothing and says so.
+// A FUZZY synonym is named by the lookup, which carries the choice's signal; a lookup that fails still maps the key and says the failure.
 test('a synonym is named by a lookup only when the match is not EXACT, and a failed lookup fails loud', async () => {
   const failing = async () => { throw new Error('HTTP 503'); };
   const exact = panelRig({ match: async () => ({ key: 6164590, matchType: 'EXACT', canonicalName: null }), speciesName: failing });
@@ -198,10 +198,15 @@ test('a synonym is named by a lookup only when the match is not EXACT, and a fai
   console.error = (...args) => { logged.push(args); };
   try {
     const failed = panelRig({ match: async () => ({ key: 5220086, matchType: 'FUZZY', canonicalName: null }), speciesName: failing });
-    assert.equal(await failed.panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' }), false);
-    assert.equal(failed.els['species-status'].textContent, 'GBIF lookup failed (HTTP 503)');
-    assert.equal(failed.calls.params.length, 0, 'a FUZZY match that cannot be named maps nothing');
+    // Fix round 1, item 6: the key is known, so the taxon is mapped anyway; the failed name lookup is said in the note and the status, and logged.
+    assert.equal(await failed.panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' }), true);
+    assert.deepEqual(failed.calls.params.at(-1).p, { taxonKey: 5220086, name: 'Megaptera nodosus' }, 'a FUZZY synonym whose name lookup fails is still mapped');
+    assert.equal(failed.els['species-chosen-note'].hidden, false);
+    assert.equal(failed.els['species-chosen-note'].textContent, "shown as GBIF's accepted taxon 5220086 — name lookup failed: HTTP 503");
+    assert.equal(failed.els['species-status'].textContent, "No exact GBIF match for Megaptera nodosus; shown as GBIF's accepted taxon 5220086 — name lookup failed: HTTP 503.");
     assert.equal(logged.length, 1, 'and is logged');
+    assert.equal(logged[0][0], '[species] accepted-name lookup failed; mapped by key');
+    assert.equal(logged[0][1].taxonKey, 5220086);
   } finally {
     console.error = original;
   }

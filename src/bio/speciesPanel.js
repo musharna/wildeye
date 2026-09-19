@@ -315,6 +315,20 @@ export function createSpeciesPanel({
     return mapTaxon({ taxonKey, name });
   }
 
+  /**
+   * Fix round 1, item 6: the accepted name of a synonym the match did not name. The key is known, so a failed lookup does not stop the map: the
+   * name shown says the lookup failed ("accepted taxon 5220086 — name lookup failed: HTTP 503"), and the failure is logged. An abort is rethrown.
+   */
+  async function acceptedName(taxonKey, item, signal) {
+    try {
+      return (await client.speciesName(taxonKey, { signal })).scientificName;
+    } catch (error) {
+      if (error?.name === 'AbortError' || signal.aborted) throw error;
+      console.error('[species] accepted-name lookup failed; mapped by key', { taxonKey, item, error });
+      return `accepted taxon ${taxonKey} — name lookup failed: ${error.message}`;
+    }
+  }
+
   async function choose(item) {
     const signal = startChoice();
     endSearch(); // M3: a choice ends the name search
@@ -341,7 +355,7 @@ export function createSpeciesPanel({
         // R13-M3: a synonym the match did not name is named by looking its accepted key up, here, where the name is shown; an EXACT match
         // shows no name, so it sends no lookup and cannot fail on one.
         if (match.matchType !== 'EXACT') {
-          shownAsName = match.canonicalName ?? (await client.speciesName(taxonKey, { signal })).scientificName;
+          shownAsName = match.canonicalName ?? await acceptedName(taxonKey, item, signal);
           if (signal.aborted) return superseded();
         }
       }
