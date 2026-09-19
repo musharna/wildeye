@@ -2134,8 +2134,17 @@ if (CHECKS.has('phone-accordion')) {
     const r = panel.getBoundingClientRect();
     return { id: panel.id, open: !panel.classList.contains('collapsed'), shown: panel.getClientRects().length > 0 && getComputedStyle(panel).display !== 'none', height: Math.round(r.height) };
   }).filter((panel) => panel.id !== 'cctv-panel'));
+  // A real click on a panel's +/−; the page must hit that button first, else the check fails naming what it hit.
   const clickToggle = async (id) => {
-    const box = await tab.evaluate((id) => { const b = document.querySelector(`#${id} [data-collapse-target="${id}"]`).getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; }, id);
+    const box = await tab.evaluate((id) => {
+      const button = document.querySelector(`#${id} [data-collapse-target="${id}"]`);
+      const b = button.getBoundingClientRect();
+      const x = b.left + b.width / 2;
+      const y = b.top + b.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      return { x, y, hits: Boolean(hit && (hit === button || button.contains(hit))), hit: hit ? `${hit.tagName.toLowerCase()}#${hit.id}.${String(hit.className).slice(0, 60)}` : null };
+    }, id);
+    if (!box.hits) throw new Error(`phone-accordion: the ${id} toggle is under ${box.hit}`);
     await tab.mouse.click(box.x, box.y);
     await sleep(1500);
   };
