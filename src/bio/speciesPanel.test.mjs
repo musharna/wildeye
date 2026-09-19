@@ -27,7 +27,7 @@ const yearsChip = (years) => ({ target: { closest: () => ({ dataset: { years } }
 // The rows in the block's content element, a list labelled by the block's heading in index.html: [link href, link text, count, note or null].
 const datasetRowsIn = (content) => content.children[0].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
 
-function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' }), speciesName = async (key) => ({ key, scientificName: 'x', commonName: null }), suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, clearTimer = () => {}, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
+function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' }), speciesName = async (key) => ({ key, scientificName: 'x', commonName: null }), suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, clearTimer = () => {}, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null, enableGate = null } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
   const doc = { activeElement: null, getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag, focus() { doc.activeElement = this; } }) };
   for (const node of Object.values(els)) node.focus = () => { doc.activeElement = node; };
@@ -53,7 +53,7 @@ function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', can
       return true;
     },
     isEnabled: () => enabled,
-    setEnabled: async (id, on, options) => { calls.enable.push({ id, on, origin: options.origin }); enabled = on; return true; },
+    setEnabled: async (id, on, options) => { calls.enable.push({ id, on, origin: options.origin }); if (enableGate) await enableGate(); enabled = on; return true; },
     subscribe: (listener) => { listeners.push(listener); return () => {}; },
   };
   const speciesLayer = { getStats: () => ({ error: null, tileFailures: 0 }), onStatus: () => () => {} };
@@ -242,6 +242,40 @@ test("a superseded choice ends at once while its synonym lookup is still out, be
   assert.equal(calls.speciesName[0].signal?.aborted, true, 'the newer pick aborts the lookup');
   assert.equal(result, false, 'and the superseded choice has ended without mapping');
   assert.deepEqual(calls.params.at(-1).p, { taxonKey: 1340481, name: 'Nudibranch' });
+});
+
+// Fix round 1, I-2: the check after the match holds for an EXACT answer too (a client that answers after its abort, EXACT, must not map over a
+// newer what-lives-here pick; the FUZZY race above is also caught by the check after the name lookup, so it cannot pin this one).
+test('a late EXACT match of a superseded choice maps nothing over the newer pick', async () => {
+  let answer = null;
+  const { panel, els, calls } = panelRig({ match: () => new Promise((resolve) => { answer = resolve; }) });
+  const pending = panel.choose({ gbifKey: null, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' });
+  await settle();
+  assert.equal(await panel.chooseTaxon({ taxonKey: 1340481, name: 'Nudibranch' }), true);
+  answer({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' });
+  assert.equal(await pending, false, 'the superseded choice maps nothing');
+  assert.deepEqual(calls.params.map((c) => c.p.taxonKey), [1340481], 'only the newer pick was ever mapped');
+  assert.equal(els['species-status'].textContent, '');
+});
+
+// Fix round 1, I-2: with the map off, a choice waits for the map switch after setting its taxon. A what-lives-here pick landing in that wait
+// is the newer choice: the old one must not clear the search box or write its "shown as GBIF's" status for a taxon that is no longer mapped.
+test('a pick landing while a choice waits for the map switch keeps the box text and gets no stale status', async () => {
+  let open = null;
+  const gate = new Promise((resolve) => { open = resolve; });
+  const { panel, els, calls } = panelRig({ match: async () => ({ key: 5133088, matchType: 'FUZZY', canonicalName: 'Danaus plexippus' }), enableGate: () => gate });
+  els['species-search'].value = 'danaus plex';
+  const pending = panel.choose({ gbifKey: null, scientificName: 'Danaus plexippa', commonName: 'Monarch', rank: 'species' });
+  await settle();
+  assert.equal(calls.enable.length, 1, 'the choice waits for the map switch');
+  const picked = panel.chooseTaxon({ taxonKey: 1340481, name: 'Nudibranch' });
+  open();
+  const [oldResult, newResult] = await Promise.all([pending, picked]);
+  assert.equal(els['species-search'].value, 'danaus plex', 'the box keeps its text');
+  assert.equal(els['species-status'].textContent, '', 'no "shown as GBIF\'s" status for the replaced taxon');
+  assert.equal(els['species-chosen-note'].hidden, true);
+  assert.deepEqual(calls.params.at(-1).p, { taxonKey: 1340481, name: 'Nudibranch' });
+  assert.deepEqual([oldResult, newResult], [false, true], 'the superseded choice reports that it was superseded');
 });
 
 // M2 (final review), R12-M2 (re-review): Escape in the search box does one thing at a time and marks it handled (a recorded keydown), so the
