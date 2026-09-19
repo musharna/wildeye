@@ -233,3 +233,18 @@ def test_nas_adapter_pages_each_year_and_keeps_only_dated_located_rows_in_window
     f = to_feature(recs[1], {**NAS_TAXON, "id": recs[1]["taxon"], "name": recs[1]["name"], "sci": recs[1]["sci"]})
     assert f["properties"]["group"] == "invasives" and f["properties"]["icon"] == "🦞"
     assert resolve_datasets(recs)[NAS_DATASET_KEY]["publisher"] == "U.S. Geological Survey"
+
+
+def test_gbif_records_names_the_backbone_checklist_for_its_taxon_key(monkeypatch):
+    # Brief B fix round 1 (review I-2): taxonKey is a GBIF Backbone key. gbif.org reads keys under Catalogue of Life XR since
+    # 2026-06-18, and a key read under the wrong checklist answers HTTP 200 with count 0, so the query names the Backbone, like the
+    # app's requests (src/bio/gbif.js GBIF_BACKBONE_CHECKLIST_KEY).
+    import urllib.parse
+    import pipeline.occurrences as occ
+    urls = []
+    monkeypatch.setattr(occ, "_get_json", lambda url, timeout=60: urls.append(url) or {"results": [], "endOfRecords": True})
+    occ.gbif_records(TAXON, "2026-08-01", "2026-08-31")
+    assert len(urls) == 1 and urls[0].startswith(occ.GBIF + "?")
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(urls[0]).query)
+    assert q["taxonKey"] == ["5220086"]  # positive control: the taxon is still filtered
+    assert q.get("checklistKey") == ["d7dddbf4-2cf0-4f39-9b2a-bb099caae36c"]

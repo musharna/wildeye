@@ -677,11 +677,16 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   opacity: 0.96;
 }
 
+/* Brief B: the host pills' and headers' label text and their +/− button are 0.8 white, like the SPECIES panel's text. In the shared 0.3 white
+   (--text-dim) they measured 2.1:1 over the collapsed glass on the light street map and 2.2:1 over ocean; 0.8 white holds 4.5:1 over both
+   (qa collapsed-pills measures it). One rule for every pill, so they stay one family. The label is 0.9 white: at 0.8 its thin 9 px strokes,
+   as rendered at 1x, measured 4.14-4.26:1 on DATA LAYERS over the light map (the 90th-percentile glyph pixel over the median ground), at 0.9
+   4.81-5.55:1 on every pill. */
 .panel-title {
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 3px;
-  color: var(--text-dim);
+  color: rgba(232, 234, 237, 0.9);
   text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
   white-space: nowrap;
 }
@@ -698,7 +703,7 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
-  color: var(--text-dim);
+  color: rgba(232, 234, 237, 0.8);
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1;
@@ -9549,6 +9554,23 @@ body.scene-playback-mode #key-setup {
   font: 12px/1.45 var(--font-sans);
 }
 .bio-card[hidden] { display: none; }
+/* Brief B fix round 1 (critic S1): a short window (phone landscape: 195 px of card between the header and the bottom bar) has width to spare,
+   and at 360 px the filter line and the gbif.org credit wrap to two lines each. Wider there, each is one line, which is the height one whole
+   species row needs above the fixed parts (measured at 667x375: 1 whole row and the credit whole at 560 px, none at 360). Only the width
+   changes with the window; how the height is shared still follows the content (.bio-card-main). */
+/* Fix round 4 (critic r3 S1', S3): on a short viewport (the one condition, max-height 600px in landscape, which src/bio/shortViewport.js exports as
+   SHORT_VIEWPORT_QUERY) the card has a region of its own: the column right of the collapsed pills (--short-card-left: their right edge plus
+   8 px), from under the header (76 px) down to above the time bar (78 px). It is top-anchored, so the 75 px "Click a spot" card sits above the
+   globe's centre, the pick target, at every short size (its bottom at 151 px; the centre is at 160 px or lower). An open panel and the card
+   take turns (shortViewport.js), so the card never covers a pill and a pill tap after a pick reopens its panel. */
+@media (max-height: 600px) and (orientation: landscape) {
+  .bio-card { --short-card-left: 200px; top: var(--short-card-top, 76px); bottom: auto; right: 16px; width: min(560px, calc(100vw - 16px - var(--short-card-left))); max-height: calc(100vh - var(--short-card-top, 76px) - 78px); padding: 8px 12px; gap: 4px; }
+  /* Fix round 4: the card's own region leaves the Top datasets rows at least one whole line at rest from 640x360 up (26 px at 667x375), so
+     keyboard focus in them changes nothing here either (the round-3 fold of the species list is gone). At 568x320 the rows rest at their
+     ring inset: a focused link scrolls into a 6 px view, part of the stated 568x320 exemption. */
+}
+/* R13-M8: the card's one-line status region, heard by screen readers and not seen. */
+.bio-card-announce { position: fixed; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .bio-card-head { display: flex; align-items: center; gap: 8px; }
 /* No text-transform: uppercase — it maps µ (U+00B5) to M in unit strings. */
 .bio-card-title { flex: 1; min-width: 0; font: 10px/1.3 var(--font-mono); letter-spacing: 1px; color: var(--accent); }
@@ -9556,10 +9578,44 @@ body.scene-playback-mode #key-setup {
    2.96:1 over a white basemap. */
 .bio-card-close { background: none; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: rgba(232, 234, 237, 0.8); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 8px; }
 .bio-card-close:hover { color: var(--accent); border-color: var(--accent); }
+/* Fix round 6 (critic r5 N1): shown while the antimeridian note is folded (detailsCard.js); a tap shows the note's text over the list, where a
+   touch user can read it (the credit link's title is hover-only). */
+.bio-card-note-info { background: none; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 50%; color: rgba(232, 234, 237, 0.8); cursor: pointer; font: italic 700 11px/1 Georgia, serif; width: 22px; height: 22px; padding: 0; }
+.bio-card-note-info[hidden] { display: none; }
+.bio-card-note-info:hover, .bio-card-note-info[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
+.bio-card-note-pop { position: absolute; top: 40px; left: 12px; right: 12px; z-index: 1; margin: 0; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 8px; background: rgb(13, 15, 22); color: rgba(232, 234, 237, 0.9); font-size: 11px; }
+.bio-card-note-pop[hidden] { display: none; }
 /* 0.8 white: the shared --text-secondary (0.5 white) measured 4.09:1 over the card (visual critic 5). */
 .bio-card-filter { color: rgba(232, 234, 237, 0.8); font-size: 11px; }
 .bio-card-filter:empty { display: none; }
-.bio-card-body { overflow-y: auto; min-height: 0; }
+/* R13-M1: the species list (the body) and the Top datasets rows share the card's height. .bio-card-main is a flex item of the card, so it takes
+   what the card has left under its 52vh cap after the heading and the filter line, and that height is definite for its grid. The grid gives
+   its two scrolling tracks their floors first and then the rest in equal steps, each track stopping at its
+   content (CSS Grid "maximize tracks"): whichever list is shorter shows whole and the other gets the rest, and when both are long they get
+   the same share. The foot's heading, note and gbif.org credit link are fixed tracks, so the credit is visible at rest at every size. No window
+   query: the share follows the foot's real content (failure notes, wrapped lines), which a window size cannot see. The tracks are `auto`, so
+   an item's min-height is its track's floor and a track with no item (no datasets, no note) takes no space. The foot and its dataset list
+   are subgrids: their children sit on these tracks while the foot keeps its own border and padding. */
+.bio-card-main {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: [body] auto [foot-start datasets-start datasets-heading] auto [datasets-rows] auto [datasets-end foot-note] auto [foot-link] auto [foot-end];
+  align-content: start;
+}
+/* Brief B fix round 1 (critic S1): the floors say what a short card keeps. The species list, the card's content, keeps one whole row (12 px and
+   11 px lines at line-height 1.45, 5 px padding and a 1 px border each side, a 3 px margin); the Top datasets rows keep only their focus-ring
+   inset, so they give way to their heading and "more ↓" cue first. With the rows' old one-line floor the phone-landscape card (195 px) showed
+   no species at all while it kept a dataset line. The floor is the list's: a status or a marker's details keep their own height (a taller
+   status card covered the globe's centre in landscape, where a what-lives-here click goes). */
+.bio-card-body { grid-row: body; overflow-y: auto; min-height: 0; }
+.bio-card-body:has(> .bio-card-row) { min-height: calc(12px * 1.45 + 11px * 1.45 + 15px); }
+/* Fix round 5 (critic r4 S1): the list keeps its one whole row at every size. Where the card's content still overflows its box (a short
+   window), detailsCard.js folds, in order, the Top datasets block and then the antimeridian note (its text goes to the credit link's title);
+   the gbif.org credit is never folded. */
+.bio-card--fold-datasets .bio-card-foot .dataset-list { display: none; }
+.bio-card--fold-note .bio-card-foot-note { display: none; }
 /* A list longer than the card fades out at the bottom while more is below, like the species suggestions; with nothing to scroll the
    timeline is inactive and the fade stays 0 px. */
 @property --bio-card-body-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
@@ -9584,18 +9640,13 @@ body.scene-playback-mode #key-setup {
 .bio-card-row-note { grid-column: 1 / -1; color: #ffb86b; font-size: 11px; }
 .bio-card-status { margin: 0 0 6px; color: rgba(232, 234, 237, 0.8); }
 .bio-card-retry { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: rgba(232, 234, 237, 0.8); cursor: pointer; font: 9px var(--font-mono); letter-spacing: 1.2px; padding: 5px 9px; }
-/* R12-I1: the foot is a column that never shrinks below its content or its cap: only its Top datasets rows shrink and scroll, with a fade while
-   more of them is below, and its heading, note and gbif.org credit link never shrink, so the credit is visible at rest. (One scrolling foot
-   capped at 26vh hid the credit below its scroll with no cue.) */
-.bio-card-foot { display: flex; flex-direction: column; flex: 0 0 auto; font-size: 11px; color: rgba(232, 234, 237, 0.8); border-top: 1px solid var(--glass-border); padding-top: 6px; }
+/* R12-I1: only the foot's Top datasets rows shrink and scroll, with a fade while more of them is below; its heading, note and gbif.org credit
+   link are fixed tracks of .bio-card-main, so the credit is visible at rest. (One scrolling foot capped at 26vh hid the credit below its
+   scroll with no cue.) */
+.bio-card-foot { grid-row: foot-start / foot-end; display: grid; grid-template-rows: subgrid; margin-top: 6px; font-size: 11px; color: rgba(232, 234, 237, 0.8); border-top: 1px solid var(--glass-border); padding-top: 6px; }
 .bio-card-foot:empty { display: none; }
-.bio-card-foot-note { display: block; flex: none; margin-bottom: 2px; }
-.bio-card-foot > a { flex: none; align-self: flex-start; }
-/* The cap: on windows up to 850 px tall the foot is at most half the card's 52vh, which buys a species row when failed dataset lookups make the
-   foot tall (measured on the Taveuni list: 2 rows against 1 at 800 px, 1 against 0 at 720 and 667 px). At 900 and 1,100 px it bought none. */
-@media (max-height: 850px) {
-  .bio-card-foot { max-height: 26vh; }
-}
+.bio-card-foot-note { grid-row: foot-note; display: block; margin-bottom: 2px; }
+.bio-card-foot > a { grid-row: foot-link; justify-self: start; }
 body.ui-clean-view #bio-card,
 body.recording-mode #bio-card { display: none !important; }
 /* ── SPECIES panel (src/bio/speciesPanel.js) ── */
@@ -9660,7 +9711,7 @@ body.recording-mode #bio-card { display: none !important; }
 /* B1: the scroll cue is a row of its own under the body's scroll container, inside the panel, so it can never cover content (the fade and the
    overlaying "more ↓" hint it replaces hid a dataset count and a footer line). Its height is always laid out, and speciesPanel.js changes only
    its visibility, shown while more of the body is below and hidden at the end, so nothing moves. aria-hidden in index.html. */
-.species-more { flex: 0 0 auto; height: 14px; margin-top: 2px; color: var(--accent); font: 9px/14px var(--font-mono); letter-spacing: 1.2px; text-align: right; visibility: hidden; pointer-events: none; }
+.species-more, .dataset-list-more { flex: 0 0 auto; height: 14px; margin-top: 2px; color: var(--accent); font: 9px/14px var(--font-mono); letter-spacing: 1.2px; text-align: right; visibility: hidden; pointer-events: none; }
 /* Each chip row sits beside its label when they fit on one line, and under it when they do not. */
 .species-chip-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .species-chip-group > .species-label { margin-bottom: 0; }
@@ -9732,11 +9783,16 @@ body.recording-mode #bio-card { display: none !important; }
 .dataset-row-link { flex: 1 1 0; min-width: 0; color: var(--accent); overflow-wrap: anywhere; }
 .dataset-row-count { flex: 0 0 auto; color: rgba(232, 234, 237, 0.8); font: 10px var(--font-mono); }
 .dataset-row-note { flex: 1 0 100%; color: #ffb86b; font-size: 10px; }
-.bio-card-foot .dataset-list { flex: 0 1 auto; min-height: 0; margin-bottom: 6px; }
-.bio-card-foot .dataset-list-heading { flex: none; }
-.bio-card-foot .dataset-list-rows { flex: 0 1 auto; min-height: 0; overflow-y: auto; }
-/* The rows fade out at the bottom while more of them is below, as the card body does; with nothing to scroll the timeline is inactive and the
-   fade stays 0 px. */
+.bio-card-foot .dataset-list { grid-row: datasets-start / datasets-end; display: grid; grid-template-rows: subgrid; row-gap: 0; margin-bottom: 6px; }
+.bio-card-foot .dataset-list-heading { grid-row: datasets-heading; }
+/* The rows' floor is their ring inset only (see .bio-card-body). R13-M2: 3 px of padding inside the scroller, taken back by the margin, as on
+   .species-body, keep a focused link's ring (the UA's auto
+   ring, 2 px out from the link) inside the scroll clip on every side; scroll-padding keeps that inset when focus scrolls a link into view.
+   The padding also replaces the 3 px the rows sat under their heading. The rows' fade is dropped while focus is inside them (below), so nothing dims the ring. */
+.bio-card-foot .dataset-list-rows { grid-row: datasets-rows; margin: 0 -3px; padding: 3px; scroll-padding: 3px; min-height: 0; overflow-y: auto; }
+/* Brief B fix round 1 (critic S3): where the rows' view cuts a line, the line fades out, as the species list's does: a line sliced at a hard
+   edge read as a rendering glitch, with the "more ↓" cue on the heading line 100-130 px away. The fade is scroll-driven: 20 px while more rows
+   are below, 0 at the end, and nothing when nothing scrolls. A focused link's ring is never dimmed: with focus inside, the rows drop the mask. */
 @property --bio-card-datasets-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
 @keyframes bio-card-datasets-fade { from { --bio-card-datasets-fade: 20px; } to { --bio-card-datasets-fade: 0px; } }
 @supports (animation-timeline: scroll()) {
@@ -9746,7 +9802,13 @@ body.recording-mode #bio-card { display: none !important; }
     animation: bio-card-datasets-fade linear both;
     animation-timeline: scroll(self);
   }
+  .bio-card-foot .dataset-list-rows:focus-within { -webkit-mask-image: none; mask-image: none; }
 }
+/* Brief B S-1: the rows' "more below" cue is the SPECIES panel's: the same "more ↓" label and style (.species-more), shown by moreCue.js while
+   more rows are below their view and hidden at the end, only its visibility changing. It sits on the heading's line at the right, so it
+   covers no row and takes no height from the rows or the species list (at 667x375 the card has 4 px to spare). It replaces the 20 px fade,
+   which between rows read as the end of the list. */
+.bio-card-foot .dataset-list-more { grid-row: datasets-heading; justify-self: end; align-self: end; height: auto; margin-top: 0; line-height: 12px; }
 .species-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
 /* Unpressed chips: the shared .scene-btn text (0.5 white) measured 4.00 to 4.55:1 over the panel, so species chips use 0.8 white. The
    pressed rule below has the same specificity and comes later, so it still wins. */
@@ -9791,6 +9853,40 @@ body.recording-mode #bio-card { display: none !important; }
   #species-panel .species-chip-group { column-gap: 6px; }
   #species-panel .species-chip-row { gap: 4px; }
   #species-panel .scene-btn.species-chip { min-width: 0; padding: 5px 7px; }
+  /* Brief B fix round 1 (critic S2): the phone stack ends at half height (the lower half is the context rail's), and the collapsed DATA LAYERS
+     and SCENES pills with their gaps took 116 of its 255 px at 375x667, leaving the body an 85.5 px view: too small for the search, a 2-line
+     status, the chosen species with its switch and WHAT LIVES HERE (about 132 px). An open SPECIES panel is the only panel the stack shows, an
+     accordion: collapsing it brings the pills back. The panel is not moved or grown past the half-height line, so the species map stays in view. */
+  /* Final review m-1 and critic r1 N3: every left-stack panel works the same way (ui.js setPanelCollapsed collapses the others when one opens),
+     so the collapsed pills hide while any panel is open. In phone landscape the stack is 110 px tall and the collapsed pills alone took
+     more, so an opened DATA LAYERS got 0 px (on main 1f5d591 too). */
+  #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) > [data-panel-id].collapsed { display: none !important; }
+}
+/* Final round (critic r1 N2): in phone landscape the stack's half-height line (50vh + 8px, the context rail's share in portrait) left it
+   110 px at 667x375, and the SPECIES body 55 px: the chosen row showed 13 of its 44 px and WHAT LIVES HERE none. The rail sits beside the
+   stack there, not under it, so the stack runs down to the rail's own floor above the required map credit (calc(2vh + 7.5rem), the rail rule
+   above), 178 px at 667x375, and is 460 px wide instead of the full width: wide enough for the FUZZY status on one line (at 360 px it took
+   two, and WHAT LIVES HERE lost 6.5 px), and the map stays in view beside it.
+   Fix round 3 (critic r2 N1): with every panel collapsed the stack has the same height, so all three pills (162 px with their gaps) show
+   without a scroll at 667x375 and 640x360 (the 110 px band hid SPECIES below it), at the collapsed pills' desktop width, which keeps them
+   clear of the globe's centre; an open panel widens it to 460 px, and folds while the card shows (src/bio/shortViewport.js).
+   Fix round 4 (critic r3 N1): at 568x320 the stack is 124 px tall, and the three 50 px pills with their gaps took 162, leaving SPECIES an 8 px
+   sliver whose + sat on the map credit. On a short viewport the collapsed pills are 38 px (6 px padding above and below the header, 34 px for
+   SPECIES) with 4 px gaps, 118 px in all. */
+@media (max-height: 600px) and (orientation: landscape) {
+  /* Fix round 5 (critic r4 B1): the short model is a height condition, so it holds at every width. Above 720 px the desktop lane engine
+     used to lay out the stack at these heights, and gave it a 38 px band from 26vh (on main 1f5d591 too), so an open panel showed only its
+     header; ui.js now leaves the stack to these rules whenever the viewport is short, as it does on phones. The stack is the phone one: from
+     under the header (70 px) down to the rail's floor above the map credit, a 176 px pill column, one open panel at a time (460 px wide), the
+     collapsed pills hidden while it is open. */
+  #left-panel-stack { top: var(--short-stack-top, 70px); left: 16px; right: auto; width: min(var(--left-collapsed-width), calc(100vw - 32px)); bottom: calc(2vh + 7.5rem); max-height: none; overflow-y: auto; row-gap: 4px; }
+  #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) { width: min(460px, calc(100vw - 32px)); }
+  #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) > [data-panel-id].collapsed { display: none !important; }
+  #left-panel-stack > [data-panel-id], #left-panel-stack > [data-panel-id].collapsed { position: relative; top: auto; right: auto; bottom: auto; left: auto; width: 100%; }
+  #left-panel-stack > [data-panel-id].collapsed > :is(.data-panel-inner, .scene-panel-inner, .species-panel-inner, .cctv-panel-inner) { padding-top: 6px; padding-bottom: 6px; }
+  /* Fix round 5 (critic r4 N2): each panel's glow extends 18 px past its box (inset -18px), which gave the 124 px stack at 568x320 a 16 px
+     scroll range nothing needed; here the glow stays inside its pill. */
+  #left-panel-stack > [data-panel-id] > .panel-glow { inset: 0; }
 }
 #species-panel.collapsed { width: var(--left-collapsed-width); }
 #species-panel.collapsed .species-body { display: none !important; }

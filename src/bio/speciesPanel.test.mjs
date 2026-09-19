@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createSpeciesPanel, hasMoreBelow, MORE_SLACK_PX, suggestionText } from './speciesPanel.js';
+import { createSpeciesPanel, suggestionText } from './speciesPanel.js';
+import { hasMoreBelow, MORE_SLACK_PX } from './moreCue.js';
 import { SPECIES_MAP_LEGEND, gbifPortalTaxonUrl, yearLabel } from './gbif.js';
 import { DATA_CREDITS } from '../data/dataCredits.js';
 
@@ -27,7 +28,7 @@ const yearsChip = (years) => ({ target: { closest: () => ({ dataset: { years } }
 // The rows in the block's content element, a list labelled by the block's heading in index.html: [link href, link text, count, note or null].
 const datasetRowsIn = (content) => content.children[0].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
 
-function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' }), suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, clearTimer = () => {}, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
+function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' }), speciesName = async (key) => ({ key, scientificName: 'x', commonName: null }), suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, clearTimer = () => {}, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null, enableGate = null } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
   const doc = { activeElement: null, getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag, focus() { doc.activeElement = this; } }) };
   for (const node of Object.values(els)) node.focus = () => { doc.activeElement = node; };
@@ -38,7 +39,7 @@ function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', can
   els['species-body'].children = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-what-lives-here', 'species-legend', 'species-datasets'].map((id) => els[id]);
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
   let enabled = initiallyEnabled;
-  const calls = { params: [], enable: [], match: [], taxonDatasets: [], dataset: [] };
+  const calls = { params: [], enable: [], match: [], speciesName: [], taxonDatasets: [], dataset: [] };
   // Like src/data/manager.js, subscribers hear 'params-requested' before the layer applies new params (_reserveLayerParamsIntent) and 'params'
   // after, so a render during the request sees the previous params. A fake that never notified hid that the FUZZY note was lost (M1).
   const listeners = [];
@@ -53,13 +54,13 @@ function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', can
       return true;
     },
     isEnabled: () => enabled,
-    setEnabled: async (id, on, options) => { calls.enable.push({ id, on, origin: options.origin }); enabled = on; return true; },
+    setEnabled: async (id, on, options) => { calls.enable.push({ id, on, origin: options.origin }); if (enableGate) await enableGate(); enabled = on; return true; },
     subscribe: (listener) => { listeners.push(listener); return () => {}; },
   };
   const speciesLayer = { getStats: () => ({ error: null, tileFailures: 0 }), onStatus: () => () => {} };
   const client = {
-    match: async (name) => { calls.match.push(name); return match(name); },
-    speciesName: async (key) => ({ key, scientificName: 'x', commonName: null }),
+    match: async (name, options) => { calls.match.push(name); return match(name, options); },
+    speciesName: async (key, options) => { calls.speciesName.push({ key, signal: options?.signal ?? null }); return speciesName(key, options); },
     suggest: (q, options) => suggest(q, options),
     taxonDatasets: async (args, options) => {
       calls.taxonDatasets.push({ args, signal: options?.signal });
@@ -176,6 +177,115 @@ test("a FUZZY match is mapped and says it is shown as GBIF's name; EXACT says no
   assert.equal(none.els['species-chosen-note'].hidden, true);
 });
 
+// R13-M3: the accepted name of a synonym is looked up only where it is shown: a match that is not EXACT. An EXACT synonym maps its accepted key
+// with no lookup, so a failing lookup cannot stop it (live: "Felis concolor coryi", EXACT SUBSPECIES synonym of 6164590, no subspecies field).
+// A FUZZY synonym is named by the lookup, which carries the choice's signal; a lookup that fails still maps the key and says the failure.
+test('a synonym is named by a lookup only when the match is not EXACT, and a failed lookup fails loud', async () => {
+  const failing = async () => { throw new Error('HTTP 503'); };
+  const exact = panelRig({ match: async () => ({ key: 6164590, matchType: 'EXACT', canonicalName: null }), speciesName: failing });
+  assert.equal(await exact.panel.choose({ gbifKey: null, scientificName: 'Felis concolor coryi', commonName: 'Florida Panther', rank: 'subspecies' }), true);
+  assert.deepEqual(exact.calls.params.at(-1).p, { taxonKey: 6164590, name: 'Florida Panther' }, 'the EXACT synonym maps its accepted key');
+  assert.deepEqual(exact.calls.speciesName, [], 'with no lookup');
+  assert.equal(exact.els['species-chosen-note'].hidden, true);
+
+  const fuzzy = panelRig({ match: async () => ({ key: 5220086, matchType: 'FUZZY', canonicalName: null }), speciesName: async (key) => ({ key, scientificName: 'Megaptera novaeangliae', commonName: 'Humpback Whale' }) });
+  assert.equal(await fuzzy.panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' }), true);
+  assert.deepEqual(fuzzy.calls.speciesName.map((c) => c.key), [5220086], 'a FUZZY synonym looks its accepted key up');
+  assert.ok(fuzzy.calls.speciesName[0].signal instanceof AbortSignal, "with the choice's signal");
+  assert.equal(fuzzy.els['species-chosen-note'].textContent, "shown as GBIF's Megaptera novaeangliae");
+
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => { logged.push(args); };
+  try {
+    const failed = panelRig({ match: async () => ({ key: 5220086, matchType: 'FUZZY', canonicalName: null }), speciesName: failing });
+    // Fix round 1, item 6: the key is known, so the taxon is mapped anyway; the failed name lookup is said in the note and the status, and logged.
+    assert.equal(await failed.panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' }), true);
+    assert.deepEqual(failed.calls.params.at(-1).p, { taxonKey: 5220086, name: 'Megaptera nodosus' }, 'a FUZZY synonym whose name lookup fails is still mapped');
+    assert.equal(failed.els['species-chosen-note'].hidden, false);
+    assert.equal(failed.els['species-chosen-note'].textContent, "shown as GBIF's accepted taxon 5220086 — name lookup failed: HTTP 503");
+    assert.equal(failed.els['species-status'].textContent, "No exact GBIF match for Megaptera nodosus; shown as GBIF's accepted taxon 5220086 — name lookup failed: HTTP 503.");
+    assert.equal(logged.length, 1, 'and is logged');
+    assert.equal(logged[0][0], '[species] accepted-name lookup failed; mapped by key');
+    assert.equal(logged[0][1].taxonKey, 5220086);
+  } finally {
+    console.error = original;
+  }
+});
+
+// R13-M4: every entry point that sets the taxon starts a new choice. A suggestion choice still matching ("Megaptera nodosus") must not
+// overwrite a what-lives-here pick (chooseTaxon) made while it was out, even when its match answers after all, and its "Looking up" line goes.
+test('a what-lives-here pick supersedes a suggestion choice still matching, whose late answer maps nothing', async () => {
+  let answer = null;
+  const { panel, els, calls } = panelRig({ match: () => new Promise((resolve) => { answer = resolve; }) });
+  const pending = panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' });
+  await settle();
+  assert.equal(els['species-status'].textContent, 'Looking up Megaptera nodosus in GBIF…');
+  assert.equal(await panel.chooseTaxon({ taxonKey: 1340481, name: 'Nudibranch' }), true);
+  // A review m-5: the line goes when the newer pick starts, not when the old match answers (a client that ignores the abort answers late).
+  assert.equal(els['species-status'].textContent, '', 'the superseded "Looking up" line goes at once');
+  answer({ key: 5220086, matchType: 'FUZZY', canonicalName: 'Megaptera novaeangliae' });
+  assert.equal(await pending, false, 'the superseded choice reports that it mapped nothing');
+  assert.deepEqual(calls.params.at(-1).p, { taxonKey: 1340481, name: 'Nudibranch' }, 'the newer pick stays mapped');
+  assert.equal(calls.params.filter((c) => c.p.taxonKey === 5220086).length, 0, 'the late match maps nothing');
+  assert.equal(els['species-chosen-note'].hidden, true, "no \"shown as GBIF's\" note for a taxon that is not mapped");
+  assert.equal(els['species-status'].textContent, '', 'the superseded "Looking up" line goes');
+});
+
+// R13-M4: the accepted-name lookup carries the choice's signal, so a superseded choice ends while the lookup is still out (like the real
+// client's speciesName, the fake rejects only when its caller's signal aborts). Without the signal the old choice would wait on the lookup.
+test("a superseded choice ends at once while its synonym lookup is still out, because the lookup carries the choice's signal", async () => {
+  const { panel, calls } = panelRig({
+    match: async () => ({ key: 5220086, matchType: 'FUZZY', canonicalName: null }),
+    speciesName: (key, options) => new Promise((resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')), { once: true });
+    }),
+  });
+  let result = 'pending';
+  void panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' }).then((value) => { result = value; });
+  await settle();
+  assert.deepEqual(calls.speciesName.map((c) => c.key), [5220086], 'the lookup is out');
+  await panel.chooseTaxon({ taxonKey: 1340481, name: 'Nudibranch' });
+  await settle();
+  assert.equal(calls.speciesName[0].signal?.aborted, true, 'the newer pick aborts the lookup');
+  assert.equal(result, false, 'and the superseded choice has ended without mapping');
+  assert.deepEqual(calls.params.at(-1).p, { taxonKey: 1340481, name: 'Nudibranch' });
+});
+
+// Fix round 1, I-2: the check after the match holds for an EXACT answer too (a client that answers after its abort, EXACT, must not map over a
+// newer what-lives-here pick; the FUZZY race above is also caught by the check after the name lookup, so it cannot pin this one).
+test('a late EXACT match of a superseded choice maps nothing over the newer pick', async () => {
+  let answer = null;
+  const { panel, els, calls } = panelRig({ match: () => new Promise((resolve) => { answer = resolve; }) });
+  const pending = panel.choose({ gbifKey: null, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' });
+  await settle();
+  assert.equal(await panel.chooseTaxon({ taxonKey: 1340481, name: 'Nudibranch' }), true);
+  answer({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' });
+  assert.equal(await pending, false, 'the superseded choice maps nothing');
+  assert.deepEqual(calls.params.map((c) => c.p.taxonKey), [1340481], 'only the newer pick was ever mapped');
+  assert.equal(els['species-status'].textContent, '');
+});
+
+// Fix round 1, I-2: with the map off, a choice waits for the map switch after setting its taxon. A what-lives-here pick landing in that wait
+// is the newer choice: the old one must not clear the search box or write its "shown as GBIF's" status for a taxon that is no longer mapped.
+test('a pick landing while a choice waits for the map switch keeps the box text and gets no stale status', async () => {
+  let open = null;
+  const gate = new Promise((resolve) => { open = resolve; });
+  const { panel, els, calls } = panelRig({ match: async () => ({ key: 5133088, matchType: 'FUZZY', canonicalName: 'Danaus plexippus' }), enableGate: () => gate });
+  els['species-search'].value = 'danaus plex';
+  const pending = panel.choose({ gbifKey: null, scientificName: 'Danaus plexippa', commonName: 'Monarch', rank: 'species' });
+  await settle();
+  assert.equal(calls.enable.length, 1, 'the choice waits for the map switch');
+  const picked = panel.chooseTaxon({ taxonKey: 1340481, name: 'Nudibranch' });
+  open();
+  const [oldResult, newResult] = await Promise.all([pending, picked]);
+  assert.equal(els['species-search'].value, 'danaus plex', 'the box keeps its text');
+  assert.equal(els['species-status'].textContent, '', 'no "shown as GBIF\'s" status for the replaced taxon');
+  assert.equal(els['species-chosen-note'].hidden, true);
+  assert.deepEqual(calls.params.at(-1).p, { taxonKey: 1340481, name: 'Nudibranch' });
+  assert.deepEqual([oldResult, newResult], [false, true], 'the superseded choice reports that it was superseded');
+});
+
 // M2 (final review), R12-M2 (re-review): Escape in the search box does one thing at a time and marks it handled (a recorded keydown), so the
 // details card and WHAT LIVES HERE, which listen on the document after it, leave that key alone. With a list showing it hides the list and keeps
 // the text; with text and no list it clears the text; either way it ends the name search. With neither, Escape is theirs.
@@ -208,6 +318,37 @@ test('Escape hides a visible list, then clears the text, each marked handled and
   const third = keydown('Escape');
   input.listeners.keydown(third);
   assert.equal(third.prevented, 0, 'with no list and no text, Escape is left for the card and WHAT LIVES HERE');
+});
+
+// R13-M5: the search box and its suggestion list are one combobox, so Escape with focus on a suggestion (Tab from the box) is the combobox's too:
+// it hides the list, returns focus to the box, keeps the text and marks the key handled, so the card and WHAT LIVES HERE leave it alone. The
+// suggestion's own keys stay its own: Enter on it is not taken by the list.
+test('Escape on a focused suggestion hides the list, returns focus to the box and does nothing else', async () => {
+  const timers = fakeTimers();
+  const { els, doc } = panelRig({ suggest: async () => ({ source: 'inaturalist', items: [MONARCH] }), setTimer: timers.setTimer, clearTimer: timers.clearTimer });
+  const input = els['species-search'];
+  const list = els['species-suggestions'];
+  input.value = 'monarch';
+  input.listeners.input();
+  timers.fireAll();
+  await settle();
+  assert.equal(list.hidden, false, 'the list shows');
+  const suggestion = list.children[0].children[0];
+  suggestion.focus();
+  assert.equal(typeof list.listeners.keydown, 'function', 'the suggestion list handles its keys (Escape from a suggestion reaches the combobox)');
+  const enter = { key: 'Enter', target: suggestion, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  list.listeners.keydown(enter);
+  assert.equal(enter.defaultPrevented, false, 'Enter on a suggestion is left to the suggestion');
+  const escape = { key: 'Escape', target: suggestion, defaultPrevented: false, prevented: 0, preventDefault() { this.defaultPrevented = true; this.prevented += 1; } };
+  list.listeners.keydown(escape);
+  assert.equal(list.hidden, true, 'Escape on a suggestion hides the list');
+  assert.equal(doc.activeElement, input, 'and returns focus to the box');
+  assert.equal(input.value, 'monarch', 'and keeps the text');
+  assert.equal(escape.prevented, 1, 'and marks the key handled, so the card and WHAT LIVES HERE leave it alone');
+  assert.equal(timers.pending(), 0);
+  const next = { key: 'Escape', target: input, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  input.listeners.keydown(next);
+  assert.equal(input.value, '', 'positive control: the next Escape, in the box, clears the text as before');
 });
 
 // R12-M1 (re-review): Escape that hides the list also ends the name search. The list for "mona" shows, a search for "monar" is out and one
@@ -615,6 +756,15 @@ test('a failed dataset lookup is a row naming its error', async () => {
 
 // B1: the scroll cue is a row of its own below the scrolling body. It shows while more of the body is below and hides at the end. I2:
 // scrollHeight and clientHeight are whole pixels rounded from fractional layout, so a range of up to 2 px counts as nothing to scroll.
+// Final review m-5: the panel watches sizes through moreCue.js's observer (one implementation, with a stop function), not a copy of it.
+test('the SPECIES panel uses the shared size observer and cue rule from moreCue.js', () => {
+  const src = readFileSync(new URL('./speciesPanel.js', import.meta.url), 'utf8');
+  assert.match(src, /import \{[^}]*observeSizeWithResizeObserver[^}]*\} from '\.\/moreCue\.js';/, 'positive control: the shared observer is imported');
+  assert.match(src, /observeSize = observeSizeWithResizeObserver,/);
+  assert.doesNotMatch(src, /new ResizeObserver/, 'no second ResizeObserver implementation');
+  assert.doesNotMatch(src, /export \{ MORE_SLACK_PX, hasMoreBelow \}/, 'no re-export: importers use moreCue.js');
+});
+
 test('the scroll cue shows while more of the panel body is below, hides at the end, and allows 2 px of rounding', () => {
   assert.equal(MORE_SLACK_PX, 2);
   const cases = [[0, 500, 500, false], [0, 501, 500, false], [0, 502, 500, false], [0, 503, 500, true], [100, 616, 500, true], [113, 616, 500, true], [114, 616, 500, false], [116, 616, 500, false]];
@@ -659,17 +809,52 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   }
   // R12-I1 (re-review): only the Top datasets rows scroll inside the card foot; the heading, the note and the gbif.org credit never shrink, so
   // the credit is visible at rest. The rows fade at the bottom while more of them is below, like the card body.
+  // R13-M1: the species list and the rows share the card through .bio-card-main's grid (auto tracks: each item's min-height is its floor, and
+  // the rest is shared in equal steps up to each track's content), with no window-height cap on the foot.
   const bodyOf = (selector) => feature.filter((r) => r.selector === selector).map((r) => r.body).join(' ');
+  const main = bodyOf('.bio-card-main');
+  for (const declaration of ['flex: 0 1 auto;', 'min-height: 0;', 'display: grid;', 'align-content: start;', 'grid-template-rows: [body] auto [foot-start datasets-start datasets-heading] auto [datasets-rows] auto [datasets-end foot-note] auto [foot-link] auto [foot-end];']) {
+    assert.ok(main.includes(declaration), `.bio-card-main has ${declaration}`);
+  }
+  // Brief B fix round 1 (critic S1): the floors say what a short card keeps: one whole species row; the dataset rows only their ring inset.
+  for (const declaration of ['grid-row: body;', 'overflow-y: auto;', 'min-height: 0;']) assert.ok(bodyOf('.bio-card-body').includes(declaration), `.bio-card-body has ${declaration}`);
+  assert.ok(bodyOf('.bio-card-body:has(> .bio-card-row)').includes('min-height: calc(12px * 1.45 + 11px * 1.45 + 15px);'), 'a species list keeps one whole row');
   const foot = bodyOf('.bio-card-foot');
-  for (const declaration of ['display: flex;', 'flex-direction: column;', 'flex: 0 0 auto;']) assert.ok(foot.includes(declaration), `.bio-card-foot has ${declaration}`);
-  assert.doesNotMatch(foot, /overflow-y: auto/, 'the foot itself does not scroll');
-  for (const declaration of ['flex: 0 1 auto;', 'min-height: 0;']) assert.ok(bodyOf('.bio-card-foot .dataset-list').includes(declaration), `.bio-card-foot .dataset-list has ${declaration}`);
-  for (const declaration of ['min-height: 0;', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
-  for (const selector of ['.bio-card-foot-note', '.bio-card-foot > a', '.bio-card-foot .dataset-list-heading']) assert.ok(bodyOf(selector).includes('flex: none;'), `${selector} never shrinks`);
-  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-foot \.dataset-list-rows \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-datasets-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
-  // The cap buys species rows only on windows up to 800 px tall (probe in the residual report: none at 900 and 1,100 px), so it applies up to 850 px.
-  assert.doesNotMatch(feature.find((r) => r.selector === '.bio-card-foot').body, /max-height/, 'the foot has no cap on tall windows');
-  assert.match(css, /@media \(max-height: 850px\) \{\s*\.bio-card-foot \{ max-height: 26vh; \}\s*\}/, 'the cap applies on windows up to 850 px tall');
+  for (const declaration of ['grid-row: foot-start / foot-end;', 'display: grid;', 'grid-template-rows: subgrid;']) assert.ok(foot.includes(declaration), `.bio-card-foot has ${declaration}`);
+  assert.doesNotMatch(foot, /overflow-y: auto|max-height/, 'the foot itself neither scrolls nor has a cap');
+  // Each @media block whose query names a height, cut out by counting braces: none may style the card.
+  const heightQueries = [...css.matchAll(/@media [^{]*height[^{]*\{/g)].map((m) => {
+    let depth = 1;
+    let end = m.index + m[0].length;
+    while (depth > 0 && end < css.length) { if (css[end] === '{') depth += 1; else if (css[end] === '}') depth -= 1; end += 1; }
+    return css.slice(m.index, end);
+  });
+  assert.ok(heightQueries.length > 0, 'positive control: the stylesheet has height queries (for other surfaces)');
+  // Brief B fix round 1: one height query may widen the card on a short window; none may set a height, a cap or a share for it.
+  const cardQueries = heightQueries.filter((block) => block.includes('.bio-card'));
+  // Fix round 4: every height query that styles the card is the one short-viewport condition (src/bio/shortViewport.js SHORT_VIEWPORT_QUERY), and
+  // it places the card in its own region (top-anchored, right of the pill column, above the time bar) rather than sharing the height anew.
+  const shortQuery = '(max-height: 600px) and (orientation: landscape)';
+  for (const block of cardQueries) assert.ok(block.startsWith(`@media ${shortQuery}`) || block.startsWith(`@media (min-width: 721px) and ${shortQuery}`), block.slice(0, 80));
+  const shortBlock = cardQueries.find((block) => block.startsWith(`@media ${shortQuery}`)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ');
+  for (const declaration of ['top: var(--short-card-top, 76px);', 'bottom: auto;', 'width: min(560px, calc(100vw - 16px - var(--short-card-left)));', 'max-height: calc(100vh - var(--short-card-top, 76px) - 78px);']) assert.ok(shortBlock.includes(declaration), `short card: ${declaration}`);
+  assert.doesNotMatch(shortBlock, /grid-template-rows/, 'no second share for the short card');
+  for (const declaration of ['grid-row: datasets-start / datasets-end;', 'grid-template-rows: subgrid;']) assert.ok(bodyOf('.bio-card-foot .dataset-list').includes(declaration), `.bio-card-foot .dataset-list has ${declaration}`);
+  // R13-M2: the rows are inset by the focus ring's reach (padding taken back by the margin), so a focused link's ring is not cut by their scroll clip.
+  for (const declaration of ['grid-row: datasets-rows;', 'margin: 0 -3px;', 'padding: 3px;', 'scroll-padding: 3px;', 'min-height: 0;', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
+  for (const [selector, track] of [['.bio-card-foot-note', 'foot-note'], ['.bio-card-foot > a', 'foot-link'], ['.bio-card-foot .dataset-list-heading', 'datasets-heading']]) assert.ok(bodyOf(selector).includes(`grid-row: ${track};`), `${selector} sits on its own fixed track`);
+  // Brief B S-1: the rows' "more below" cue is the panel's "more ↓" (same rule as .species-more), on the heading's line; the rows' fade is gone.
+  assert.match(css, /\.species-more, \.dataset-list-more \{[^}]*visibility: hidden;[^}]*pointer-events: none;/);
+  for (const declaration of ['grid-row: datasets-heading;', 'justify-self: end;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-more').includes(declaration), `the rows' cue has ${declaration}`);
+  // Brief B fix round 1 (critic S3): a line cut at the rows' edge fades out there too (scroll-driven, 0 px at the end), and focus inside drops it.
+  assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-foot \.dataset-list-rows \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-datasets-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);[^}]*\}\s*\.bio-card-foot \.dataset-list-rows:focus-within \{ -webkit-mask-image: none; mask-image: none; \}/);
+  // Brief B: the shared host pill and header label text and its +/− button are 0.8 white (the shared 0.3 white measured 2.1:1 over the collapsed
+  // glass on the light map and over ocean); one rule for every pill.
+  const hostRule = (selector) => rules.find((r) => r.selector === selector)?.body ?? '';
+  // Final round (critic N1): the 9 px labels' rendered strokes measured 4.14-4.26:1 on DATA LAYERS at 0.8 white (fg90 over the median ground,
+  // light street map, 1x DPR); at 0.9 white 4.81-5.55:1 on all three pills. The + button's strokes were already 5.3:1 or more.
+  assert.match(hostRule('.panel-title'), /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.9\);/, '.panel-title is 0.9 white');
+  assert.match(hostRule('.panel-collapse-btn'), /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.8\);/, '.panel-collapse-btn is 0.8 white');
   // Critic 10 S1: the floor is for the open SPECIES panel and the card; the collapsed SPECIES pill keeps the shared glass of its sibling pills.
   assert.ok(bodyOf('.species-panel-inner').includes('background: var(--glass-bg);'), '.species-panel-inner keeps the shared glass');
   for (const selector of ['#species-panel:not(.collapsed) .species-panel-inner', '.bio-card']) {
@@ -689,9 +874,23 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.doesNotMatch(stack.slice(stack.indexOf('id="species-panel"')), /data-requires-backend/, 'species search works on the static host');
   // B1/S1: the action sits directly after the chosen-species block and the two chip rows follow it, each label beside its row in a group,
   // so the controls stay whole above the panel's cut on a 400x800 phone; the legend, the datasets and the credit line come after them.
+  // Brief B fix round 1 (critic S2, N5): the order is back to search, status, chosen species, action. Moving the action first only moved the
+  // fold onto the chosen species; the fix is the view's size (phone accordion, style.css), which fits all four with a 2-line status.
   const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
   // The legend's content is rendered from SPECIES_MAP_LEGEND (speciesPanel.js), so the markup holds an empty container.
   assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<span id="species-chosen-note" class="species-chosen-note" hidden><\/span>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
+  // Brief B fix round 1: on a phone-width window an open SPECIES panel is the only panel the left stack shows (an accordion), so its body has
+  // the view the collapsed DATA LAYERS and SCENES pills took (116 px at 375x667).
+  assert.match(css, /@media \(max-width: 720px\) \{[^@]*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) > \[data-panel-id\]\.collapsed \{ display: none !important; \}/);
+  // Critic r1 S-new: focus in the dataset rows gives them one whole link line back, at the species list's expense (qa card-foot-rest rings).
+  // Fix round 3 (critic r2 S2): that focus share lives only in the short-window block above; no rule outside it changes the card on focus.
+  assert.doesNotMatch(css.replace(/@media \(max-height: 600px\) and \(orientation: landscape\) \{[\s\S]*?\n\}/, ''), /dataset-list-rows:focus-within\) \.bio-card-body|dataset-list-rows:focus-within \{ min-height/, 'no unscoped focus share');
+  // Final round (critic r1 N2): phone landscape gives the stack the rail's floor above the map credit and a 460 px width (qa panel-fold 667x375).
+  // Fix round 5: the short stack is a height condition at every width (the lane engine steps aside there, ui.js), with the phone stack's box.
+  assert.match(css, /@media \(max-height: 600px\) and \(orientation: landscape\) \{(?:\s*\/\*[\s\S]*?\*\/)?\s*#left-panel-stack \{ top: var\(--short-stack-top, 70px\); left: 16px; right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); max-height: none; overflow-y: auto; row-gap: 4px; \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(460px, calc\(100vw - 32px\)\); \}/);
+  assert.doesNotMatch(css, /@media \(max-width: 720px\) and \(max-height: [0-9]+px\)|@media \(min-width: 721px\) and \(max-height: 480px\)/, 'no width-split short rules');
+  const uiSource = readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
+  assert.match(uiSource, /window\.matchMedia\('\(max-width: 720px\)'\)\.matches \|\| window\.matchMedia\(SHORT_VIEWPORT_QUERY\)\.matches\) \{\n      stack\.classList\.remove\('layout-focus'\);/, 'the lane engine steps aside on a short viewport');
   assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
@@ -736,8 +935,8 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // never positioned over the body, and gone with the collapsed body. I1: the Top datasets heading scrolls with its links (sticky covered the
   // top link on a phone).
   assert.doesNotMatch(css, /--species-body-fade|--species-more|\.species-body::after|#species-panel \.species-body \{[^}]*mask-image/);
-  assert.match(css, /\.species-more \{[^}]*flex: 0 0 auto;[^}]*height: \d+px;[^}]*color: var\(--accent\);[^}]*visibility: hidden;/);
-  assert.doesNotMatch(css, /\.species-more \{[^}]*(?:position:|margin-top: -)/);
+  assert.match(css, /\.species-more(?:, \.dataset-list-more)? \{[^}]*flex: 0 0 auto;[^}]*height: \d+px;[^}]*color: var\(--accent\);[^}]*visibility: hidden;/);
+  assert.doesNotMatch(css, /\.species-more(?:, \.dataset-list-more)? \{[^}]*(?:position:|margin-top: -)/);
   assert.match(css, /#species-panel\.collapsed \.species-more \{ display: none !important; \}/);
   assert.doesNotMatch(css, /dataset-list-heading \{[^}]*sticky/);
   assert.match(css, /\.species-legend \{[^}]*background: rgb\(13, 15, 22\);/);

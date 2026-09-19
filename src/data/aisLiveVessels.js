@@ -1557,7 +1557,8 @@ function removeVesselInteraction() {
 }
 
 function onVesselKeyDown(event) {
-  if (!state.enabled || event.key !== 'Escape') return;
+  // One key, one thing: an Escape another control already handled (preventDefault) is not ours.
+  if (!state.enabled || event.key !== 'Escape' || event.defaultPrevented) return;
   const transition = reduceVesselSelection({
     selectedMmsi: state.selectedRecord?.mmsi,
     gesture: 'escape',

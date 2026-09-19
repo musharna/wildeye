@@ -45,7 +45,9 @@ test('the Top datasets block is built with text only, and every link is https in
   ]);
   assert.equal(DATASETS_HEADING, 'Top datasets');
   assert.deepEqual([block.tag, block.className], ['div', 'dataset-list']);
-  const [heading, list] = block.children;
+  const [heading, list, cue] = block.children;
+  // Brief B S-1: the rows' "more ↓" cue follows them, hidden from screen readers (its visibility is set by moreCue.watchMoreBelow).
+  assert.deepEqual([block.children.length, cue.tag, cue.className, cue.textContent, cue.attributes['aria-hidden']], [3, 'span', 'dataset-list-more', 'more ↓', 'true']);
   assert.deepEqual([heading.tag, heading.className, heading.textContent], ['span', 'dataset-list-heading', 'Top datasets']);
   assert.deepEqual([list.tag, list.className, list.attributes['aria-label']], ['ol', 'dataset-list-rows', 'Top datasets']);
   assert.deepEqual(list.children.map((li) => [li.tag, li.className, li.children.map((c) => [c.tag, c.className, c.textContent])]), [

@@ -1100,6 +1100,20 @@ test('vessel interaction wire: empty pick deselects and emits gev:entity-selecti
   }
 });
 
+// Species polish fix round 1, item 5: one key, one thing. An Escape another control already handled (preventDefault: the species search hiding
+// its suggestions) keeps the vessel selected; the next, unhandled Escape deselects it (positive control in the same test).
+test('vessel interaction wire: an Escape another control already handled keeps the vessel selected', () => {
+  const harness = installWireHarness(undefined);
+  try {
+    harness.keyTarget.dispatch({ key: 'Escape', defaultPrevented: true });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.mmsi, harness.record.mmsi, 'a handled Escape leaves the selection');
+    harness.keyTarget.dispatch({ key: 'Escape', defaultPrevented: false });
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo(), null, 'an unhandled Escape deselects');
+  } finally {
+    harness.cleanup();
+  }
+});
+
 test('vessel interaction wire: Escape deselects the selected vessel', () => {
   const harness = installWireHarness(undefined);
   try {
