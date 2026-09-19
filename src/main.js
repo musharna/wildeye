@@ -21,6 +21,7 @@ import ecoregionsLayer from './data/ecoregions.js';
 import speciesLayer, { DEFAULT_SPECIES_PARAMS } from './data/species.js';
 import { createBioClient } from './bio/gbif.js';
 import { createWhatLivesHere } from './bio/whatLivesHere.js';
+import { createPickClearance } from './bio/pickClearance.js';
 import { createSpeciesPanel } from './bio/speciesPanel.js';
 import { createDetailsCard } from './bio/detailsCard.js';
 import firesLayer from './data/fires.js';
@@ -314,6 +315,12 @@ async function init() {
     // Species search and "what lives here" (docs/superpowers/specs/2026-09-13-species-search-design.md).
     const bioClient = createBioClient();
     let speciesPanel = null;
+    // Fix round 3: an open left panel over the globe's centre steps aside while the pick waits for a click (src/bio/pickClearance.js).
+    const pickClearance = createPickClearance({
+      stack: document.getElementById('left-panel-stack'),
+      canvas: viewer.scene.canvas,
+      setPanelCollapsed: (id, collapsed) => styleManager.setPanelCollapsed(id, collapsed),
+    });
     whatLivesHere = createWhatLivesHere({
       viewer,
       client: bioClient,
@@ -322,7 +329,10 @@ async function init() {
       onPickSpecies: ({ taxonKey, name }) => {
         speciesPanel?.chooseTaxon({ taxonKey, name }).catch((error) => console.error('[species] could not map the picked species', { taxonKey, error }));
       },
-      onArmedChange: () => speciesPanel?.render(),
+      onArmedChange: (armed, reason) => {
+        pickClearance.onArmedChange(armed, reason);
+        speciesPanel?.render();
+      },
     });
     speciesPanel = createSpeciesPanel({ dataManager, speciesLayer, client: bioClient, whatLivesHere });
 

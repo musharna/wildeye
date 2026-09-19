@@ -44,7 +44,7 @@ function fakeCardDoc() {
 
 // realCard: the real details card, wired to the controller as src/main.js wires them (onDismiss → cancel, onListEnd → listEnded).
 function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }], datasets: [{ key: INAT_RG, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, dataset = null, client: clientOverride = null, defaultArea = false, realCard = false, drawArea = null, depthTexture = true } = {}) {
-  const calls = { near: [], names: [], datasets: [], status: [], list: [], card: [], picked: [], armed: [] };
+  const calls = { near: [], names: [], datasets: [], status: [], list: [], card: [], picked: [], armed: [], armedReasons: [] };
   const params = { years: 'recent', radiusKm: 10 };
   // groundPrimitives stands in for Cesium's collection, for the default outline; `areas` records the injected outline seam.
   const groundPrimitives = { items: [], add(p) { this.items.push(p); return p; }, remove(p) { const i = this.items.indexOf(p); if (i >= 0) this.items.splice(i, 1); return i >= 0; } };
@@ -106,7 +106,7 @@ function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, spec
     card,
     getParams: () => ({ ...params }),
     onPickSpecies: (p) => calls.picked.push(p),
-    onArmedChange: (on) => calls.armed.push(on),
+    onArmedChange: (on, reason) => { calls.armed.push(on); calls.armedReasons.push(reason ?? null); },
     handlerFor: () => ({ setInputAction() {}, destroy() {} }),
     doc,
     ...areaSeam,
@@ -168,6 +168,7 @@ test('a ground click sends exactly one GBIF search at the clicked point and list
   assert.equal(viewer.scene.canvas.style.cursor, 'crosshair');
   assert.deepEqual(calls.armed, [true]);
   await controller.handleClick(CLICK);
+  assert.deepEqual(calls.armedReasons, ['arm', 'pick'], 'a ground click disarms as a pick');
   assert.equal(calls.near.length, 1);
   assert.equal(calls.near[0].radiusKm, 10);
   assert.equal(calls.near[0].years, 'recent');
@@ -382,6 +383,8 @@ test('Escape while armed disarms (cursor back, onArmedChange(false)); other keys
   assert.deepEqual(r.calls.armed, [true, false]);
   r.doc.press('Escape');
   assert.deepEqual(r.calls.armed, [true, false], 'Escape when not armed reports nothing');
+  // Fix round 3 (critic r2 S1): each change says why, so a panel cleared for the pick can come back on a cancel and stay away after a pick.
+  assert.deepEqual(r.calls.armedReasons, ['arm', 'cancel']);
   assert.equal(r.controller.handleClick(CLICK), null, 'a click after Escape sends nothing');
   assert.equal(r.calls.near.length, 0);
 });

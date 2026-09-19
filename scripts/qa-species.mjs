@@ -1032,6 +1032,7 @@ if (CHECKS.has('card-foot-rest')) {
     return { speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed'), radiusKm: window.__godsEyeView.dataManager.getLayerParams('species')?.radiusKm ?? 10 };
   });
   const results = [];
+  const armedAt = [];
   let error = null;
   let restored = null;
   try {
@@ -1058,9 +1059,19 @@ if (CHECKS.has('card-foot-rest')) {
       await page.mouse.click(armAt.x, armAt.y);
       await sleep(300);
       if (await page.evaluate(() => document.getElementById('species-what-lives-here').getAttribute('aria-pressed')) !== 'true') throw new Error(`card-foot-rest ${width}x${height}: a real click did not arm WHAT LIVES HERE`);
-      await page.evaluate(() => { const panel = document.getElementById('species-panel'); if (!panel.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click(); });
+      // Fix round 3 (critic r2 S1): the globe's centre is clicked as armed, with SPECIES left as the page leaves it; the check does not collapse
+      // it. The centre must be the canvas (an open panel over it steps aside while armed, src/bio/pickClearance.js).
       await sleep(800);
-      const centre = await page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
+      const centre = await page.evaluate(() => {
+        const canvas = window.__godsEyeView.viewer.scene.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return { x, y, onCanvas: hit === canvas, hit: hit ? (hit.id || String(hit.className)) : null, speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed') };
+      });
+      armedAt.push({ viewport: `${width}x${height}`, failed, ...centre });
+      if (!centre.onCanvas) throw new Error(`card-foot-rest ${width}x${height}: armed, the globe's centre is under ${centre.hit}, not the canvas`);
       await page.mouse.click(centre.x, centre.y);
       await page.waitForFunction((failed) => {
         const card = document.getElementById('bio-card');
@@ -1099,7 +1110,7 @@ if (CHECKS.has('card-foot-rest')) {
     await page.setViewport({ width: 1400, height: 900 });
     await sleep(2000);
   }
-  report('card-foot-rest', error === null && results.length === STATES.length && results.every((r) => r.ok) && restored?.fetchRestored === true, { results, restored, ...(error ? { error } : {}) });
+  report('card-foot-rest', error === null && results.length === STATES.length && results.every((r) => r.ok) && restored?.fetchRestored === true, { results, armedAt, restored, ...(error ? { error } : {}) });
 }
 
 // Critic 10 S1: the collapsed SPECIES pill is the material of the collapsed DATA LAYERS and SCENES pills. With all three collapsed, the scope mask

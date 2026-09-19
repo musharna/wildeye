@@ -104,11 +104,12 @@ export function createWhatLivesHere({
     area = null;
   };
 
-  const setArmed = (value) => {
+  // reason: 'arm', 'pick' (a ground click ended it) or 'cancel' (Escape, the button, the card dismissed); fix round 3 (pickClearance.js).
+  const setArmed = (value, reason = value ? 'arm' : 'cancel') => {
     if (armed === value) return;
     armed = value;
     viewer.scene.canvas.style.cursor = value ? 'crosshair' : '';
-    onArmedChange(value);
+    onArmedChange(value, reason);
   };
 
   const groundAt = (windowPosition) => {
@@ -184,7 +185,7 @@ export function createWhatLivesHere({
       return null;
     }
     const cartographic = Cesium.Cartographic.fromCartesian(position);
-    setArmed(false);
+    setArmed(false, 'pick');
     return run(Cesium.Math.toDegrees(cartographic.latitude), Cesium.Math.toDegrees(cartographic.longitude));
   }
 
