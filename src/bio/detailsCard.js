@@ -152,13 +152,24 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   };
   // Static skeleton only; no data is interpolated here. The body and the foot share .bio-card-main, the grid that divides the card's height
   // between the species list and the Top datasets rows (style.css, R13-M1).
-  root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><div class="bio-card-filter"></div><div class="bio-card-main"><div class="bio-card-body"></div><div class="bio-card-foot"></div></div>';
+  root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-note-info" aria-label="Why all locations" aria-expanded="false" aria-controls="bio-card-note-pop" hidden>i</button><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><div class="bio-card-filter"></div><div class="bio-card-main"><div class="bio-card-body"></div><div class="bio-card-foot"></div></div><p id="bio-card-note-pop" class="bio-card-note-pop" role="note" hidden></p>';
   const title = root.querySelector('.bio-card-title');
   title.id = 'bio-card-title';
   const filter = root.querySelector('.bio-card-filter');
   const body = root.querySelector('.bio-card-body');
   const foot = root.querySelector('.bio-card-foot');
   const main = root.querySelector('.bio-card-main');
+  // Fix round 6 (critic r5 N1): the folded note's text stays reachable on touch: an info button in the head shows it over the list.
+  const noteInfo = root.querySelector('.bio-card-note-info');
+  const notePop = root.querySelector('.bio-card-note-pop');
+  noteInfo.hidden = true;
+  notePop.hidden = true;
+  const showNotePop = (open) => {
+    notePop.hidden = !open;
+    notePop.textContent = open && listFoot?.note ? listFoot.note.textContent : '';
+    noteInfo.setAttribute('aria-expanded', String(open));
+  };
+  noteInfo.addEventListener('click', () => showNotePop(notePop.hidden));
   // Fix round 5 (critic r4 S1): what a list's card gives up, in order, when its content does not fit its box (a short window): first the Top
   // datasets block (secondary, and the gbif.org credit link carries the records), then the antimeridian note (its text moves to the credit
   // link's title; the credit itself says "all locations"). The species list keeps its one whole row (its min-height), so it gives way last.
@@ -166,6 +177,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   let listFoot = null; // { hasDatasets, note, link } of the list showing
   const fitFoot = () => {
     root.classList?.remove(...FOLDS);
+    noteInfo.hidden = true;
     if (listFoot?.link && listFoot.note) listFoot.link.removeAttribute?.('title');
     if (!listFoot || root.hidden || mode !== 'list') return;
     const overflows = () => main.scrollHeight > main.clientHeight + 1;
@@ -174,8 +186,12 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
       if (fold === 'bio-card--fold-datasets' && !listFoot.hasDatasets) continue;
       if (fold === 'bio-card--fold-note' && !listFoot.note) continue;
       root.classList?.add(fold);
-      if (fold === 'bio-card--fold-note') listFoot.link.title = listFoot.note.textContent;
+      if (fold === 'bio-card--fold-note') {
+        listFoot.link.title = listFoot.note.textContent;
+        noteInfo.hidden = false;
+      }
     }
+    if (noteInfo.hidden && !notePop.hidden) showNotePop(false); // the note shows again in the foot
   };
   doc.defaultView?.addEventListener?.('resize', fitFoot);
   let mode = null;
@@ -201,6 +217,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     stopCue();
     listFoot = null;
     root.classList?.remove(...FOLDS);
+    showNotePop(false);
+    noteInfo.hidden = true;
     title.textContent = heading;
     filter.textContent = '';
     body.replaceChildren();

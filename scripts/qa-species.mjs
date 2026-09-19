@@ -2240,6 +2240,14 @@ if (CHECKS.has('landscape-regions')) {
           return { card: { left: Math.round(c.left), top: Math.round(c.top), right: Math.round(c.right), bottom: Math.round(c.bottom), maxHeight: getComputedStyle(card).maxHeight }, parts, folds, noteTitle: link.getAttribute('title'), overlap, linkWhole: whole(link) && lr.bottom <= c.bottom + 0.5, linkHit: Boolean(lh && (lh === link || link.contains(lh))), speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter(whole).length };
         });
         await shot(`landscape-regions-results-${size}`);
+        // Fix round 6 (critic r5 N1): where the note is folded, its reason is one real tap away: the info button in the head shows it.
+        if (r.results.folds.includes('bio-card--fold-note')) {
+          await realClick('#bio-card .bio-card-note-info', 'the note info button');
+          r.noteInfo = await page.evaluate(() => { const pop = document.querySelector('#bio-card .bio-card-note-pop'); const b = pop.getBoundingClientRect(); return { shown: pop.getClientRects().length > 0 && b.height > 10 && b.bottom <= innerHeight, text: pop.textContent }; });
+          await shot(`landscape-regions-note-${size}`);
+          await realClick('#bio-card .bio-card-note-info', 'the note info button again');
+          r.noteInfo.closed = await page.evaluate(() => document.querySelector('#bio-card .bio-card-note-pop').hidden);
+        }
         r.speciesOpenAfterPick = await page.evaluate(() => { const p = document.getElementById('species-panel'); return !p.classList.contains('collapsed') && p.getBoundingClientRect().height > 60; });
         if (!beside) {
           r.afterPick = await pillsState();
@@ -2266,7 +2274,7 @@ if (CHECKS.has('landscape-regions')) {
         ? r.armed.speciesOpen && !r.armed.speciesOverlapsCard && r.speciesOpenAfterPick
         : !r.armed.speciesOpen && !r.speciesOpenAfterPick && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown;
       r.ok = headerOk(r.headerCollapsed) && headerOk(r.headerOpen) && pillsOk(r.collapsed) && r.armed.armed && r.armed.onCanvas && r.picked && Boolean(r.results) && !r.results.overlap && r.results.linkWhole && r.results.linkHit && r.results.speciesRowsWhole >= 1
-        && turnsOk && r.keyboard.armed && r.keyboard.active !== 'BODY' && !r.keyboardCancel.armed && r.keyboardCancel.onButton && r.keyboardCancel.speciesOpen;
+        && turnsOk && (!r.results.folds.includes('bio-card--fold-note') || (r.noteInfo?.shown && r.noteInfo.text === "gbif.org can't show this area as a circle" && r.noteInfo.closed)) && r.keyboard.armed && r.keyboard.active !== 'BODY' && !r.keyboardCancel.armed && r.keyboardCancel.onButton && r.keyboardCancel.speciesOpen;
       } catch (caught) {
         // One size's failure is recorded with its cause and the next size still runs.
         r.error = String(caught?.message || caught).slice(0, 300);

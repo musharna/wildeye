@@ -231,9 +231,21 @@ test('a list too tall for its card folds the Top datasets block, then the note, 
   assert.deepEqual([...classes].sort(), ['bio-card--fold-datasets', 'bio-card--fold-note']);
   const link = card.element.querySelector('.bio-card-foot').children.at(-1);
   assert.equal(link.title, "gbif.org can't show this area as a circle", 'the note stays reachable on the credit link');
+  // Fix round 6 (critic r5 N1): a title is hover-only, so the folded note also gets an info button in the card's head (touch reachable), which
+  // shows the note's text over the list and hides it again; it only shows while the note is folded.
+  const info = root.querySelector('.bio-card-note-info');
+  const pop = root.querySelector('.bio-card-note-pop');
+  assert.equal(info.hidden, false, 'the info button shows while the note is folded');
+  assert.equal(pop.hidden, true);
+  info.listeners.click();
+  assert.deepEqual([pop.hidden, pop.textContent, info.attributes['aria-expanded']], [false, "gbif.org can't show this area as a circle", 'true']);
+  info.listeners.click();
+  assert.deepEqual([pop.hidden, info.attributes['aria-expanded']], [true, 'false']);
+  info.listeners.click();
   room = 190; // the datasets fold is enough
   card.showList(base);
   assert.deepEqual([...classes], ['bio-card--fold-datasets']);
+  assert.deepEqual([info.hidden, pop.hidden], [true, true], 'no info button while the note shows, and a new list closes the popover');
   assert.equal(card.element.querySelector('.bio-card-foot').children.at(-1).title ?? '', '', 'no title while the note shows');
   room = 400; // positive control: room for everything
   card.showList(base);
