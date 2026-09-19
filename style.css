@@ -9747,8 +9747,12 @@ body.recording-mode #bio-card { display: none !important; }
 .dataset-row-note { flex: 1 0 100%; color: #ffb86b; font-size: 10px; }
 .bio-card-foot .dataset-list { grid-row: datasets-start / datasets-end; display: grid; grid-template-rows: subgrid; row-gap: 0; margin-bottom: 6px; }
 .bio-card-foot .dataset-list-heading { grid-row: datasets-heading; }
-/* The rows' floor is one line of a dataset link (11 px at line-height 1.35), so one dataset line stays whole at every size. */
-.bio-card-foot .dataset-list-rows { grid-row: datasets-rows; margin-top: 3px; min-height: calc(11px * 1.35); overflow-y: auto; }
+/* The rows' floor is one line of a dataset link (11 px at line-height 1.35) inside the ring inset, so one dataset line stays whole at every
+   size. R13-M2: 3 px of padding inside the scroller, taken back by the margin, as on .species-body, keep a focused link's ring (the UA's auto
+   ring, 2 px out from the link) inside the scroll clip on every side; scroll-padding keeps that inset when focus scrolls a link into view.
+   The padding also replaces the 3 px the rows sat under their heading. The fade's mask is on the border box, so it now ends 3 px outside
+   the links, not on their edges. */
+.bio-card-foot .dataset-list-rows { grid-row: datasets-rows; margin: 0 -3px; padding: 3px; scroll-padding: 3px; min-height: calc(11px * 1.35 + 6px); overflow-y: auto; }
 /* The rows fade out at the bottom while more of them is below, as the card body does; with nothing to scroll the timeline is inactive and the
    fade stays 0 px. */
 @property --bio-card-datasets-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }

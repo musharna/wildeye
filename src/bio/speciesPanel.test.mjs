@@ -779,7 +779,8 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   assert.ok(heightQueries.length > 0, 'positive control: the stylesheet has height queries (for other surfaces)');
   assert.deepEqual(heightQueries.filter((block) => block.includes('.bio-card')), [], 'no window-height query sizes the card');
   for (const declaration of ['grid-row: datasets-start / datasets-end;', 'grid-template-rows: subgrid;']) assert.ok(bodyOf('.bio-card-foot .dataset-list').includes(declaration), `.bio-card-foot .dataset-list has ${declaration}`);
-  for (const declaration of ['grid-row: datasets-rows;', 'min-height: calc(11px * 1.35);', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
+  // R13-M2: the rows are inset by the focus ring's reach (padding taken back by the margin), so a focused link's ring is not cut by their scroll clip.
+  for (const declaration of ['grid-row: datasets-rows;', 'margin: 0 -3px;', 'padding: 3px;', 'scroll-padding: 3px;', 'min-height: calc(11px * 1.35 + 6px);', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
   for (const [selector, track] of [['.bio-card-foot-note', 'foot-note'], ['.bio-card-foot > a', 'foot-link'], ['.bio-card-foot .dataset-list-heading', 'datasets-heading']]) assert.ok(bodyOf(selector).includes(`grid-row: ${track};`), `${selector} sits on its own fixed track`);
   assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-foot \.dataset-list-rows \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-datasets-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
   // Critic 10 S1: the floor is for the open SPECIES panel and the card; the collapsed SPECIES pill keeps the shared glass of its sibling pills.

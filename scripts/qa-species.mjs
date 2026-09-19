@@ -833,9 +833,14 @@ if (CHECKS.has('contrast')) {
 // the list plus the rows' own floor (their min-height), and while the rows are cut, the list is no taller than the rows. At least one species
 // row is whole wherever the card can hold one: its fixed parts with both lists at their floors, plus one row, fit under the card's max-height.
 // Where they do not (667x375: the 52vh card is 195 px), the result says so with those numbers instead of passing on nothing.
+// R13-M2: at 1400x900 and 375x667, in both states, the first and the last dataset link take keyboard focus (Shift+Tab, then Tab back, so
+// :focus-visible applies and the browser scrolls the rows as it would) and the focus ring (the link's box grown by its outline width and
+// offset; Chrome paints the UA's auto 1px ring 2 px out from the box) is whole inside every clipping ancestor, the card and the window.
 if (CHECKS.has('card-foot-rest')) {
+  const RING_SIZES = new Set(['1400x900', '375x667']);
   const TAVEUNI = [179.97, -16.8, 10000];
-  const SIZES = [[1400, 900], [375, 667], [1400, 851], [393, 852], [412, 915], [430, 932], [667, 375]];
+  // --card-sizes narrows the sizes for a quicker run while developing; the default is every size above.
+  const SIZES = arg('--card-sizes', '1400x900,375x667,1400x851,393x852,412x915,430x932,667x375').split(',').map((size) => size.split('x').map(Number));
   const STATES = [...SIZES.map(([width, height]) => [width, height, true]), ...SIZES.map(([width, height]) => [width, height, false])];
   const setDatasetFailures = (on) => page.evaluate((on) => {
     if (on && !window.__qaRestFetch) {
@@ -907,6 +912,42 @@ if (CHECKS.has('card-foot-rest')) {
     const canHoldRow = s.speciesRowHeight !== null && fixedAtFloors + s.speciesRowHeight <= s.cardMaxHeight + 0.5;
     return { ok: listNotStarved && rowsNotStarved && (!canHoldRow || s.speciesRowsWhole >= 1), bodyCut, rowsCut, listNotStarved, rowsNotStarved, fixedAtFloors: +fixedAtFloors.toFixed(1), speciesRowHeight: s.speciesRowHeight && +s.speciesRowHeight.toFixed(1), cardMaxHeight: s.cardMaxHeight, canHoldRow };
   };
+  const focusRings = async (label) => {
+    const count = await page.evaluate(() => document.querySelectorAll('#bio-card .bio-card-foot .dataset-row-link').length);
+    const rings = [];
+    for (const index of [...new Set([0, count - 1])]) {
+      await page.evaluate((i) => document.querySelectorAll('#bio-card .bio-card-foot .dataset-row-link')[i].focus(), index);
+      await page.keyboard.down('Shift');
+      await page.keyboard.press('Tab');
+      await page.keyboard.up('Shift');
+      await page.keyboard.press('Tab');
+      await sleep(400);
+      await shot(`card-focus-${index === 0 ? 'first' : 'last'}-${label}`);
+      rings.push(await page.evaluate((i) => {
+        const card = document.getElementById('bio-card');
+        const a = card.querySelectorAll('.bio-card-foot .dataset-row-link')[i];
+        const r = a.getBoundingClientRect();
+        const cs = getComputedStyle(a);
+        const out = (parseFloat(cs.outlineWidth) || 0) + (parseFloat(cs.outlineOffset) || 0);
+        const ring = { left: r.left - out, top: r.top - out, right: r.right + out, bottom: r.bottom + out };
+        let clip = { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+        const clippers = [];
+        for (let node = a.parentElement; node; node = node.parentElement) {
+          const ncs = getComputedStyle(node);
+          if (ncs.overflowX === 'visible' && ncs.overflowY === 'visible' && node !== card) continue;
+          const nr = node.getBoundingClientRect();
+          const box = node === card && ncs.overflowX === 'visible' && ncs.overflowY === 'visible' ? nr : { left: nr.left + node.clientLeft, top: nr.top + node.clientTop, right: nr.left + node.clientLeft + node.clientWidth, bottom: nr.top + node.clientTop + node.clientHeight };
+          clippers.push(node.className || node.id || node.tagName);
+          clip = { left: Math.max(clip.left, box.left), top: Math.max(clip.top, box.top), right: Math.min(clip.right, box.right), bottom: Math.min(clip.bottom, box.bottom) };
+        }
+        const round = (b) => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, +v.toFixed(1)]));
+        const inside = ring.left >= clip.left - 0.05 && ring.top >= clip.top - 0.05 && ring.right <= clip.right + 0.05 && ring.bottom <= clip.bottom + 0.05;
+        return { index: i, focused: document.activeElement === a, focusVisible: a.matches(':focus-visible'), outline: `${cs.outlineStyle} ${cs.outlineWidth} offset ${cs.outlineOffset}`, ring: round(ring), clip: round(clip), clippers, inside };
+      }, index));
+    }
+    await page.evaluate(() => { document.activeElement?.blur?.(); for (const el of document.querySelectorAll('#bio-card *')) el.scrollTop = 0; });
+    return { rings, ok: rings.length >= 2 && rings.every((r) => r.focused && r.focusVisible && r.outline.startsWith('auto') && r.inside) };
+  };
   const restOk = (s, failed) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s).ok && s.datasetFirstLinesWhole >= 1
     && (!s.datasetList || s.datasetList.scrollHeight - s.datasetList.clientHeight <= 1 || /^[1-9][\d.]*px$/.test(s.datasetList.fade))
     && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0);
@@ -948,7 +989,8 @@ if (CHECKS.has('card-foot-rest')) {
       await sleep(1000);
       const rest = await readRest();
       await shot(`card-foot-rest-${failed ? 'failed' : 'normal'}-${width}x${height}`);
-      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed), share: share(rest), ...rest });
+      const focus = RING_SIZES.has(`${width}x${height}`) ? await focusRings(`${failed ? 'failed' : 'normal'}-${width}x${height}`) : null;
+      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed) && (focus === null || focus.ok), share: share(rest), focus, ...rest });
       await closeCard();
     }
   } catch (caught) {
