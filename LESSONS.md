@@ -23,3 +23,6 @@ One line per miss: the class of miss and the mechanism that now catches it.
 - 2026-09-19 (final review m-2): a qa step switched to a script click to get past one size, and so stopped checking that people can reach the control at every size; it clicks for real and fails with what it hit.
 - 2026-09-19 (final review m-3): an announcer outside the element it describes kept speaking when that element was hidden by a page mode; it checks the card is rendered, pinned by a unit test and qa `card-announce-hidden`.
 - 2026-09-19 (critic r1 N1): contrast measured by specified colour passed while thin rendered strokes did not; the label colour is set by the rendered-pixel measurement, recorded in the CSS comment and the unit pin.
+- 2026-09-19 (critic r2 S1): the qa step before the globe click collapsed SPECIES itself, so it could not see that the armed pick left the panel over the centre; it now clicks as the page leaves it and fails with what covers the centre.
+- 2026-09-19 (critic r2 S2): a fix for one size (the landscape card's focused link) was written unscoped and changed every size; it is scoped to the short-window block, and a unit pin forbids the focus share outside it.
+- 2026-09-19 (fix round 3): qa screenshots from a second tab were taken with the main page's helper, so the "landscape" images showed the desktop page; the check screenshots its own tab.
