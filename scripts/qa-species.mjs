@@ -2182,7 +2182,9 @@ if (CHECKS.has('landscape-regions')) {
       await page.evaluate(() => { document.getElementById('left-panel-stack').scrollTop = 0; });
       r.collapsed = await pillsState();
       await realClick('#species-panel [data-collapse-target="species-panel"]', 'the SPECIES +');
-      await page.evaluate(() => { document.getElementById('species-body').scrollTop = 0; });
+      // A person scrolls the SPECIES body to WHAT LIVES HERE when a chosen species and its note sit above it (a 163 px panel at 360 px tall).
+      await page.evaluate(() => { const body = document.getElementById('species-body'); body.scrollTop = 0; document.getElementById('species-what-lives-here').scrollIntoView({ block: 'nearest' }); });
+      await sleep(300);
       await realClick('#species-what-lives-here', 'WHAT LIVES HERE');
       await sleep(600);
       r.armed = await page.evaluate(() => {
