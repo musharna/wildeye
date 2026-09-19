@@ -829,9 +829,12 @@ if (CHECKS.has('contrast')) {
 // across the antimeridian, so the foot carries its note) is read with every scroll container in the card set to scroll 0, and nothing is scrolled
 // after that: the link's box must be whole inside the card, the foot and every clipping ancestor, and the page must hit the link at the centre
 // of each of its boxes; the note must be whole too. States: the list with every dataset lookup failed (HTTP 503 answered in the page's fetch) and the normal
-// list, at 1400x900 and 375x667. The failed states run first: finished dataset lookups are cached for the session, failures are not. Positive
+// list, at 1400x900 and 375x667. Finished dataset lookups are cached for the session and panel-layout, which runs first in a default run,
+// looks up the monarch's datasets, two of which Taveuni lists too: a cached title needs no request, so its row showed no failure note and the
+// failed state never settled (the full-run timeouts brief A put down to the network). In the failed state the page's fetch therefore also
+// renames the search's DATASET_KEY facet to fresh random dataset UUIDs, which no cache holds, keeping their order and counts. Positive
 // control in the same check: at rest at least one species row and the first line of at least one dataset link are whole, so the credit is not
-// bought by hiding the lists, and where the dataset rows overflow their fade is on. qa contrast scrolls to find text and cannot see this.
+// bought by hiding the lists. qa contrast scrolls to find text and cannot see this.
 // R13-M1: also just above 850 px (1400x851), on tall phones (393x852, 412x915, 430x932) and in phone landscape (667x375), where a window-height
 // cap on the foot lost a species row. The species list and the dataset rows share the card: while the list is cut, the rows are no taller than
 // the list plus the rows' own floor (their min-height), and while the rows are cut, the list is no taller than the rows. At least one species
@@ -854,6 +857,16 @@ if (CHECKS.has('card-foot-rest')) {
       window.fetch = (input, init) => {
         const url = String(input?.url ?? input);
         if (url.startsWith('https://api.gbif.org/v1/dataset/')) return Promise.resolve(new Response('{"qa":"forced failure"}', { status: 503, headers: { 'content-type': 'application/json' } }));
+        let u = null;
+        try { u = new URL(url); } catch { /* not a URL: passed through */ }
+        if (u && u.hostname === 'api.gbif.org' && u.pathname === '/v1/occurrence/search' && u.searchParams.getAll('facet').includes('speciesKey')) {
+          return window.__qaRestFetch.call(window, input, init).then(async (res) => {
+            if (!res.ok) return res;
+            const json = await res.json();
+            for (const facet of json.facets || []) if (facet.field === 'DATASET_KEY') for (const c of facet.counts || []) c.name = crypto.randomUUID();
+            return new Response(JSON.stringify(json), { status: 200, headers: { 'content-type': 'application/json' } });
+          });
+        }
         return window.__qaRestFetch.call(window, input, init);
       };
     }
