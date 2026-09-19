@@ -27,7 +27,7 @@ const yearsChip = (years) => ({ target: { closest: () => ({ dataset: { years } }
 // The rows in the block's content element, a list labelled by the block's heading in index.html: [link href, link text, count, note or null].
 const datasetRowsIn = (content) => content.children[0].children.map((li) => [li.children[0].href, li.children[0].textContent, li.children[1].textContent, li.children[2]?.textContent ?? null]);
 
-function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' }), suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, clearTimer = () => {}, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
+function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' }), speciesName = async (key) => ({ key, scientificName: 'x', commonName: null }), suggest = async () => ({ source: 'none', items: [] }), setTimer = () => 0, clearTimer = () => {}, enabled: initiallyEnabled = false, taxonDatasets = null, dataset = null } = {}) {
   const els = Object.fromEntries(PANEL_IDS.map((id) => [id, fakeElement()]));
   const doc = { activeElement: null, getElementById: (id) => els[id] || null, createElement: (tag) => Object.assign(fakeElement(), { tag, focus() { doc.activeElement = this; } }) };
   for (const node of Object.values(els)) node.focus = () => { doc.activeElement = node; };
@@ -38,7 +38,7 @@ function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', can
   els['species-body'].children = ['species-search', 'species-suggestions', 'species-status', 'species-chosen', 'species-what-lives-here', 'species-legend', 'species-datasets'].map((id) => els[id]);
   let params = { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
   let enabled = initiallyEnabled;
-  const calls = { params: [], enable: [], match: [], taxonDatasets: [], dataset: [] };
+  const calls = { params: [], enable: [], match: [], speciesName: [], taxonDatasets: [], dataset: [] };
   // Like src/data/manager.js, subscribers hear 'params-requested' before the layer applies new params (_reserveLayerParamsIntent) and 'params'
   // after, so a render during the request sees the previous params. A fake that never notified hid that the FUZZY note was lost (M1).
   const listeners = [];
@@ -58,8 +58,8 @@ function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', can
   };
   const speciesLayer = { getStats: () => ({ error: null, tileFailures: 0 }), onStatus: () => () => {} };
   const client = {
-    match: async (name) => { calls.match.push(name); return match(name); },
-    speciesName: async (key) => ({ key, scientificName: 'x', commonName: null }),
+    match: async (name, options) => { calls.match.push(name); return match(name, options); },
+    speciesName: async (key, options) => { calls.speciesName.push({ key, signal: options?.signal ?? null }); return speciesName(key, options); },
     suggest: (q, options) => suggest(q, options),
     taxonDatasets: async (args, options) => {
       calls.taxonDatasets.push({ args, signal: options?.signal });
@@ -174,6 +174,37 @@ test("a FUZZY match is mapped and says it is shown as GBIF's name; EXACT says no
   assert.equal(none.els['species-status'].textContent, 'Danaus fakeus is not in GBIF.');
   assert.equal(none.calls.params.length, 0, 'NONE maps nothing');
   assert.equal(none.els['species-chosen-note'].hidden, true);
+});
+
+// R13-M3: the accepted name of a synonym is looked up only where it is shown: a match that is not EXACT. An EXACT synonym maps its accepted key
+// with no lookup, so a failing lookup cannot stop it (live: "Felis concolor coryi", EXACT SUBSPECIES synonym of 6164590, no subspecies field).
+// A FUZZY synonym is named by the lookup, which carries the choice's signal; a lookup that fails maps nothing and says so.
+test('a synonym is named by a lookup only when the match is not EXACT, and a failed lookup fails loud', async () => {
+  const failing = async () => { throw new Error('HTTP 503'); };
+  const exact = panelRig({ match: async () => ({ key: 6164590, matchType: 'EXACT', canonicalName: null }), speciesName: failing });
+  assert.equal(await exact.panel.choose({ gbifKey: null, scientificName: 'Felis concolor coryi', commonName: 'Florida Panther', rank: 'subspecies' }), true);
+  assert.deepEqual(exact.calls.params.at(-1).p, { taxonKey: 6164590, name: 'Florida Panther' }, 'the EXACT synonym maps its accepted key');
+  assert.deepEqual(exact.calls.speciesName, [], 'with no lookup');
+  assert.equal(exact.els['species-chosen-note'].hidden, true);
+
+  const fuzzy = panelRig({ match: async () => ({ key: 5220086, matchType: 'FUZZY', canonicalName: null }), speciesName: async (key) => ({ key, scientificName: 'Megaptera novaeangliae', commonName: 'Humpback Whale' }) });
+  assert.equal(await fuzzy.panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' }), true);
+  assert.deepEqual(fuzzy.calls.speciesName.map((c) => c.key), [5220086], 'a FUZZY synonym looks its accepted key up');
+  assert.ok(fuzzy.calls.speciesName[0].signal instanceof AbortSignal, "with the choice's signal");
+  assert.equal(fuzzy.els['species-chosen-note'].textContent, "shown as GBIF's Megaptera novaeangliae");
+
+  const logged = [];
+  const original = console.error;
+  console.error = (...args) => { logged.push(args); };
+  try {
+    const failed = panelRig({ match: async () => ({ key: 5220086, matchType: 'FUZZY', canonicalName: null }), speciesName: failing });
+    assert.equal(await failed.panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' }), false);
+    assert.equal(failed.els['species-status'].textContent, 'GBIF lookup failed (HTTP 503)');
+    assert.equal(failed.calls.params.length, 0, 'a FUZZY match that cannot be named maps nothing');
+    assert.equal(logged.length, 1, 'and is logged');
+  } finally {
+    console.error = original;
+  }
 });
 
 // M2 (final review), R12-M2 (re-review): Escape in the search box does one thing at a time and marks it handled (a recorded keydown), so the

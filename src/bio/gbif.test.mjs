@@ -357,7 +357,7 @@ test('name parsers keep the fields the panel shows', () => {
   const MEGAPTERA_NODOSUS = { usageKey: 5220089, acceptedUsageKey: 5220086, scientificName: 'Megaptera nodosa (Bonnaterre, 1789)', canonicalName: 'Megaptera nodosa', rank: 'SPECIES', status: 'SYNONYM', confidence: 96, matchType: 'FUZZY', kingdom: 'Animalia', phylum: 'Chordata', order: 'Cetacea', family: 'Balaenopteridae', genus: 'Megaptera', species: 'Megaptera novaeangliae', kingdomKey: 1, phylumKey: 44, classKey: 359, orderKey: 733, familyKey: 5313, genusKey: 2440748, speciesKey: 5220086, class: 'Mammalia' };
   assert.deepEqual(parseGbifMatch(MEGAPTERA_NODOSUS), { key: 5220086, matchType: 'FUZZY', canonicalName: 'Megaptera novaeangliae' });
   assert.deepEqual(parseGbifMatch({ ...MEGAPTERA_NODOSUS, confidence: 99, matchType: 'EXACT' }), { key: 5220086, matchType: 'EXACT', canonicalName: 'Megaptera novaeangliae' });
-  // A synonym whose rank field does not carry the accepted key names nothing from the response: null, for the client to look the key up.
+  // A synonym whose rank field does not carry the accepted key names nothing from the response: null, for a caller that shows the name to look the key up.
   assert.deepEqual(parseGbifMatch({ usageKey: 11, acceptedUsageKey: 22, canonicalName: 'Oldgenus', rank: 'GENUS', genus: 'Oldgenus', genusKey: 11, status: 'SYNONYM', matchType: 'FUZZY' }), { key: 22, matchType: 'FUZZY', canonicalName: null });
   assert.deepEqual(parseGbifMatch({ usageKey: 5133088, scientificName: 'Danaus plexippus (Linnaeus, 1758)', canonicalName: 'Danaus plexippus', status: 'ACCEPTED', confidence: 99, matchType: 'EXACT' }), { key: 5133088, matchType: 'EXACT', canonicalName: 'Danaus plexippus' });
   assert.deepEqual(parseGbifMatch({ usageKey: 5133088, scientificName: 'Danaus plexippus (Linnaeus, 1758)', canonicalName: 'Danaus plexippus', status: 'ACCEPTED', confidence: 97, matchType: 'FUZZY' }), { key: 5133088, matchType: 'FUZZY', canonicalName: 'Danaus plexippus' });
@@ -373,6 +373,9 @@ test('name parsers keep the fields the panel shows', () => {
   );
   assert.equal(parseSpeciesName({ key: 7, scientificName: 'A b' }).scientificName, 'A b');
   assert.throws(() => parseSpeciesName({}), /no key/);
+  // R13-M3 nit: an answer with no name fails loud, not as scientificName undefined.
+  assert.throws(() => parseSpeciesName({ key: 7 }), /GBIF species: key 7 has no name/);
+  assert.throws(() => parseSpeciesName({ key: 7, canonicalName: '', scientificName: '' }), /GBIF species: key 7 has no name/);
   assert.equal(new URL(inatSuggestUrl('red maple')).searchParams.get('q'), 'red maple');
   assert.equal(new URL(inatSuggestUrl('red maple')).pathname, '/v1/taxa/autocomplete');
   assert.equal(new URL(gbifSuggestUrl('Danaus plex')).pathname, '/v1/species/suggest');
@@ -421,22 +424,23 @@ test('fetchJson: HTTP errors carry the status, a hung request times out, a calle
   assert.deepEqual(await fetchJson('https://x.test/d', { fetchImpl: async () => ok({ a: 1 }) }), { a: 1 });
 });
 
-// R12-M3: a synonym whose response does not name its accepted taxon is named by looking the accepted key up (the shared, cached species lookup).
-// Positive control in the same test: a response that names its accepted taxon sends no lookup.
-test('match names a synonym by its accepted taxon, looking the accepted key up when the response does not carry its name', async () => {
+// R13-M3: match is one request. A synonym whose response does not name its accepted taxon comes back with canonicalName null; the caller
+// that shows the name (the SPECIES panel, only for a match that is not EXACT) looks the accepted key up. The live EXACT SUBSPECIES synonym
+// "Felis concolor coryi" carries no subspecies field; with a failing species lookup it must still map its accepted key.
+// Positive control in the same test: a response that names its accepted taxon is named from the response.
+test('match sends one request and leaves an unnamed synonym for its caller to name', async () => {
   const paths = [];
   const client = createBioClient({ fetchImpl: async (url) => {
     paths.push(new URL(url).pathname);
-    if (url.includes('/v1/species/match')) return ok({ usageKey: 11, acceptedUsageKey: 22, scientificName: 'Oldgenus Author', canonicalName: 'Oldgenus', rank: 'GENUS', genus: 'Oldgenus', genusKey: 11, status: 'SYNONYM', confidence: 95, matchType: 'FUZZY' });
-    if (new URL(url).pathname === '/v1/species/22') return ok({ key: 22, scientificName: 'Newgenus Author, 1900', canonicalName: 'Newgenus', rank: 'GENUS' });
-    return httpError(404);
+    if (url.includes('/v1/species/match')) return ok({ usageKey: 8356890, acceptedUsageKey: 6164590, scientificName: 'Felis concolor coryi Bangs, 1899', canonicalName: 'Felis concolor coryi', rank: 'SUBSPECIES', species: 'Felis concolor', speciesKey: 7193927, status: 'SYNONYM', confidence: 99, matchType: 'EXACT' });
+    return httpError(503);
   } });
-  assert.deepEqual(await client.match('Oldgenos'), { key: 22, matchType: 'FUZZY', canonicalName: 'Newgenus' });
-  assert.deepEqual(paths, ['/v1/species/match', '/v1/species/22']);
+  assert.deepEqual(await client.match('Felis concolor coryi'), { key: 6164590, matchType: 'EXACT', canonicalName: null });
+  assert.deepEqual(paths, ['/v1/species/match'], 'no lookup from match');
   const named = [];
   const direct = createBioClient({ fetchImpl: async (url) => { named.push(new URL(url).pathname); return ok({ usageKey: 5220089, acceptedUsageKey: 5220086, canonicalName: 'Megaptera nodosa', rank: 'SPECIES', species: 'Megaptera novaeangliae', speciesKey: 5220086, status: 'SYNONYM', matchType: 'FUZZY' }); } });
   assert.deepEqual(await direct.match('Megaptera nodosus'), { key: 5220086, matchType: 'FUZZY', canonicalName: 'Megaptera novaeangliae' });
-  assert.deepEqual(named, ['/v1/species/match'], 'a response that names the accepted taxon sends no lookup');
+  assert.deepEqual(named, ['/v1/species/match']);
 });
 
 test('suggest: iNaturalist first; GBIF names with a visible notice when it fails; both failing names both', async () => {

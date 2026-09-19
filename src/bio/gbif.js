@@ -325,7 +325,7 @@ export function parseGbifMatch(json) {
   if (!Number.isInteger(json.usageKey)) throw new Error(`GBIF match: a ${matchType} match has no usageKey`);
   if (Number.isInteger(json.acceptedUsageKey)) {
     // R12-M3: a synonym is mapped as its accepted taxon, so it is named as that taxon: the classification field for its rank ("species" for a
-    // SPECIES synonym) when that field's key is the accepted key; otherwise null, and client.match looks the accepted key up.
+    // SPECIES synonym) when that field's key is the accepted key; otherwise null, and a caller that shows the name looks the accepted key up.
     const field = typeof json.rank === 'string' ? json.rank.toLowerCase() : null;
     const accepted = field && json[`${field}Key`] === json.acceptedUsageKey && typeof json[field] === 'string' && json[field] ? json[field] : null;
     return { key: json.acceptedUsageKey, matchType, canonicalName: accepted };
@@ -341,7 +341,9 @@ export function speciesUrl(key) {
 
 export function parseSpeciesName(json) {
   if (!json || !Number.isInteger(json.key)) throw new Error('GBIF species: response has no key');
-  return { key: json.key, scientificName: json.canonicalName || json.scientificName, commonName: json.vernacularName || null, className: json.class || null };
+  const scientificName = json.canonicalName || json.scientificName;
+  if (typeof scientificName !== 'string' || !scientificName) throw new Error(`GBIF species: key ${json.key} has no name`);
+  return { key: json.key, scientificName, commonName: json.vernacularName || null, className: json.class || null };
 }
 
 /** At most `maxPerWindow` acquisitions in any `windowMs` window. */
@@ -445,12 +447,12 @@ export function createBioClient({
         throw new RequestError(`iNaturalist ${inatError.message}, GBIF ${error.message}`); // N-a: each failure once, the codes visible
       }
     },
-    /** GBIF's strict match; a synonym whose accepted name the response does not carry is named by looking the accepted key up (R12-M3). */
+    /**
+     * GBIF's strict match, one request. A synonym whose accepted name the response does not carry comes back with canonicalName null (R13-M3):
+     * only a caller that shows the name looks the accepted key up, so a match whose name is never shown needs no second request.
+     */
     async match(scientificName, { signal = null } = {}) {
-      const match = parseGbifMatch(await get(gbifMatchUrl(scientificName), signal));
-      if (match.key === null || match.canonicalName !== null) return match;
-      const accepted = await this.speciesName(match.key, { signal });
-      return { ...match, canonicalName: accepted.scientificName };
+      return parseGbifMatch(await get(gbifMatchUrl(scientificName), signal));
     },
     async speciesNear(args, { signal = null } = {}) {
       return parseSpeciesNear(await get(speciesNearUrl(args), signal));

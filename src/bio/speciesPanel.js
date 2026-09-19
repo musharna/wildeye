@@ -329,7 +329,11 @@ export function createSpeciesPanel({
         }
         taxonKey = match.key;
         // M1: GBIF matched another spelling or a higher rank ("Danaus plexippa" is mapped as Danaus plexippus), so say which name is shown.
-        if (match.matchType !== 'EXACT') shownAsName = match.canonicalName;
+        // R13-M3: a synonym the match did not name is named by looking its accepted key up, here, where the name is shown; an EXACT match
+        // shows no name, so it sends no lookup and cannot fail on one.
+        if (match.matchType !== 'EXACT') {
+          shownAsName = match.canonicalName ?? (await client.speciesName(taxonKey, { signal: chooseAbort.signal })).scientificName;
+        }
       }
       await chooseTaxon({ taxonKey, name: item.commonName || item.scientificName, shownAsName });
       input.value = '';
