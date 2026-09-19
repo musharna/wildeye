@@ -421,7 +421,14 @@ test('the details line names the record, and an identical line is cleared and se
   const body = card.element.querySelector('.bio-card-body');
   body.querySelector('b').textContent = '  🐋 Blue whale ';
   viewer.selectedEntity = entityIn('occurrences', '<b>🐋 Blue whale</b> <i>Balaenoptera musculus</i>');
-  assert.equal(announcer.textContent, '🐋 Blue whale details opened');
+  // Brief B fix round 1, item 6: the layers lead a name with an icon ("🐋 Blue whale"), which a screen reader reads as "whale emoji"; the line
+  // names the record without leading pictographs (emoji, their variation selectors, joiners, keycaps and flags). Digits and letters stay.
+  // A name that is only an icon falls through to the details' bold line (here "Blue whale"), then to the layer.
+  assert.equal(announcer.textContent, 'Blue whale details opened');
+  for (const [name, heard] of [['🦋 Monarch', 'Monarch'], ['🏳️\u200d🌈  Pride', 'Pride'], ['🇺🇸 US bird', 'US bird'], ['7 spot ladybird', '7 spot ladybird'], ['Grey seal 🦭', 'Grey seal 🦭'], ['🦭', 'Blue whale']]) {
+    viewer.selectedEntity = { ...entityIn('occurrences', '<b>x</b>'), id: `emoji-${name}`, name };
+    assert.equal(announcer.textContent, `${heard} details opened`, name);
+  }
   body.querySelector('b').textContent = '';
   viewer.selectedEntity = { ...entityIn('occurrences', 'plain text'), id: 'e2' };
   assert.equal(announcer.textContent, 'GBIF Occurrences details opened');

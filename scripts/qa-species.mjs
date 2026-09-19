@@ -1384,7 +1384,8 @@ if (CHECKS.has('card')) {
   const linksOk = httpsLinks.length > 0 && httpsLinks.every((link) => link.target === '_blank' && /\bnoopener\b/.test(link.rel || ''));
   report('card', Boolean(card?.visible) && card.text.includes(target.name) && /CC0|CC[ -]BY/i.test(card.text) && linksOk, { entity: target.id, name: target.name, doiLink, httpsLinks: httpsLinks.length, card: card && { visible: card.visible, text: card.text.slice(0, 240), links: card.links } });
   // Fix round 1, item 3: the hidden status line names the record that opened (the first bold line of a GBIF occurrence's details).
-  report('card-announce', typeof card?.announce === 'string' && card.announce.includes(target.name) && card.announce.endsWith(' details opened'), { announce: card?.announce ?? null, name: target.name });
+  // Brief B fix round 1, item 6: the line starts with the name itself, not the layer's icon ("🐋 Blue whale details opened" before).
+  report('card-announce', typeof card?.announce === 'string' && card.announce.includes(target.name) && card.announce.endsWith(' details opened') && !/^[\p{Extended_Pictographic}\p{Regional_Indicator}\s]/u.test(card.announce), { announce: card?.announce ?? null, name: target.name });
 
   // Escape must deselect as well as close: Cesium raises selectedEntityChanged only when the value changes, so a
   // marker left selected could not reopen the card.

@@ -61,6 +61,15 @@ function browserSanitizer(doc) {
   return (html) => sanitizeDescription(html, purify);
 }
 
+/**
+ * Leading pictographs (emoji and their variation selectors, zero-width joiners, keycap marks and flag letters) and spaces, removed from a
+ * record's name for the spoken line. Digits and letters are kept, and so is an icon after the name.
+ */
+const LEADING_PICTOGRAPHS = /^[\p{Extended_Pictographic}\p{Regional_Indicator}\u200d\ufe0e\ufe0f\u20e3\s]+/u;
+export function spokenName(text) {
+  return typeof text === 'string' ? text.replace(LEADING_PICTOGRAPHS, '').trim() : '';
+}
+
 export function listRows(entries) {
   return entries.map((entry) => ({
     key: entry.key,
@@ -184,7 +193,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
       root.hidden = false;
       // Fix round 1, item 3: the line names the record: the entity's name, else the first bold line of its details (the biology layers put the
       // record's name there), else the layer.
-      const record = (typeof entity.name === 'string' && entity.name.trim()) || body.querySelector('b')?.textContent?.trim() || heading;
+      // Brief B fix round 1, item 6: without the icon the layers put before a name ("🐋 Blue whale"), which a reader speaks as an emoji name.
+      const record = spokenName(typeof entity.name === 'string' ? entity.name : '') || spokenName(body.querySelector('b')?.textContent) || heading;
       announce(`${record} details opened`);
       setMode('detail');
     } catch (error) {
