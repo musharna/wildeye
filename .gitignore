@@ -17,6 +17,9 @@ pinokio/.installed
 pipeline/cron.log
 pipeline/__pycache__/
 pipeline/tests/__pycache__/
+# Python bytecode anywhere: a test run rewrites it, so tracked .pyc files dirtied the tree on every pytest run.
+__pycache__/
+*.pyc
 .pytest_cache/
 public/data/birds_ppi/
 public/data/birds_field.png
