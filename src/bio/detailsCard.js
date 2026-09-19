@@ -114,7 +114,7 @@ function failuresLine(rows, what) {
   return `${failed.length} ${what}${failed.length === 1 ? '' : 's'} failed (${[...new Set(failed.map((row) => row.error))].join(', ')})`;
 }
 
-export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {}, observeSize = observeSizeWithResizeObserver, nextFrame = (fn) => setTimeout(fn, 50), cancelFrame = (id) => clearTimeout(id) }) {
+export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {}, observeSize = observeSizeWithResizeObserver, nextFrame = (fn) => setTimeout(fn, 50), cancelFrame = (id) => clearTimeout(id), isRendered = null }) {
   const root = doc.createElement('aside');
   root.id = 'bio-card';
   root.className = 'bio-card';
@@ -133,12 +133,19 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   // Fix round 1, item 3: a line identical to the one showing is not a change a screen reader hears, so it is cleared and set again a moment later
   // (50 ms, a later task than the clear, so the two are separate changes); a newer line or a close cancels that pending set.
   let pendingFrame = null;
+  // Final review m-3: clean view and recording mode hide the card with display: none (style.css), and a line about a card nobody can see is
+  // noise; a line is said only while the card is rendered, checked again when a repeat is set.
+  const rendered = isRendered ?? (() => root.getClientRects().length > 0);
   const announce = (text) => {
     if (pendingFrame !== null) cancelFrame(pendingFrame);
     pendingFrame = null;
+    if (text !== '' && !rendered()) {
+      announcer.textContent = '';
+      return;
+    }
     if (text !== '' && announcer.textContent === text) {
       announcer.textContent = '';
-      pendingFrame = nextFrame(() => { pendingFrame = null; announcer.textContent = text; });
+      pendingFrame = nextFrame(() => { pendingFrame = null; if (rendered()) announcer.textContent = text; });
       return;
     }
     announcer.textContent = text;

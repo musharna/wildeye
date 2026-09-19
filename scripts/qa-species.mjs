@@ -1438,6 +1438,29 @@ if (CHECKS.has('card')) {
   });
   report('card-reopen', afterEscape.hidden === true && afterEscape.selected === null && Boolean(reopened?.visible) && reopened.text.includes(target.name), { afterEscape, reopened });
   await page.keyboard.press('Escape');
+  // Final review m-3: in clean view the card is display: none, so selecting the same record announces nothing; leaving clean view and
+  // selecting it again announces it (positive control in the same check).
+  const cleanView = await page.evaluate(async (id) => {
+    const view = window.__godsEyeView.viewer;
+    let entity = null;
+    for (let i = 0; i < view.dataSources.length && !entity; i += 1) entity = view.dataSources.get(i).entities.getById(id) ?? null;
+    const read = () => document.getElementById('bio-card-announce')?.textContent ?? null;
+    const wait = () => new Promise((resolve) => setTimeout(resolve, 400));
+    view.selectedEntity = undefined;
+    document.body.classList.add('ui-clean-view');
+    view.selectedEntity = entity;
+    await wait();
+    const hidden = { announce: read(), rendered: document.getElementById('bio-card').getClientRects().length > 0 };
+    view.selectedEntity = undefined;
+    document.body.classList.remove('ui-clean-view');
+    view.selectedEntity = entity;
+    await wait();
+    const shown = { announce: read(), rendered: document.getElementById('bio-card').getClientRects().length > 0 };
+    view.selectedEntity = undefined;
+    return { found: Boolean(entity), hidden, shown };
+  }, target.id);
+  report('card-announce-hidden', cleanView.found && cleanView.hidden.rendered === false && cleanView.hidden.announce === '' && cleanView.shown.rendered === true && /details opened$/.test(cleanView.shown.announce ?? ''), cleanView);
+  await page.keyboard.press('Escape');
 
   // A hostile description on a real occurrences entity: DOMPurify must drop the img and the javascript: href, keep the
   // https link (forced to a new tab with no opener), and nothing may run.

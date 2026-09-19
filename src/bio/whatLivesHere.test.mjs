@@ -36,6 +36,7 @@ function fakeCardDoc() {
       replaceChildren(...kids) { this.children = kids; this.innerHTML = ''; },
       addEventListener(type, fn) { this.listeners[type] = fn; },
       querySelector(selector) { return (parts[selector] ||= make(selector)); },
+      getClientRects() { return this.hidden ? [] : [{}]; },
     };
   };
   return { listeners, createElement: make, addEventListener(type, fn) { listeners[type] = fn; }, press(key) { listeners.keydown?.({ key }); } };

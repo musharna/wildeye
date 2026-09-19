@@ -92,6 +92,7 @@ function cardDoc() {
       addEventListener(type, fn) { this.listeners[type] = fn; },
       removeEventListener(type, fn) { if (this.listeners[type] === fn) delete this.listeners[type]; },
       querySelector(selector) { return (parts[selector] ||= make(selector)); },
+      getClientRects() { return this.hidden ? [] : [{}]; },
     };
   };
   return { listeners, createElement: make, addEventListener(type, fn) { listeners[type] = fn; } };
@@ -441,6 +442,27 @@ test('the details line names the record, and an identical line is cleared and se
   body.querySelector('b').textContent = '';
   viewer.selectedEntity = { ...entityIn('occurrences', 'plain text'), id: 'e2' };
   assert.equal(announcer.textContent, 'GBIF Occurrences details opened');
+});
+
+// Final review m-3: in clean view and recording mode the card is display: none (style.css), so its status line stays silent: no "details
+// opened" for a card nobody can see. Positive control in the same test: the same selection announces once the card renders again.
+test('the status line says nothing while the card is not rendered (clean view, recording mode)', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  let rendered = false;
+  const frames = [];
+  const card = createDetailsCard({ viewer, doc, layerName: () => 'GBIF Occurrences', sanitize: (html) => html, isRendered: () => rendered, nextFrame: (fn) => { frames.push(fn); return frames.length; }, cancelFrame: () => {} });
+  viewer.selectedEntity = { ...entityIn('occurrences', '<b>x</b>'), id: 'a', name: 'Blue whale' };
+  assert.equal(card.announcer.textContent, '', 'hidden card: nothing announced');
+  card.showStatus({ heading: 'What lives here', message: 'GBIF search failed (HTTP\u00a0503)' });
+  assert.equal(card.announcer.textContent, '', 'hidden card: a status is not announced either');
+  rendered = true;
+  viewer.selectedEntity = { ...entityIn('occurrences', '<b>x</b>'), id: 'b', name: 'Fin whale' };
+  assert.equal(card.announcer.textContent, 'Fin whale details opened', 'positive control: a rendered card announces');
+  viewer.selectedEntity = { ...entityIn('occurrences', '<b>x</b>'), id: 'c', name: 'Fin whale' };
+  rendered = false;
+  frames.at(-1)();
+  assert.equal(card.announcer.textContent, '', 'a repeat set after the card stopped rendering stays silent');
 });
 
 // Fix round 1, item 4: the card was a live region, so failed name and dataset lookups in a list were read out with it. The status line now says
