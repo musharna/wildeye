@@ -8,7 +8,10 @@
  * - a panel opened while the card shows (one tap on a pill, results showing) closes the card.
  * On taller viewports nothing here acts: the regions do not meet there.
  */
-export const SHORT_VIEWPORT_QUERY = '(max-height: 480px)';
+// Fix round 5: 600 px, not 480. At the heights between, the desktop lane engine (ui.js) gives an open left panel 35 px at 500-520 px, 98-164 px at
+// 530-600 px (measured at 1024 and 1400 px wide), less than the ~186 px the SPECIES controls need (search, status, chosen row, WHAT LIVES HERE).
+// Landscape only: a portrait phone this short (320x568) keeps the portrait layout, where the stack and the card already stack vertically.
+export const SHORT_VIEWPORT_QUERY = '(max-height: 600px) and (orientation: landscape)';
 
 export function createShortViewportRegions({
   isShort = () => window.matchMedia(SHORT_VIEWPORT_QUERY).matches,

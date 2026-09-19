@@ -54,7 +54,7 @@ function world({ short = true } = {}) {
 }
 
 test('the short-viewport condition is one query', () => {
-  assert.equal(SHORT_VIEWPORT_QUERY, '(max-height: 480px)');
+  assert.equal(SHORT_VIEWPORT_QUERY, '(max-height: 600px) and (orientation: landscape)');
 });
 
 test('short viewport: the card folds the open panel, moves focus that was in it to the card, and gives both back when it closes', () => {

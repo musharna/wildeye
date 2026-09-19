@@ -118,6 +118,7 @@ import {
   measureLeftPanelNaturalHeight,
   phoneAccordionSiblingsToCollapse,
 } from './panelStackLayout.js';
+import { SHORT_VIEWPORT_QUERY } from './bio/shortViewport.js';
 import {
   resolveCockpitUtilityAnchor,
   resolveCockpitUtilityLayout,
@@ -7186,8 +7187,9 @@ export class StyleManager {
     }
 
     // The existing narrow-screen composition has its own full-width stack.
-    // Keep this desktop lane engine from fighting those dedicated rules.
-    if (window.matchMedia('(max-width: 720px)').matches) {
+    // Keep this desktop lane engine from fighting those dedicated rules. Fix round 5: a short viewport (SHORT_VIEWPORT_QUERY) at any width
+    // has its own stack rules too (style.css); the lane engine gave it a 38 px band there, so an open panel showed only its header.
+    if (window.matchMedia('(max-width: 720px)').matches || window.matchMedia(SHORT_VIEWPORT_QUERY).matches) {
       stack.classList.remove('layout-focus');
       stack.classList.remove('layout-tail');
       stack.style.removeProperty('--left-stack-safe-top');
@@ -7720,7 +7722,7 @@ export class StyleManager {
     }
     // Final review m-1: at phone width the left stack is an accordion (one open panel; the others' pills are hidden, style.css), so opening a
     // panel collapses the open ones, whatever opened it; a share link restoring several open panels ends with the last one open.
-    if (!nextCollapsed && leftOwnerPanel && window.matchMedia('(max-width: 720px)').matches) {
+    if (!nextCollapsed && leftOwnerPanel && (window.matchMedia('(max-width: 720px)').matches || window.matchMedia(SHORT_VIEWPORT_QUERY).matches)) {
       const stackPanels = [...this._leftPanelStack.querySelectorAll(':scope > [data-panel-id]')]
         .map((panel) => ({ id: panel.id, collapsed: panel.classList.contains('collapsed') }));
       for (const siblingId of phoneAccordionSiblingsToCollapse({ panels: stackPanels, openedId: panelId })) {

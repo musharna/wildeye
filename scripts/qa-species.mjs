@@ -2133,7 +2133,9 @@ if (CHECKS.has('portal-link')) {
 // (not BODY), and Escape cancels and puts focus back on WHAT LIVES HERE, with SPECIES open again; the same at 375x667 (positive control, a
 // size where nothing moves).
 if (CHECKS.has('landscape-regions')) {
-  const SIZES = [[667, 375], [640, 360], [568, 320]];
+  // Fix round 5 (critic r4 B1): the short model is a height condition, so the wider phone-landscape sizes (740x360, 844x390, 932x430) and a
+  // short desktop-width window (1024x500) are in the matrix too.
+  const SIZES = [[667, 375], [640, 360], [568, 320], [740, 360], [844, 390], [932, 430], [1024, 500], [1024, 580]];
   const TAVEUNI = [179.97, -16.8, 10000];
   const pillIds = ['data-panel', 'scene-panel', 'species-panel'];
   const hitAt = (sel) => page.evaluate((sel) => {

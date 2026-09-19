@@ -834,7 +834,7 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   const cardQueries = heightQueries.filter((block) => block.includes('.bio-card'));
   // Fix round 4: every height query that styles the card is the one short-viewport condition (src/bio/shortViewport.js SHORT_VIEWPORT_QUERY), and
   // it places the card in its own region (top-anchored, right of the pill column, above the time bar) rather than sharing the height anew.
-  const shortQuery = '(max-height: 480px)';
+  const shortQuery = '(max-height: 600px) and (orientation: landscape)';
   for (const block of cardQueries) assert.ok(block.startsWith(`@media ${shortQuery}`) || block.startsWith(`@media (min-width: 721px) and ${shortQuery}`), block.slice(0, 80));
   const shortBlock = cardQueries.find((block) => block.startsWith(`@media ${shortQuery}`)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/\s+/g, ' ');
   for (const declaration of ['top: 76px;', 'bottom: auto;', 'width: min(560px, calc(100vw - 16px - var(--short-card-left)));', 'max-height: calc(100vh - 76px - 78px);']) assert.ok(shortBlock.includes(declaration), `short card: ${declaration}`);
@@ -884,9 +884,13 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /@media \(max-width: 720px\) \{[^@]*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) > \[data-panel-id\]\.collapsed \{ display: none !important; \}/);
   // Critic r1 S-new: focus in the dataset rows gives them one whole link line back, at the species list's expense (qa card-foot-rest rings).
   // Fix round 3 (critic r2 S2): that focus share lives only in the short-window block above; no rule outside it changes the card on focus.
-  assert.doesNotMatch(css.replace(/@media \(max-height: 480px\) \{[\s\S]*?\n\}/, ''), /dataset-list-rows:focus-within\) \.bio-card-body|dataset-list-rows:focus-within \{ min-height/, 'no unscoped focus share');
+  assert.doesNotMatch(css.replace(/@media \(max-height: 600px\) and \(orientation: landscape\) \{[\s\S]*?\n\}/, ''), /dataset-list-rows:focus-within\) \.bio-card-body|dataset-list-rows:focus-within \{ min-height/, 'no unscoped focus share');
   // Final round (critic r1 N2): phone landscape gives the stack the rail's floor above the map credit and a 460 px width (qa panel-fold 667x375).
-  assert.match(css, /@media \(max-width: 720px\) and \(max-height: 480px\) \{\s*#left-panel-stack \{ right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); row-gap: 4px; \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(460px, calc\(100vw - 32px\)\); \}/);
+  // Fix round 5: the short stack is a height condition at every width (the lane engine steps aside there, ui.js), with the phone stack's box.
+  assert.match(css, /@media \(max-height: 600px\) and \(orientation: landscape\) \{(?:\s*\/\*[\s\S]*?\*\/)?\s*#left-panel-stack \{ top: 70px; left: 16px; right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); max-height: none; overflow-y: auto; row-gap: 4px; \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(460px, calc\(100vw - 32px\)\); \}/);
+  assert.doesNotMatch(css, /@media \(max-width: 720px\) and \(max-height: [0-9]+px\)|@media \(min-width: 721px\) and \(max-height: 480px\)/, 'no width-split short rules');
+  const uiSource = readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
+  assert.match(uiSource, /window\.matchMedia\('\(max-width: 720px\)'\)\.matches \|\| window\.matchMedia\(SHORT_VIEWPORT_QUERY\)\.matches\) \{\n      stack\.classList\.remove\('layout-focus'\);/, 'the lane engine steps aside on a short viewport');
   assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';

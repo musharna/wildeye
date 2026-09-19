@@ -9558,12 +9558,12 @@ body.scene-playback-mode #key-setup {
    and at 360 px the filter line and the gbif.org credit wrap to two lines each. Wider there, each is one line, which is the height one whole
    species row needs above the fixed parts (measured at 667x375: 1 whole row and the credit whole at 560 px, none at 360). Only the width
    changes with the window; how the height is shared still follows the content (.bio-card-main). */
-/* Fix round 4 (critic r3 S1', S3): on a short viewport (the one condition, max-height 480px, which src/bio/shortViewport.js exports as
+/* Fix round 4 (critic r3 S1', S3): on a short viewport (the one condition, max-height 600px in landscape, which src/bio/shortViewport.js exports as
    SHORT_VIEWPORT_QUERY) the card has a region of its own: the column right of the collapsed pills (--short-card-left: their right edge plus
    8 px), from under the header (76 px) down to above the time bar (78 px). It is top-anchored, so the 75 px "Click a spot" card sits above the
    globe's centre, the pick target, at every short size (its bottom at 151 px; the centre is at 160 px or lower). An open panel and the card
    take turns (shortViewport.js), so the card never covers a pill and a pill tap after a pick reopens its panel. */
-@media (max-height: 480px) {
+@media (max-height: 600px) and (orientation: landscape) {
   .bio-card { --short-card-left: 200px; top: 76px; bottom: auto; right: 16px; width: min(560px, calc(100vw - 16px - var(--short-card-left))); max-height: calc(100vh - 76px - 78px); padding: 8px 12px; gap: 4px; }
   /* The list keeps its one-row floor where the region has room for it above the card's fixed parts at their largest (157 px: the 2-line
      filter line and credit and the antimeridian note, at the 352 px width of a 568 px window), and gives it up below that (568x320: 166 px of
@@ -9866,14 +9866,17 @@ body.recording-mode #bio-card { display: none !important; }
    Fix round 4 (critic r3 N1): at 568x320 the stack is 124 px tall, and the three 50 px pills with their gaps took 162, leaving SPECIES an 8 px
    sliver whose + sat on the map credit. On a short viewport the collapsed pills are 38 px (6 px padding above and below the header, 34 px for
    SPECIES) with 4 px gaps, 118 px in all. */
-@media (max-width: 720px) and (max-height: 480px) {
-  #left-panel-stack { right: auto; width: min(var(--left-collapsed-width), calc(100vw - 32px)); bottom: calc(2vh + 7.5rem); row-gap: 4px; }
+@media (max-height: 600px) and (orientation: landscape) {
+  /* Fix round 5 (critic r4 B1): the short model is a height condition, so it holds at every width. Above 720 px the desktop lane engine
+     used to lay out the stack at these heights, and gave it a 38 px band from 26vh (on main 1f5d591 too), so an open panel showed only its
+     header; ui.js now leaves the stack to these rules whenever the viewport is short, as it does on phones. The stack is the phone one: from
+     under the header (70 px) down to the rail's floor above the map credit, a 176 px pill column, one open panel at a time (460 px wide), the
+     collapsed pills hidden while it is open. */
+  #left-panel-stack { top: 70px; left: 16px; right: auto; width: min(var(--left-collapsed-width), calc(100vw - 32px)); bottom: calc(2vh + 7.5rem); max-height: none; overflow-y: auto; row-gap: 4px; }
   #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) { width: min(460px, calc(100vw - 32px)); }
+  #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) > [data-panel-id].collapsed { display: none !important; }
+  #left-panel-stack > [data-panel-id], #left-panel-stack > [data-panel-id].collapsed { position: relative; top: auto; right: auto; bottom: auto; left: auto; width: 100%; }
   #left-panel-stack > [data-panel-id].collapsed > :is(.data-panel-inner, .scene-panel-inner, .species-panel-inner, .cctv-panel-inner) { padding-top: 6px; padding-bottom: 6px; }
-}
-/* On a short window wider than 720 px the desktop lane holds the collapsed pills at --left-stack-x, so the card's column starts right of them. */
-@media (min-width: 721px) and (max-height: 480px) {
-  .bio-card { --short-card-left: calc(var(--left-stack-x) + var(--left-collapsed-width) + 8px); }
 }
 #species-panel.collapsed { width: var(--left-collapsed-width); }
 #species-panel.collapsed .species-body { display: none !important; }
