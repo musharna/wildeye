@@ -154,6 +154,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   let mode = null;
   // Brief B S-1: stops the Top datasets rows' "more ↓" cue from watching a list the card no longer shows.
   let stopDatasetsCue = null;
+  const stopCue = () => { stopDatasetsCue?.(); stopDatasetsCue = null; };
   // The owner is told (onListEnd), after the change, whenever list or status content stops showing for any reason: the card
   // is closed or dismissed, or a marker's details replace it. "What lives here" keeps its outline exactly that long (R-7e).
   // The owner's handler runs inside the card's own state change, so its failure is logged here under its own label: a dismiss still
@@ -170,14 +171,14 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   };
 
   const reset = (heading) => {
-    stopDatasetsCue?.();
-    stopDatasetsCue = null;
+    stopCue();
     title.textContent = heading;
     filter.textContent = '';
     body.replaceChildren();
     foot.replaceChildren();
   };
-  const close = () => { root.hidden = true; announce(''); setMode(null); };
+  // Review M-4: a hidden card stops watching its rows too; the next render would otherwise be the only thing that did.
+  const close = () => { root.hidden = true; stopCue(); announce(''); setMode(null); };
 
   viewer.selectedEntityChanged.addEventListener((entity) => {
     try {

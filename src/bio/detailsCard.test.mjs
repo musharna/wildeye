@@ -90,6 +90,7 @@ function cardDoc() {
       appendChild(child) { this.children.push(child); return child; },
       replaceChildren(...kids) { this.children = kids; this.innerHTML = ''; },
       addEventListener(type, fn) { this.listeners[type] = fn; },
+      removeEventListener(type, fn) { if (this.listeners[type] === fn) delete this.listeners[type]; },
       querySelector(selector) { return (parts[selector] ||= make(selector)); },
     };
   };
@@ -278,6 +279,14 @@ test('the Top datasets rows in the card show the SPECIES panel "more" cue while 
   assert.equal(cue.style.visibility, 'hidden', 'nothing cut: no cue');
   card.showList(base);
   assert.equal(watched[0].stopped, true, 'a new list stops the old watcher');
+  assert.equal(rows.listeners.scroll, undefined, 'and removes its scroll listener');
+  // Review M-4: closing the card stops the watcher too, not only the next render.
+  card.showList({ ...base, datasets: [{ key: INAT_RG, count: 1, title: 'iNaturalist Research-grade Observations', doi: null }] });
+  assert.equal(watched.length, 2);
+  assert.equal(watched[1].stopped, false, 'positive control: a showing list is watched');
+  card.close();
+  assert.equal(watched[1].stopped, true, 'a closed card stops its watcher');
+  assert.equal(foot.children[0].children[1].listeners.scroll, undefined, 'and removes its scroll listener');
 });
 
 // R-7e: the what-lives-here outline lives exactly as long as the card shows list or status content, so the card tells its
