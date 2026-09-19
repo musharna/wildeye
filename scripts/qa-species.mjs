@@ -2138,6 +2138,7 @@ if (CHECKS.has('landscape-regions')) {
   // --landscape-sizes narrows the matrix while developing; the default is every size.
   const SIZES = arg('--landscape-sizes', '667x375,640x360,568x320,740x360,844x390,932x430,1024x500,1024x580,1280x600').split(',').map((size) => size.split('x').map(Number));
   const TAVEUNI = [179.97, -16.8, 10000];
+  const BESIDE = new Set(['1024x500', '1024x580', '1280x600']);
   const pillIds = ['data-panel', 'scene-panel', 'species-panel'];
   const hitAt = (sel) => page.evaluate((sel) => {
     const el = document.querySelector(sel);
@@ -2180,7 +2181,10 @@ if (CHECKS.has('landscape-regions')) {
   try {
     for (const [width, height] of SIZES) {
       const size = `${width}x${height}`;
-      const r = { viewport: size };
+      // Fix round 6 (critic r5 S2): where the open 460 px panel and the card fit side by side and the panel leaves the globe's centre clear, both
+      // stay; pinned per size (1024x500, 1024x580, 1280x600), not read from the page. Everywhere else the panel folds while the card shows.
+      const beside = BESIDE.has(size);
+      const r = { viewport: size, beside };
       try {
       await page.setViewport({ width, height });
       await sleep(2500);
@@ -2205,7 +2209,9 @@ if (CHECKS.has('landscape-regions')) {
         const y = c.top + c.height / 2;
         const hit = document.elementFromPoint(x, y);
         const card = document.getElementById('bio-card').getBoundingClientRect();
-        return { x, y, onCanvas: hit === canvas, hit: hit ? (hit.id || String(hit.className).slice(0, 30)) : null, armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', card: { top: Math.round(card.top), bottom: Math.round(card.bottom), left: Math.round(card.left) } };
+        const sp = document.getElementById('species-panel');
+        const spr = sp.getBoundingClientRect();
+        return { x, y, onCanvas: hit === canvas, hit: hit ? (hit.id || String(hit.className).slice(0, 30)) : null, armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', card: { top: Math.round(card.top), bottom: Math.round(card.bottom), left: Math.round(card.left) }, speciesOpen: !sp.classList.contains('collapsed') && spr.height > 60, speciesOverlapsCard: !sp.classList.contains('collapsed') && spr.right > card.left + 0.5 && spr.left < card.right - 0.5 && spr.bottom > card.top + 0.5 && spr.top < card.bottom - 0.5 };
       });
       if (r.armed.onCanvas) {
         await page.mouse.click(r.armed.x, r.armed.y);
@@ -2230,9 +2236,12 @@ if (CHECKS.has('landscape-regions')) {
           return { card: { left: Math.round(c.left), top: Math.round(c.top), right: Math.round(c.right), bottom: Math.round(c.bottom), maxHeight: getComputedStyle(card).maxHeight }, parts, folds, noteTitle: link.getAttribute('title'), overlap, linkWhole: whole(link) && lr.bottom <= c.bottom + 0.5, linkHit: Boolean(lh && (lh === link || link.contains(lh))), speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter(whole).length };
         });
         await shot(`landscape-regions-results-${size}`);
-        r.afterPick = await pillsState();
-        await realClick('#species-panel [data-collapse-target="species-panel"]', 'the SPECIES + after the pick');
-        r.reopened = await page.evaluate(() => { const p = document.getElementById('species-panel'); return { open: !p.classList.contains('collapsed'), shown: p.getBoundingClientRect().height > 60, cardHidden: document.getElementById('bio-card').hidden }; });
+        r.speciesOpenAfterPick = await page.evaluate(() => { const p = document.getElementById('species-panel'); return !p.classList.contains('collapsed') && p.getBoundingClientRect().height > 60; });
+        if (!beside) {
+          r.afterPick = await pillsState();
+          await realClick('#species-panel [data-collapse-target="species-panel"]', 'the SPECIES + after the pick');
+          r.reopened = await page.evaluate(() => { const p = document.getElementById('species-panel'); return { open: !p.classList.contains('collapsed'), shown: p.getBoundingClientRect().height > 60, cardHidden: document.getElementById('bio-card').hidden }; });
+        }
       }
       // (5) keyboard
       await closeCard();
@@ -2249,8 +2258,11 @@ if (CHECKS.has('landscape-regions')) {
       const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && st.scrollSlack <= 1 && st.pillsInBox && st.pills.every((p) => p.collapsed && p.hit);
       // Fix round 5: no size is exempt from a whole species row (the card folds its Top datasets block and then the note first).
       const headerOk = (h) => Boolean(h) && h.lines >= 2 && h.out.length === 0;
+      const turnsOk = beside
+        ? r.armed.speciesOpen && !r.armed.speciesOverlapsCard && r.speciesOpenAfterPick
+        : !r.armed.speciesOpen && !r.speciesOpenAfterPick && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown;
       r.ok = headerOk(r.headerCollapsed) && headerOk(r.headerOpen) && pillsOk(r.collapsed) && r.armed.armed && r.armed.onCanvas && r.picked && Boolean(r.results) && !r.results.overlap && r.results.linkWhole && r.results.linkHit && r.results.speciesRowsWhole >= 1
-        && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown && r.keyboard.armed && r.keyboard.active !== 'BODY' && !r.keyboardCancel.armed && r.keyboardCancel.onButton && r.keyboardCancel.speciesOpen;
+        && turnsOk && r.keyboard.armed && r.keyboard.active !== 'BODY' && !r.keyboardCancel.armed && r.keyboardCancel.onButton && r.keyboardCancel.speciesOpen;
       } catch (caught) {
         // One size's failure is recorded with its cause and the next size still runs.
         r.error = String(caught?.message || caught).slice(0, 300);

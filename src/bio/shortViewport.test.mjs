@@ -35,7 +35,9 @@ function world({ short = true } = {}) {
     if (collapsed && p.contains(doc.activeElement)) doc.activeElement = doc.body; // a hidden element loses focus
     observer?.([{ target: p, attributeName: 'class', oldValue: was ? 'collapsed' : '' }]);
   };
+  let viewport = { width: 667, height: 375 };
   const regions = createShortViewportRegions({
+    viewport: () => viewport,
     isShort: () => short,
     stack,
     cardElement: card,
@@ -50,7 +52,9 @@ function world({ short = true } = {}) {
     observer?.([{ target: card, attributeName: 'hidden' }]);
   }
   const open = (id) => setPanelCollapsed(id, false);
-  return { doc, panels, action, card, close, calls, setCard, open, regions };
+  const api = { doc, panels, action, card, close, calls, setCard, open, regions };
+  api.withViewport = (v) => { viewport = v; return api; };
+  return api;
 }
 
 test('the short-viewport condition is one query', () => {
@@ -111,4 +115,49 @@ test('each short-viewport column starts below the header boxes over it', async (
   assert.equal(topBelowHeader({ boxes: header, left: 268, right: 828, viewportHeight: 390 }), 104, 'the card column meets the tagline and the buttons');
   assert.equal(topBelowHeader({ boxes: [box(16, 300, 400, 330)], left: 16, right: 476, viewportHeight: 390 }), 0, 'a box in the lower half is not header');
   assert.equal(topBelowHeader({ boxes: [box(0, 0, 0, 0)], left: 16, right: 476, viewportHeight: 390 }), 0, 'an empty (hidden) box counts for nothing');
+});
+
+// Fix round 6 (critic r5 S2): the panel and the card take turns only when they would meet. Where the open panel leaves the globe's centre clear
+// and the card still gets 320 px beside it, both stay, and the card's column starts 8 px right of the panel.
+test('panel and card stay side by side where they fit and the centre is clear, and take turns where they do not', () => {
+  const rect = (left, top, right, bottom) => ({ left, top, right, bottom, width: right - left, height: bottom - top });
+  const make = (viewport) => {
+    const w = world();
+    w.panels[2].getBoundingClientRect = () => rect(16, 97, 476, 440);
+    w.card.style = { props: {}, setProperty(k, v) { this.props[k] = v; }, removeProperty(k) { delete this.props[k]; } };
+    return w.withViewport(viewport);
+  };
+  const wide = make({ width: 1280, height: 600 });
+  wide.open('species-panel');
+  wide.calls.length = 0;
+  wide.setCard(true);
+  assert.deepEqual(wide.calls, [], '1280x600: SPECIES stays open');
+  assert.equal(wide.card.style.props['--short-card-left'], '484px', 'the card starts right of the panel');
+  wide.setCard(false);
+  assert.equal(wide.card.style.props['--short-card-left'], undefined, 'and goes back to its column when it closes');
+  const narrow = make({ width: 932, height: 430 }); // the panel (16-476) covers the centre (466, 215)
+  narrow.open('species-panel');
+  narrow.calls.length = 0;
+  narrow.setCard(true);
+  assert.deepEqual(narrow.calls, [['species-panel', true]], '932x430: the panel folds (it covers the pick target)');
+  const small = make({ width: 1100, height: 1000 }); // centre (550, 500) clear, 1100-16-484 = 600 px for the card: fits
+  small.open('species-panel');
+  small.calls.length = 0;
+  small.setCard(true);
+  assert.deepEqual(small.calls, []);
+  const cramped = make({ width: 800, height: 900 }); // centre (400, 450) is below the panel, but only 300 px would be left for the card
+  cramped.open('species-panel');
+  cramped.calls.length = 0;
+  cramped.setCard(true);
+  assert.deepEqual(cramped.calls, [['species-panel', true]], 'too little room beside: the panel folds');
+  // Opening a panel while the card shows: kept beside when it fits, the card closed when not.
+  const reopen = make({ width: 1280, height: 600 });
+  reopen.setCard(true);
+  reopen.open('species-panel');
+  assert.equal(reopen.card.hidden, false, 'the card stays');
+  assert.equal(reopen.card.style.props['--short-card-left'], '484px');
+  const reopenNarrow = make({ width: 932, height: 430 });
+  reopenNarrow.setCard(true);
+  reopenNarrow.open('species-panel');
+  assert.equal(reopenNarrow.card.hidden, true, 'the card closes where they would meet');
 });
