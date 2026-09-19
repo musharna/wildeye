@@ -101,6 +101,8 @@ export function createSpeciesPanel({
   let listQuery = null; // M3: the query the suggestion list showing was built for
   let chooseAbort = null;
   let lookingUpKey = null;
+  // The "Looking up …" line of the choice in flight, cleared by the next choice (startChoice).
+  let pendingLookingUp = null;
   // M1: { taxonKey, canonicalName } while the chosen taxon came from a GBIF match that was not EXACT.
   let shownAs = null;
   // N-d: the status written for that choice ("No exact GBIF match …; shown as GBIF's …"), which goes when the note does.
@@ -292,6 +294,10 @@ export function createSpeciesPanel({
    * answers late cannot overwrite the newer one. Returns the new choice's signal.
    */
   function startChoice() {
+    // A review m-5: the pending choice's "Looking up …" line goes now, not when that choice resumes (a client that ignored the abort would
+    // leave it up until its late answer). A line something else wrote since is kept.
+    if (pendingLookingUp !== null && status.textContent === pendingLookingUp) status.textContent = '';
+    pendingLookingUp = null;
     chooseAbort?.abort();
     chooseAbort = new AbortController();
     return chooseAbort.signal;
@@ -334,6 +340,7 @@ export function createSpeciesPanel({
     clearSuggestions();
     const lookingUp = `Looking up ${item.scientificName} in GBIF…`;
     status.textContent = lookingUp;
+    pendingLookingUp = lookingUp;
     // A newer choice took over: this one maps nothing more, and its "Looking up" line goes unless something has replaced it.
     const superseded = () => {
       if (status.textContent === lookingUp) status.textContent = '';

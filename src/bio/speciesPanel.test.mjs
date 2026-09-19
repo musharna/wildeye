@@ -222,6 +222,8 @@ test('a what-lives-here pick supersedes a suggestion choice still matching, whos
   await settle();
   assert.equal(els['species-status'].textContent, 'Looking up Megaptera nodosus in GBIF…');
   assert.equal(await panel.chooseTaxon({ taxonKey: 1340481, name: 'Nudibranch' }), true);
+  // A review m-5: the line goes when the newer pick starts, not when the old match answers (a client that ignores the abort answers late).
+  assert.equal(els['species-status'].textContent, '', 'the superseded "Looking up" line goes at once');
   answer({ key: 5220086, matchType: 'FUZZY', canonicalName: 'Megaptera novaeangliae' });
   assert.equal(await pending, false, 'the superseded choice reports that it mapped nothing');
   assert.deepEqual(calls.params.at(-1).p, { taxonKey: 1340481, name: 'Nudibranch' }, 'the newer pick stays mapped');
