@@ -5,12 +5,11 @@
  */
 import { SPECIES_MAP_LEGEND, gbifPortalTaxonUrl, yearLabel } from './gbif.js';
 import { createDatasetRows } from './datasetList.js';
-import { MORE_SLACK_PX, hasMoreBelow, watchMoreBelow } from './moreCue.js';
+import { observeSizeWithResizeObserver, watchMoreBelow } from './moreCue.js';
 
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
-// The scroll cue's rule lives in moreCue.js, shared with the details card's Top datasets rows; re-exported for existing importers.
-export { MORE_SLACK_PX, hasMoreBelow };
+// The scroll cue's rule and the size observer live in moreCue.js, shared with the details card's Top datasets rows.
 
 /**
  * "Common · Scientific (rank)", plus the term iNaturalist matched, which can be another common name ("Hump-back Cicada" for Swamp
@@ -72,7 +71,7 @@ export function renderLegendInto(container, doc, legend = SPECIES_MAP_LEGEND) {
 
 export function createSpeciesPanel({
   doc = document, dataManager, speciesLayer, client, whatLivesHere, setTimer = setTimeout, clearTimer = clearTimeout,
-  observeSize = (targets, onChange) => { const observer = new ResizeObserver(onChange); for (const target of targets) observer.observe(target); },
+  observeSize = observeSizeWithResizeObserver,
 }) {
   const el = (id) => {
     const node = doc.getElementById(id);

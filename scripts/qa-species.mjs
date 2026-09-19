@@ -7,7 +7,7 @@
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
 import { GBIF_BACKBONE_CHECKLIST_KEY, SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX } from '../src/bio/gbif.js';
-import { MORE_SLACK_PX } from '../src/bio/speciesPanel.js';
+import { MORE_SLACK_PX } from '../src/bio/moreCue.js';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
