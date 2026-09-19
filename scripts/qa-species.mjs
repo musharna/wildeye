@@ -103,6 +103,125 @@ const openSpeciesPanel = async () => {
   await sleep(800);
 };
 
+// The contrast method (qa contrast, and the collapsed pills in qa collapsed-pills): see the contrast check's comment.
+const frames = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+const addStyle = (id, css) => page.evaluate((id, css) => { const style = document.createElement('style'); style.id = id; style.textContent = css; document.head.appendChild(style); }, id, css);
+const removeStyle = (id) => page.evaluate((id) => document.getElementById(id)?.remove(), id);
+const hideText = (root) => `${root}, ${root} *, ${root} *::before, ${root} *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; transition: none !important; } ${root} input::placeholder { color: transparent !important; }`;
+const installContrast = () => page.evaluate(() => {
+  const lin = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+  const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const parseColor = (text) => { const parts = (text.match(/[\d.]+/g) || []).map(Number); return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }; };
+  const describe = (el) => el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '') + [...el.classList].map((name) => `.${name}`).join('');
+  const opacityOf = (el) => { let opacity = 1; for (let node = el; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity); return opacity; };
+  // A box clipped to the view of the element itself and of every ancestor that clips (an ellipsised name's line box runs on under the switch
+  // beside it) and to the window; null when nothing of it can be seen.
+  const clip = (box, el) => {
+    let b = { ...box };
+    for (let node = el; node; node = node.parentElement) {
+      const cs = getComputedStyle(node);
+      if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+      const r = node.getBoundingClientRect();
+      b = { left: Math.max(b.left, r.left + node.clientLeft), top: Math.max(b.top, r.top + node.clientTop), right: Math.min(b.right, r.left + node.clientLeft + node.clientWidth), bottom: Math.min(b.bottom, r.top + node.clientTop + node.clientHeight) };
+    }
+    b = { left: Math.max(b.left, 0), top: Math.max(b.top, 0), right: Math.min(b.right, innerWidth), bottom: Math.min(b.bottom, innerHeight) };
+    return b.right - b.left >= 1 && b.bottom - b.top >= 1 ? b : null;
+  };
+  const decode = async (png) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${png}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    return { width: img.width, data: ctx.getImageData(0, 0, img.width, img.height).data, scale: img.width / innerWidth };
+  };
+  window.__qaContrast = {
+    collect(rootSelector, parkedSelector, nonTextSelector) {
+      const root = document.querySelector(rootSelector);
+      if (!root) throw new Error(`contrast: ${rootSelector} is missing`);
+      const rootBox = root.getBoundingClientRect();
+      const items = new Map();
+      // Text kept for screen readers only (a 1 px box, like the phone's "Find a species" label) is reported, not gated: nobody sees it.
+      const screenReaderOnly = (el) => { const r = el.getBoundingClientRect(); return r.width <= 1 || r.height <= 1; };
+      const add = (el, text, rects, color) => {
+        // Text with no layout box (display: none, a hidden list) is not on the page. Text laid out but clipped out of view at this scroll
+        // position is registered with no boxes, so text that no scroll position shows is reported unmeasured instead of being skipped.
+        if (el.getClientRects().length === 0) return;
+        const key = `${describe(el)}|${text.slice(0, 60)}`;
+        const hiddenFromSight = screenReaderOnly(el);
+        const item = items.get(key) || { key, label: describe(el), text: text.slice(0, 60), color, opacity: opacityOf(el), rects: [], gate: !hiddenFromSight && !(parkedSelector && el.closest(parkedSelector)), screenReaderOnly: hiddenFromSight, min: el.closest(nonTextSelector) ? 3 : 4.5, control: el.id === 'qa-contrast-control' ? 'dim' : el.id === 'qa-contrast-unseen-control' ? 'unseen' : false };
+        item.rects.push(...rects);
+        // Text drawn outside its surface's box is not on the surface's ground.
+        item.outside = Boolean(item.outside) || rects.some((r) => r.left < rootBox.left - 0.5 || r.right > rootBox.right + 0.5 || r.top < rootBox.top - 0.5 || r.bottom > rootBox.bottom + 0.5);
+        items.set(key, item);
+      };
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.textContent.replace(/\s+/g, ' ').trim();
+        if (!text) continue;
+        const el = node.parentElement;
+        const cs = getComputedStyle(el);
+        if (cs.visibility !== 'visible' || opacityOf(el) === 0) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        add(el, text, [...range.getClientRects()].map((r) => clip({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }, el)).filter(Boolean), parseColor(cs.color));
+      }
+      // An input's value or placeholder: its content box, as wide as the text (the clear button sits to its right).
+      for (const input of root.querySelectorAll('input')) {
+        const cs = getComputedStyle(input);
+        if (cs.visibility !== 'visible' || input.getClientRects().length === 0) continue;
+        const text = input.value || input.placeholder;
+        if (!text) continue;
+        const ctx = document.createElement('canvas').getContext('2d');
+        ctx.font = cs.font;
+        const r = input.getBoundingClientRect();
+        const left = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft);
+        const right = Math.min(left + ctx.measureText(text).width, r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight));
+        const box = clip({ left, top: r.top + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop), right, bottom: r.bottom - parseFloat(cs.borderBottomWidth) - parseFloat(cs.paddingBottom) }, input);
+        add(input, `${input.value ? 'value' : 'placeholder'}: ${text}`, box ? [box] : [], parseColor(input.value ? cs.color : getComputedStyle(input, '::placeholder').color));
+      }
+      return [...items.values()];
+    },
+    async analyse(png, items) {
+      const { width, data, scale } = await decode(png);
+      return items.map((item) => {
+        const alpha = item.color.a * item.opacity;
+        const text = [item.color.r, item.color.g, item.color.b];
+        let worst = null;
+        let pixels = 0;
+        for (const r of item.rects) {
+          for (let y = Math.ceil(r.top * scale); y < Math.floor(r.bottom * scale); y += 1) {
+            for (let x = Math.ceil(r.left * scale); x < Math.floor(r.right * scale); x += 1) {
+              const i = (y * width + x) * 4;
+              const bg = [data[i], data[i + 1], data[i + 2]];
+              const fg = text.map((channel, k) => alpha * channel + (1 - alpha) * bg[k]);
+              const lf = lum(...fg);
+              const lb = lum(...bg);
+              const ratio = (Math.max(lf, lb) + 0.05) / (Math.min(lf, lb) + 0.05);
+              pixels += 1;
+              if (!worst || ratio < worst.ratio) worst = { ratio, bg };
+            }
+          }
+        }
+        return { key: item.key, label: item.label, text: item.text, color: item.color, opacity: item.opacity, gate: item.gate, screenReaderOnly: item.screenReaderOnly, outside: item.outside, min: item.min, control: item.control, pixels, ratio: worst ? +worst.ratio.toFixed(2) : null, worstBg: worst?.bg ?? null };
+      });
+    },
+    async behind(png, box) {
+      const { width, data, scale } = await decode(png);
+      const values = [];
+      for (let y = Math.ceil(box.top * scale); y < Math.floor(box.bottom * scale); y += 2) {
+        for (let x = Math.ceil(box.left * scale); x < Math.floor(box.right * scale); x += 2) { const i = (y * width + x) * 4; values.push(lum(data[i], data[i + 1], data[i + 2])); }
+      }
+      values.sort((p, q) => p - q);
+      if (!values.length) return { pixels: 0, medianL: null };
+      return { pixels: values.length, p10L: +values[Math.floor(values.length * 0.1)].toFixed(3), medianL: +values[Math.floor(values.length / 2)].toFixed(3), maxL: +values.at(-1).toFixed(3) };
+    },
+  };
+});
+
 await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
 await sleep(12000);
@@ -490,7 +609,8 @@ if (CHECKS.has('left-stack')) {
 //   then made transparent and the page captured, so each pixel under a line box is the ground that text is drawn on. The text colour is
 //   composited over each of those pixels, and the lowest WCAG ratio is the text's. Each scroll container of a surface (the card's body and its
 //   foot) is stepped through, and text that no position shows fails as unmeasured. Text needs 4.5:1, the card's close × (non-text) 3:1.
-// - The host header (the SPECIES title and its button, parked with R-7ii S2) is measured and reported, not gated.
+// - The host header (the SPECIES title and its button) is gated like the rest since brief B brought the shared pill and header text to 0.8
+//   white (it was parked with R-7ii S2 at the shared 0.3 white).
 // - Controls in the same check: each forced message is present; the map behind each surface, captured with the surface hidden, has a median
 //   relative luminance of at least 0.5; a 0.3-white control line placed in each surface measures under 4.5:1; and a control line laid out where
 //   no scroll position shows it comes back unmeasured.
@@ -504,10 +624,6 @@ if (CHECKS.has('contrast')) {
   const FUZZY_SUGGESTION = { total_results: 1, page: 1, per_page: 1, results: [{ id: 48662, name: 'Danaus plexippa', rank: 'species', preferred_common_name: 'Monarch', matched_term: 'Monarch' }] };
   const INAT_AUTOCOMPLETE = '^https://api\\.inaturalist\\.org/v1/taxa/autocomplete';
   const TAXON_DATASET_SEARCH = '^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*taxonKey=)';
-  const frames = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  const addStyle = (id, css) => page.evaluate((id, css) => { const style = document.createElement('style'); style.id = id; style.textContent = css; document.head.appendChild(style); }, id, css);
-  const removeStyle = (id) => page.evaluate((id) => document.getElementById(id)?.remove(), id);
-  const hideText = (root) => `${root}, ${root} *, ${root} *::before, ${root} *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; transition: none !important; } ${root} input::placeholder { color: transparent !important; }`;
   // Each rule is a URL pattern the page's fetch answers with HTTP 503, or { pattern, body }, answered 200 with that JSON.
   const setFailures = (rules) => page.evaluate((rules) => {
     if (!window.__qaFetchOriginal) {
@@ -532,119 +648,7 @@ if (CHECKS.has('contrast')) {
   const canvasCentre = () => page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
   const collapseSpecies = async () => { await page.evaluate(() => { const panel = document.getElementById('species-panel'); if (!panel.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click(); }); await sleep(800); };
   const closeCard = async () => { await page.evaluate(() => { const card = document.getElementById('bio-card'); if (card && !card.hidden) card.querySelector('.bio-card-close').click(); }); await sleep(500); };
-  await page.evaluate(() => {
-    const lin = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
-    const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-    const parseColor = (text) => { const parts = (text.match(/[\d.]+/g) || []).map(Number); return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }; };
-    const describe = (el) => el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '') + [...el.classList].map((name) => `.${name}`).join('');
-    const opacityOf = (el) => { let opacity = 1; for (let node = el; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity); return opacity; };
-    // A box clipped to the view of the element itself and of every ancestor that clips (an ellipsised name's line box runs on under the switch
-    // beside it) and to the window; null when nothing of it can be seen.
-    const clip = (box, el) => {
-      let b = { ...box };
-      for (let node = el; node; node = node.parentElement) {
-        const cs = getComputedStyle(node);
-        if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
-        const r = node.getBoundingClientRect();
-        b = { left: Math.max(b.left, r.left + node.clientLeft), top: Math.max(b.top, r.top + node.clientTop), right: Math.min(b.right, r.left + node.clientLeft + node.clientWidth), bottom: Math.min(b.bottom, r.top + node.clientTop + node.clientHeight) };
-      }
-      b = { left: Math.max(b.left, 0), top: Math.max(b.top, 0), right: Math.min(b.right, innerWidth), bottom: Math.min(b.bottom, innerHeight) };
-      return b.right - b.left >= 1 && b.bottom - b.top >= 1 ? b : null;
-    };
-    const decode = async (png) => {
-      const img = new Image();
-      img.src = `data:image/png;base64,${png}`;
-      await img.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(img, 0, 0);
-      return { width: img.width, data: ctx.getImageData(0, 0, img.width, img.height).data, scale: img.width / innerWidth };
-    };
-    window.__qaContrast = {
-      collect(rootSelector, parkedSelector, nonTextSelector) {
-        const root = document.querySelector(rootSelector);
-        if (!root) throw new Error(`contrast: ${rootSelector} is missing`);
-        const rootBox = root.getBoundingClientRect();
-        const items = new Map();
-        // Text kept for screen readers only (a 1 px box, like the phone's "Find a species" label) is reported, not gated: nobody sees it.
-        const screenReaderOnly = (el) => { const r = el.getBoundingClientRect(); return r.width <= 1 || r.height <= 1; };
-        const add = (el, text, rects, color) => {
-          // Text with no layout box (display: none, a hidden list) is not on the page. Text laid out but clipped out of view at this scroll
-          // position is registered with no boxes, so text that no scroll position shows is reported unmeasured instead of being skipped.
-          if (el.getClientRects().length === 0) return;
-          const key = `${describe(el)}|${text.slice(0, 60)}`;
-          const hiddenFromSight = screenReaderOnly(el);
-          const item = items.get(key) || { key, label: describe(el), text: text.slice(0, 60), color, opacity: opacityOf(el), rects: [], gate: !hiddenFromSight && !(parkedSelector && el.closest(parkedSelector)), screenReaderOnly: hiddenFromSight, min: el.closest(nonTextSelector) ? 3 : 4.5, control: el.id === 'qa-contrast-control' ? 'dim' : el.id === 'qa-contrast-unseen-control' ? 'unseen' : false };
-          item.rects.push(...rects);
-          // Text drawn outside its surface's box is not on the surface's ground.
-          item.outside = Boolean(item.outside) || rects.some((r) => r.left < rootBox.left - 0.5 || r.right > rootBox.right + 0.5 || r.top < rootBox.top - 0.5 || r.bottom > rootBox.bottom + 0.5);
-          items.set(key, item);
-        };
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-          const text = node.textContent.replace(/\s+/g, ' ').trim();
-          if (!text) continue;
-          const el = node.parentElement;
-          const cs = getComputedStyle(el);
-          if (cs.visibility !== 'visible' || opacityOf(el) === 0) continue;
-          const range = document.createRange();
-          range.selectNodeContents(node);
-          add(el, text, [...range.getClientRects()].map((r) => clip({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }, el)).filter(Boolean), parseColor(cs.color));
-        }
-        // An input's value or placeholder: its content box, as wide as the text (the clear button sits to its right).
-        for (const input of root.querySelectorAll('input')) {
-          const cs = getComputedStyle(input);
-          if (cs.visibility !== 'visible' || input.getClientRects().length === 0) continue;
-          const text = input.value || input.placeholder;
-          if (!text) continue;
-          const ctx = document.createElement('canvas').getContext('2d');
-          ctx.font = cs.font;
-          const r = input.getBoundingClientRect();
-          const left = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft);
-          const right = Math.min(left + ctx.measureText(text).width, r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight));
-          const box = clip({ left, top: r.top + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop), right, bottom: r.bottom - parseFloat(cs.borderBottomWidth) - parseFloat(cs.paddingBottom) }, input);
-          add(input, `${input.value ? 'value' : 'placeholder'}: ${text}`, box ? [box] : [], parseColor(input.value ? cs.color : getComputedStyle(input, '::placeholder').color));
-        }
-        return [...items.values()];
-      },
-      async analyse(png, items) {
-        const { width, data, scale } = await decode(png);
-        return items.map((item) => {
-          const alpha = item.color.a * item.opacity;
-          const text = [item.color.r, item.color.g, item.color.b];
-          let worst = null;
-          let pixels = 0;
-          for (const r of item.rects) {
-            for (let y = Math.ceil(r.top * scale); y < Math.floor(r.bottom * scale); y += 1) {
-              for (let x = Math.ceil(r.left * scale); x < Math.floor(r.right * scale); x += 1) {
-                const i = (y * width + x) * 4;
-                const bg = [data[i], data[i + 1], data[i + 2]];
-                const fg = text.map((channel, k) => alpha * channel + (1 - alpha) * bg[k]);
-                const lf = lum(...fg);
-                const lb = lum(...bg);
-                const ratio = (Math.max(lf, lb) + 0.05) / (Math.min(lf, lb) + 0.05);
-                pixels += 1;
-                if (!worst || ratio < worst.ratio) worst = { ratio, bg };
-              }
-            }
-          }
-          return { key: item.key, label: item.label, text: item.text, color: item.color, opacity: item.opacity, gate: item.gate, screenReaderOnly: item.screenReaderOnly, outside: item.outside, min: item.min, control: item.control, pixels, ratio: worst ? +worst.ratio.toFixed(2) : null, worstBg: worst?.bg ?? null };
-        });
-      },
-      async behind(png, box) {
-        const { width, data, scale } = await decode(png);
-        const values = [];
-        for (let y = Math.ceil(box.top * scale); y < Math.floor(box.bottom * scale); y += 2) {
-          for (let x = Math.ceil(box.left * scale); x < Math.floor(box.right * scale); x += 2) { const i = (y * width + x) * 4; values.push(lum(data[i], data[i + 1], data[i + 2])); }
-        }
-        values.sort((p, q) => p - q);
-        if (!values.length) return { pixels: 0, medianL: null };
-        return { pixels: values.length, p10L: +values[Math.floor(values.length * 0.1)].toFixed(3), medianL: +values[Math.floor(values.length / 2)].toFixed(3), maxL: +values.at(-1).toFixed(3) };
-      },
-    };
-  });
+  await installContrast();
   // One surface in its current state: the map behind it, then every text at each scroll position of each of its scroll containers, then a
   // capture for the critic.
   const measureSurface = async (name, { root, scrollers = [], parked = null, nonText = '.bio-card-close' }) => {
@@ -758,7 +762,7 @@ if (CHECKS.has('contrast')) {
       await page.waitForFunction(() => /^Name search failed/.test(document.getElementById('species-status')?.textContent || ''), { timeout: 30000 });
       const panelForced = await page.evaluate(() => ({ status: document.getElementById('species-status').textContent, datasets: document.getElementById('species-datasets-status').textContent, retry: Boolean(document.querySelector('#species-datasets .species-datasets-retry')), note: document.getElementById('species-chosen-note').textContent }));
       const panelTiles = await waitForMapTiles();
-      const panel = await measureSurface(`panel-${size}`, { root: '#species-panel .species-panel-inner', scrollers: ['#species-body'], parked: '#species-panel .panel-header' });
+      const panel = await measureSurface(`panel-${size}`, { root: '#species-panel .species-panel-inner', scrollers: ['#species-body'], nonText: '.panel-collapse-btn' });
       surfaces.push({ ...panel, ok: panel.ok && panelForced.retry && panelForced.note === "shown as GBIF's Danaus plexippus" && Boolean(panel.classes['span#species-chosen-note.species-chosen-note']), viewport: size, forced: { ...panelForced, requests: await forcedCount() }, tiles: panelTiles.settled });
       // A status card: the what-lives-here search fails. The panel is collapsed, so the map is what shows behind the card.
       await setFailures(['^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*facet=speciesKey)']);
@@ -1051,7 +1055,30 @@ if (CHECKS.has('card-foot-rest')) {
 // pills' computed backgrounds and backdrop filters are equal, and the SPECIES pill's fill (the median pixel of the pill 10 px in from its edges,
 // with every header's contents hidden) is within 15 levels per channel of the mean of the other two pills' fills. Positive control in the same
 // check: the open SPECIES panel's computed background is the 0.86 floor, not the pills' glass.
+// Brief B (pill contrast): in the same states, every pill's label text (DATA LAYERS, SCENES, SPECIES) holds 4.5:1 and its + button 3:1 (a
+// non-text control) over the ground it is drawn on, measured with qa contrast's method (the text made transparent, the page captured, the
+// text colour composited over each pixel under its line boxes, the lowest ratio kept). Positive control in the same measurement: each label
+// at 0.3 white (the pills' old --text-dim) over the same pixels comes out under 4.5:1.
 if (CHECKS.has('collapsed-pills')) {
+  await installContrast();
+  const pillContrast = async (roots) => {
+    await page.evaluate(() => document.activeElement?.blur?.());
+    const items = [];
+    for (const root of roots) items.push(...(await page.evaluate((root) => window.__qaContrast.collect(root, null, '.panel-collapse-btn'), root)).map((item) => ({ ...item, root })));
+    const controls = items.filter((item) => item.label.includes('panel-title')).map((item) => ({ ...item, key: `control 0.3 white ${item.key}`, color: { ...item.color, a: 0.3 }, opacity: 1, control: 'dim' }));
+    await addStyle('qa-pill-hide-text', roots.map(hideText).join(' '));
+    await frames();
+    await sleep(300);
+    const png = await page.screenshot({ encoding: 'base64' });
+    await removeStyle('qa-pill-hide-text');
+    await sleep(300);
+    const measured = await page.evaluate((png, items) => window.__qaContrast.analyse(png, items), png, [...items, ...controls]);
+    const labels = measured.filter((item) => !item.control).map(({ key, text, ratio, min, pixels, worstBg }) => ({ key, text, ratio, min, pixels, worstBg }));
+    const dim = measured.filter((item) => item.control === 'dim').map(({ key, ratio }) => ({ key, ratio }));
+    const titles = labels.filter((item) => item.key.includes('panel-title'));
+    const ok = titles.length === roots.length && labels.every((item) => item.pixels > 0 && item.ratio !== null && item.ratio >= item.min) && dim.length === titles.length && dim.every((item) => item.ratio !== null && item.ratio < 4.5);
+    return { ok, labels, dim };
+  };
   const PLACES = [['light', -97.74, 30.27, 3000], ['ocean', -140, -10, 800000]];
   const PILLS = [['data', 'data-panel', '.data-panel-inner'], ['scene', 'scene-panel', '.scene-panel-inner'], ['species', 'species-panel', '.species-panel-inner']];
   const MAX_LEVELS = 15;
@@ -1114,8 +1141,9 @@ if (CHECKS.has('collapsed-pills')) {
         const [data, scene, species] = pills;
         const mean = [0, 1, 2].map((k) => (data.rgb[k] + scene.rgb[k]) / 2);
         const maxLevels = Math.max(...species.rgb.map((value, k) => Math.abs(value - mean[k])));
-        const ok = pills.every((p) => p.collapsed && p.box.width > 40 && p.box.height > 20 && p.background === data.background && p.backdrop === data.backdrop) && maxLevels <= MAX_LEVELS;
-        samples.push({ viewport: `${width}x${height}`, place, tiles: tiles.settled, ok, maxLevels: +maxLevels.toFixed(1), pills });
+        const contrast = await pillContrast(PILLS.map(([, id, inner]) => `#${id} ${inner}`));
+        const ok = pills.every((p) => p.collapsed && p.box.width > 40 && p.box.height > 20 && p.background === data.background && p.backdrop === data.backdrop) && maxLevels <= MAX_LEVELS && contrast.ok;
+        samples.push({ viewport: `${width}x${height}`, place, tiles: tiles.settled, ok, maxLevels: +maxLevels.toFixed(1), pills, contrast });
       }
     }
     await setCollapsed('species-panel', false);
@@ -1141,7 +1169,7 @@ if (CHECKS.has('collapsed-pills')) {
   }
   const controlOk = Boolean(control?.open) && control.background === 'rgba(12, 12, 20, 0.86)' && samples.length > 0 && control.background !== samples[0].pills[0].background;
   report('collapsed-pills', error === null && samples.length === 4 && samples.every((s) => s.ok) && controlOk && restored?.stack === initial.stack && restored.scope === initial.scope, {
-    samples: samples.map((s) => ({ viewport: s.viewport, place: s.place, tiles: s.tiles, ok: s.ok, maxLevels: s.maxLevels, pills: s.pills.map((p) => ({ name: p.name, rgb: p.rgb, background: p.background, box: p.box })) })),
+    samples: samples.map((s) => ({ viewport: s.viewport, place: s.place, tiles: s.tiles, ok: s.ok, maxLevels: s.maxLevels, pills: s.pills.map((p) => ({ name: p.name, rgb: p.rgb, background: p.background, box: p.box })), contrast: s.contrast })),
     initial, control, controlOk, restored, ...(error ? { error } : {}),
   });
 }
