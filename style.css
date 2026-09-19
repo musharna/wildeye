@@ -9804,6 +9804,11 @@ body.recording-mode #bio-card { display: none !important; }
   #species-panel .species-chip-group { column-gap: 6px; }
   #species-panel .species-chip-row { gap: 4px; }
   #species-panel .scene-btn.species-chip { min-width: 0; padding: 5px 7px; }
+  /* Brief B fix round 1 (critic S2): the phone stack ends at half height (the lower half is the context rail's), and the collapsed DATA LAYERS
+     and SCENES pills with their gaps took 116 of its 255 px at 375x667, leaving the body an 85.5 px view: too small for the search, a 2-line
+     status, the chosen species with its switch and WHAT LIVES HERE (about 132 px). An open SPECIES panel is the only panel the stack shows, an
+     accordion: collapsing it brings the pills back. The panel is not moved or grown past the half-height line, so the species map stays in view. */
+  #left-panel-stack:has(> #species-panel:not(.collapsed)) > [data-panel-id]:not(#species-panel) { display: none !important; }
 }
 #species-panel.collapsed { width: var(--left-collapsed-width); }
 #species-panel.collapsed .species-body { display: none !important; }

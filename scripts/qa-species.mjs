@@ -1190,13 +1190,13 @@ if (CHECKS.has('collapsed-pills')) {
   });
 }
 
-// Brief B (fold): a status line must not push WHAT LIVES HERE out of the SPECIES body's view. At 375x667 and 400x800, with the panel open at
-// the body's scroll top, the action is whole inside the body's view and is what the page hits at its corners, in two states per size:
-// (1) a species chosen through a real FUZZY match (iNaturalist's suggestion is answered in the page as "Danaus plexippa"), so the status says
-// "No exact GBIF match …; shown as GBIF's …" and the chosen block carries its note; (2) with that species still chosen, a name search that
-// fails on both sources (503 answered in the page's fetch): "Name search failed: iNaturalist HTTP 503, GBIF HTTP 503". Positive controls in
-// the same check: each state's status text is the expected one and on screen (the FUZZY status, the longest the panel writes for a real
-// choice, at least two lines tall), and the note is on screen.
+// Brief B (fold), fix round 1 (critic S2, review M-3): with a status line showing, nothing the person just used or needs next may leave the
+// SPECIES body's view. At 375x667 and 400x800, panel open, body at its scroll top, the search box, the status line, the chosen species row
+// with its MAP switch, and WHAT LIVES HERE are each whole inside the body's view and are what the page hits at their corners (a half-cut row
+// fails), in three states per size: (1) a 1-line status, "No names match …" (both name sources answered empty in the page's fetch); (2) a
+// 2-line status: a species chosen through a real FUZZY match (iNaturalist's suggestion answered in the page as "Danaus plexippa"), "No exact
+// GBIF match …; shown as GBIF's …", with the chosen row's note; (3) a failed name search with that species still chosen. Positive controls in
+// the same check: each state's status text is the expected one, with the stated line count, and the note is on screen.
 if (CHECKS.has('panel-fold')) {
   const SIZES = [[375, 667], [400, 800]];
   const FUZZY_SUGGESTION = { total_results: 1, page: 1, per_page: 1, results: [{ id: 48662, name: 'Danaus plexippa', rank: 'species', preferred_common_name: 'Monarch', matched_term: 'Monarch' }] };
@@ -1224,16 +1224,23 @@ if (CHECKS.has('panel-fold')) {
     body.scrollTop = 0;
     const b = body.getBoundingClientRect();
     const view = { top: b.top + body.clientTop, bottom: Math.min(b.bottom, b.top + body.clientTop + body.clientHeight) };
-    const action = document.getElementById('species-what-lives-here');
-    const r = action.getBoundingClientRect();
-    const inset = Math.min((r.bottom - r.top) / 2, 10);
-    const corners = [[r.left + inset, r.top + 2], [r.right - inset, r.top + 2], [r.left + inset, r.bottom - 2], [r.right - inset, r.bottom - 2]].every(([x, y]) => { const hit = document.elementFromPoint(x, y); return Boolean(hit && (hit === action || action.contains(hit))); });
+    const round = (v) => +v.toFixed(1);
+    // Whole inside the view, and hit at points inset from its corners (rounded pills: inset by up to half their height).
+    const seen = (id) => {
+      const el = document.getElementById(id);
+      const r = el.getBoundingClientRect();
+      const inset = Math.min((r.bottom - r.top) / 2, 10);
+      const corners = r.width > 0 && r.height > 0 && [[r.left + inset, r.top + 2], [r.right - inset, r.top + 2], [r.left + inset, r.bottom - 2], [r.right - inset, r.bottom - 2]].every(([x, y]) => { const hit = document.elementFromPoint(x, y); return Boolean(hit && (hit === el || el.contains(hit))); });
+      return { top: round(r.top), bottom: round(r.bottom), inside: r.height > 0 && r.top >= view.top - 0.5 && r.bottom <= view.bottom + 0.5, corners };
+    };
+    const parts = Object.fromEntries(['species-search', 'species-status', 'species-chosen', 'species-toggle', 'species-what-lives-here'].map((id) => [id, seen(id)]));
     const status = document.getElementById('species-status');
     const note = document.getElementById('species-chosen-note');
     const lineHeight = parseFloat(getComputedStyle(status).lineHeight) || parseFloat(getComputedStyle(status).fontSize) * 1.2;
-    const round = (v) => +v.toFixed(1);
+    const stack = document.getElementById('left-panel-stack');
     return {
-      view: { top: round(view.top), bottom: round(view.bottom) }, action: { top: round(r.top), bottom: round(r.bottom) }, inside: r.top >= view.top - 0.5 && r.bottom <= view.bottom + 0.5, corners,
+      view: { top: round(view.top), bottom: round(view.bottom) }, parts, whole: Object.values(parts).every((part) => part.inside && part.corners),
+      stackShown: [...stack.children].filter((el) => el.getClientRects().length > 0).map((el) => el.id),
       status: status.textContent, statusLines: round(status.getBoundingClientRect().height / lineHeight), note: note.hidden ? null : note.textContent,
       order: [...body.children].filter((el) => el.getClientRects().length > 0).map((el) => el.id || el.className).slice(0, 6),
     };
@@ -1247,6 +1254,7 @@ if (CHECKS.has('panel-fold')) {
       await page.setViewport({ width, height });
       await sleep(2500);
       await openSpeciesPanel();
+      // (1) the FUZZY choice first, so a species is chosen; its 2-line status is measured after the 1-line one below.
       await setRules([{ pattern: INAT_AUTOCOMPLETE, body: FUZZY_SUGGESTION }]);
       await typeQuery('monarch');
       await page.waitForFunction(() => document.querySelector('#species-suggestions button')?.textContent.includes('Danaus plexippa'), { timeout: 20000 });
@@ -1254,15 +1262,22 @@ if (CHECKS.has('panel-fold')) {
       await page.waitForFunction(() => document.getElementById('species-chosen-note')?.hidden === false && /^No exact GBIF match for Danaus plexippa; shown as GBIF's Danaus plexippus\./.test(document.getElementById('species-status').textContent), { timeout: 45000 });
       await sleep(1000);
       const fuzzy = await measure();
-      await shot(`panel-fold-fuzzy-${width}x${height}`);
-      states.push({ viewport: `${width}x${height}`, state: 'fuzzy', ...fuzzy, ok: fuzzy.inside && fuzzy.corners && fuzzy.statusLines >= 2 && fuzzy.note === "shown as GBIF's Danaus plexippus" });
+      await shot(`panel-fold-2line-${width}x${height}`);
+      states.push({ viewport: `${width}x${height}`, state: '2-line status (FUZZY)', ...fuzzy, ok: fuzzy.whole && fuzzy.statusLines >= 1.9 && fuzzy.statusLines <= 2.2 && fuzzy.note === "shown as GBIF's Danaus plexippus" });
+      await setRules([{ pattern: INAT_AUTOCOMPLETE, body: { total_results: 0, page: 1, per_page: 0, results: [] } }, { pattern: '^https://api\\.gbif\\.org/v1/species/suggest', body: [] }]);
+      await typeQuery('zzqx');
+      await page.waitForFunction(() => document.getElementById('species-status').textContent === 'No names match "zzqx".', { timeout: 30000 });
+      await sleep(1000);
+      const oneLine = await measure();
+      await shot(`panel-fold-1line-${width}x${height}`);
+      states.push({ viewport: `${width}x${height}`, state: '1-line status', ...oneLine, ok: oneLine.whole && oneLine.statusLines >= 0.9 && oneLine.statusLines <= 1.2 && oneLine.note === "shown as GBIF's Danaus plexippus" });
       await setRules([INAT_AUTOCOMPLETE, '^https://api\\.gbif\\.org/v1/species/suggest']);
       await typeQuery('monarch');
       await page.waitForFunction(() => /^Name search failed/.test(document.getElementById('species-status').textContent), { timeout: 30000 });
       await sleep(1000);
       const failedSearch = await measure();
       await shot(`panel-fold-error-${width}x${height}`);
-      states.push({ viewport: `${width}x${height}`, state: 'search failed', ...failedSearch, ok: failedSearch.inside && failedSearch.corners && failedSearch.statusLines >= 1 && failedSearch.status === 'Name search failed: iNaturalist HTTP 503, GBIF HTTP 503' && failedSearch.note === "shown as GBIF's Danaus plexippus" });
+      states.push({ viewport: `${width}x${height}`, state: 'search failed', ...failedSearch, ok: failedSearch.whole && failedSearch.statusLines >= 0.9 && failedSearch.status === 'Name search failed: iNaturalist HTTP 503, GBIF HTTP 503' && failedSearch.note === "shown as GBIF's Danaus plexippus" });
     }
   } catch (caught) {
     error = String(caught?.stack || caught).slice(0, 500);
@@ -1282,7 +1297,7 @@ if (CHECKS.has('panel-fold')) {
     await page.setViewport({ width: 1400, height: 900 });
     await sleep(2000);
   }
-  report('panel-fold', error === null && states.length === SIZES.length * 2 && states.every((s) => s.ok) && restored?.fetchRestored === true, { states, restored, ...(error ? { error } : {}) });
+  report('panel-fold', error === null && states.length === SIZES.length * 3 && states.every((s) => s.ok) && restored?.fetchRestored === true, { states, restored, ...(error ? { error } : {}) });
 }
 
 // M1 (final review): a strict GBIF match that answers FUZZY is mapped and says so. The page's fetch answers iNaturalist's autocomplete with one

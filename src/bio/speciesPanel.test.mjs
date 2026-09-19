@@ -846,14 +846,16 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   for (const id of PANEL_IDS) assert.match(stack, new RegExp(`id="${id}"`), id);
   assert.match(stack, /data-collapse-target="species-panel"/);
   assert.doesNotMatch(stack.slice(stack.indexOf('id="species-panel"')), /data-requires-backend/, 'species search works on the static host');
-  // Brief B (fold): WHAT LIVES HERE is the body's first control, above the search box. The suggestions, the status line and the chosen
-  // species' note all grow under the search box, so none of them can push the action out of the body's view (at 375x667 a two-line status
-  // and the note put it 18 px below the view). B1/S1: the two chip rows follow the chosen-species block, each label beside its row in a group,
+  // B1/S1: the action sits directly after the chosen-species block and the two chip rows follow it, each label beside its row in a group,
   // so the controls stay whole above the panel's cut on a 400x800 phone; the legend, the datasets and the credit line come after them.
+  // Brief B fix round 1 (critic S2, N5): the order is back to search, status, chosen species, action. Moving the action first only moved the
+  // fold onto the chosen species; the fix is the view's size (phone accordion, style.css), which fits all four with a 2-line status.
   const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
-  assert.match(panelHtml, /<div id="species-body" class="species-body">\s*(?:<!--[^>]*-->\s*)?<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<label class="species-label" for="species-search">/);
   // The legend's content is rendered from SPECIES_MAP_LEGEND (speciesPanel.js), so the markup holds an empty container.
-  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<span id="species-chosen-note" class="species-chosen-note" hidden><\/span>\s*<\/div>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
+  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<span id="species-chosen-note" class="species-chosen-note" hidden><\/span>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
+  // Brief B fix round 1: on a phone-width window an open SPECIES panel is the only panel the left stack shows (an accordion), so its body has
+  // the view the collapsed DATA LAYERS and SCENES pills took (116 px at 375x667).
+  assert.match(css, /@media \(max-width: 720px\) \{[^@]*#left-panel-stack:has\(> #species-panel:not\(\.collapsed\)\) > \[data-panel-id\]:not\(#species-panel\) \{ display: none !important; \}/);
   assert.match(panelHtml, /<div class="species-chip-group">\s*<span id="species-radius-label"[^>]*>[^<]*<\/span>\s*<div id="species-radius"[^>]*>[\s\S]*?<\/div>\s*<\/div>\s*<div id="species-legend" class="species-legend" hidden><\/div>/);
   // The map toggle is a switch with a fixed accessible name; aria-checked carries its state.
   const toggleTag = panelHtml.match(/<button [^>]*id="species-toggle"[^>]*>/)?.[0] ?? '';
@@ -863,7 +865,7 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   // I-2: the Top datasets block can take focus (Retry moves focus to it) and holds a polite live region from page load, then its content.
   // S5: its heading is markup, so a failed search keeps it above the message and Retry.
   assert.match(panelHtml, /<div id="species-legend" class="species-legend" hidden><\/div>\s*<div id="species-datasets" class="species-datasets" tabindex="-1" hidden>\s*<span id="species-datasets-heading" class="dataset-list-heading">Top datasets for this species<\/span>\s*<p id="species-datasets-status" class="species-datasets-status" role="status" aria-live="polite"><\/p>\s*<div id="species-datasets-content" class="species-datasets-content"><\/div>\s*<\/div>/);
-  const order = ['id="species-what-lives-here"', 'id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-years-label"', 'id="species-years"', 'id="species-radius-label"', 'id="species-radius"', 'id="species-legend"', 'id="species-datasets"', 'class="species-credit"'];
+  const order = ['id="species-search"', 'id="species-suggestions"', 'id="species-status"', 'id="species-chosen"', 'id="species-what-lives-here"', 'id="species-years-label"', 'id="species-years"', 'id="species-radius-label"', 'id="species-radius"', 'id="species-legend"', 'id="species-datasets"', 'class="species-credit"'];
   const positions = order.map((marker) => panelHtml.indexOf(marker));
   assert.ok(positions.every((at) => at >= 0), `every marker is present: ${JSON.stringify(Object.fromEntries(order.map((m, i) => [m, positions[i]])))}`);
   assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'markup order');
