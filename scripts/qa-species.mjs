@@ -836,10 +836,13 @@ if (CHECKS.has('contrast')) {
 // control in the same check: at rest at least one species row and the first line of at least one dataset link are whole, so the credit is not
 // bought by hiding the lists. qa contrast scrolls to find text and cannot see this.
 // R13-M1: also just above 850 px (1400x851), on tall phones (393x852, 412x915, 430x932) and in phone landscape (667x375), where a window-height
-// cap on the foot lost a species row. The species list and the dataset rows share the card: while the list is cut, the rows are no taller than
-// the list plus the rows' own floor (their min-height), and while the rows are cut, the list is no taller than the rows. At least one species
-// row is whole wherever the card can hold one: its fixed parts with both lists at their floors, plus one row, fit under the card's max-height.
-// Where they do not (667x375: the 52vh card is 195 px), the result says so with those numbers instead of passing on nothing.
+// cap on the foot lost a species row. The species list and the dataset rows share the card from their floors up in equal steps: the list's
+// floor is one whole species row (BODY_FLOOR_PX), the rows' floor only their focus-ring inset (ROWS_FLOOR_PX), so on a short card the dataset
+// rows give way to their heading and "more ↓" cue before the species list does (brief B fix round 1, critic S1). While the list is cut the
+// rows are no taller than the list minus the difference of the floors, and while the rows are cut the list is no taller than the rows plus it.
+// At least one whole species row at every size: no size and no measured quantity waives it (review I-1). At least one whole dataset line at
+// every size but LANDSCAPE, pinned: at 667x375 the 195 px card holds the fixed parts, one species row and the dataset heading with its cue,
+// and no dataset line (the arithmetic is in B-report.md, fix round 1).
 // R13-M2: at 1400x900 and 375x667, in both states, the first and the last dataset link take keyboard focus (Shift+Tab, then Tab back, so
 // :focus-visible applies and the browser scrolls the rows as it would) and the focus ring (the link's box grown by its outline width and
 // offset; Chrome paints the UA's auto 1px ring 2 px out from the box) is whole inside every clipping ancestor, the card and the window.
@@ -931,16 +934,21 @@ if (CHECKS.has('card-foot-rest')) {
     };
   });
   // R13-M1: the share between the list and the rows, and whether the card can hold a whole species row at all (see above).
-  const share = (s) => {
+  // One species row (12 px and 11 px lines at line-height 1.45, 5 px padding and a 1 px border each side, a 3 px margin), and the rows' 3 px
+  // ring inset each side. Pinned here, not read from the page, so a build that changes the floors fails instead of moving the target.
+  const BODY_FLOOR_PX = 12 * 1.45 + 11 * 1.45 + 15;
+  const ROWS_FLOOR_PX = 6;
+  const LANDSCAPE = '667x375';
+  const share = (s, viewport) => {
     if (!s.body) return { ok: false, why: 'no body' };
     const bodyCut = s.body.scrollHeight - s.body.clientHeight > 1;
     const rows = s.datasetList;
     const rowsCut = Boolean(rows) && rows.scrollHeight - rows.clientHeight > 1;
-    const listNotStarved = !bodyCut || !rows || rows.clientHeight <= s.body.clientHeight + rows.minHeight + 2;
-    const rowsNotStarved = !rowsCut || s.body.clientHeight <= rows.clientHeight + 2;
-    const fixedAtFloors = s.card.height - s.body.clientHeight - (rows ? rows.clientHeight - rows.minHeight : 0);
-    const canHoldRow = s.speciesRowHeight !== null && fixedAtFloors + s.speciesRowHeight <= s.cardMaxHeight + 0.5;
-    return { ok: listNotStarved && rowsNotStarved && (!canHoldRow || s.speciesRowsWhole >= 1), bodyCut, rowsCut, listNotStarved, rowsNotStarved, fixedAtFloors: +fixedAtFloors.toFixed(1), speciesRowHeight: s.speciesRowHeight && +s.speciesRowHeight.toFixed(1), cardMaxHeight: s.cardMaxHeight, canHoldRow };
+    const listNotStarved = !bodyCut || !rows || rows.clientHeight <= s.body.clientHeight - (BODY_FLOOR_PX - ROWS_FLOOR_PX) + 2;
+    const rowsNotStarved = !rowsCut || s.body.clientHeight <= rows.clientHeight + (BODY_FLOOR_PX - ROWS_FLOOR_PX) + 2;
+    const speciesRowOk = s.speciesRowsWhole >= 1;
+    const datasetLineOk = viewport === LANDSCAPE ? rowsCut : s.datasetFirstLinesWhole >= 1;
+    return { ok: listNotStarved && rowsNotStarved && speciesRowOk && datasetLineOk, bodyCut, rowsCut, listNotStarved, rowsNotStarved, speciesRowOk, datasetLineOk, speciesRowHeight: s.speciesRowHeight && +s.speciesRowHeight.toFixed(1), cardMaxHeight: s.cardMaxHeight };
   };
   const focusRings = async (label) => {
     const count = await page.evaluate(() => document.querySelectorAll('#bio-card .bio-card-foot .dataset-row-link').length);
@@ -998,7 +1006,7 @@ if (CHECKS.has('card-foot-rest')) {
     return Boolean(s.cue) && s.cue.visibility === 'visible' && s.cue.display !== 'none' && s.cue.text === 'more ↓' && s.cue.ariaHidden === 'true' && s.cue.overlaps.length === 0 && s.cue.box.height >= 10
       && s.cueEnd?.visibility === 'hidden' && s.cueEnd.backAtTop === 'visible';
   };
-  const restOk = (s, failed) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s).ok && s.datasetFirstLinesWhole >= 1 && cueOk(s)
+  const restOk = (s, failed, viewport) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s, viewport).ok && cueOk(s)
     && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0)
     // Fix round 1, item 4: the status line says the failed dataset lookups (and only when some failed).
     && (failed ? new RegExp(`; ${s.datasetRows} dataset lookups? failed \\(HTTP`).test(s.announce ?? '') : !/dataset lookups? failed/.test(s.announce ?? ''));
@@ -1042,7 +1050,7 @@ if (CHECKS.has('card-foot-rest')) {
       rest.cueEnd = await cueAtEnd();
       await shot(`card-foot-rest-${failed ? 'failed' : 'normal'}-${width}x${height}`);
       const focus = RING_SIZES.has(`${width}x${height}`) ? await focusRings(`${failed ? 'failed' : 'normal'}-${width}x${height}`) : null;
-      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed) && (focus === null || focus.ok), share: share(rest), focus, ...rest });
+      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed, `${width}x${height}`) && (focus === null || focus.ok), share: share(rest, `${width}x${height}`), focus, ...rest });
       await closeCard();
     }
   } catch (caught) {

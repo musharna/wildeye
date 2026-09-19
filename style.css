@@ -9552,6 +9552,13 @@ body.scene-playback-mode #key-setup {
   font: 12px/1.45 var(--font-sans);
 }
 .bio-card[hidden] { display: none; }
+/* Brief B fix round 1 (critic S1): a short window (phone landscape: 195 px of card between the header and the bottom bar) has width to spare,
+   and at 360 px the filter line and the gbif.org credit wrap to two lines each. Wider there, each is one line, which is the height one whole
+   species row needs above the fixed parts (measured at 667x375: 1 whole row and the credit whole at 560 px, none at 360). Only the width
+   changes with the window; how the height is shared still follows the content (.bio-card-main). */
+@media (max-height: 480px) {
+  .bio-card { width: min(560px, calc(100vw - 48px)); }
+}
 /* R13-M8: the card's one-line status region, heard by screen readers and not seen. */
 .bio-card-announce { position: fixed; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .bio-card-head { display: flex; align-items: center; gap: 8px; }
@@ -9566,7 +9573,7 @@ body.scene-playback-mode #key-setup {
 .bio-card-filter:empty { display: none; }
 /* R13-M1: the species list (the body) and the Top datasets rows share the card's height. .bio-card-main is a flex item of the card, so it takes
    what the card has left under its 52vh cap after the heading and the filter line, and that height is definite for its grid. The grid gives
-   its two scrolling tracks their floors first (the body 0, the rows one line) and then the rest in equal steps, each track stopping at its
+   its two scrolling tracks their floors first and then the rest in equal steps, each track stopping at its
    content (CSS Grid "maximize tracks"): whichever list is shorter shows whole and the other gets the rest, and when both are long they get
    the same share. The foot's heading, note and gbif.org credit link are fixed tracks, so the credit is visible at rest at every size. No window
    query: the share follows the foot's real content (failure notes, wrapped lines), which a window size cannot see. The tracks are `auto`, so
@@ -9580,7 +9587,13 @@ body.scene-playback-mode #key-setup {
   grid-template-rows: [body] auto [foot-start datasets-start datasets-heading] auto [datasets-rows] auto [datasets-end foot-note] auto [foot-link] auto [foot-end];
   align-content: start;
 }
+/* Brief B fix round 1 (critic S1): the floors say what a short card keeps. The species list, the card's content, keeps one whole row (12 px and
+   11 px lines at line-height 1.45, 5 px padding and a 1 px border each side, a 3 px margin); the Top datasets rows keep only their focus-ring
+   inset, so they give way to their heading and "more ↓" cue first. With the rows' old one-line floor the phone-landscape card (195 px) showed
+   no species at all while it kept a dataset line. The floor is the list's: a status or a marker's details keep their own height (a taller
+   status card covered the globe's centre in landscape, where a what-lives-here click goes). */
 .bio-card-body { grid-row: body; overflow-y: auto; min-height: 0; }
+.bio-card-body:has(> .bio-card-row) { min-height: calc(12px * 1.45 + 11px * 1.45 + 15px); }
 /* A list longer than the card fades out at the bottom while more is below, like the species suggestions; with nothing to scroll the
    timeline is inactive and the fade stays 0 px. */
 @property --bio-card-body-fade { syntax: "<length>"; inherits: false; initial-value: 0px; }
@@ -9750,11 +9763,11 @@ body.recording-mode #bio-card { display: none !important; }
 .dataset-row-note { flex: 1 0 100%; color: #ffb86b; font-size: 10px; }
 .bio-card-foot .dataset-list { grid-row: datasets-start / datasets-end; display: grid; grid-template-rows: subgrid; row-gap: 0; margin-bottom: 6px; }
 .bio-card-foot .dataset-list-heading { grid-row: datasets-heading; }
-/* The rows' floor is one line of a dataset link (11 px at line-height 1.35) inside the ring inset, so one dataset line stays whole at every
-   size. R13-M2: 3 px of padding inside the scroller, taken back by the margin, as on .species-body, keep a focused link's ring (the UA's auto
+/* The rows' floor is their ring inset only (see .bio-card-body). R13-M2: 3 px of padding inside the scroller, taken back by the margin, as on
+   .species-body, keep a focused link's ring (the UA's auto
    ring, 2 px out from the link) inside the scroll clip on every side; scroll-padding keeps that inset when focus scrolls a link into view.
    The padding also replaces the 3 px the rows sat under their heading. The rows carry no mask, so nothing clips or dims the ring. */
-.bio-card-foot .dataset-list-rows { grid-row: datasets-rows; margin: 0 -3px; padding: 3px; scroll-padding: 3px; min-height: calc(11px * 1.35 + 6px); overflow-y: auto; }
+.bio-card-foot .dataset-list-rows { grid-row: datasets-rows; margin: 0 -3px; padding: 3px; scroll-padding: 3px; min-height: 0; overflow-y: auto; }
 /* Brief B S-1: the rows' "more below" cue is the SPECIES panel's: the same "more ↓" label and style (.species-more), shown by moreCue.js while
    more rows are below their view and hidden at the end, only its visibility changing. It sits on the heading's line at the right, so it
    covers no row and takes no height from the rows or the species list (at 667x375 the card has 4 px to spare). It replaces the 20 px fade,

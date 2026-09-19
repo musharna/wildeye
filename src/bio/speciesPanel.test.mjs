@@ -804,7 +804,9 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   for (const declaration of ['flex: 0 1 auto;', 'min-height: 0;', 'display: grid;', 'align-content: start;', 'grid-template-rows: [body] auto [foot-start datasets-start datasets-heading] auto [datasets-rows] auto [datasets-end foot-note] auto [foot-link] auto [foot-end];']) {
     assert.ok(main.includes(declaration), `.bio-card-main has ${declaration}`);
   }
+  // Brief B fix round 1 (critic S1): the floors say what a short card keeps: one whole species row; the dataset rows only their ring inset.
   for (const declaration of ['grid-row: body;', 'overflow-y: auto;', 'min-height: 0;']) assert.ok(bodyOf('.bio-card-body').includes(declaration), `.bio-card-body has ${declaration}`);
+  assert.ok(bodyOf('.bio-card-body:has(> .bio-card-row)').includes('min-height: calc(12px * 1.45 + 11px * 1.45 + 15px);'), 'a species list keeps one whole row');
   const foot = bodyOf('.bio-card-foot');
   for (const declaration of ['grid-row: foot-start / foot-end;', 'display: grid;', 'grid-template-rows: subgrid;']) assert.ok(foot.includes(declaration), `.bio-card-foot has ${declaration}`);
   assert.doesNotMatch(foot, /overflow-y: auto|max-height/, 'the foot itself neither scrolls nor has a cap');
@@ -816,10 +818,12 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
     return css.slice(m.index, end);
   });
   assert.ok(heightQueries.length > 0, 'positive control: the stylesheet has height queries (for other surfaces)');
-  assert.deepEqual(heightQueries.filter((block) => block.includes('.bio-card')), [], 'no window-height query sizes the card');
+  // Brief B fix round 1: one height query may widen the card on a short window; none may set a height, a cap or a share for it.
+  const cardQueries = heightQueries.filter((block) => block.includes('.bio-card'));
+  assert.deepEqual(cardQueries.map((block) => block.replace(/\s+/g, ' ')), ['@media (max-height: 480px) { .bio-card { width: min(560px, calc(100vw - 48px)); } }'], 'only the short-window width');
   for (const declaration of ['grid-row: datasets-start / datasets-end;', 'grid-template-rows: subgrid;']) assert.ok(bodyOf('.bio-card-foot .dataset-list').includes(declaration), `.bio-card-foot .dataset-list has ${declaration}`);
   // R13-M2: the rows are inset by the focus ring's reach (padding taken back by the margin), so a focused link's ring is not cut by their scroll clip.
-  for (const declaration of ['grid-row: datasets-rows;', 'margin: 0 -3px;', 'padding: 3px;', 'scroll-padding: 3px;', 'min-height: calc(11px * 1.35 + 6px);', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
+  for (const declaration of ['grid-row: datasets-rows;', 'margin: 0 -3px;', 'padding: 3px;', 'scroll-padding: 3px;', 'min-height: 0;', 'overflow-y: auto;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-rows').includes(declaration), `the foot's dataset rows have ${declaration}`);
   for (const [selector, track] of [['.bio-card-foot-note', 'foot-note'], ['.bio-card-foot > a', 'foot-link'], ['.bio-card-foot .dataset-list-heading', 'datasets-heading']]) assert.ok(bodyOf(selector).includes(`grid-row: ${track};`), `${selector} sits on its own fixed track`);
   // Brief B S-1: the rows' "more below" cue is the panel's "more ↓" (same rule as .species-more), on the heading's line; the rows' fade is gone.
   assert.match(css, /\.species-more, \.dataset-list-more \{[^}]*visibility: hidden;[^}]*pointer-events: none;/);
