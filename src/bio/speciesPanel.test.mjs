@@ -207,6 +207,43 @@ test('a synonym is named by a lookup only when the match is not EXACT, and a fai
   }
 });
 
+// R13-M4: every entry point that sets the taxon starts a new choice. A suggestion choice still matching ("Megaptera nodosus") must not
+// overwrite a what-lives-here pick (chooseTaxon) made while it was out, even when its match answers after all, and its "Looking up" line goes.
+test('a what-lives-here pick supersedes a suggestion choice still matching, whose late answer maps nothing', async () => {
+  let answer = null;
+  const { panel, els, calls } = panelRig({ match: () => new Promise((resolve) => { answer = resolve; }) });
+  const pending = panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' });
+  await settle();
+  assert.equal(els['species-status'].textContent, 'Looking up Megaptera nodosus in GBIF…');
+  assert.equal(await panel.chooseTaxon({ taxonKey: 1340481, name: 'Nudibranch' }), true);
+  answer({ key: 5220086, matchType: 'FUZZY', canonicalName: 'Megaptera novaeangliae' });
+  assert.equal(await pending, false, 'the superseded choice reports that it mapped nothing');
+  assert.deepEqual(calls.params.at(-1).p, { taxonKey: 1340481, name: 'Nudibranch' }, 'the newer pick stays mapped');
+  assert.equal(calls.params.filter((c) => c.p.taxonKey === 5220086).length, 0, 'the late match maps nothing');
+  assert.equal(els['species-chosen-note'].hidden, true, "no \"shown as GBIF's\" note for a taxon that is not mapped");
+  assert.equal(els['species-status'].textContent, '', 'the superseded "Looking up" line goes');
+});
+
+// R13-M4: the accepted-name lookup carries the choice's signal, so a superseded choice ends while the lookup is still out (like the real
+// client's speciesName, the fake rejects only when its caller's signal aborts). Without the signal the old choice would wait on the lookup.
+test("a superseded choice ends at once while its synonym lookup is still out, because the lookup carries the choice's signal", async () => {
+  const { panel, calls } = panelRig({
+    match: async () => ({ key: 5220086, matchType: 'FUZZY', canonicalName: null }),
+    speciesName: (key, options) => new Promise((resolve, reject) => {
+      options?.signal?.addEventListener('abort', () => reject(new DOMException('This operation was aborted', 'AbortError')), { once: true });
+    }),
+  });
+  let result = 'pending';
+  void panel.choose({ gbifKey: null, scientificName: 'Megaptera nodosus', commonName: null, rank: 'species' }).then((value) => { result = value; });
+  await settle();
+  assert.deepEqual(calls.speciesName.map((c) => c.key), [5220086], 'the lookup is out');
+  await panel.chooseTaxon({ taxonKey: 1340481, name: 'Nudibranch' });
+  await settle();
+  assert.equal(calls.speciesName[0].signal?.aborted, true, 'the newer pick aborts the lookup');
+  assert.equal(result, false, 'and the superseded choice has ended without mapping');
+  assert.deepEqual(calls.params.at(-1).p, { taxonKey: 1340481, name: 'Nudibranch' });
+});
+
 // M2 (final review), R12-M2 (re-review): Escape in the search box does one thing at a time and marks it handled (a recorded keydown), so the
 // details card and WHAT LIVES HERE, which listen on the document after it, leave that key alone. With a list showing it hides the list and keeps
 // the text; with text and no list it clears the text; either way it ends the name search. With neither, Escape is theirs.

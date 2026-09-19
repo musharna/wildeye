@@ -299,10 +299,17 @@ export function createSpeciesPanel({
   }
 
   /**
-   * Put a GBIF taxon on the map. Used by suggestions and by "what lives here" rows. `shownAsName` is the GBIF name a match that was not EXACT
-   * found (M1); any other choice clears it.
+   * R13-M4: a new choice of taxon, from any entry point, aborts the one still pending (its match or name lookup), so an older choice that
+   * answers late cannot overwrite the newer one. Returns the new choice's signal.
    */
-  async function chooseTaxon({ taxonKey, name, shownAsName = null }) {
+  function startChoice() {
+    chooseAbort?.abort();
+    chooseAbort = new AbortController();
+    return chooseAbort.signal;
+  }
+
+  /** Put a GBIF taxon on the map. `shownAsName` is the GBIF name a match that was not EXACT found (M1); any other choice clears it. */
+  async function mapTaxon({ taxonKey, name, shownAsName = null }) {
     shownAs = shownAsName ? { taxonKey, canonicalName: shownAsName } : null;
     if (!dataManager.setLayerParams('species', { taxonKey, name }, { origin: 'user' })) {
       throw new Error(`species layer rejected taxon ${taxonKey}`);
@@ -312,17 +319,29 @@ export function createSpeciesPanel({
     return true;
   }
 
+  /** A GBIF taxon chosen by key ("what lives here" rows): a new choice, mapped at once. */
+  async function chooseTaxon({ taxonKey, name }) {
+    startChoice();
+    return mapTaxon({ taxonKey, name });
+  }
+
   async function choose(item) {
-    chooseAbort?.abort();
-    chooseAbort = new AbortController();
+    const signal = startChoice();
     endSearch(); // M3: a choice ends the name search
     clearSuggestions();
-    status.textContent = `Looking up ${item.scientificName} in GBIF…`;
+    const lookingUp = `Looking up ${item.scientificName} in GBIF…`;
+    status.textContent = lookingUp;
+    // A newer choice took over: this one maps nothing more, and its "Looking up" line goes unless something has replaced it.
+    const superseded = () => {
+      if (status.textContent === lookingUp) status.textContent = '';
+      return false;
+    };
     try {
       let taxonKey = item.gbifKey;
       let shownAsName = null;
       if (taxonKey === null || taxonKey === undefined) {
-        const match = await client.match(item.scientificName, { signal: chooseAbort.signal });
+        const match = await client.match(item.scientificName, { signal });
+        if (signal.aborted) return superseded();
         if (match.key === null) {
           status.textContent = `${item.scientificName} is not in GBIF.`;
           return false;
@@ -332,16 +351,18 @@ export function createSpeciesPanel({
         // R13-M3: a synonym the match did not name is named by looking its accepted key up, here, where the name is shown; an EXACT match
         // shows no name, so it sends no lookup and cannot fail on one.
         if (match.matchType !== 'EXACT') {
-          shownAsName = match.canonicalName ?? (await client.speciesName(taxonKey, { signal: chooseAbort.signal })).scientificName;
+          shownAsName = match.canonicalName ?? (await client.speciesName(taxonKey, { signal })).scientificName;
+          if (signal.aborted) return superseded();
         }
       }
-      await chooseTaxon({ taxonKey, name: item.commonName || item.scientificName, shownAsName });
+      await mapTaxon({ taxonKey, name: item.commonName || item.scientificName, shownAsName });
+      if (signal.aborted) return superseded();
       input.value = '';
       status.textContent = shownAsName ? `No exact GBIF match for ${item.scientificName}; shown as GBIF's ${shownAsName}.` : '';
       shownAsStatus = shownAsName ? status.textContent : null;
       return true;
     } catch (error) {
-      if (error?.name === 'AbortError') return false;
+      if (error?.name === 'AbortError' || signal.aborted) return superseded();
       console.error('[species] could not choose species', { item, error });
       status.textContent = `GBIF lookup failed (${error.message})`;
       return false;
