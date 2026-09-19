@@ -109,8 +109,9 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   announcer.setAttribute('aria-live', 'polite');
   announcer.setAttribute('aria-atomic', 'true');
   const announce = (text) => { announcer.textContent = text; };
-  // Static skeleton only; no data is interpolated here.
-  root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><div class="bio-card-filter"></div><div class="bio-card-body"></div><div class="bio-card-foot"></div>';
+  // Static skeleton only; no data is interpolated here. The body and the foot share .bio-card-main, the grid that divides the card's height
+  // between the species list and the Top datasets rows (style.css, R13-M1).
+  root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><div class="bio-card-filter"></div><div class="bio-card-main"><div class="bio-card-body"></div><div class="bio-card-foot"></div></div>';
   const title = root.querySelector('.bio-card-title');
   title.id = 'bio-card-title';
   const filter = root.querySelector('.bio-card-filter');

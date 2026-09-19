@@ -828,9 +828,15 @@ if (CHECKS.has('contrast')) {
 // list, at 1400x900 and 375x667. The failed states run first: finished dataset lookups are cached for the session, failures are not. Positive
 // control in the same check: at rest at least one species row and the first line of at least one dataset link are whole, so the credit is not
 // bought by hiding the lists, and where the dataset rows overflow their fade is on. qa contrast scrolls to find text and cannot see this.
+// R13-M1: also just above 850 px (1400x851), on tall phones (393x852, 412x915, 430x932) and in phone landscape (667x375), where a window-height
+// cap on the foot lost a species row. The species list and the dataset rows share the card: while the list is cut, the rows are no taller than
+// the list plus the rows' own floor (their min-height), and while the rows are cut, the list is no taller than the rows. At least one species
+// row is whole wherever the card can hold one: its fixed parts with both lists at their floors, plus one row, fit under the card's max-height.
+// Where they do not (667x375: the 52vh card is 195 px), the result says so with those numbers instead of passing on nothing.
 if (CHECKS.has('card-foot-rest')) {
   const TAVEUNI = [179.97, -16.8, 10000];
-  const STATES = [[1400, 900, true], [375, 667, true], [1400, 900, false], [375, 667, false]];
+  const SIZES = [[1400, 900], [375, 667], [1400, 851], [393, 852], [412, 915], [430, 932], [667, 375]];
+  const STATES = [...SIZES.map(([width, height]) => [width, height, true]), ...SIZES.map(([width, height]) => [width, height, false])];
   const setDatasetFailures = (on) => page.evaluate((on) => {
     if (on && !window.__qaRestFetch) {
       window.__qaRestFetch = window.fetch;
@@ -882,11 +888,26 @@ if (CHECKS.has('card-foot-rest')) {
       speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter((row) => wholeBox(row, row.getBoundingClientRect())).length,
       datasetRows: card.querySelectorAll('.bio-card-foot .dataset-row').length,
       datasetNotes: card.querySelectorAll('.bio-card-foot .dataset-row-note').length,
-      datasetFirstLinesWhole: [...card.querySelectorAll('.bio-card-foot .dataset-row-link')].filter((a) => wholeBox(a, a.getClientRects()[0])).length,
-      datasetList: rows && { overflowY: getComputedStyle(rows).overflowY, scrollHeight: rows.scrollHeight, clientHeight: rows.clientHeight, fade: getComputedStyle(rows).getPropertyValue('--bio-card-datasets-fade').trim() },
+      // The first text line of each dataset link (a link is a flex item, so its own box holds every line it wraps to).
+      datasetFirstLinesWhole: [...card.querySelectorAll('.bio-card-foot .dataset-row-link')].filter((a) => { const range = document.createRange(); range.selectNodeContents(a); return wholeBox(a, range.getClientRects()[0]); }).length,
+      datasetList: rows && { overflowY: getComputedStyle(rows).overflowY, scrollHeight: rows.scrollHeight, clientHeight: rows.clientHeight, minHeight: parseFloat(getComputedStyle(rows).minHeight) || 0, fade: getComputedStyle(rows).getPropertyValue('--bio-card-datasets-fade').trim() },
+      cardMaxHeight: parseFloat(getComputedStyle(card).maxHeight),
+      speciesRowHeight: card.querySelector('.bio-card-row')?.getBoundingClientRect().height ?? null,
     };
   });
-  const restOk = (s, failed) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && s.speciesRowsWhole >= 1 && s.datasetFirstLinesWhole >= 1
+  // R13-M1: the share between the list and the rows, and whether the card can hold a whole species row at all (see above).
+  const share = (s) => {
+    if (!s.body) return { ok: false, why: 'no body' };
+    const bodyCut = s.body.scrollHeight - s.body.clientHeight > 1;
+    const rows = s.datasetList;
+    const rowsCut = Boolean(rows) && rows.scrollHeight - rows.clientHeight > 1;
+    const listNotStarved = !bodyCut || !rows || rows.clientHeight <= s.body.clientHeight + rows.minHeight + 2;
+    const rowsNotStarved = !rowsCut || s.body.clientHeight <= rows.clientHeight + 2;
+    const fixedAtFloors = s.card.height - s.body.clientHeight - (rows ? rows.clientHeight - rows.minHeight : 0);
+    const canHoldRow = s.speciesRowHeight !== null && fixedAtFloors + s.speciesRowHeight <= s.cardMaxHeight + 0.5;
+    return { ok: listNotStarved && rowsNotStarved && (!canHoldRow || s.speciesRowsWhole >= 1), bodyCut, rowsCut, listNotStarved, rowsNotStarved, fixedAtFloors: +fixedAtFloors.toFixed(1), speciesRowHeight: s.speciesRowHeight && +s.speciesRowHeight.toFixed(1), cardMaxHeight: s.cardMaxHeight, canHoldRow };
+  };
+  const restOk = (s, failed) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s).ok && s.datasetFirstLinesWhole >= 1
     && (!s.datasetList || s.datasetList.scrollHeight - s.datasetList.clientHeight <= 1 || /^[1-9][\d.]*px$/.test(s.datasetList.fade))
     && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0);
   const saved = await page.evaluate(() => {
@@ -906,7 +927,9 @@ if (CHECKS.has('card-foot-rest')) {
       await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { radiusKm: 50 }, { origin: 'user' })) throw new Error('species radius rejected'); });
       await flyTo(...TAVEUNI);
       await openSpeciesPanel();
-      await page.click('#species-what-lives-here');
+      // In phone landscape the left stack runs under the HUD, so the action is armed through its own click handler; the card, which this
+      // check is about, still opens from a real click on the globe.
+      await page.evaluate(() => document.getElementById('species-what-lives-here').click());
       await page.evaluate(() => { const panel = document.getElementById('species-panel'); if (!panel.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click(); });
       await sleep(800);
       const centre = await page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
@@ -916,12 +939,16 @@ if (CHECKS.has('card-foot-rest')) {
         const rows = card.querySelectorAll('.bio-card-foot .dataset-row').length;
         const notes = card.querySelectorAll('.bio-card-foot .dataset-row-note').length;
         return Boolean(card.querySelector('.bio-card-foot-note')) && card.querySelectorAll('.bio-card-row').length > 0 && rows > 0 && (failed ? notes === rows : notes === 0);
-      }, { timeout: 60000 }, failed);
+      }, { timeout: 60000 }, failed).catch(async (caught) => {
+        // What the card showed instead (a live GBIF failure shows its message and Retry), so a timeout names its cause.
+        const shown = await page.evaluate(() => { const card = document.getElementById('bio-card'); return { hidden: card.hidden, text: card.innerText.slice(0, 300) }; }).catch(() => null);
+        throw new Error(`card-foot-rest ${width}x${height} ${failed ? 'failed' : 'normal'}: the list did not settle (${String(caught).slice(0, 80)}); card: ${JSON.stringify(shown)}`);
+      });
       await page.mouse.move(Math.round(width / 2), Math.round(height * 0.3));
       await sleep(1000);
       const rest = await readRest();
       await shot(`card-foot-rest-${failed ? 'failed' : 'normal'}-${width}x${height}`);
-      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed), ...rest });
+      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed), share: share(rest), ...rest });
       await closeCard();
     }
   } catch (caught) {

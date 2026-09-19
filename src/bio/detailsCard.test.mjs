@@ -112,6 +112,12 @@ function fakeViewer() {
   };
 }
 
+// R13-M1: the body and the foot are the two children of .bio-card-main, the grid that shares the card's height between them (style.css).
+test('the card skeleton puts the body and the foot in the shared grid', () => {
+  const card = createDetailsCard({ viewer: fakeViewer(), doc: cardDoc(), sanitize: (html) => html });
+  assert.ok(card.element.innerHTML.includes('<div class="bio-card-filter"></div><div class="bio-card-main"><div class="bio-card-body"></div><div class="bio-card-foot"></div></div>'), card.element.innerHTML);
+});
+
 test('detail mode renders only what the sanitizer returns', () => {
   const doc = cardDoc();
   const viewer = fakeViewer();
