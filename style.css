@@ -9877,6 +9877,9 @@ body.recording-mode #bio-card { display: none !important; }
   #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) > [data-panel-id].collapsed { display: none !important; }
   #left-panel-stack > [data-panel-id], #left-panel-stack > [data-panel-id].collapsed { position: relative; top: auto; right: auto; bottom: auto; left: auto; width: 100%; }
   #left-panel-stack > [data-panel-id].collapsed > :is(.data-panel-inner, .scene-panel-inner, .species-panel-inner, .cctv-panel-inner) { padding-top: 6px; padding-bottom: 6px; }
+  /* Fix round 5 (critic r4 N2): each panel's glow extends 18 px past its box (inset -18px), which gave the 124 px stack at 568x320 a 16 px
+     scroll range nothing needed; here the glow stays inside its pill. */
+  #left-panel-stack > [data-panel-id] > .panel-glow { inset: 0; }
 }
 #species-panel.collapsed { width: var(--left-collapsed-width); }
 #species-panel.collapsed .species-body { display: none !important; }

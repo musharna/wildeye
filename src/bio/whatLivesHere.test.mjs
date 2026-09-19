@@ -330,7 +330,8 @@ test('arming again cancels a search still in flight, so the prompt stays on the 
   old.resolve({ total: 5, species: [{ key: 5232437, count: 5 }], datasets: [] });
   await first;
   const last = r.calls.card.at(-1);
-  assert.deepEqual({ kind: last.kind, message: last.message }, { kind: 'status', message: 'Click a spot on the globe. Esc cancels.' }, 'the prompt is still the last card call');
+  // Fix round 5 (critic r3 N3, r4 N4): the prompt names a cancel that works on touch (the card's ×) as well as Escape.
+  assert.deepEqual({ kind: last.kind, message: last.message }, { kind: 'status', message: 'Click a spot on the globe. Tap × or press Esc to cancel.' }, 'the prompt is still the last card call');
   assert.equal(r.calls.list.length, 0, 'the old search listed nothing');
   assert.equal(old.signal.aborted, true, 'arming aborted the old search');
   assert.equal(r.controller.armed, true);

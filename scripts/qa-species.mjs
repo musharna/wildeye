@@ -1734,7 +1734,7 @@ if (CHECKS.has('card-a11y')) {
     }).catch((caught) => { error = `${error ?? ''} restoring: ${caught}`; });
     await sleep(500);
   }
-  const ok = error === null && tree?.role === 'complementary' && tree.name === dom?.title && dom.title !== '' && dom.live === null && dom.announce === `${dom.title}: Click a spot on the globe. Esc cancels.`;
+  const ok = error === null && tree?.role === 'complementary' && tree.name === dom?.title && dom.title !== '' && dom.live === null && dom.announce === `${dom.title}: Click a spot on the globe. Tap × or press Esc to cancel.`;
   report('card-a11y', ok, { tree, dom, ...(error ? { error } : {}) });
 }
 
@@ -2155,7 +2155,9 @@ if (CHECKS.has('landscape-regions')) {
   };
   const pillsState = () => page.evaluate((ids) => {
     const stack = document.getElementById('left-panel-stack');
-    return { scrollTop: stack.scrollTop, pills: ids.map((id) => {
+    const sr = stack.getBoundingClientRect();
+    // Fix round 5 (critic r4 N2, N3): no scroll range the pills do not need, and every pill inside the stack's own box.
+    return { scrollTop: stack.scrollTop, scrollSlack: stack.scrollHeight - stack.clientHeight, pillsInBox: ids.every((id) => { const r = document.getElementById(id).getBoundingClientRect(); return r.top >= sr.top - 0.5 && r.bottom <= sr.bottom + 0.5 && r.left >= sr.left - 0.5 && r.right <= sr.right + 0.5; }), pills: ids.map((id) => {
       const button = document.querySelector(`#${id} [data-collapse-target="${id}"]`);
       const r = button.getBoundingClientRect();
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -2231,7 +2233,7 @@ if (CHECKS.has('landscape-regions')) {
       await sleep(900);
       r.keyboardCancel = await page.evaluate(() => ({ armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', onButton: document.activeElement === document.getElementById('species-what-lives-here'), speciesOpen: !document.getElementById('species-panel').classList.contains('collapsed'), cardHidden: document.getElementById('bio-card').hidden }));
       await shot(`landscape-regions-${size}`);
-      const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && st.pills.every((p) => p.collapsed && p.hit);
+      const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && st.scrollSlack <= 1 && st.pillsInBox && st.pills.every((p) => p.collapsed && p.hit);
       // Fix round 5: no size is exempt from a whole species row (the card folds its Top datasets block and then the note first).
       r.ok = pillsOk(r.collapsed) && r.armed.armed && r.armed.onCanvas && r.picked && Boolean(r.results) && !r.results.overlap && r.results.linkWhole && r.results.linkHit && r.results.speciesRowsWhole >= 1
         && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown && r.keyboard.armed && r.keyboard.active !== 'BODY' && !r.keyboardCancel.armed && r.keyboardCancel.onButton && r.keyboardCancel.speciesOpen;
