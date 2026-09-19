@@ -1262,6 +1262,8 @@ if (CHECKS.has('suggestion-fade')) {
 // The first Escape only hides the list, and the search for "monarchs" it ended does not reopen it (R12-M1); the text, the card and the armed
 // state stay. The second Escape, with text and no list, only clears the text (R12-M2). The third, with neither, closes the card and disarms: the
 // positive control that Escape still reaches them.
+// R13-M5: before that sequence, Tab moves focus from the box to the first suggestion and Escape is pressed there: it only hides the list and
+// puts focus back in the box, keeping the text, the card and the armed state. Typing then brings the list back for the sequence above.
 if (CHECKS.has('escape')) {
   const read = () => page.evaluate(() => ({
     listHidden: document.getElementById('species-suggestions').hidden,
@@ -1271,7 +1273,9 @@ if (CHECKS.has('escape')) {
     cursor: window.__godsEyeView.viewer.scene.canvas.style.cursor,
     value: document.getElementById('species-search').value,
     focused: document.activeElement?.id || document.activeElement?.tagName || null,
+    focusedSuggestion: Boolean(document.activeElement?.classList?.contains('species-suggestion')),
   }));
+  const listShowing = () => page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
   const states = {};
   let error = null;
   try {
@@ -1280,8 +1284,15 @@ if (CHECKS.has('escape')) {
     await page.waitForFunction(() => !document.getElementById('bio-card').hidden, { timeout: 10000 });
     await page.click('#species-search', { clickCount: 3 });
     await page.keyboard.press('Backspace');
-    await page.type('#species-search', 'monarch', { delay: 40 });
-    await page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
+    await page.type('#species-search', 'mona', { delay: 40 });
+    await listShowing();
+    await page.keyboard.press('Tab');
+    states.tabbed = await read();
+    await page.keyboard.press('Escape');
+    await sleep(700);
+    states.fromSuggestion = await read();
+    await page.keyboard.type('rch', { delay: 40 });
+    await listShowing();
     states.before = await read();
     await page.keyboard.type('s');
     await page.keyboard.press('Escape');
@@ -1307,10 +1318,11 @@ if (CHECKS.has('escape')) {
     }).catch((caught) => { error = `${error ?? ''} restoring: ${caught}`; });
     await sleep(500);
   }
+  const suggestionOk = Boolean(states.fromSuggestion) && states.tabbed.focusedSuggestion && states.tabbed.listHidden === false && states.fromSuggestion.listHidden === true && states.fromSuggestion.focused === 'species-search' && states.fromSuggestion.value === 'mona' && states.fromSuggestion.cardHidden === false && states.fromSuggestion.armed;
   const firstOk = Boolean(states.first) && states.before.listHidden === false && states.before.cardHidden === false && states.before.armed && states.first.listHidden === true && states.first.value === 'monarchs' && states.first.cardHidden === false && states.first.armed;
   const secondOk = Boolean(states.second) && states.second.value === '' && states.second.listHidden === true && states.second.cardHidden === false && states.second.armed;
   const thirdOk = Boolean(states.third) && states.third.cardHidden === true && states.third.armed === false;
-  report('escape', error === null && firstOk && secondOk && thirdOk, { ...states, firstOk, secondOk, thirdOk, ...(error ? { error } : {}) });
+  report('escape', error === null && suggestionOk && firstOk && secondOk && thirdOk, { ...states, suggestionOk, firstOk, secondOk, thirdOk, ...(error ? { error } : {}) });
 }
 
 if (CHECKS.has('search')) {

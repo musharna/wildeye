@@ -278,6 +278,37 @@ test('Escape hides a visible list, then clears the text, each marked handled and
   assert.equal(third.prevented, 0, 'with no list and no text, Escape is left for the card and WHAT LIVES HERE');
 });
 
+// R13-M5: the search box and its suggestion list are one combobox, so Escape with focus on a suggestion (Tab from the box) is the combobox's too:
+// it hides the list, returns focus to the box, keeps the text and marks the key handled, so the card and WHAT LIVES HERE leave it alone. The
+// suggestion's own keys stay its own: Enter on it is not taken by the list.
+test('Escape on a focused suggestion hides the list, returns focus to the box and does nothing else', async () => {
+  const timers = fakeTimers();
+  const { els, doc } = panelRig({ suggest: async () => ({ source: 'inaturalist', items: [MONARCH] }), setTimer: timers.setTimer, clearTimer: timers.clearTimer });
+  const input = els['species-search'];
+  const list = els['species-suggestions'];
+  input.value = 'monarch';
+  input.listeners.input();
+  timers.fireAll();
+  await settle();
+  assert.equal(list.hidden, false, 'the list shows');
+  const suggestion = list.children[0].children[0];
+  suggestion.focus();
+  assert.equal(typeof list.listeners.keydown, 'function', 'the suggestion list handles its keys (Escape from a suggestion reaches the combobox)');
+  const enter = { key: 'Enter', target: suggestion, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  list.listeners.keydown(enter);
+  assert.equal(enter.defaultPrevented, false, 'Enter on a suggestion is left to the suggestion');
+  const escape = { key: 'Escape', target: suggestion, defaultPrevented: false, prevented: 0, preventDefault() { this.defaultPrevented = true; this.prevented += 1; } };
+  list.listeners.keydown(escape);
+  assert.equal(list.hidden, true, 'Escape on a suggestion hides the list');
+  assert.equal(doc.activeElement, input, 'and returns focus to the box');
+  assert.equal(input.value, 'monarch', 'and keeps the text');
+  assert.equal(escape.prevented, 1, 'and marks the key handled, so the card and WHAT LIVES HERE leave it alone');
+  assert.equal(timers.pending(), 0);
+  const next = { key: 'Escape', target: input, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  input.listeners.keydown(next);
+  assert.equal(input.value, '', 'positive control: the next Escape, in the box, clears the text as before');
+});
+
 // R12-M1 (re-review): Escape that hides the list also ends the name search. The list for "mona" shows, a search for "monar" is out and one
 // for "monarch" waits for the debounce: Escape clears the timer and aborts the request, or the list reopens under the card.
 test('Escape that hides the suggestion list cancels the pending debounce and aborts the name search still out', async () => {

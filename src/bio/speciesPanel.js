@@ -373,19 +373,30 @@ export function createSpeciesPanel({
     clearTimer(timer);
     timer = setTimer(() => { void requestSuggestions(); }, SUGGEST_DEBOUNCE_MS);
   });
+  /**
+   * M2, R12-M1, R12-M2, R13-M5: Escape in the combobox (the box and its suggestion list, as in the WAI-ARIA combobox pattern) does one thing at a
+   * time and says so (preventDefault), so the card and WHAT LIVES HERE leave that key alone. It hides a visible list, keeps the text and puts
+   * focus in the box (it may have been on a suggestion); with no list it clears the text in the box; either way it ends the name search. With
+   * neither, the key is theirs: the next Escape closes the card and disarms.
+   */
+  function comboboxEscape(event) {
+    if (event.key !== 'Escape' || (list.hidden && input.value === '')) return;
+    endSearch();
+    if (!list.hidden) {
+      input.focus();
+      clearSuggestions();
+    } else {
+      input.value = '';
+    }
+    event.preventDefault();
+  }
   input.addEventListener('keydown', (event) => {
     // M3: Enter picks the first row only of a list showing for what the box holds now, not of one built for an earlier query.
     if (event.key === 'Enter' && !list.hidden && listQuery === input.value.trim()) list.querySelector('button')?.click();
-    // M2, R12-M1, R12-M2: Escape does one thing at a time and says so (preventDefault), so the card and WHAT LIVES HERE leave that key alone. It
-    // hides a visible list and keeps the text; with no list it clears the text in the box; either way it ends the name search. With neither, the
-    // key is theirs: the next Escape closes the card and disarms.
-    if (event.key === 'Escape' && (!list.hidden || input.value !== '')) {
-      endSearch();
-      if (!list.hidden) clearSuggestions();
-      else input.value = '';
-      event.preventDefault();
-    }
+    comboboxEscape(event);
   });
+  // Keys from a focused suggestion: only Escape is the combobox's; Enter and Space stay the button's own.
+  list.addEventListener('keydown', comboboxEscape);
   toggle.addEventListener('click', () => {
     void dataManager.setEnabled('species', !dataManager.isEnabled('species'), { origin: 'user' }).then(render);
   });
