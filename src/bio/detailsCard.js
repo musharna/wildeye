@@ -95,6 +95,16 @@ export function renderListInto(container, rows, doc, onRow) {
   }
 }
 
+/**
+ * Fix round 1, item 4: "3 name lookups failed (HTTP 503, timeout)" for the rows that carry an error, each distinct message once, or '' with none.
+ * The card was a live region that read these out with the rows; the status line says them now.
+ */
+function failuresLine(rows, what) {
+  const failed = rows.filter((row) => row.error);
+  if (failed.length === 0) return '';
+  return `${failed.length} ${what}${failed.length === 1 ? '' : 's'} failed (${[...new Set(failed.map((row) => row.error))].join(', ')})`;
+}
+
 export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {}, observeSize = observeSizeWithResizeObserver, nextFrame = (fn) => setTimeout(fn, 50), cancelFrame = (id) => clearTimeout(id) }) {
   const root = doc.createElement('aside');
   root.id = 'bio-card';
@@ -252,7 +262,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         link.rel = 'noopener noreferrer';
         link.textContent = footer;
         foot.appendChild(link);
-      }, `${heading}: ${entries.length} species listed`);
+      }, `${heading}: ${[`${entries.length} species listed`, failuresLine(entries, 'name lookup'), failuresLine(datasets, 'dataset lookup')].filter(Boolean).join('; ')}`);
     },
   };
 }

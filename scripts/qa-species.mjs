@@ -908,6 +908,7 @@ if (CHECKS.has('card-foot-rest')) {
       card: round(cardBox),
       foot: foot && { box: round(foot.getBoundingClientRect()), maxHeight: footCs.maxHeight, overflowY: footCs.overflowY, scrollHeight: foot.scrollHeight, clientHeight: foot.clientHeight },
       body: body && { clientHeight: body.clientHeight, scrollHeight: body.scrollHeight },
+      announce: document.getElementById('bio-card-announce')?.textContent ?? null,
       speciesRows: card.querySelectorAll('.bio-card-row').length,
       speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter((row) => wholeBox(row, row.getBoundingClientRect())).length,
       datasetRows: card.querySelectorAll('.bio-card-foot .dataset-row').length,
@@ -998,7 +999,9 @@ if (CHECKS.has('card-foot-rest')) {
       && s.cueEnd?.visibility === 'hidden' && s.cueEnd.backAtTop === 'visible';
   };
   const restOk = (s, failed) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s).ok && s.datasetFirstLinesWhole >= 1 && cueOk(s)
-    && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0);
+    && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0)
+    // Fix round 1, item 4: the status line says the failed dataset lookups (and only when some failed).
+    && (failed ? new RegExp(`; ${s.datasetRows} dataset lookups? failed \\(HTTP`).test(s.announce ?? '') : !/dataset lookups? failed/.test(s.announce ?? ''));
   const saved = await page.evaluate(() => {
     const c = window.__godsEyeView.viewer.camera;
     window.__qaRestCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll };

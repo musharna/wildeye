@@ -426,3 +426,21 @@ test('the details line names the record, and an identical line is cleared and se
   viewer.selectedEntity = { ...entityIn('occurrences', 'plain text'), id: 'e2' };
   assert.equal(announcer.textContent, 'GBIF Occurrences details opened');
 });
+
+// Fix round 1, item 4: the card was a live region, so failed name and dataset lookups in a list were read out with it. The status line now says
+// them: how many of each failed and why, after the species count. Positive control in the same test: a list with no failures says only the count.
+test('a list line names its failed name and dataset lookups', () => {
+  const doc = cardDoc();
+  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html });
+  const base = { heading: 'What lives here', filterLine: 'CC0 and CC BY records', footer: 'GBIF.org', footerHref: 'https://www.gbif.org/', onRow: () => {} };
+  const ok = { key: 1, count: 3, scientificName: 'Branta canadensis', commonName: 'Canada Goose' };
+  card.showList({ ...base, entries: [ok], datasets: [{ key: INAT_RG, count: 3, title: 'iNaturalist', doi: null }] });
+  assert.equal(card.announcer.textContent, 'What lives here: 1 species listed', 'no failures: the count only');
+  const failedName = (key, error) => ({ key, count: 1, scientificName: `GBIF taxon ${key}`, commonName: null, error });
+  card.showList({
+    ...base,
+    entries: [ok, failedName(2, 'HTTP\u00a0503'), failedName(3, 'HTTP\u00a0503'), failedName(4, 'timeout')],
+    datasets: [{ key: INAT_RG, count: 3, title: null, doi: null, error: 'HTTP\u00a0503' }, { key: '6ac3f774-d9fb-4796-b3e9-92bf6c81c084', count: 1, title: 'Other', doi: null }],
+  });
+  assert.equal(card.announcer.textContent, 'What lives here: 4 species listed; 3 name lookups failed (HTTP\u00a0503, timeout); 1 dataset lookup failed (HTTP\u00a0503)');
+});
