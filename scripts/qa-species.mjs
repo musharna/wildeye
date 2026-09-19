@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,panel-fold,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
@@ -14,7 +14,7 @@ const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) +
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,panel-fold,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -1070,6 +1070,101 @@ if (CHECKS.has('collapsed-pills')) {
     samples: samples.map((s) => ({ viewport: s.viewport, place: s.place, tiles: s.tiles, ok: s.ok, maxLevels: s.maxLevels, pills: s.pills.map((p) => ({ name: p.name, rgb: p.rgb, background: p.background, box: p.box })) })),
     initial, control, controlOk, restored, ...(error ? { error } : {}),
   });
+}
+
+// Brief B (fold): a status line must not push WHAT LIVES HERE out of the SPECIES body's view. At 375x667 and 400x800, with the panel open at
+// the body's scroll top, the action is whole inside the body's view and is what the page hits at its corners, in two states per size:
+// (1) a species chosen through a real FUZZY match (iNaturalist's suggestion is answered in the page as "Danaus plexippa"), so the status says
+// "No exact GBIF match …; shown as GBIF's …" and the chosen block carries its note; (2) with that species still chosen, a name search that
+// fails on both sources (503 answered in the page's fetch): "Name search failed: iNaturalist HTTP 503, GBIF HTTP 503". Positive controls in
+// the same check: each state's status text is the expected one and on screen (the FUZZY status, the longest the panel writes for a real
+// choice, at least two lines tall), and the note is on screen.
+if (CHECKS.has('panel-fold')) {
+  const SIZES = [[375, 667], [400, 800]];
+  const FUZZY_SUGGESTION = { total_results: 1, page: 1, per_page: 1, results: [{ id: 48662, name: 'Danaus plexippa', rank: 'species', preferred_common_name: 'Monarch', matched_term: 'Monarch' }] };
+  const INAT_AUTOCOMPLETE = '^https://api\\.inaturalist\\.org/v1/taxa/autocomplete';
+  const setRules = (rules) => page.evaluate((rules) => {
+    if (!window.__qaFoldFetch) {
+      window.__qaFoldFetch = window.fetch;
+      window.fetch = (input, init) => {
+        const url = String(input?.url ?? input);
+        const rule = (window.__qaFoldRules || []).find((r) => new RegExp(typeof r === 'string' ? r : r.pattern).test(url));
+        if (rule) return Promise.resolve(typeof rule === 'string' ? new Response('{"qa":"forced failure"}', { status: 503, headers: { 'content-type': 'application/json' } }) : new Response(JSON.stringify(rule.body), { status: 200, headers: { 'content-type': 'application/json' } }));
+        return window.__qaFoldFetch.call(window, input, init);
+      };
+    }
+    window.__qaFoldRules = rules;
+  }, rules);
+  const typeQuery = async (text) => {
+    await page.click('#species-search', { clickCount: 3 });
+    await page.keyboard.press('Backspace');
+    await page.type('#species-search', text, { delay: 30 });
+  };
+  const measure = () => page.evaluate(() => {
+    document.activeElement?.blur?.();
+    const body = document.getElementById('species-body');
+    body.scrollTop = 0;
+    const b = body.getBoundingClientRect();
+    const view = { top: b.top + body.clientTop, bottom: Math.min(b.bottom, b.top + body.clientTop + body.clientHeight) };
+    const action = document.getElementById('species-what-lives-here');
+    const r = action.getBoundingClientRect();
+    const inset = Math.min((r.bottom - r.top) / 2, 10);
+    const corners = [[r.left + inset, r.top + 2], [r.right - inset, r.top + 2], [r.left + inset, r.bottom - 2], [r.right - inset, r.bottom - 2]].every(([x, y]) => { const hit = document.elementFromPoint(x, y); return Boolean(hit && (hit === action || action.contains(hit))); });
+    const status = document.getElementById('species-status');
+    const note = document.getElementById('species-chosen-note');
+    const lineHeight = parseFloat(getComputedStyle(status).lineHeight) || parseFloat(getComputedStyle(status).fontSize) * 1.2;
+    const round = (v) => +v.toFixed(1);
+    return {
+      view: { top: round(view.top), bottom: round(view.bottom) }, action: { top: round(r.top), bottom: round(r.bottom) }, inside: r.top >= view.top - 0.5 && r.bottom <= view.bottom + 0.5, corners,
+      status: status.textContent, statusLines: round(status.getBoundingClientRect().height / lineHeight), note: note.hidden ? null : note.textContent,
+      order: [...body.children].filter((el) => el.getClientRects().length > 0).map((el) => el.id || el.className).slice(0, 6),
+    };
+  });
+  const initial = await page.evaluate(() => ({ speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed'), params: window.__godsEyeView.dataManager.getLayerParams('species'), enabled: window.__godsEyeView.dataManager.isEnabled('species') }));
+  const states = [];
+  let error = null;
+  let restored = null;
+  try {
+    for (const [width, height] of SIZES) {
+      await page.setViewport({ width, height });
+      await sleep(2500);
+      await openSpeciesPanel();
+      await setRules([{ pattern: INAT_AUTOCOMPLETE, body: FUZZY_SUGGESTION }]);
+      await typeQuery('monarch');
+      await page.waitForFunction(() => document.querySelector('#species-suggestions button')?.textContent.includes('Danaus plexippa'), { timeout: 20000 });
+      await page.click('#species-suggestions button');
+      await page.waitForFunction(() => document.getElementById('species-chosen-note')?.hidden === false && /^No exact GBIF match for Danaus plexippa; shown as GBIF's Danaus plexippus\./.test(document.getElementById('species-status').textContent), { timeout: 45000 });
+      await sleep(1000);
+      const fuzzy = await measure();
+      await shot(`panel-fold-fuzzy-${width}x${height}`);
+      states.push({ viewport: `${width}x${height}`, state: 'fuzzy', ...fuzzy, ok: fuzzy.inside && fuzzy.corners && fuzzy.statusLines >= 2 && fuzzy.note === "shown as GBIF's Danaus plexippus" });
+      await setRules([INAT_AUTOCOMPLETE, '^https://api\\.gbif\\.org/v1/species/suggest']);
+      await typeQuery('monarch');
+      await page.waitForFunction(() => /^Name search failed/.test(document.getElementById('species-status').textContent), { timeout: 30000 });
+      await sleep(1000);
+      const failedSearch = await measure();
+      await shot(`panel-fold-error-${width}x${height}`);
+      states.push({ viewport: `${width}x${height}`, state: 'search failed', ...failedSearch, ok: failedSearch.inside && failedSearch.corners && failedSearch.statusLines >= 1 && failedSearch.status === 'Name search failed: iNaturalist HTTP 503, GBIF HTTP 503' && failedSearch.note === "shown as GBIF's Danaus plexippus" });
+    }
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    restored = await page.evaluate(async (initial) => {
+      if (window.__qaFoldFetch) { window.fetch = window.__qaFoldFetch; delete window.__qaFoldFetch; }
+      const input = document.getElementById('species-search');
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+      const dm = window.__godsEyeView.dataManager;
+      await dm.setEnabled('species', initial.enabled, { origin: 'user' });
+      dm.setLayerParams('species', { taxonKey: initial.params?.taxonKey ?? null, years: initial.params?.years ?? 'recent', radiusKm: initial.params?.radiusKm ?? 10, ...(initial.params?.name ? { name: initial.params.name } : {}) }, { origin: 'user' });
+      const panel = document.getElementById('species-panel');
+      if (panel.classList.contains('collapsed') !== initial.speciesCollapsed) panel.querySelector('[data-collapse-target="species-panel"]').click();
+      return { fetchRestored: !window.__qaFoldFetch, taxonKey: dm.getLayerParams('species')?.taxonKey ?? null };
+    }, initial).catch((caught) => ({ error: String(caught?.stack || caught).slice(0, 300) }));
+    await page.setViewport({ width: 1400, height: 900 });
+    await sleep(2000);
+  }
+  report('panel-fold', error === null && states.length === SIZES.length * 2 && states.every((s) => s.ok) && restored?.fetchRestored === true, { states, restored, ...(error ? { error } : {}) });
 }
 
 // M1 (final review): a strict GBIF match that answers FUZZY is mapped and says so. The page's fetch answers iNaturalist's autocomplete with one

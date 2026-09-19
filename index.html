@@ -690,6 +690,9 @@
         <button class="panel-collapse-btn" data-collapse-target="species-panel" title="Collapse panel">+</button>
       </div>
       <div id="species-body" class="species-body">
+        <!-- Brief B (fold): WHAT LIVES HERE is the body's first control. Everything that changes height (suggestions, status line, chosen
+             species and its note) sits under the search box, so none of it can push the action out of the body's view. -->
+        <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">WHAT LIVES HERE</button>
         <label class="species-label" for="species-search">Find a species</label>
         <input type="search" id="species-search" placeholder="monarch, humpback, red maple…" autocomplete="off" spellcheck="false" />
         <ul id="species-suggestions" class="species-suggestions" aria-label="Species suggestions" hidden></ul>
@@ -699,7 +702,6 @@
           <button type="button" id="species-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Species map">MAP OFF</button>
           <span id="species-chosen-note" class="species-chosen-note" hidden></span>
         </div>
-        <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">WHAT LIVES HERE</button>
         <div class="species-chip-group">
           <span id="species-years-label" class="species-label">Years</span>
           <div id="species-years" class="species-chip-row" role="group" aria-labelledby="species-years-label">
