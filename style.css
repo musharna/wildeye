@@ -679,12 +679,14 @@ body.cockpit-mode #cockpit-cloud-effects.active {
 
 /* Brief B: the host pills' and headers' label text and their +/− button are 0.8 white, like the SPECIES panel's text. In the shared 0.3 white
    (--text-dim) they measured 2.1:1 over the collapsed glass on the light street map and 2.2:1 over ocean; 0.8 white holds 4.5:1 over both
-   (qa collapsed-pills measures it). One rule for every pill, so they stay one family. */
+   (qa collapsed-pills measures it). One rule for every pill, so they stay one family. The label is 0.9 white: at 0.8 its thin 9 px strokes,
+   as rendered at 1x, measured 4.14-4.26:1 on DATA LAYERS over the light map (the 90th-percentile glyph pixel over the median ground), at 0.9
+   4.81-5.55:1 on every pill. */
 .panel-title {
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 3px;
-  color: rgba(232, 234, 237, 0.8);
+  color: rgba(232, 234, 237, 0.9);
   text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
   white-space: nowrap;
 }

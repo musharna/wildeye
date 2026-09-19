@@ -845,7 +845,10 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   // Brief B: the shared host pill and header label text and its +/− button are 0.8 white (the shared 0.3 white measured 2.1:1 over the collapsed
   // glass on the light map and over ocean); one rule for every pill.
   const hostRule = (selector) => rules.find((r) => r.selector === selector)?.body ?? '';
-  for (const selector of ['.panel-title', '.panel-collapse-btn']) assert.match(hostRule(selector), /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.8\);/, `${selector} is 0.8 white`);
+  // Final round (critic N1): the 9 px labels' rendered strokes measured 4.14-4.26:1 on DATA LAYERS at 0.8 white (fg90 over the median ground,
+  // light street map, 1x DPR); at 0.9 white 4.81-5.55:1 on all three pills. The + button's strokes were already 5.3:1 or more.
+  assert.match(hostRule('.panel-title'), /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.9\);/, '.panel-title is 0.9 white');
+  assert.match(hostRule('.panel-collapse-btn'), /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.8\);/, '.panel-collapse-btn is 0.8 white');
   // Critic 10 S1: the floor is for the open SPECIES panel and the card; the collapsed SPECIES pill keeps the shared glass of its sibling pills.
   assert.ok(bodyOf('.species-panel-inner').includes('background: var(--glass-bg);'), '.species-panel-inner keeps the shared glass');
   for (const selector of ['#species-panel:not(.collapsed) .species-panel-inner', '.bio-card']) {
