@@ -568,3 +568,26 @@ test('speciesName shares one lookup per key, but an abort rejects only the calle
   assert.deepEqual(await settle(client.speciesName(9, { signal: AbortSignal.abort() })), ABORTED);
   assert.equal(calls.get(9), 1);
 });
+
+// Brief B item 7 (D-research Q1, live 2026-09-18): gbif.org reads taxon keys under Catalogue of Life XR since 2026-06-18, and api.gbif.org
+// still defaults to the Backbone. A key read under the other checklist fails silently (HTTP 200 count 0, or an empty 204 tile), so every
+// api.gbif.org request that carries a taxonKey or facets by speciesKey names the Backbone, the checklist the app's integer keys come from.
+test('every api.gbif.org request that carries a taxon key or facets by species names the Backbone checklist', () => {
+  const pinned = {
+    'adhoc tile template': densityTileTemplate({ taxonKey: 5133088, years: 'recent', now: NOW }).replace('{z}/{x}/{y}', '0/0/0'),
+    'taxon datasets search': taxonDatasetsUrl({ taxonKey: 5133088, years: 'all', now: NOW }),
+    'what-lives-here polygon facet search': speciesNearUrl({ lat: 44.46, lon: -110.83, radiusKm: 10, years: 'recent', now: NOW }),
+    'what-lives-here geoDistance facet search': speciesNearUrl({ lat: 89, lon: 0, radiusKm: 50, years: 'recent', now: NOW }),
+  };
+  assert.equal(new URL(pinned['what-lives-here geoDistance facet search']).searchParams.has('geoDistance'), true, 'the fallback search is covered');
+  for (const [name, href] of Object.entries(pinned)) {
+    const url = new URL(href);
+    assert.equal(url.origin, 'https://api.gbif.org', name);
+    assert.deepEqual(url.searchParams.getAll('checklistKey'), [GBIF_BACKBONE_CHECKLIST_KEY], name);
+  }
+  assert.equal(GBIF_BACKBONE_CHECKLIST_KEY, 'd7dddbf4-2cf0-4f39-9b2a-bb099caae36c');
+  // /v1/species/match, /v1/species/suggest and /v1/species/{key} ignore checklistKey (always the Backbone), so they carry none.
+  for (const href of [gbifMatchUrl('Danaus plexippus'), gbifSuggestUrl('monarch'), speciesUrl(5133088)]) {
+    assert.equal(new URL(href).searchParams.has('checklistKey'), false, href);
+  }
+});

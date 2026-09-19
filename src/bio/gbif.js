@@ -13,6 +13,10 @@ export const REQUEST_TIMEOUT_MS = 8000;
  * 2026-06-18 www.gbif.org reads taxon keys under Catalogue of Life XR unless a link names a checklist, and there a Backbone key matches
  * no record, so a gbif.org link that filters a taxon carries this key. gbifPortalUrl and gbifPortalAnyLocationUrl filter no taxon and
  * carry none; one that gains a taxon filter needs it.
+ * The API default is still the Backbone, but a key read under another checklist fails just as silently there (live 2026-09-18: HTTP 200
+ * count 0 for a search, an empty 204 tile), and the speciesKey facet returns the keys of whichever checklist applies. So every
+ * api.gbif.org request that carries a taxonKey or facets by speciesKey names this checklist too (densityTileTemplate, speciesNearUrl,
+ * taxonDatasetsUrl), and does not depend on the API default staying put.
  */
 export const GBIF_BACKBONE_CHECKLIST_KEY = 'd7dddbf4-2cf0-4f39-9b2a-bb099caae36c';
 
@@ -158,7 +162,7 @@ export const SPECIES_TILE_SIZE_PX = 512;
  */
 export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`densityTileTemplate: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: SPECIES_MAP_LEGEND.style, srs: 'EPSG:3857' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, style: SPECIES_MAP_LEGEND.style, srs: 'EPSG:3857' });
   appendRecordFilters(params, years, now);
   return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }
@@ -178,7 +182,8 @@ export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) 
   const area = polygonRefusal({ lat, lon, radiusKm }) === null
     ? { geometry: circlePolygonWkt({ lat, lon, radiusKm }) }
     : { geoDistance: `${lat.toFixed(4)},${lon.toFixed(4)},${radiusKm}km` };
-  const params = new URLSearchParams({ ...area, hasCoordinate: 'true', hasGeospatialIssue: 'false' });
+  // checklistKey: the speciesKey facet answers in the keys of the checklist the search names (GBIF_BACKBONE_CHECKLIST_KEY).
+  const params = new URLSearchParams({ ...area, checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, hasCoordinate: 'true', hasGeospatialIssue: 'false' });
   params.append('facet', 'speciesKey');
   params.append('facet', 'datasetKey');
   params.set('speciesKey.facetLimit', String(NEAR_SPECIES_LIMIT));
@@ -242,7 +247,7 @@ export function parseSpeciesNear(json) {
  */
 export function taxonDatasetsUrl({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`taxonDatasetsUrl: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), hasCoordinate: 'true', facet: 'datasetKey', 'datasetKey.facetLimit': String(TAXON_DATASET_LIMIT), limit: '0' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, hasCoordinate: 'true', facet: 'datasetKey', 'datasetKey.facetLimit': String(TAXON_DATASET_LIMIT), limit: '0' });
   appendRecordFilters(params, years, now);
   return `${GBIF_API}/v1/occurrence/search?${params}`;
 }
@@ -299,6 +304,12 @@ export function parseInatSuggest(json) {
     .map((r) => ({ id: r.id ?? null, gbifKey: null, scientificName: r.name, commonName: r.preferred_common_name || null, rank: r.rank, matchedTerm: typeof r.matched_term === 'string' && r.matched_term ? r.matched_term : null }));
 }
 
+/**
+ * /v1/species/suggest, /v1/species/match and /v1/species/{key} (speciesUrl) take no checklistKey: they ignore it and always answer in
+ * the Backbone (live 2026-09-18, .superpowers/sdd/polish/D-research.md Q1: match with the COL XR checklistKey still gave usageKey
+ * 5133088; suggest gave Backbone key 6223161; /v1/species/4DXXM is HTTP 400). Their keys are Backbone keys, which is the checklist every
+ * taxon request names (GBIF_BACKBONE_CHECKLIST_KEY).
+ */
 export function gbifSuggestUrl(q) {
   return `${GBIF_API}/v1/species/suggest?${new URLSearchParams({ q, limit: '8' })}`;
 }
