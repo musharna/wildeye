@@ -392,3 +392,37 @@ test('startup puts the card announcer in the page, and it is visually hidden', (
   const rule = css.match(/\.bio-card-announce \{([^}]*)\}/)?.[1] ?? '';
   for (const declaration of ['position: fixed;', 'width: 1px;', 'height: 1px;', 'overflow: hidden;', 'clip-path: inset(50%);', 'white-space: nowrap;']) assert.ok(rule.includes(declaration), `.bio-card-announce has ${declaration}`);
 });
+
+// Fix round 1, item 3: the line names the record that opened (the entity's name, else the first bold line of its details, else the layer), so
+// opening another record in the same layer is new text. A line identical to the one showing (another record of the same name) is cleared and
+// set again on the next frame, so a screen reader hears it again; a newer line or a close cancels that pending frame.
+test('the details line names the record, and an identical line is cleared and set again on the next frame', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const frames = [];
+  const card = createDetailsCard({ viewer, doc, layerName: () => 'GBIF Occurrences', sanitize: (html) => html, nextFrame: (fn) => { frames.push(fn); return frames.length; }, cancelFrame: (id) => { frames[id - 1] = null; } });
+  const announcer = card.announcer;
+  const named = (id, name) => ({ ...entityIn('occurrences', '<b>x</b>'), id, name });
+  viewer.selectedEntity = named('a', 'Blue whale');
+  assert.equal(announcer.textContent, 'Blue whale details opened', 'the record is named');
+  viewer.selectedEntity = named('b', 'Fin whale');
+  assert.equal(announcer.textContent, 'Fin whale details opened', 'another record in the same layer is new text');
+  assert.equal(frames.length, 0, 'different text is set at once');
+  viewer.selectedEntity = named('c', 'Fin whale');
+  assert.equal(announcer.textContent, '', 'the same text is cleared first');
+  assert.equal(frames.length, 1);
+  frames[0]();
+  assert.equal(announcer.textContent, 'Fin whale details opened', 'and set again on the next frame');
+  viewer.selectedEntity = named('d', 'Fin whale');
+  card.close();
+  assert.equal(frames[1], null, 'a close cancels the pending line');
+  assert.equal(announcer.textContent, '');
+  // With no entity name, the first bold line of the details names the record; with neither, the layer does.
+  const body = card.element.querySelector('.bio-card-body');
+  body.querySelector('b').textContent = '  🐋 Blue whale ';
+  viewer.selectedEntity = entityIn('occurrences', '<b>🐋 Blue whale</b> <i>Balaenoptera musculus</i>');
+  assert.equal(announcer.textContent, '🐋 Blue whale details opened');
+  body.querySelector('b').textContent = '';
+  viewer.selectedEntity = { ...entityIn('occurrences', 'plain text'), id: 'e2' };
+  assert.equal(announcer.textContent, 'GBIF Occurrences details opened');
+});

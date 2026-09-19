@@ -95,7 +95,7 @@ export function renderListInto(container, rows, doc, onRow) {
   }
 }
 
-export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {}, observeSize = observeSizeWithResizeObserver }) {
+export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {}, observeSize = observeSizeWithResizeObserver, nextFrame = (fn) => setTimeout(fn, 50), cancelFrame = (id) => clearTimeout(id) }) {
   const root = doc.createElement('aside');
   root.id = 'bio-card';
   root.className = 'bio-card';
@@ -111,7 +111,19 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   announcer.setAttribute('role', 'status');
   announcer.setAttribute('aria-live', 'polite');
   announcer.setAttribute('aria-atomic', 'true');
-  const announce = (text) => { announcer.textContent = text; };
+  // Fix round 1, item 3: a line identical to the one showing is not a change a screen reader hears, so it is cleared and set again a moment later
+  // (50 ms, a later task than the clear, so the two are separate changes); a newer line or a close cancels that pending set.
+  let pendingFrame = null;
+  const announce = (text) => {
+    if (pendingFrame !== null) cancelFrame(pendingFrame);
+    pendingFrame = null;
+    if (text !== '' && announcer.textContent === text) {
+      announcer.textContent = '';
+      pendingFrame = nextFrame(() => { pendingFrame = null; announcer.textContent = text; });
+      return;
+    }
+    announcer.textContent = text;
+  };
   // Static skeleton only; no data is interpolated here. The body and the foot share .bio-card-main, the grid that divides the card's height
   // between the species list and the Top datasets rows (style.css, R13-M1).
   root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><div class="bio-card-filter"></div><div class="bio-card-main"><div class="bio-card-body"></div><div class="bio-card-foot"></div></div>';
@@ -160,7 +172,10 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
       reset(heading);
       body.innerHTML = html;
       root.hidden = false;
-      announce(`${heading} details opened`);
+      // Fix round 1, item 3: the line names the record: the entity's name, else the first bold line of its details (the biology layers put the
+      // record's name there), else the layer.
+      const record = (typeof entity.name === 'string' && entity.name.trim()) || body.querySelector('b')?.textContent?.trim() || heading;
+      announce(`${record} details opened`);
       setMode('detail');
     } catch (error) {
       console.error('[bio-card] could not render details', { layerId: entity?.entityCollection?.owner?.name ?? null, entityId: entity?.id ?? null, error });

@@ -1372,7 +1372,7 @@ if (CHECKS.has('card')) {
   await sleep(2500);
   const card = await page.evaluate(() => {
     const el = document.getElementById('bio-card');
-    return el ? { visible: !el.hidden && el.getBoundingClientRect().width > 0, text: el.innerText, links: [...el.querySelectorAll('.bio-card-body a')].map((a) => ({ href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel') })) } : null;
+    return el ? { announce: document.getElementById('bio-card-announce')?.textContent ?? null, visible: !el.hidden && el.getBoundingClientRect().width > 0, text: el.innerText, links: [...el.querySelectorAll('.bio-card-body a')].map((a) => ({ href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel') })) } : null;
   });
   await shot('card');
   // Positive control for the sanitizer: the layer's own https links (the DOI among them) survive, opening in a new tab with no opener.
@@ -1380,6 +1380,8 @@ if (CHECKS.has('card')) {
   const doiLink = httpsLinks.find((link) => link.href.startsWith('https://doi.org/')) || null;
   const linksOk = httpsLinks.length > 0 && httpsLinks.every((link) => link.target === '_blank' && /\bnoopener\b/.test(link.rel || ''));
   report('card', Boolean(card?.visible) && card.text.includes(target.name) && /CC0|CC[ -]BY/i.test(card.text) && linksOk, { entity: target.id, name: target.name, doiLink, httpsLinks: httpsLinks.length, card: card && { visible: card.visible, text: card.text.slice(0, 240), links: card.links } });
+  // Fix round 1, item 3: the hidden status line names the record that opened (the first bold line of a GBIF occurrence's details).
+  report('card-announce', typeof card?.announce === 'string' && card.announce.includes(target.name) && card.announce.endsWith(' details opened'), { announce: card?.announce ?? null, name: target.name });
 
   // Escape must deselect as well as close: Cesium raises selectedEntityChanged only when the value changes, so a
   // marker left selected could not reopen the card.
@@ -1425,6 +1427,36 @@ if (CHECKS.has('card')) {
     ds.entities.remove(entity);
     return result;
   }, HOSTILE);
+  // Fix round 1, item 3: two records of the same name, one after the other: the second line is identical, so it is cleared and set again, two
+  // separate changes a screen reader hears; a record of another name is set at once. Recorded by a MutationObserver on the status line.
+  const repeat = await page.evaluate(async () => {
+    const viewer = window.__godsEyeView.viewer;
+    let ds = null;
+    for (let i = 0; i < viewer.dataSources.length; i += 1) if (viewer.dataSources.get(i).name === 'occurrences') ds = viewer.dataSources.get(i);
+    const line = document.getElementById('bio-card-announce');
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(line.textContent));
+    observer.observe(line, { childList: true, characterData: true, subtree: true });
+    const add = (id, name) => ds.entities.add({ id, name, description: `<b>${name}</b> qa repeat` });
+    const a = add('qa-repeat-a', 'QA Twin');
+    const b = add('qa-repeat-b', 'QA Twin');
+    const c = add('qa-repeat-c', 'QA Other');
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    viewer.selectedEntity = undefined;
+    await pause(300);
+    seen.length = 0;
+    viewer.selectedEntity = a;
+    await pause(300);
+    viewer.selectedEntity = b;
+    await pause(300);
+    viewer.selectedEntity = c;
+    await pause(300);
+    observer.disconnect();
+    viewer.selectedEntity = undefined;
+    for (const e of [a, b, c]) ds.entities.remove(e);
+    return { seen, final: line.textContent };
+  });
+  report('card-announce-repeat', JSON.stringify(repeat.seen) === JSON.stringify(['QA Twin details opened', '', 'QA Twin details opened', 'QA Other details opened']), repeat);
   report('card-sanitize', sanitized.visible && sanitized.hasMarker && sanitized.imgs === 0 && sanitized.javascriptHrefs === 0 && sanitized.disallowedHrefs === 0 && sanitized.safeLink?.target === '_blank' && /\bnoopener\b/.test(sanitized.safeLink?.rel || '') && sanitized.xss === 'undefined', sanitized);
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', false, { origin: 'user' }));
 }
