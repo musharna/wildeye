@@ -1649,7 +1649,8 @@ const bikeshareLayer = {
  * @param {KeyboardEvent} e - Keyboard event.
  */
 function _onKeyDown(e) {
-  if (e.key === 'Escape' && _selectedKey) {
+  // One key, one thing: an Escape another control already handled (preventDefault) is not ours.
+  if (e.key === 'Escape' && !e.defaultPrevented && _selectedKey) {
     _clearSelection();
   }
 }

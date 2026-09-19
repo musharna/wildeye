@@ -5239,7 +5239,8 @@ const flightsLayer = {
  * @param {KeyboardEvent} e
  */
 function _onKeyDown(e) {
-  if (e.key === 'Escape' && _trackedIcao) {
+  // One key, one thing: an Escape another control already handled (preventDefault) is not ours.
+  if (e.key === 'Escape' && !e.defaultPrevented && _trackedIcao) {
     _cancelPendingTrackingRestore();
     _clearTracking(false, { origin: 'user' });
   }
