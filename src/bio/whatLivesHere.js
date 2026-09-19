@@ -104,11 +104,12 @@ export function createWhatLivesHere({
     area = null;
   };
 
-  const setArmed = (value) => {
+  // reason: 'arm', 'pick' (a ground click ended it) or 'cancel' (Escape, the button, the card dismissed), for owners that care why.
+  const setArmed = (value, reason = value ? 'arm' : 'cancel') => {
     if (armed === value) return;
     armed = value;
     viewer.scene.canvas.style.cursor = value ? 'crosshair' : '';
-    onArmedChange(value);
+    onArmedChange(value, reason);
   };
 
   const groundAt = (windowPosition) => {
@@ -184,7 +185,7 @@ export function createWhatLivesHere({
       return null;
     }
     const cartographic = Cesium.Cartographic.fromCartesian(position);
-    setArmed(false);
+    setArmed(false, 'pick');
     return run(Cesium.Math.toDegrees(cartographic.latitude), Cesium.Math.toDegrees(cartographic.longitude));
   }
 
@@ -201,7 +202,8 @@ export function createWhatLivesHere({
       controller?.abort(); // a search still in flight must not replace the prompt or leave a Retry for the old spot
       removeArea(); // the prompt no longer describes the old circle
       setArmed(true);
-      card.showStatus({ heading: HEADING, message: 'Click a spot on the globe. Esc cancels.' });
+      // Fix round 5: the × on the card is the cancel a touch user has, so the prompt names it with Escape.
+      card.showStatus({ heading: HEADING, message: 'Click a spot on the globe. Tap × or press Esc to cancel.' });
     },
     disarm() { setArmed(false); },
     /** The card was dismissed: abort the search it was waiting for (aborted searches are silent), disarm, remove the outline. */

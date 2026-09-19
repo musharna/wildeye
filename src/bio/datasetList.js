@@ -50,10 +50,16 @@ export function createDatasetRows(doc, datasets, { label = DATASETS_HEADING, lab
   return list;
 }
 
-/** The block: a heading, then its rows (createDatasetRows). */
+/**
+ * The block: a heading, then its rows (createDatasetRows), then the "more ↓" cue for the rows (brief B S-1), hidden from screen readers.
+ * Children in that order: [heading, rows, cue]. The cue starts hidden; watchMoreBelow (moreCue.js) shows it while more rows are below.
+ */
 export function createDatasetList(doc, datasets, { heading = DATASETS_HEADING } = {}) {
   const block = make(doc, 'div', 'dataset-list');
   block.appendChild(make(doc, 'span', 'dataset-list-heading', heading));
   block.appendChild(createDatasetRows(doc, datasets, { label: heading }));
+  const cue = make(doc, 'span', 'dataset-list-more', 'more ↓');
+  cue.setAttribute('aria-hidden', 'true');
+  block.appendChild(cue);
   return block;
 }

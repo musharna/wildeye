@@ -5,19 +5,11 @@
  */
 import { SPECIES_MAP_LEGEND, gbifPortalTaxonUrl, yearLabel } from './gbif.js';
 import { createDatasetRows } from './datasetList.js';
+import { observeSizeWithResizeObserver, watchMoreBelow } from './moreCue.js';
 
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
-/**
- * I2: scrollHeight and clientHeight are whole pixels rounded from fractional layout, so a scroll range of up to 2 px is rounding, not content,
- * and the scroll cue stays hidden.
- */
-export const MORE_SLACK_PX = 2;
-
-/** Whether more of a scroll container's content is below its view: more than MORE_SLACK_PX of its scroll range is left. */
-export function hasMoreBelow({ scrollTop, scrollHeight, clientHeight }) {
-  return scrollHeight - clientHeight - scrollTop > MORE_SLACK_PX;
-}
+// The scroll cue's rule and the size observer live in moreCue.js, shared with the details card's Top datasets rows.
 
 /**
  * "Common · Scientific (rank)", plus the term iNaturalist matched, which can be another common name ("Hump-back Cicada" for Swamp
@@ -79,7 +71,7 @@ export function renderLegendInto(container, doc, legend = SPECIES_MAP_LEGEND) {
 
 export function createSpeciesPanel({
   doc = document, dataManager, speciesLayer, client, whatLivesHere, setTimer = setTimeout, clearTimer = clearTimeout,
-  observeSize = (targets, onChange) => { const observer = new ResizeObserver(onChange); for (const target of targets) observer.observe(target); },
+  observeSize = observeSizeWithResizeObserver,
 }) {
   const el = (id) => {
     const node = doc.getElementById(id);
@@ -109,6 +101,8 @@ export function createSpeciesPanel({
   let listQuery = null; // M3: the query the suggestion list showing was built for
   let chooseAbort = null;
   let lookingUpKey = null;
+  // The "Looking up …" line of the choice in flight, cleared by the next choice (startChoice).
+  let pendingLookingUp = null;
   // M1: { taxonKey, canonicalName } while the chosen taxon came from a GBIF match that was not EXACT.
   let shownAs = null;
   // N-d: the status written for that choice ("No exact GBIF match …; shown as GBIF's …"), which goes when the note does.
@@ -120,11 +114,8 @@ export function createSpeciesPanel({
   let datasetsSettled = false;
   let datasetsFailed = false;
   renderLegendInto(legend, doc);
-  const updateMore = () => { more.style.visibility = hasMoreBelow(body) ? 'visible' : 'hidden'; };
-  body.addEventListener('scroll', updateMore, { passive: true });
   // The body's size follows the window and the panel stack; its content's follows the legend, the datasets and the suggestions.
-  observeSize([body, ...body.children], updateMore);
-  updateMore();
+  watchMoreBelow(body, more, observeSize);
 
   const params = () => dataManager.getLayerParams('species') || { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
 
@@ -299,10 +290,21 @@ export function createSpeciesPanel({
   }
 
   /**
-   * Put a GBIF taxon on the map. Used by suggestions and by "what lives here" rows. `shownAsName` is the GBIF name a match that was not EXACT
-   * found (M1); any other choice clears it.
+   * R13-M4: a new choice of taxon, from any entry point, aborts the one still pending (its match or name lookup), so an older choice that
+   * answers late cannot overwrite the newer one. Returns the new choice's signal.
    */
-  async function chooseTaxon({ taxonKey, name, shownAsName = null }) {
+  function startChoice() {
+    // A review m-5: the pending choice's "Looking up …" line goes now, not when that choice resumes (a client that ignored the abort would
+    // leave it up until its late answer). A line something else wrote since is kept.
+    if (pendingLookingUp !== null && status.textContent === pendingLookingUp) status.textContent = '';
+    pendingLookingUp = null;
+    chooseAbort?.abort();
+    chooseAbort = new AbortController();
+    return chooseAbort.signal;
+  }
+
+  /** Put a GBIF taxon on the map. `shownAsName` is the GBIF name a match that was not EXACT found (M1); any other choice clears it. */
+  async function mapTaxon({ taxonKey, name, shownAsName = null }) {
     shownAs = shownAsName ? { taxonKey, canonicalName: shownAsName } : null;
     if (!dataManager.setLayerParams('species', { taxonKey, name }, { origin: 'user' })) {
       throw new Error(`species layer rejected taxon ${taxonKey}`);
@@ -312,32 +314,65 @@ export function createSpeciesPanel({
     return true;
   }
 
+  /** A GBIF taxon chosen by key ("what lives here" rows): a new choice, mapped at once. */
+  async function chooseTaxon({ taxonKey, name }) {
+    startChoice();
+    return mapTaxon({ taxonKey, name });
+  }
+
+  /**
+   * Fix round 1, item 6: the accepted name of a synonym the match did not name. The key is known, so a failed lookup does not stop the map: the
+   * name shown says the lookup failed ("accepted taxon 5220086 — name lookup failed: HTTP 503"), and the failure is logged. An abort is rethrown.
+   */
+  async function acceptedName(taxonKey, item, signal) {
+    try {
+      return (await client.speciesName(taxonKey, { signal })).scientificName;
+    } catch (error) {
+      if (error?.name === 'AbortError' || signal.aborted) throw error;
+      console.error('[species] accepted-name lookup failed; mapped by key', { taxonKey, item, error });
+      return `accepted taxon ${taxonKey} — name lookup failed: ${error.message}`;
+    }
+  }
+
   async function choose(item) {
-    chooseAbort?.abort();
-    chooseAbort = new AbortController();
+    const signal = startChoice();
     endSearch(); // M3: a choice ends the name search
     clearSuggestions();
-    status.textContent = `Looking up ${item.scientificName} in GBIF…`;
+    const lookingUp = `Looking up ${item.scientificName} in GBIF…`;
+    status.textContent = lookingUp;
+    pendingLookingUp = lookingUp;
+    // A newer choice took over: this one maps nothing more, and its "Looking up" line goes unless something has replaced it.
+    const superseded = () => {
+      if (status.textContent === lookingUp) status.textContent = '';
+      return false;
+    };
     try {
       let taxonKey = item.gbifKey;
       let shownAsName = null;
       if (taxonKey === null || taxonKey === undefined) {
-        const match = await client.match(item.scientificName, { signal: chooseAbort.signal });
+        const match = await client.match(item.scientificName, { signal });
+        if (signal.aborted) return superseded();
         if (match.key === null) {
           status.textContent = `${item.scientificName} is not in GBIF.`;
           return false;
         }
         taxonKey = match.key;
         // M1: GBIF matched another spelling or a higher rank ("Danaus plexippa" is mapped as Danaus plexippus), so say which name is shown.
-        if (match.matchType !== 'EXACT') shownAsName = match.canonicalName;
+        // R13-M3: a synonym the match did not name is named by looking its accepted key up, here, where the name is shown; an EXACT match
+        // shows no name, so it sends no lookup and cannot fail on one.
+        if (match.matchType !== 'EXACT') {
+          shownAsName = match.canonicalName ?? await acceptedName(taxonKey, item, signal);
+          if (signal.aborted) return superseded();
+        }
       }
-      await chooseTaxon({ taxonKey, name: item.commonName || item.scientificName, shownAsName });
+      await mapTaxon({ taxonKey, name: item.commonName || item.scientificName, shownAsName });
+      if (signal.aborted) return superseded();
       input.value = '';
       status.textContent = shownAsName ? `No exact GBIF match for ${item.scientificName}; shown as GBIF's ${shownAsName}.` : '';
       shownAsStatus = shownAsName ? status.textContent : null;
       return true;
     } catch (error) {
-      if (error?.name === 'AbortError') return false;
+      if (error?.name === 'AbortError' || signal.aborted) return superseded();
       console.error('[species] could not choose species', { item, error });
       status.textContent = `GBIF lookup failed (${error.message})`;
       return false;
@@ -348,19 +383,30 @@ export function createSpeciesPanel({
     clearTimer(timer);
     timer = setTimer(() => { void requestSuggestions(); }, SUGGEST_DEBOUNCE_MS);
   });
+  /**
+   * M2, R12-M1, R12-M2, R13-M5: Escape in the combobox (the box and its suggestion list, as in the WAI-ARIA combobox pattern) does one thing at a
+   * time and says so (preventDefault), so the card and WHAT LIVES HERE leave that key alone. It hides a visible list, keeps the text and puts
+   * focus in the box (it may have been on a suggestion); with no list it clears the text in the box; either way it ends the name search. With
+   * neither, the key is theirs: the next Escape closes the card and disarms.
+   */
+  function comboboxEscape(event) {
+    if (event.key !== 'Escape' || (list.hidden && input.value === '')) return;
+    endSearch();
+    if (!list.hidden) {
+      input.focus();
+      clearSuggestions();
+    } else {
+      input.value = '';
+    }
+    event.preventDefault();
+  }
   input.addEventListener('keydown', (event) => {
     // M3: Enter picks the first row only of a list showing for what the box holds now, not of one built for an earlier query.
     if (event.key === 'Enter' && !list.hidden && listQuery === input.value.trim()) list.querySelector('button')?.click();
-    // M2, R12-M1, R12-M2: Escape does one thing at a time and says so (preventDefault), so the card and WHAT LIVES HERE leave that key alone. It
-    // hides a visible list and keeps the text; with no list it clears the text in the box; either way it ends the name search. With neither, the
-    // key is theirs: the next Escape closes the card and disarms.
-    if (event.key === 'Escape' && (!list.hidden || input.value !== '')) {
-      endSearch();
-      if (!list.hidden) clearSuggestions();
-      else input.value = '';
-      event.preventDefault();
-    }
+    comboboxEscape(event);
   });
+  // Keys from a focused suggestion: only Escape is the combobox's; Enter and Space stay the button's own.
+  list.addEventListener('keydown', comboboxEscape);
   toggle.addEventListener('click', () => {
     void dataManager.setEnabled('species', !dataManager.isEnabled('species'), { origin: 'user' }).then(render);
   });

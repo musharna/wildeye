@@ -21,6 +21,7 @@ import ecoregionsLayer from './data/ecoregions.js';
 import speciesLayer, { DEFAULT_SPECIES_PARAMS } from './data/species.js';
 import { createBioClient } from './bio/gbif.js';
 import { createWhatLivesHere } from './bio/whatLivesHere.js';
+import { createShortViewportRegions } from './bio/shortViewport.js';
 import { createSpeciesPanel } from './bio/speciesPanel.js';
 import { createDetailsCard } from './bio/detailsCard.js';
 import firesLayer from './data/fires.js';
@@ -310,9 +311,18 @@ async function init() {
     let whatLivesHere = null;
     const bioCard = createDetailsCard({ viewer, layerName: (id) => dataManager.layers.get(id)?.module?.name || id, onDismiss: () => whatLivesHere?.cancel(), onListEnd: () => whatLivesHere?.listEnded() });
     document.body.appendChild(bioCard.element);
+    document.body.appendChild(bioCard.announcer);
     // Species search and "what lives here" (docs/superpowers/specs/2026-09-13-species-search-design.md).
     const bioClient = createBioClient();
     let speciesPanel = null;
+    // Fix round 4: on a short viewport the open left panel and the card take turns, so neither covers the other or the pick target
+    // (src/bio/shortViewport.js; style.css gives each its region). The fold is temporary, so it is not persisted or shared.
+    createShortViewportRegions({
+      stack: document.getElementById('left-panel-stack'),
+      cardElement: bioCard.element,
+      dismissCard: () => bioCard.element.querySelector('.bio-card-close')?.click(),
+      setPanelCollapsed: (id, collapsed) => styleManager.setPanelCollapsed(id, collapsed, { persist: false, syncShare: false }),
+    });
     whatLivesHere = createWhatLivesHere({
       viewer,
       client: bioClient,

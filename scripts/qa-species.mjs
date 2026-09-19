@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 /**
  * qa-species.mjs — real-browser checks for the biology details card, species search and "what lives here".
- * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link] [--shots <dir>]
+ * Run: node scripts/qa-species.mjs --url http://localhost:4488/wildeye/ [--checks panel-layout,left-stack,contrast,card-foot-rest,panel-fold,phone-accordion,landscape-regions,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
 import { GBIF_BACKBONE_CHECKLIST_KEY, SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX } from '../src/bio/gbif.js';
-import { MORE_SLACK_PX } from '../src/bio/speciesPanel.js';
+import { MORE_SLACK_PX } from '../src/bio/moreCue.js';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 // I2: a desktop window height at which the whole SPECIES panel body fits (round-10 build: nothing overflowed at 1,100, 1,300 and 1,700 px).
 const TALL_DESKTOP_HEIGHT = 1100;
-const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link').split(','));
+const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,panel-fold,phone-accordion,landscape-regions,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
@@ -102,6 +102,125 @@ const openSpeciesPanel = async () => {
   });
   await sleep(800);
 };
+
+// The contrast method (qa contrast, and the collapsed pills in qa collapsed-pills): see the contrast check's comment.
+const frames = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+const addStyle = (id, css) => page.evaluate((id, css) => { const style = document.createElement('style'); style.id = id; style.textContent = css; document.head.appendChild(style); }, id, css);
+const removeStyle = (id) => page.evaluate((id) => document.getElementById(id)?.remove(), id);
+const hideText = (root) => `${root}, ${root} *, ${root} *::before, ${root} *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; transition: none !important; } ${root} input::placeholder { color: transparent !important; }`;
+const installContrast = () => page.evaluate(() => {
+  const lin = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+  const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const parseColor = (text) => { const parts = (text.match(/[\d.]+/g) || []).map(Number); return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }; };
+  const describe = (el) => el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '') + [...el.classList].map((name) => `.${name}`).join('');
+  const opacityOf = (el) => { let opacity = 1; for (let node = el; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity); return opacity; };
+  // A box clipped to the view of the element itself and of every ancestor that clips (an ellipsised name's line box runs on under the switch
+  // beside it) and to the window; null when nothing of it can be seen.
+  const clip = (box, el) => {
+    let b = { ...box };
+    for (let node = el; node; node = node.parentElement) {
+      const cs = getComputedStyle(node);
+      if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+      const r = node.getBoundingClientRect();
+      b = { left: Math.max(b.left, r.left + node.clientLeft), top: Math.max(b.top, r.top + node.clientTop), right: Math.min(b.right, r.left + node.clientLeft + node.clientWidth), bottom: Math.min(b.bottom, r.top + node.clientTop + node.clientHeight) };
+    }
+    b = { left: Math.max(b.left, 0), top: Math.max(b.top, 0), right: Math.min(b.right, innerWidth), bottom: Math.min(b.bottom, innerHeight) };
+    return b.right - b.left >= 1 && b.bottom - b.top >= 1 ? b : null;
+  };
+  const decode = async (png) => {
+    const img = new Image();
+    img.src = `data:image/png;base64,${png}`;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    return { width: img.width, data: ctx.getImageData(0, 0, img.width, img.height).data, scale: img.width / innerWidth };
+  };
+  window.__qaContrast = {
+    collect(rootSelector, parkedSelector, nonTextSelector) {
+      const root = document.querySelector(rootSelector);
+      if (!root) throw new Error(`contrast: ${rootSelector} is missing`);
+      const rootBox = root.getBoundingClientRect();
+      const items = new Map();
+      // Text kept for screen readers only (a 1 px box, like the phone's "Find a species" label) is reported, not gated: nobody sees it.
+      const screenReaderOnly = (el) => { const r = el.getBoundingClientRect(); return r.width <= 1 || r.height <= 1; };
+      const add = (el, text, rects, color) => {
+        // Text with no layout box (display: none, a hidden list) is not on the page. Text laid out but clipped out of view at this scroll
+        // position is registered with no boxes, so text that no scroll position shows is reported unmeasured instead of being skipped.
+        if (el.getClientRects().length === 0) return;
+        const key = `${describe(el)}|${text.slice(0, 60)}`;
+        const hiddenFromSight = screenReaderOnly(el);
+        const item = items.get(key) || { key, label: describe(el), text: text.slice(0, 60), color, opacity: opacityOf(el), rects: [], gate: !hiddenFromSight && !(parkedSelector && el.closest(parkedSelector)), screenReaderOnly: hiddenFromSight, min: el.closest(nonTextSelector) ? 3 : 4.5, control: el.id === 'qa-contrast-control' ? 'dim' : el.id === 'qa-contrast-unseen-control' ? 'unseen' : false };
+        item.rects.push(...rects);
+        // Text drawn outside its surface's box is not on the surface's ground.
+        item.outside = Boolean(item.outside) || rects.some((r) => r.left < rootBox.left - 0.5 || r.right > rootBox.right + 0.5 || r.top < rootBox.top - 0.5 || r.bottom > rootBox.bottom + 0.5);
+        items.set(key, item);
+      };
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.textContent.replace(/\s+/g, ' ').trim();
+        if (!text) continue;
+        const el = node.parentElement;
+        const cs = getComputedStyle(el);
+        if (cs.visibility !== 'visible' || opacityOf(el) === 0) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        add(el, text, [...range.getClientRects()].map((r) => clip({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }, el)).filter(Boolean), parseColor(cs.color));
+      }
+      // An input's value or placeholder: its content box, as wide as the text (the clear button sits to its right).
+      for (const input of root.querySelectorAll('input')) {
+        const cs = getComputedStyle(input);
+        if (cs.visibility !== 'visible' || input.getClientRects().length === 0) continue;
+        const text = input.value || input.placeholder;
+        if (!text) continue;
+        const ctx = document.createElement('canvas').getContext('2d');
+        ctx.font = cs.font;
+        const r = input.getBoundingClientRect();
+        const left = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft);
+        const right = Math.min(left + ctx.measureText(text).width, r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight));
+        const box = clip({ left, top: r.top + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop), right, bottom: r.bottom - parseFloat(cs.borderBottomWidth) - parseFloat(cs.paddingBottom) }, input);
+        add(input, `${input.value ? 'value' : 'placeholder'}: ${text}`, box ? [box] : [], parseColor(input.value ? cs.color : getComputedStyle(input, '::placeholder').color));
+      }
+      return [...items.values()];
+    },
+    async analyse(png, items) {
+      const { width, data, scale } = await decode(png);
+      return items.map((item) => {
+        const alpha = item.color.a * item.opacity;
+        const text = [item.color.r, item.color.g, item.color.b];
+        let worst = null;
+        let pixels = 0;
+        for (const r of item.rects) {
+          for (let y = Math.ceil(r.top * scale); y < Math.floor(r.bottom * scale); y += 1) {
+            for (let x = Math.ceil(r.left * scale); x < Math.floor(r.right * scale); x += 1) {
+              const i = (y * width + x) * 4;
+              const bg = [data[i], data[i + 1], data[i + 2]];
+              const fg = text.map((channel, k) => alpha * channel + (1 - alpha) * bg[k]);
+              const lf = lum(...fg);
+              const lb = lum(...bg);
+              const ratio = (Math.max(lf, lb) + 0.05) / (Math.min(lf, lb) + 0.05);
+              pixels += 1;
+              if (!worst || ratio < worst.ratio) worst = { ratio, bg };
+            }
+          }
+        }
+        return { key: item.key, label: item.label, text: item.text, color: item.color, opacity: item.opacity, gate: item.gate, screenReaderOnly: item.screenReaderOnly, outside: item.outside, min: item.min, control: item.control, pixels, ratio: worst ? +worst.ratio.toFixed(2) : null, worstBg: worst?.bg ?? null };
+      });
+    },
+    async behind(png, box) {
+      const { width, data, scale } = await decode(png);
+      const values = [];
+      for (let y = Math.ceil(box.top * scale); y < Math.floor(box.bottom * scale); y += 2) {
+        for (let x = Math.ceil(box.left * scale); x < Math.floor(box.right * scale); x += 2) { const i = (y * width + x) * 4; values.push(lum(data[i], data[i + 1], data[i + 2])); }
+      }
+      values.sort((p, q) => p - q);
+      if (!values.length) return { pixels: 0, medianL: null };
+      return { pixels: values.length, p10L: +values[Math.floor(values.length * 0.1)].toFixed(3), medianL: +values[Math.floor(values.length / 2)].toFixed(3), maxL: +values.at(-1).toFixed(3) };
+    },
+  };
+});
 
 await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
@@ -490,7 +609,8 @@ if (CHECKS.has('left-stack')) {
 //   then made transparent and the page captured, so each pixel under a line box is the ground that text is drawn on. The text colour is
 //   composited over each of those pixels, and the lowest WCAG ratio is the text's. Each scroll container of a surface (the card's body and its
 //   foot) is stepped through, and text that no position shows fails as unmeasured. Text needs 4.5:1, the card's close × (non-text) 3:1.
-// - The host header (the SPECIES title and its button, parked with R-7ii S2) is measured and reported, not gated.
+// - The host header (the SPECIES title and its button) is gated like the rest since brief B brought the shared pill and header text to 0.8
+//   white (it was parked with R-7ii S2 at the shared 0.3 white).
 // - Controls in the same check: each forced message is present; the map behind each surface, captured with the surface hidden, has a median
 //   relative luminance of at least 0.5; a 0.3-white control line placed in each surface measures under 4.5:1; and a control line laid out where
 //   no scroll position shows it comes back unmeasured.
@@ -504,10 +624,6 @@ if (CHECKS.has('contrast')) {
   const FUZZY_SUGGESTION = { total_results: 1, page: 1, per_page: 1, results: [{ id: 48662, name: 'Danaus plexippa', rank: 'species', preferred_common_name: 'Monarch', matched_term: 'Monarch' }] };
   const INAT_AUTOCOMPLETE = '^https://api\\.inaturalist\\.org/v1/taxa/autocomplete';
   const TAXON_DATASET_SEARCH = '^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*taxonKey=)';
-  const frames = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  const addStyle = (id, css) => page.evaluate((id, css) => { const style = document.createElement('style'); style.id = id; style.textContent = css; document.head.appendChild(style); }, id, css);
-  const removeStyle = (id) => page.evaluate((id) => document.getElementById(id)?.remove(), id);
-  const hideText = (root) => `${root}, ${root} *, ${root} *::before, ${root} *::after { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; transition: none !important; } ${root} input::placeholder { color: transparent !important; }`;
   // Each rule is a URL pattern the page's fetch answers with HTTP 503, or { pattern, body }, answered 200 with that JSON.
   const setFailures = (rules) => page.evaluate((rules) => {
     if (!window.__qaFetchOriginal) {
@@ -532,119 +648,7 @@ if (CHECKS.has('contrast')) {
   const canvasCentre = () => page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
   const collapseSpecies = async () => { await page.evaluate(() => { const panel = document.getElementById('species-panel'); if (!panel.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click(); }); await sleep(800); };
   const closeCard = async () => { await page.evaluate(() => { const card = document.getElementById('bio-card'); if (card && !card.hidden) card.querySelector('.bio-card-close').click(); }); await sleep(500); };
-  await page.evaluate(() => {
-    const lin = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
-    const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-    const parseColor = (text) => { const parts = (text.match(/[\d.]+/g) || []).map(Number); return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }; };
-    const describe = (el) => el.tagName.toLowerCase() + (el.id ? `#${el.id}` : '') + [...el.classList].map((name) => `.${name}`).join('');
-    const opacityOf = (el) => { let opacity = 1; for (let node = el; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity); return opacity; };
-    // A box clipped to the view of the element itself and of every ancestor that clips (an ellipsised name's line box runs on under the switch
-    // beside it) and to the window; null when nothing of it can be seen.
-    const clip = (box, el) => {
-      let b = { ...box };
-      for (let node = el; node; node = node.parentElement) {
-        const cs = getComputedStyle(node);
-        if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
-        const r = node.getBoundingClientRect();
-        b = { left: Math.max(b.left, r.left + node.clientLeft), top: Math.max(b.top, r.top + node.clientTop), right: Math.min(b.right, r.left + node.clientLeft + node.clientWidth), bottom: Math.min(b.bottom, r.top + node.clientTop + node.clientHeight) };
-      }
-      b = { left: Math.max(b.left, 0), top: Math.max(b.top, 0), right: Math.min(b.right, innerWidth), bottom: Math.min(b.bottom, innerHeight) };
-      return b.right - b.left >= 1 && b.bottom - b.top >= 1 ? b : null;
-    };
-    const decode = async (png) => {
-      const img = new Image();
-      img.src = `data:image/png;base64,${png}`;
-      await img.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(img, 0, 0);
-      return { width: img.width, data: ctx.getImageData(0, 0, img.width, img.height).data, scale: img.width / innerWidth };
-    };
-    window.__qaContrast = {
-      collect(rootSelector, parkedSelector, nonTextSelector) {
-        const root = document.querySelector(rootSelector);
-        if (!root) throw new Error(`contrast: ${rootSelector} is missing`);
-        const rootBox = root.getBoundingClientRect();
-        const items = new Map();
-        // Text kept for screen readers only (a 1 px box, like the phone's "Find a species" label) is reported, not gated: nobody sees it.
-        const screenReaderOnly = (el) => { const r = el.getBoundingClientRect(); return r.width <= 1 || r.height <= 1; };
-        const add = (el, text, rects, color) => {
-          // Text with no layout box (display: none, a hidden list) is not on the page. Text laid out but clipped out of view at this scroll
-          // position is registered with no boxes, so text that no scroll position shows is reported unmeasured instead of being skipped.
-          if (el.getClientRects().length === 0) return;
-          const key = `${describe(el)}|${text.slice(0, 60)}`;
-          const hiddenFromSight = screenReaderOnly(el);
-          const item = items.get(key) || { key, label: describe(el), text: text.slice(0, 60), color, opacity: opacityOf(el), rects: [], gate: !hiddenFromSight && !(parkedSelector && el.closest(parkedSelector)), screenReaderOnly: hiddenFromSight, min: el.closest(nonTextSelector) ? 3 : 4.5, control: el.id === 'qa-contrast-control' ? 'dim' : el.id === 'qa-contrast-unseen-control' ? 'unseen' : false };
-          item.rects.push(...rects);
-          // Text drawn outside its surface's box is not on the surface's ground.
-          item.outside = Boolean(item.outside) || rects.some((r) => r.left < rootBox.left - 0.5 || r.right > rootBox.right + 0.5 || r.top < rootBox.top - 0.5 || r.bottom > rootBox.bottom + 0.5);
-          items.set(key, item);
-        };
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-          const text = node.textContent.replace(/\s+/g, ' ').trim();
-          if (!text) continue;
-          const el = node.parentElement;
-          const cs = getComputedStyle(el);
-          if (cs.visibility !== 'visible' || opacityOf(el) === 0) continue;
-          const range = document.createRange();
-          range.selectNodeContents(node);
-          add(el, text, [...range.getClientRects()].map((r) => clip({ left: r.left, top: r.top, right: r.right, bottom: r.bottom }, el)).filter(Boolean), parseColor(cs.color));
-        }
-        // An input's value or placeholder: its content box, as wide as the text (the clear button sits to its right).
-        for (const input of root.querySelectorAll('input')) {
-          const cs = getComputedStyle(input);
-          if (cs.visibility !== 'visible' || input.getClientRects().length === 0) continue;
-          const text = input.value || input.placeholder;
-          if (!text) continue;
-          const ctx = document.createElement('canvas').getContext('2d');
-          ctx.font = cs.font;
-          const r = input.getBoundingClientRect();
-          const left = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft);
-          const right = Math.min(left + ctx.measureText(text).width, r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight));
-          const box = clip({ left, top: r.top + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop), right, bottom: r.bottom - parseFloat(cs.borderBottomWidth) - parseFloat(cs.paddingBottom) }, input);
-          add(input, `${input.value ? 'value' : 'placeholder'}: ${text}`, box ? [box] : [], parseColor(input.value ? cs.color : getComputedStyle(input, '::placeholder').color));
-        }
-        return [...items.values()];
-      },
-      async analyse(png, items) {
-        const { width, data, scale } = await decode(png);
-        return items.map((item) => {
-          const alpha = item.color.a * item.opacity;
-          const text = [item.color.r, item.color.g, item.color.b];
-          let worst = null;
-          let pixels = 0;
-          for (const r of item.rects) {
-            for (let y = Math.ceil(r.top * scale); y < Math.floor(r.bottom * scale); y += 1) {
-              for (let x = Math.ceil(r.left * scale); x < Math.floor(r.right * scale); x += 1) {
-                const i = (y * width + x) * 4;
-                const bg = [data[i], data[i + 1], data[i + 2]];
-                const fg = text.map((channel, k) => alpha * channel + (1 - alpha) * bg[k]);
-                const lf = lum(...fg);
-                const lb = lum(...bg);
-                const ratio = (Math.max(lf, lb) + 0.05) / (Math.min(lf, lb) + 0.05);
-                pixels += 1;
-                if (!worst || ratio < worst.ratio) worst = { ratio, bg };
-              }
-            }
-          }
-          return { key: item.key, label: item.label, text: item.text, color: item.color, opacity: item.opacity, gate: item.gate, screenReaderOnly: item.screenReaderOnly, outside: item.outside, min: item.min, control: item.control, pixels, ratio: worst ? +worst.ratio.toFixed(2) : null, worstBg: worst?.bg ?? null };
-        });
-      },
-      async behind(png, box) {
-        const { width, data, scale } = await decode(png);
-        const values = [];
-        for (let y = Math.ceil(box.top * scale); y < Math.floor(box.bottom * scale); y += 2) {
-          for (let x = Math.ceil(box.left * scale); x < Math.floor(box.right * scale); x += 2) { const i = (y * width + x) * 4; values.push(lum(data[i], data[i + 1], data[i + 2])); }
-        }
-        values.sort((p, q) => p - q);
-        if (!values.length) return { pixels: 0, medianL: null };
-        return { pixels: values.length, p10L: +values[Math.floor(values.length * 0.1)].toFixed(3), medianL: +values[Math.floor(values.length / 2)].toFixed(3), maxL: +values.at(-1).toFixed(3) };
-      },
-    };
-  });
+  await installContrast();
   // One surface in its current state: the map behind it, then every text at each scroll position of each of its scroll containers, then a
   // capture for the critic.
   const measureSurface = async (name, { root, scrollers = [], parked = null, nonText = '.bio-card-close' }) => {
@@ -758,7 +762,7 @@ if (CHECKS.has('contrast')) {
       await page.waitForFunction(() => /^Name search failed/.test(document.getElementById('species-status')?.textContent || ''), { timeout: 30000 });
       const panelForced = await page.evaluate(() => ({ status: document.getElementById('species-status').textContent, datasets: document.getElementById('species-datasets-status').textContent, retry: Boolean(document.querySelector('#species-datasets .species-datasets-retry')), note: document.getElementById('species-chosen-note').textContent }));
       const panelTiles = await waitForMapTiles();
-      const panel = await measureSurface(`panel-${size}`, { root: '#species-panel .species-panel-inner', scrollers: ['#species-body'], parked: '#species-panel .panel-header' });
+      const panel = await measureSurface(`panel-${size}`, { root: '#species-panel .species-panel-inner', scrollers: ['#species-body'], nonText: '.panel-collapse-btn' });
       surfaces.push({ ...panel, ok: panel.ok && panelForced.retry && panelForced.note === "shown as GBIF's Danaus plexippus" && Boolean(panel.classes['span#species-chosen-note.species-chosen-note']), viewport: size, forced: { ...panelForced, requests: await forcedCount() }, tiles: panelTiles.settled });
       // A status card: the what-lives-here search fails. The panel is collapsed, so the map is what shows behind the card.
       await setFailures(['^https://api\\.gbif\\.org/v1/occurrence/search\\?(?=.*facet=speciesKey)']);
@@ -825,18 +829,48 @@ if (CHECKS.has('contrast')) {
 // across the antimeridian, so the foot carries its note) is read with every scroll container in the card set to scroll 0, and nothing is scrolled
 // after that: the link's box must be whole inside the card, the foot and every clipping ancestor, and the page must hit the link at the centre
 // of each of its boxes; the note must be whole too. States: the list with every dataset lookup failed (HTTP 503 answered in the page's fetch) and the normal
-// list, at 1400x900 and 375x667. The failed states run first: finished dataset lookups are cached for the session, failures are not. Positive
+// list, at 1400x900 and 375x667. Finished dataset lookups are cached for the session and panel-layout, which runs first in a default run,
+// looks up the monarch's datasets, two of which Taveuni lists too: a cached title needs no request, so its row showed no failure note and the
+// failed state never settled (the full-run timeouts brief A put down to the network). In the failed state the page's fetch therefore also
+// renames the search's DATASET_KEY facet to fresh random dataset UUIDs, which no cache holds, keeping their order and counts. Positive
 // control in the same check: at rest at least one species row and the first line of at least one dataset link are whole, so the credit is not
-// bought by hiding the lists, and where the dataset rows overflow their fade is on. qa contrast scrolls to find text and cannot see this.
+// bought by hiding the lists. qa contrast scrolls to find text and cannot see this.
+// R13-M1: also just above 850 px (1400x851), on tall phones (393x852, 412x915, 430x932) and in phone landscape (667x375), where a window-height
+// cap on the foot lost a species row. The species list and the dataset rows share the card from their floors up in equal steps: the list's
+// floor is one whole species row (BODY_FLOOR_PX), the rows' floor only their focus-ring inset (ROWS_FLOOR_PX), so on a short card the dataset
+// rows give way to their heading and "more ↓" cue before the species list does (brief B fix round 1, critic S1). While the list is cut the
+// rows are no taller than the list minus the difference of the floors, and while the rows are cut the list is no taller than the rows plus it.
+// At least one whole species row at every size: no size and no measured quantity waives it (review I-1). At least one whole dataset line at
+// every size but LANDSCAPE, pinned: at 667x375 the 195 px card holds the fixed parts, one species row and the dataset heading with its cue,
+// and no dataset line (the arithmetic is in B-report.md, fix round 1).
+// R13-M2: at 1400x900 and 375x667, in both states, the first and the last dataset link take keyboard focus (Shift+Tab, then Tab back, so
+// :focus-visible applies and the browser scrolls the rows as it would) and the focus ring (the link's box grown by its outline width and
+// offset; Chrome paints the UA's auto 1px ring 2 px out from the box) is whole inside every clipping ancestor, the card and the window.
+// Brief B S-1: while the dataset rows are cut at rest, the card shows the panel's "more ↓" cue for them (visible, aria-hidden, overlapping
+// no text of the block), and it goes when the rows are scrolled to their end; with nothing cut there is no cue.
 if (CHECKS.has('card-foot-rest')) {
+  // Critic r1 S-new: phone landscape too, where the rows keep only their ring inset at rest and a focused link showed a 7 px slice.
+  const RING_SIZES = new Set(['1400x900', '375x667', '667x375']);
   const TAVEUNI = [179.97, -16.8, 10000];
-  const STATES = [[1400, 900, true], [375, 667, true], [1400, 900, false], [375, 667, false]];
+  // --card-sizes narrows the sizes for a quicker run while developing; the default is every size above.
+  const SIZES = arg('--card-sizes', '1400x900,375x667,1400x851,393x852,412x915,430x932,667x375').split(',').map((size) => size.split('x').map(Number));
+  const STATES = [...SIZES.map(([width, height]) => [width, height, true]), ...SIZES.map(([width, height]) => [width, height, false])];
   const setDatasetFailures = (on) => page.evaluate((on) => {
     if (on && !window.__qaRestFetch) {
       window.__qaRestFetch = window.fetch;
       window.fetch = (input, init) => {
         const url = String(input?.url ?? input);
         if (url.startsWith('https://api.gbif.org/v1/dataset/')) return Promise.resolve(new Response('{"qa":"forced failure"}', { status: 503, headers: { 'content-type': 'application/json' } }));
+        let u = null;
+        try { u = new URL(url); } catch { /* not a URL: passed through */ }
+        if (u && u.hostname === 'api.gbif.org' && u.pathname === '/v1/occurrence/search' && u.searchParams.getAll('facet').includes('speciesKey')) {
+          return window.__qaRestFetch.call(window, input, init).then(async (res) => {
+            if (!res.ok) return res;
+            const json = await res.json();
+            for (const facet of json.facets || []) if (facet.field === 'DATASET_KEY') for (const c of facet.counts || []) c.name = crypto.randomUUID();
+            return new Response(JSON.stringify(json), { status: 200, headers: { 'content-type': 'application/json' } });
+          });
+        }
         return window.__qaRestFetch.call(window, input, init);
       };
     }
@@ -878,23 +912,149 @@ if (CHECKS.has('card-foot-rest')) {
       card: round(cardBox),
       foot: foot && { box: round(foot.getBoundingClientRect()), maxHeight: footCs.maxHeight, overflowY: footCs.overflowY, scrollHeight: foot.scrollHeight, clientHeight: foot.clientHeight },
       body: body && { clientHeight: body.clientHeight, scrollHeight: body.scrollHeight },
+      announce: document.getElementById('bio-card-announce')?.textContent ?? null,
       speciesRows: card.querySelectorAll('.bio-card-row').length,
       speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter((row) => wholeBox(row, row.getBoundingClientRect())).length,
       datasetRows: card.querySelectorAll('.bio-card-foot .dataset-row').length,
       datasetNotes: card.querySelectorAll('.bio-card-foot .dataset-row-note').length,
-      datasetFirstLinesWhole: [...card.querySelectorAll('.bio-card-foot .dataset-row-link')].filter((a) => wholeBox(a, a.getClientRects()[0])).length,
-      datasetList: rows && { overflowY: getComputedStyle(rows).overflowY, scrollHeight: rows.scrollHeight, clientHeight: rows.clientHeight, fade: getComputedStyle(rows).getPropertyValue('--bio-card-datasets-fade').trim() },
+      // The first text line of each dataset link (a link is a flex item, so its own box holds every line it wraps to).
+      datasetFirstLinesWhole: [...card.querySelectorAll('.bio-card-foot .dataset-row-link')].filter((a) => { const range = document.createRange(); range.selectNodeContents(a); return wholeBox(a, range.getClientRects()[0]); }).length,
+      datasetList: rows && { overflowY: getComputedStyle(rows).overflowY, scrollHeight: rows.scrollHeight, clientHeight: rows.clientHeight, minHeight: parseFloat(getComputedStyle(rows).minHeight) || 0, fade: getComputedStyle(rows).getPropertyValue('--bio-card-datasets-fade').trim() },
+      // Brief B fix round 1 (critic S3): a text line cut by a scroller's bottom edge at rest. Each such line must sit inside a fade at that
+      // edge: the scroller carries a mask, and its fade is at least as tall as the part of the line that shows. A line cut with no fade read as
+      // a rendering glitch, with the "more ↓" cue 100-130 px away on the heading line.
+      sliced: [['.bio-card-body', '--bio-card-body-fade', '.bio-card-row-primary, .bio-card-row-secondary, .bio-card-row-count, .bio-card-row-note'], ['.bio-card-foot .dataset-list-rows', '--bio-card-datasets-fade', '.dataset-row-link, .dataset-row-count, .dataset-row-note']].flatMap(([scrollerSel, fadeVar, textSel]) => {
+        const scroller = card.querySelector(scrollerSel);
+        if (!scroller) return [];
+        const r = scroller.getBoundingClientRect();
+        const clipBottom = r.top + scroller.clientTop + scroller.clientHeight;
+        const cs = getComputedStyle(scroller);
+        const mask = cs.maskImage || cs.webkitMaskImage || 'none';
+        const fade = parseFloat(cs.getPropertyValue(fadeVar)) || 0;
+        return [...scroller.querySelectorAll(textSel)].flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()]; })
+          .filter((line) => line.top < clipBottom - 0.5 && line.bottom > clipBottom + 0.5)
+          .map((line) => { const shows = clipBottom - line.top; return { scroller: scrollerSel, shows: +shows.toFixed(1), fade, mask: mask !== 'none', ok: mask !== 'none' && fade >= shows - 0.5 }; });
+      }),
+      cue: (() => {
+        const cue = card.querySelector('.bio-card-foot .dataset-list-more');
+        if (!cue) return null;
+        const c = cue.getBoundingClientRect();
+        const cs = getComputedStyle(cue);
+        // Visible text of the block the cue could cover: the heading's text and every dataset link's and count's text inside the rows' view.
+        const texts = [...card.querySelectorAll('.bio-card-foot .dataset-list-heading, .bio-card-foot .dataset-row-link, .bio-card-foot .dataset-row-count')].flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()].map((r) => ({ el, r })); });
+        const overlaps = texts.filter(({ r }) => Math.min(r.right, c.right) - Math.max(r.left, c.left) > 0.5 && Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top) > 0.5).map(({ el }) => el.className);
+        return { text: cue.textContent, visibility: cs.visibility, display: cs.display, ariaHidden: cue.getAttribute('aria-hidden'), box: round(c), overlaps };
+      })(),
+      cardMaxHeight: parseFloat(getComputedStyle(card).maxHeight),
+      speciesRowHeight: card.querySelector('.bio-card-row')?.getBoundingClientRect().height ?? null,
     };
   });
-  const restOk = (s, failed) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && s.speciesRowsWhole >= 1 && s.datasetFirstLinesWhole >= 1
-    && (!s.datasetList || s.datasetList.scrollHeight - s.datasetList.clientHeight <= 1 || /^[1-9][\d.]*px$/.test(s.datasetList.fade))
-    && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0);
+  // R13-M1: the share between the list and the rows, and whether the card can hold a whole species row at all (see above).
+  // One species row (12 px and 11 px lines at line-height 1.45, 5 px padding and a 1 px border each side, a 3 px margin), and the rows' 3 px
+  // ring inset each side. Pinned here, not read from the page, so a build that changes the floors fails instead of moving the target.
+  const BODY_FLOOR_PX = 12 * 1.45 + 11 * 1.45 + 15;
+  const ROWS_FLOOR_PX = 6;
+  const LANDSCAPE = '667x375';
+  const share = (s, viewport) => {
+    if (!s.body) return { ok: false, why: 'no body' };
+    const bodyCut = s.body.scrollHeight - s.body.clientHeight > 1;
+    const rows = s.datasetList;
+    const rowsCut = Boolean(rows) && rows.scrollHeight - rows.clientHeight > 1;
+    const listNotStarved = !bodyCut || !rows || rows.clientHeight <= s.body.clientHeight - (BODY_FLOOR_PX - ROWS_FLOOR_PX) + 2;
+    const rowsNotStarved = !rowsCut || s.body.clientHeight <= rows.clientHeight + (BODY_FLOOR_PX - ROWS_FLOOR_PX) + 2;
+    const speciesRowOk = s.speciesRowsWhole >= 1;
+    const datasetLineOk = viewport === LANDSCAPE ? rowsCut : s.datasetFirstLinesWhole >= 1;
+    return { ok: listNotStarved && rowsNotStarved && speciesRowOk && datasetLineOk, bodyCut, rowsCut, listNotStarved, rowsNotStarved, speciesRowOk, datasetLineOk, speciesRowHeight: s.speciesRowHeight && +s.speciesRowHeight.toFixed(1), cardMaxHeight: s.cardMaxHeight };
+  };
+  // Fix round 3 (critic r2 S2): the species list as focus in the rows leaves it: its height, and every species text line its bottom edge cuts,
+  // each of which must sit inside the list's fade (mask on, fade at least as tall as the part that shows).
+  const bodyNow = () => page.evaluate(() => {
+    const body = document.querySelector('#bio-card .bio-card-body');
+    const r = body.getBoundingClientRect();
+    const clipBottom = r.top + body.clientTop + body.clientHeight;
+    const cs = getComputedStyle(body);
+    const mask = (cs.maskImage || cs.webkitMaskImage || 'none') !== 'none';
+    const fade = parseFloat(cs.getPropertyValue('--bio-card-body-fade')) || 0;
+    const cut = [...body.querySelectorAll('.bio-card-row-primary, .bio-card-row-secondary, .bio-card-row-count, .bio-card-row-note')]
+      .flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()]; })
+      .filter((line) => line.top < clipBottom - 0.5 && line.bottom > clipBottom + 0.5)
+      .map((line) => { const shows = +(clipBottom - line.top).toFixed(1); return { shows, fade, mask, ok: mask && fade >= shows - 0.5 }; });
+    return { height: body.clientHeight, cut };
+  });
+  const focusRings = async (label) => {
+    const count = await page.evaluate(() => document.querySelectorAll('#bio-card .bio-card-foot .dataset-row-link').length);
+    const restBody = await bodyNow();
+    const restRows = await page.evaluate(() => document.querySelector('#bio-card .bio-card-foot .dataset-list-rows').clientHeight);
+    const bodies = [];
+    const rings = [];
+    for (const index of [...new Set([0, count - 1])]) {
+      await page.evaluate((i) => document.querySelectorAll('#bio-card .bio-card-foot .dataset-row-link')[i].focus(), index);
+      await page.keyboard.down('Shift');
+      await page.keyboard.press('Tab');
+      await page.keyboard.up('Shift');
+      await page.keyboard.press('Tab');
+      await sleep(400);
+      await shot(`card-focus-${index === 0 ? 'first' : 'last'}-${label}`);
+      bodies.push(await bodyNow());
+      rings.push(await page.evaluate((i) => {
+        const card = document.getElementById('bio-card');
+        const a = card.querySelectorAll('.bio-card-foot .dataset-row-link')[i];
+        const r = a.getBoundingClientRect();
+        const cs = getComputedStyle(a);
+        const out = (parseFloat(cs.outlineWidth) || 0) + (parseFloat(cs.outlineOffset) || 0);
+        const ring = { left: r.left - out, top: r.top - out, right: r.right + out, bottom: r.bottom + out };
+        let clip = { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+        const clippers = [];
+        for (let node = a.parentElement; node; node = node.parentElement) {
+          const ncs = getComputedStyle(node);
+          if (ncs.overflowX === 'visible' && ncs.overflowY === 'visible' && node !== card) continue;
+          const nr = node.getBoundingClientRect();
+          const box = node === card && ncs.overflowX === 'visible' && ncs.overflowY === 'visible' ? nr : { left: nr.left + node.clientLeft, top: nr.top + node.clientTop, right: nr.left + node.clientLeft + node.clientWidth, bottom: nr.top + node.clientTop + node.clientHeight };
+          clippers.push(node.className || node.id || node.tagName);
+          clip = { left: Math.max(clip.left, box.left), top: Math.max(clip.top, box.top), right: Math.min(clip.right, box.right), bottom: Math.min(clip.bottom, box.bottom) };
+        }
+        const round = (b) => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, +v.toFixed(1)]));
+        const inside = ring.left >= clip.left - 0.05 && ring.top >= clip.top - 0.05 && ring.right <= clip.right + 0.05 && ring.bottom <= clip.bottom + 0.05;
+        return { index: i, focused: document.activeElement === a, focusVisible: a.matches(':focus-visible'), outline: `${cs.outlineStyle} ${cs.outlineWidth} offset ${cs.outlineOffset}`, ring: round(ring), clip: round(clip), clippers, inside, boxWhole: r.left >= clip.left - 0.05 && r.top >= clip.top - 0.05 && r.right <= clip.right + 0.05 && r.bottom <= clip.bottom + 0.05 };
+      }, index));
+    }
+    await page.evaluate(() => { document.activeElement?.blur?.(); for (const el of document.querySelectorAll('#bio-card *')) el.scrollTop = 0; });
+    // Where the rows already showed a whole link line at rest (one line inside the 6 px ring inset), focus must not cost the list anything.
+    const rowsHeldALine = restRows >= 11 * 1.35 + 6 - 0.5;
+    const bodyOk = bodies.every((b) => b.cut.every((line) => line.ok) && (!rowsHeldALine || Math.abs(b.height - restBody.height) <= 1));
+    return { rings, restBody, restRows, rowsHeldALine, bodies, bodyOk, ok: rings.length >= 2 && rings.every((r) => r.focused && r.focusVisible && r.outline.startsWith('auto') && r.inside && r.boxWhole) && bodyOk };
+  };
+  // The cue while the rows are cut: shown at rest, gone at their scroll end; with nothing cut, not shown.
+  const cueAtEnd = () => page.evaluate(async () => {
+    const rows = document.querySelector('#bio-card .bio-card-foot .dataset-list-rows');
+    const cue = document.querySelector('#bio-card .bio-card-foot .dataset-list-more');
+    if (!rows || !cue) return null;
+    rows.scrollTop = rows.scrollHeight;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const visibility = getComputedStyle(cue).visibility;
+    rows.scrollTop = 0;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return { visibility, backAtTop: getComputedStyle(cue).visibility };
+  });
+  const cueOk = (s) => {
+    const cut = Boolean(s.datasetList) && s.datasetList.scrollHeight - s.datasetList.clientHeight > MORE_SLACK_PX;
+    if (!cut) return !s.cue || s.cue.visibility === 'hidden';
+    return Boolean(s.cue) && s.cue.visibility === 'visible' && s.cue.display !== 'none' && s.cue.text === 'more ↓' && s.cue.ariaHidden === 'true' && s.cue.overlaps.length === 0 && s.cue.box.height >= 10
+      && s.cueEnd?.visibility === 'hidden' && s.cueEnd.backAtTop === 'visible';
+  };
+  const restOk = (s, failed, viewport) => Boolean(s.link?.whole && s.link.hit && s.note?.whole) && share(s, viewport).ok && cueOk(s) && s.sliced.every((line) => line.ok)
+    && (failed ? s.datasetRows > 0 && s.datasetNotes === s.datasetRows : s.datasetNotes === 0)
+    // Fix round 1, item 4: the status line says the failed dataset lookups (and only when some failed).
+    && (failed ? new RegExp(`; ${s.datasetRows} dataset lookups? failed \\(HTTP`).test(s.announce ?? '') : !/dataset lookups? failed/.test(s.announce ?? ''));
   const saved = await page.evaluate(() => {
     const c = window.__godsEyeView.viewer.camera;
     window.__qaRestCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll };
     return { speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed'), radiusKm: window.__godsEyeView.dataManager.getLayerParams('species')?.radiusKm ?? 10 };
   });
   const results = [];
+  const armedAt = [];
   let error = null;
   let restored = null;
   try {
@@ -906,22 +1066,52 @@ if (CHECKS.has('card-foot-rest')) {
       await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { radiusKm: 50 }, { origin: 'user' })) throw new Error('species radius rejected'); });
       await flyTo(...TAVEUNI);
       await openSpeciesPanel();
-      await page.click('#species-what-lives-here');
-      await page.evaluate(() => { const panel = document.getElementById('species-panel'); if (!panel.classList.contains('collapsed')) panel.querySelector('[data-collapse-target="species-panel"]').click(); });
+      // Final review m-2: a real click on WHAT LIVES HERE at every size (the first-run launcher is dismissed at the start of the run). The page
+      // must hit the button at its centre first; a miss fails the check with what was hit instead of falling back to a JS click.
+      const armAt = await page.evaluate(() => {
+        document.getElementById('species-body').scrollTop = 0;
+        const button = document.getElementById('species-what-lives-here');
+        const r = button.getBoundingClientRect();
+        const x = r.left + r.width / 2;
+        const y = r.top + r.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return { x, y, hits: Boolean(hit && (hit === button || button.contains(hit))), hit: hit ? (hit.id || String(hit.className)) : null };
+      });
+      if (!armAt.hits) throw new Error(`card-foot-rest ${width}x${height}: WHAT LIVES HERE is not what the page hits at its centre (${armAt.hit})`);
+      await page.mouse.click(armAt.x, armAt.y);
+      await sleep(300);
+      if (await page.evaluate(() => document.getElementById('species-what-lives-here').getAttribute('aria-pressed')) !== 'true') throw new Error(`card-foot-rest ${width}x${height}: a real click did not arm WHAT LIVES HERE`);
+      // Fix round 3 (critic r2 S1): the globe's centre is clicked as armed, with SPECIES left as the page leaves it; the check does not collapse
+      // it. The centre must be the canvas (on a short viewport the open panel folds while the card shows, src/bio/shortViewport.js).
       await sleep(800);
-      const centre = await page.evaluate(() => { const rect = window.__godsEyeView.viewer.scene.canvas.getBoundingClientRect(); return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }; });
+      const centre = await page.evaluate(() => {
+        const canvas = window.__godsEyeView.viewer.scene.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return { x, y, onCanvas: hit === canvas, hit: hit ? (hit.id || String(hit.className)) : null, speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed') };
+      });
+      armedAt.push({ viewport: `${width}x${height}`, failed, ...centre });
+      if (!centre.onCanvas) throw new Error(`card-foot-rest ${width}x${height}: armed, the globe's centre is under ${centre.hit}, not the canvas`);
       await page.mouse.click(centre.x, centre.y);
       await page.waitForFunction((failed) => {
         const card = document.getElementById('bio-card');
         const rows = card.querySelectorAll('.bio-card-foot .dataset-row').length;
         const notes = card.querySelectorAll('.bio-card-foot .dataset-row-note').length;
         return Boolean(card.querySelector('.bio-card-foot-note')) && card.querySelectorAll('.bio-card-row').length > 0 && rows > 0 && (failed ? notes === rows : notes === 0);
-      }, { timeout: 60000 }, failed);
+      }, { timeout: 60000 }, failed).catch(async (caught) => {
+        // What the card showed instead (a live GBIF failure shows its message and Retry), so a timeout names its cause.
+        const shown = await page.evaluate(() => { const card = document.getElementById('bio-card'); return { hidden: card.hidden, text: card.innerText.slice(0, 300) }; }).catch(() => null);
+        throw new Error(`card-foot-rest ${width}x${height} ${failed ? 'failed' : 'normal'}: the list did not settle (${String(caught).slice(0, 80)}); card: ${JSON.stringify(shown)}`);
+      });
       await page.mouse.move(Math.round(width / 2), Math.round(height * 0.3));
       await sleep(1000);
       const rest = await readRest();
+      rest.cueEnd = await cueAtEnd();
       await shot(`card-foot-rest-${failed ? 'failed' : 'normal'}-${width}x${height}`);
-      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed), ...rest });
+      const focus = RING_SIZES.has(`${width}x${height}`) ? await focusRings(`${failed ? 'failed' : 'normal'}-${width}x${height}`) : null;
+      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed, `${width}x${height}`) && (focus === null || focus.ok), share: share(rest, `${width}x${height}`), focus, ...rest });
       await closeCard();
     }
   } catch (caught) {
@@ -942,7 +1132,7 @@ if (CHECKS.has('card-foot-rest')) {
     await page.setViewport({ width: 1400, height: 900 });
     await sleep(2000);
   }
-  report('card-foot-rest', error === null && results.length === STATES.length && results.every((r) => r.ok) && restored?.fetchRestored === true, { results, restored, ...(error ? { error } : {}) });
+  report('card-foot-rest', error === null && results.length === STATES.length && results.every((r) => r.ok) && restored?.fetchRestored === true, { results, armedAt, restored, ...(error ? { error } : {}) });
 }
 
 // Critic 10 S1: the collapsed SPECIES pill is the material of the collapsed DATA LAYERS and SCENES pills. With all three collapsed, the scope mask
@@ -950,7 +1140,30 @@ if (CHECKS.has('card-foot-rest')) {
 // pills' computed backgrounds and backdrop filters are equal, and the SPECIES pill's fill (the median pixel of the pill 10 px in from its edges,
 // with every header's contents hidden) is within 15 levels per channel of the mean of the other two pills' fills. Positive control in the same
 // check: the open SPECIES panel's computed background is the 0.86 floor, not the pills' glass.
+// Brief B (pill contrast): in the same states, every pill's label text (DATA LAYERS, SCENES, SPECIES) holds 4.5:1 and its + button 3:1 (a
+// non-text control) over the ground it is drawn on, measured with qa contrast's method (the text made transparent, the page captured, the
+// text colour composited over each pixel under its line boxes, the lowest ratio kept). Positive control in the same measurement: each label
+// at 0.3 white (the pills' old --text-dim) over the same pixels comes out under 4.5:1.
 if (CHECKS.has('collapsed-pills')) {
+  await installContrast();
+  const pillContrast = async (roots) => {
+    await page.evaluate(() => document.activeElement?.blur?.());
+    const items = [];
+    for (const root of roots) items.push(...(await page.evaluate((root) => window.__qaContrast.collect(root, null, '.panel-collapse-btn'), root)).map((item) => ({ ...item, root })));
+    const controls = items.filter((item) => item.label.includes('panel-title')).map((item) => ({ ...item, key: `control 0.3 white ${item.key}`, color: { ...item.color, a: 0.3 }, opacity: 1, control: 'dim' }));
+    await addStyle('qa-pill-hide-text', roots.map(hideText).join(' '));
+    await frames();
+    await sleep(300);
+    const png = await page.screenshot({ encoding: 'base64' });
+    await removeStyle('qa-pill-hide-text');
+    await sleep(300);
+    const measured = await page.evaluate((png, items) => window.__qaContrast.analyse(png, items), png, [...items, ...controls]);
+    const labels = measured.filter((item) => !item.control).map(({ key, text, ratio, min, pixels, worstBg }) => ({ key, text, ratio, min, pixels, worstBg }));
+    const dim = measured.filter((item) => item.control === 'dim').map(({ key, ratio }) => ({ key, ratio }));
+    const titles = labels.filter((item) => item.key.includes('panel-title'));
+    const ok = titles.length === roots.length && labels.every((item) => item.pixels > 0 && item.ratio !== null && item.ratio >= item.min) && dim.length === titles.length && dim.every((item) => item.ratio !== null && item.ratio < 4.5);
+    return { ok, labels, dim };
+  };
   const PLACES = [['light', -97.74, 30.27, 3000], ['ocean', -140, -10, 800000]];
   const PILLS = [['data', 'data-panel', '.data-panel-inner'], ['scene', 'scene-panel', '.scene-panel-inner'], ['species', 'species-panel', '.species-panel-inner']];
   const MAX_LEVELS = 15;
@@ -1013,8 +1226,9 @@ if (CHECKS.has('collapsed-pills')) {
         const [data, scene, species] = pills;
         const mean = [0, 1, 2].map((k) => (data.rgb[k] + scene.rgb[k]) / 2);
         const maxLevels = Math.max(...species.rgb.map((value, k) => Math.abs(value - mean[k])));
-        const ok = pills.every((p) => p.collapsed && p.box.width > 40 && p.box.height > 20 && p.background === data.background && p.backdrop === data.backdrop) && maxLevels <= MAX_LEVELS;
-        samples.push({ viewport: `${width}x${height}`, place, tiles: tiles.settled, ok, maxLevels: +maxLevels.toFixed(1), pills });
+        const contrast = await pillContrast(PILLS.map(([, id, inner]) => `#${id} ${inner}`));
+        const ok = pills.every((p) => p.collapsed && p.box.width > 40 && p.box.height > 20 && p.background === data.background && p.backdrop === data.backdrop) && maxLevels <= MAX_LEVELS && contrast.ok;
+        samples.push({ viewport: `${width}x${height}`, place, tiles: tiles.settled, ok, maxLevels: +maxLevels.toFixed(1), pills, contrast });
       }
     }
     await setCollapsed('species-panel', false);
@@ -1040,9 +1254,120 @@ if (CHECKS.has('collapsed-pills')) {
   }
   const controlOk = Boolean(control?.open) && control.background === 'rgba(12, 12, 20, 0.86)' && samples.length > 0 && control.background !== samples[0].pills[0].background;
   report('collapsed-pills', error === null && samples.length === 4 && samples.every((s) => s.ok) && controlOk && restored?.stack === initial.stack && restored.scope === initial.scope, {
-    samples: samples.map((s) => ({ viewport: s.viewport, place: s.place, tiles: s.tiles, ok: s.ok, maxLevels: s.maxLevels, pills: s.pills.map((p) => ({ name: p.name, rgb: p.rgb, background: p.background, box: p.box })) })),
+    samples: samples.map((s) => ({ viewport: s.viewport, place: s.place, tiles: s.tiles, ok: s.ok, maxLevels: s.maxLevels, pills: s.pills.map((p) => ({ name: p.name, rgb: p.rgb, background: p.background, box: p.box })), contrast: s.contrast })),
     initial, control, controlOk, restored, ...(error ? { error } : {}),
   });
+}
+
+// Brief B (fold), fix round 1 (critic S2, review M-3): with a status line showing, nothing the person just used or needs next may leave the
+// SPECIES body's view. At 375x667 and 400x800, panel open, body at its scroll top, the search box, the status line, the chosen species row
+// with its MAP switch, and WHAT LIVES HERE are each whole inside the body's view and are what the page hits at their corners (a half-cut row
+// fails), in three states per size: (1) a 1-line status, "No names match …" (both name sources answered empty in the page's fetch); (2) a
+// 2-line status (1 line on the wider landscape panel): a species chosen through a real FUZZY match (iNaturalist's suggestion answered in the page as "Danaus plexippa"), "No exact
+// GBIF match …; shown as GBIF's …", with the chosen row's note; (3) a failed name search with that species still chosen. Positive controls in
+// the same check: each state's status text is the expected one, with the stated line count, and the note is on screen.
+// Final round (critic r1 N2): phone landscape too, 667x375, where the chosen row showed 13 of its 44 px.
+if (CHECKS.has('panel-fold')) {
+  const SIZES = [[375, 667], [400, 800], [667, 375]];
+  const FUZZY_SUGGESTION = { total_results: 1, page: 1, per_page: 1, results: [{ id: 48662, name: 'Danaus plexippa', rank: 'species', preferred_common_name: 'Monarch', matched_term: 'Monarch' }] };
+  const INAT_AUTOCOMPLETE = '^https://api\\.inaturalist\\.org/v1/taxa/autocomplete';
+  const setRules = (rules) => page.evaluate((rules) => {
+    if (!window.__qaFoldFetch) {
+      window.__qaFoldFetch = window.fetch;
+      window.fetch = (input, init) => {
+        const url = String(input?.url ?? input);
+        const rule = (window.__qaFoldRules || []).find((r) => new RegExp(typeof r === 'string' ? r : r.pattern).test(url));
+        if (rule) return Promise.resolve(typeof rule === 'string' ? new Response('{"qa":"forced failure"}', { status: 503, headers: { 'content-type': 'application/json' } }) : new Response(JSON.stringify(rule.body), { status: 200, headers: { 'content-type': 'application/json' } }));
+        return window.__qaFoldFetch.call(window, input, init);
+      };
+    }
+    window.__qaFoldRules = rules;
+  }, rules);
+  const typeQuery = async (text) => {
+    await page.click('#species-search', { clickCount: 3 });
+    await page.keyboard.press('Backspace');
+    await page.type('#species-search', text, { delay: 30 });
+  };
+  const measure = () => page.evaluate(() => {
+    document.activeElement?.blur?.();
+    const body = document.getElementById('species-body');
+    body.scrollTop = 0;
+    const b = body.getBoundingClientRect();
+    const view = { top: b.top + body.clientTop, bottom: Math.min(b.bottom, b.top + body.clientTop + body.clientHeight) };
+    const round = (v) => +v.toFixed(1);
+    // Whole inside the view, and hit at points inset from its corners (rounded pills: inset by up to half their height).
+    const seen = (id) => {
+      const el = document.getElementById(id);
+      const r = el.getBoundingClientRect();
+      const inset = Math.min((r.bottom - r.top) / 2, 10);
+      const corners = r.width > 0 && r.height > 0 && [[r.left + inset, r.top + 2], [r.right - inset, r.top + 2], [r.left + inset, r.bottom - 2], [r.right - inset, r.bottom - 2]].every(([x, y]) => { const hit = document.elementFromPoint(x, y); return Boolean(hit && (hit === el || el.contains(hit))); });
+      return { top: round(r.top), bottom: round(r.bottom), inside: r.height > 0 && r.top >= view.top - 0.5 && r.bottom <= view.bottom + 0.5, corners };
+    };
+    const parts = Object.fromEntries(['species-search', 'species-status', 'species-chosen', 'species-toggle', 'species-what-lives-here'].map((id) => [id, seen(id)]));
+    const status = document.getElementById('species-status');
+    const note = document.getElementById('species-chosen-note');
+    const lineHeight = parseFloat(getComputedStyle(status).lineHeight) || parseFloat(getComputedStyle(status).fontSize) * 1.2;
+    const stack = document.getElementById('left-panel-stack');
+    return {
+      view: { top: round(view.top), bottom: round(view.bottom) }, parts, whole: Object.values(parts).every((part) => part.inside && part.corners),
+      stackShown: [...stack.children].filter((el) => el.getClientRects().length > 0).map((el) => el.id),
+      status: status.textContent, statusLines: round(status.getBoundingClientRect().height / lineHeight), note: note.hidden ? null : note.textContent,
+      order: [...body.children].filter((el) => el.getClientRects().length > 0).map((el) => el.id || el.className).slice(0, 6),
+    };
+  });
+  const initial = await page.evaluate(() => ({ speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed'), params: window.__godsEyeView.dataManager.getLayerParams('species'), enabled: window.__godsEyeView.dataManager.isEnabled('species') }));
+  const states = [];
+  let error = null;
+  let restored = null;
+  try {
+    for (const [width, height] of SIZES) {
+      await page.setViewport({ width, height });
+      await sleep(2500);
+      await openSpeciesPanel();
+      // (1) the FUZZY choice first, so a species is chosen; its 2-line status is measured after the 1-line one below.
+      await setRules([{ pattern: INAT_AUTOCOMPLETE, body: FUZZY_SUGGESTION }]);
+      await typeQuery('monarch');
+      await page.waitForFunction(() => document.querySelector('#species-suggestions button')?.textContent.includes('Danaus plexippa'), { timeout: 20000 });
+      await page.click('#species-suggestions button');
+      await page.waitForFunction(() => document.getElementById('species-chosen-note')?.hidden === false && /^No exact GBIF match for Danaus plexippa; shown as GBIF's Danaus plexippus\./.test(document.getElementById('species-status').textContent), { timeout: 45000 });
+      await sleep(1000);
+      const fuzzy = await measure();
+      await shot(`panel-fold-2line-${width}x${height}`);
+      states.push({ viewport: `${width}x${height}`, state: '2-line status (FUZZY)', ...fuzzy, ok: fuzzy.whole && (width < 450 ? fuzzy.statusLines >= 1.9 && fuzzy.statusLines <= 2.2 : fuzzy.statusLines >= 0.9 && fuzzy.statusLines <= 1.2) && fuzzy.note === "shown as GBIF's Danaus plexippus" });
+      await setRules([{ pattern: INAT_AUTOCOMPLETE, body: { total_results: 0, page: 1, per_page: 0, results: [] } }, { pattern: '^https://api\\.gbif\\.org/v1/species/suggest', body: [] }]);
+      await typeQuery('zzqx');
+      await page.waitForFunction(() => document.getElementById('species-status').textContent === 'No names match "zzqx".', { timeout: 30000 });
+      await sleep(1000);
+      const oneLine = await measure();
+      await shot(`panel-fold-1line-${width}x${height}`);
+      states.push({ viewport: `${width}x${height}`, state: '1-line status', ...oneLine, ok: oneLine.whole && oneLine.statusLines >= 0.9 && oneLine.statusLines <= 1.2 && oneLine.note === "shown as GBIF's Danaus plexippus" });
+      await setRules([INAT_AUTOCOMPLETE, '^https://api\\.gbif\\.org/v1/species/suggest']);
+      await typeQuery('monarch');
+      await page.waitForFunction(() => /^Name search failed/.test(document.getElementById('species-status').textContent), { timeout: 30000 });
+      await sleep(1000);
+      const failedSearch = await measure();
+      await shot(`panel-fold-error-${width}x${height}`);
+      states.push({ viewport: `${width}x${height}`, state: 'search failed', ...failedSearch, ok: failedSearch.whole && failedSearch.statusLines >= 0.9 && failedSearch.status === 'Name search failed: iNaturalist HTTP 503, GBIF HTTP 503' && failedSearch.note === "shown as GBIF's Danaus plexippus" });
+    }
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    restored = await page.evaluate(async (initial) => {
+      if (window.__qaFoldFetch) { window.fetch = window.__qaFoldFetch; delete window.__qaFoldFetch; }
+      const input = document.getElementById('species-search');
+      input.value = '';
+      input.dispatchEvent(new Event('input'));
+      const dm = window.__godsEyeView.dataManager;
+      await dm.setEnabled('species', initial.enabled, { origin: 'user' });
+      dm.setLayerParams('species', { taxonKey: initial.params?.taxonKey ?? null, years: initial.params?.years ?? 'recent', radiusKm: initial.params?.radiusKm ?? 10, ...(initial.params?.name ? { name: initial.params.name } : {}) }, { origin: 'user' });
+      const panel = document.getElementById('species-panel');
+      if (panel.classList.contains('collapsed') !== initial.speciesCollapsed) panel.querySelector('[data-collapse-target="species-panel"]').click();
+      return { fetchRestored: !window.__qaFoldFetch, taxonKey: dm.getLayerParams('species')?.taxonKey ?? null };
+    }, initial).catch((caught) => ({ error: String(caught?.stack || caught).slice(0, 300) }));
+    await page.setViewport({ width: 1400, height: 900 });
+    await sleep(2000);
+  }
+  report('panel-fold', error === null && states.length === SIZES.length * 3 && states.every((s) => s.ok) && restored?.fetchRestored === true, { states, restored, ...(error ? { error } : {}) });
 }
 
 // M1 (final review): a strict GBIF match that answers FUZZY is mapped and says so. The page's fetch answers iNaturalist's autocomplete with one
@@ -1135,7 +1460,7 @@ if (CHECKS.has('card')) {
   await sleep(2500);
   const card = await page.evaluate(() => {
     const el = document.getElementById('bio-card');
-    return el ? { visible: !el.hidden && el.getBoundingClientRect().width > 0, text: el.innerText, links: [...el.querySelectorAll('.bio-card-body a')].map((a) => ({ href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel') })) } : null;
+    return el ? { announce: document.getElementById('bio-card-announce')?.textContent ?? null, visible: !el.hidden && el.getBoundingClientRect().width > 0, text: el.innerText, links: [...el.querySelectorAll('.bio-card-body a')].map((a) => ({ href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel') })) } : null;
   });
   await shot('card');
   // Positive control for the sanitizer: the layer's own https links (the DOI among them) survive, opening in a new tab with no opener.
@@ -1143,6 +1468,9 @@ if (CHECKS.has('card')) {
   const doiLink = httpsLinks.find((link) => link.href.startsWith('https://doi.org/')) || null;
   const linksOk = httpsLinks.length > 0 && httpsLinks.every((link) => link.target === '_blank' && /\bnoopener\b/.test(link.rel || ''));
   report('card', Boolean(card?.visible) && card.text.includes(target.name) && /CC0|CC[ -]BY/i.test(card.text) && linksOk, { entity: target.id, name: target.name, doiLink, httpsLinks: httpsLinks.length, card: card && { visible: card.visible, text: card.text.slice(0, 240), links: card.links } });
+  // Fix round 1, item 3: the hidden status line names the record that opened (the first bold line of a GBIF occurrence's details).
+  // Brief B fix round 1, item 6: the line starts with the name itself, not the layer's icon ("🐋 Blue whale details opened" before).
+  report('card-announce', typeof card?.announce === 'string' && card.announce.includes(target.name) && card.announce.endsWith(' details opened') && !/^[\p{Extended_Pictographic}\p{Regional_Indicator}\s]/u.test(card.announce), { announce: card?.announce ?? null, name: target.name });
 
   // Escape must deselect as well as close: Cesium raises selectedEntityChanged only when the value changes, so a
   // marker left selected could not reopen the card.
@@ -1156,6 +1484,29 @@ if (CHECKS.has('card')) {
     return el ? { visible: !el.hidden && el.getBoundingClientRect().width > 0, text: el.innerText.slice(0, 120) } : null;
   });
   report('card-reopen', afterEscape.hidden === true && afterEscape.selected === null && Boolean(reopened?.visible) && reopened.text.includes(target.name), { afterEscape, reopened });
+  await page.keyboard.press('Escape');
+  // Final review m-3: in clean view the card is display: none, so selecting the same record announces nothing; leaving clean view and
+  // selecting it again announces it (positive control in the same check).
+  const cleanView = await page.evaluate(async (id) => {
+    const view = window.__godsEyeView.viewer;
+    let entity = null;
+    for (let i = 0; i < view.dataSources.length && !entity; i += 1) entity = view.dataSources.get(i).entities.getById(id) ?? null;
+    const read = () => document.getElementById('bio-card-announce')?.textContent ?? null;
+    const wait = () => new Promise((resolve) => setTimeout(resolve, 400));
+    view.selectedEntity = undefined;
+    document.body.classList.add('ui-clean-view');
+    view.selectedEntity = entity;
+    await wait();
+    const hidden = { announce: read(), rendered: document.getElementById('bio-card').getClientRects().length > 0 };
+    view.selectedEntity = undefined;
+    document.body.classList.remove('ui-clean-view');
+    view.selectedEntity = entity;
+    await wait();
+    const shown = { announce: read(), rendered: document.getElementById('bio-card').getClientRects().length > 0 };
+    view.selectedEntity = undefined;
+    return { found: Boolean(entity), hidden, shown };
+  }, target.id);
+  report('card-announce-hidden', cleanView.found && cleanView.hidden.rendered === false && cleanView.hidden.announce === '' && cleanView.shown.rendered === true && /details opened$/.test(cleanView.shown.announce ?? ''), cleanView);
   await page.keyboard.press('Escape');
 
   // A hostile description on a real occurrences entity: DOMPurify must drop the img and the javascript: href, keep the
@@ -1188,6 +1539,36 @@ if (CHECKS.has('card')) {
     ds.entities.remove(entity);
     return result;
   }, HOSTILE);
+  // Fix round 1, item 3: two records of the same name, one after the other: the second line is identical, so it is cleared and set again, two
+  // separate changes a screen reader hears; a record of another name is set at once. Recorded by a MutationObserver on the status line.
+  const repeat = await page.evaluate(async () => {
+    const viewer = window.__godsEyeView.viewer;
+    let ds = null;
+    for (let i = 0; i < viewer.dataSources.length; i += 1) if (viewer.dataSources.get(i).name === 'occurrences') ds = viewer.dataSources.get(i);
+    const line = document.getElementById('bio-card-announce');
+    const seen = [];
+    const observer = new MutationObserver(() => seen.push(line.textContent));
+    observer.observe(line, { childList: true, characterData: true, subtree: true });
+    const add = (id, name) => ds.entities.add({ id, name, description: `<b>${name}</b> qa repeat` });
+    const a = add('qa-repeat-a', 'QA Twin');
+    const b = add('qa-repeat-b', 'QA Twin');
+    const c = add('qa-repeat-c', 'QA Other');
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    viewer.selectedEntity = undefined;
+    await pause(300);
+    seen.length = 0;
+    viewer.selectedEntity = a;
+    await pause(300);
+    viewer.selectedEntity = b;
+    await pause(300);
+    viewer.selectedEntity = c;
+    await pause(300);
+    observer.disconnect();
+    viewer.selectedEntity = undefined;
+    for (const e of [a, b, c]) ds.entities.remove(e);
+    return { seen, final: line.textContent };
+  });
+  report('card-announce-repeat', JSON.stringify(repeat.seen) === JSON.stringify(['QA Twin details opened', '', 'QA Twin details opened', 'QA Other details opened']), repeat);
   report('card-sanitize', sanitized.visible && sanitized.hasMarker && sanitized.imgs === 0 && sanitized.javascriptHrefs === 0 && sanitized.disallowedHrefs === 0 && sanitized.safeLink?.target === '_blank' && /\bnoopener\b/.test(sanitized.safeLink?.rel || '') && sanitized.xss === 'undefined', sanitized);
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('occurrences', false, { origin: 'user' }));
 }
@@ -1262,6 +1643,8 @@ if (CHECKS.has('suggestion-fade')) {
 // The first Escape only hides the list, and the search for "monarchs" it ended does not reopen it (R12-M1); the text, the card and the armed
 // state stay. The second Escape, with text and no list, only clears the text (R12-M2). The third, with neither, closes the card and disarms: the
 // positive control that Escape still reaches them.
+// R13-M5: before that sequence, Tab moves focus from the box to the first suggestion and Escape is pressed there: it only hides the list and
+// puts focus back in the box, keeping the text, the card and the armed state. Typing then brings the list back for the sequence above.
 if (CHECKS.has('escape')) {
   const read = () => page.evaluate(() => ({
     listHidden: document.getElementById('species-suggestions').hidden,
@@ -1271,7 +1654,9 @@ if (CHECKS.has('escape')) {
     cursor: window.__godsEyeView.viewer.scene.canvas.style.cursor,
     value: document.getElementById('species-search').value,
     focused: document.activeElement?.id || document.activeElement?.tagName || null,
+    focusedSuggestion: Boolean(document.activeElement?.classList?.contains('species-suggestion')),
   }));
+  const listShowing = () => page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
   const states = {};
   let error = null;
   try {
@@ -1280,8 +1665,15 @@ if (CHECKS.has('escape')) {
     await page.waitForFunction(() => !document.getElementById('bio-card').hidden, { timeout: 10000 });
     await page.click('#species-search', { clickCount: 3 });
     await page.keyboard.press('Backspace');
-    await page.type('#species-search', 'monarch', { delay: 40 });
-    await page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
+    await page.type('#species-search', 'mona', { delay: 40 });
+    await listShowing();
+    await page.keyboard.press('Tab');
+    states.tabbed = await read();
+    await page.keyboard.press('Escape');
+    await sleep(700);
+    states.fromSuggestion = await read();
+    await page.keyboard.type('rch', { delay: 40 });
+    await listShowing();
     states.before = await read();
     await page.keyboard.type('s');
     await page.keyboard.press('Escape');
@@ -1307,10 +1699,43 @@ if (CHECKS.has('escape')) {
     }).catch((caught) => { error = `${error ?? ''} restoring: ${caught}`; });
     await sleep(500);
   }
+  const suggestionOk = Boolean(states.fromSuggestion) && states.tabbed.focusedSuggestion && states.tabbed.listHidden === false && states.fromSuggestion.listHidden === true && states.fromSuggestion.focused === 'species-search' && states.fromSuggestion.value === 'mona' && states.fromSuggestion.cardHidden === false && states.fromSuggestion.armed;
   const firstOk = Boolean(states.first) && states.before.listHidden === false && states.before.cardHidden === false && states.before.armed && states.first.listHidden === true && states.first.value === 'monarchs' && states.first.cardHidden === false && states.first.armed;
   const secondOk = Boolean(states.second) && states.second.value === '' && states.second.listHidden === true && states.second.cardHidden === false && states.second.armed;
   const thirdOk = Boolean(states.third) && states.third.cardHidden === true && states.third.armed === false;
-  report('escape', error === null && firstOk && secondOk && thirdOk, { ...states, firstOk, secondOk, thirdOk, ...(error ? { error } : {}) });
+  report('escape', error === null && suggestionOk && firstOk && secondOk && thirdOk, { ...states, suggestionOk, firstOk, secondOk, thirdOk, ...(error ? { error } : {}) });
+}
+
+// Fix round 1, I-1: the card is a landmark named by its title in the browser's accessibility tree (not only an aria-labelledby string), and it is
+// not a live region; the hidden status line beside it says what opened. The card is an <aside> beside the globe, so its role is complementary
+// (content that supports the map and stands on its own), a role that takes a name; a role-less <div> would be generic and drop the name. WHAT LIVES HERE's prompt card is opened, read through the page's
+// accessibility tree, then closed.
+if (CHECKS.has('card-a11y')) {
+  let error = null;
+  let tree = null;
+  let dom = null;
+  try {
+    await openSpeciesPanel();
+    await page.click('#species-what-lives-here');
+    await page.waitForFunction(() => !document.getElementById('bio-card').hidden, { timeout: 10000 });
+    await sleep(300);
+    const handle = await page.$('#bio-card');
+    const node = await page.accessibility.snapshot({ root: handle, interestingOnly: false });
+    tree = node && { role: node.role, name: node.name };
+    dom = await page.evaluate(() => ({ title: document.querySelector('#bio-card .bio-card-title').textContent, live: document.getElementById('bio-card').getAttribute('aria-live'), announce: document.getElementById('bio-card-announce')?.textContent ?? null }));
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await page.evaluate(() => {
+      const card = document.getElementById('bio-card');
+      if (!card.hidden) card.querySelector('.bio-card-close').click();
+      const arm = document.getElementById('species-what-lives-here');
+      if (arm.getAttribute('aria-pressed') === 'true') arm.click();
+    }).catch((caught) => { error = `${error ?? ''} restoring: ${caught}`; });
+    await sleep(500);
+  }
+  const ok = error === null && tree?.role === 'complementary' && tree.name === dom?.title && dom.title !== '' && dom.live === null && dom.announce === `${dom.title}: Click a spot on the globe. Tap × or press Esc to cancel.`;
+  report('card-a11y', ok, { tree, dom, ...(error ? { error } : {}) });
 }
 
 if (CHECKS.has('search')) {
@@ -1622,8 +2047,8 @@ if (CHECKS.has('portal-link')) {
   const cardTotal = (filter) => { const m = /· ([\d,]+) records$/.exec(filter || ''); return m ? Number(m[1].replace(/,/g, '')) : null; };
   const noDistance = (u) => !u.searchParams.has('geo_distance') && !u.searchParams.has('geoDistance');
   const licencesOk = (u) => JSON.stringify(u.searchParams.getAll('license')) === JSON.stringify(['CC0_1_0', 'CC_BY_4_0']);
-  // An area link carries the search's own polygon, geospatial-issue filter, licences and years, no checklist, and its API count is the card's
-  // record total.
+  // An area link carries the search's own polygon, geospatial-issue filter, licences, years and checklist (brief B item 7: the search names
+  // the Backbone, which drops records with no Backbone taxon), and its API count is the card's record total.
   const areaLink = async (label, card, searchHref) => {
     const link = parse(card?.href);
     const sent = parse(searchHref);
@@ -1637,7 +2062,7 @@ if (CHECKS.has('portal-link')) {
       licencesEqual: licencesOk(link) && licencesOk(sent),
       yearEqual: sent.searchParams.get('year') !== null && link.searchParams.get('year') === sent.searchParams.get('year'),
       noDistanceParam: noDistance(link) && noDistance(sent),
-      noChecklist: !link.searchParams.has('checklistKey'),
+      checklistEqual: link.searchParams.get('checklistKey') === GBIF_BACKBONE_CHECKLIST_KEY && sent.searchParams.get('checklistKey') === GBIF_BACKBONE_CHECKLIST_KEY,
       lengthOk: card.href.length <= MAX_PORTAL_URL,
       countEqual: Number.isInteger(api.count) && api.count > 0 && api.count === total,
     };
@@ -1667,14 +2092,15 @@ if (CHECKS.has('portal-link')) {
     // 2. a 50 km search at the same spot: the longest polygon link
     const wide = await searchAt({ lon: -110.83, lat: 44.46, radiusKm: 50 });
     results.push({ ...(await areaLink('card 50 km', wide, wide.search)), rows: wide.rows, filter: wide.filter });
-    // 3. a 50 km search across the antimeridian (Taveuni, Fiji): searched with geoDistance, so the link carries the licences and years only
+    // 3. a 50 km search across the antimeridian (Taveuni, Fiji): searched with geoDistance, so the link carries the checklist, licences and
+    //    years only
     const across = await searchAt({ lon: 179.97, lat: -16.8, radiusKm: 50 });
     const acrossLink = parse(across.href);
     const acrossSent = parse(across.search);
     const acrossApi = across.href ? await apiCount(across.href) : null;
     const acrossChecks = {
       searchUsedDistance: Boolean(acrossSent) && acrossSent.searchParams.has('geoDistance') && !acrossSent.searchParams.has('geometry'),
-      linkHasNoLocation: Boolean(acrossLink) && JSON.stringify([...acrossLink.searchParams.keys()]) === JSON.stringify(['license', 'license', 'year']) && licencesOk(acrossLink) && acrossLink.searchParams.get('year') === acrossSent?.searchParams.get('year'),
+      linkHasNoLocation: Boolean(acrossLink) && JSON.stringify([...acrossLink.searchParams.keys()]) === JSON.stringify(['checklistKey', 'license', 'license', 'year']) && acrossLink.searchParams.get('checklistKey') === GBIF_BACKBONE_CHECKLIST_KEY && licencesOk(acrossLink) && acrossLink.searchParams.get('year') === acrossSent?.searchParams.get('year'),
       noteShown: across.note === "gbif.org can't show this area as a circle",
       lengthOk: Boolean(across.href) && across.href.length <= MAX_PORTAL_URL,
       countPositive: Number.isInteger(acrossApi?.count) && acrossApi.count > 0,
@@ -1696,6 +2122,267 @@ if (CHECKS.has('portal-link')) {
     await page.click('#species-radius [data-radius="10"]').catch((caught) => { error = `${error ?? ''} restoring the 10 km radius: ${caught}`; });
   }
   report('portal-link', error === null && results.length === 4 && results.every((r) => r.ok), { results, ...(error ? { error } : {}), forPeople: { card50km: results[1]?.href ?? null, panelTaxon: results[3]?.href ?? null, noLocation: results[2]?.href ?? null } });
+}
+
+// Fix round 4 (critic r3 S1', S3, N1, N2): short landscape as one model. At 667x375, 640x360 and 568x320 (and every window up to 480 px tall)
+// the left stack, the details card and the pick target each keep their own region. In each size, with real clicks only: (1) all three collapsed
+// pills are hit at their + with the stack unscrolled; (2) SPECIES opened by its pill, WHAT LIVES HERE armed by a real click, and the globe's centre
+// is what the page hits (nothing covers the pick target) and a real click there lands the pick (the list shows); (3) with the results showing,
+// the card and the stack do not overlap, every collapsed pill's + is hit, the credit link is whole and hit, and at least one species row is
+// whole; (4) one tap on the SPECIES + reopens it (open and shown). (5) Keyboard: WHAT LIVES HERE armed with Enter keeps focus on an element
+// (not BODY), and Escape cancels and puts focus back on WHAT LIVES HERE, with SPECIES open again; the same at 375x667 (positive control, a
+// size where nothing moves).
+if (CHECKS.has('landscape-regions')) {
+  // Fix round 5 (critic r4 B1): the short model is a height condition, so the wider phone-landscape sizes (740x360, 844x390, 932x430) and a
+  // short desktop-width window (1024x500) are in the matrix too.
+  // --landscape-sizes narrows the matrix while developing; the default is every size.
+  const SIZES = arg('--landscape-sizes', '667x375,640x360,568x320,740x360,844x390,932x430,1024x500,1024x580,1280x600,1280x610,1366x640,1440x700').split(',').map((size) => size.split('x').map(Number));
+  const TAVEUNI = [179.97, -16.8, 10000];
+  const BESIDE = new Set(['1024x500', '1024x580', '1280x600', '1280x610', '1366x640', '1440x700']);
+  // Fix round 6: just above the short threshold (600 px tall) the desktop lane lays out the stack: panel and card sit side by side there too,
+  // and its stack box is a centred lane the pills may overflow by design (10-70 px of scroll range measured), so the two stack-box checks
+  // (no spare scroll range, pills inside the box) belong to the short model only; the pills must still be hit at their +.
+  const DESKTOP_LANE = new Set(['1280x610', '1366x640', '1440x700']);
+  const pillIds = ['data-panel', 'scene-panel', 'species-panel'];
+  const hitAt = (sel) => page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const r = el.getBoundingClientRect();
+    const x = r.left + r.width / 2;
+    const y = r.top + r.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return { x, y, hits: r.width > 0 && Boolean(hit && (hit === el || el.contains(hit))), hit: hit ? `${hit.tagName.toLowerCase()}#${hit.id}.${String(hit.className).slice(0, 40)}` : null };
+  }, sel);
+  const realClick = async (sel, what) => {
+    const at = await hitAt(sel);
+    if (!at.hits) throw new Error(`landscape-regions: ${what} (${sel}) is under ${at.hit}`);
+    await page.mouse.click(at.x, at.y);
+    await sleep(900);
+  };
+  // Fix round 6 (critic r5 S1): the header's text (the title and the "NO PLACE LEFT BEHIND" tagline, its line boxes) is never under a pill or
+  // an open panel. Returns the overlaps, empty when clear.
+  const headerCovered = () => page.evaluate(() => {
+    const lines = [...document.querySelectorAll('#title-bar h1, #title-bar .subtitle')].flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()].map((r) => ({ text: el.textContent.trim().slice(0, 20), r })); });
+    const boxes = [...document.querySelectorAll('#left-panel-stack > [data-panel-id]')].filter((p) => p.getClientRects().length > 0).map((p) => ({ id: p.id, r: p.getBoundingClientRect() }));
+    const out = [];
+    for (const { text, r } of lines) for (const b of boxes) if (Math.min(r.right, b.r.right) - Math.max(r.left, b.r.left) > 0.5 && Math.min(r.bottom, b.r.bottom) - Math.max(r.top, b.r.top) > 0.5) out.push(`${b.id} over "${text}"`);
+    return { lines: lines.length, out };
+  });
+  const pillsState = () => page.evaluate((ids) => {
+    const stack = document.getElementById('left-panel-stack');
+    const sr = stack.getBoundingClientRect();
+    // Fix round 5 (critic r4 N2, N3): no scroll range the pills do not need, and every pill inside the stack's own box.
+    return { scrollTop: stack.scrollTop, scrollSlack: stack.scrollHeight - stack.clientHeight, pillsInBox: ids.every((id) => { const r = document.getElementById(id).getBoundingClientRect(); return r.top >= sr.top - 0.5 && r.bottom <= sr.bottom + 0.5 && r.left >= sr.left - 0.5 && r.right <= sr.right + 0.5; }), pills: ids.map((id) => {
+      const button = document.querySelector(`#${id} [data-collapse-target="${id}"]`);
+      const r = button.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { id, collapsed: document.getElementById(id).classList.contains('collapsed'), hit: r.width > 0 && Boolean(hit && (hit === button || button.contains(hit))), at: hit ? (hit.id || String(hit.className).slice(0, 30)) : null };
+    }) };
+  }, pillIds);
+  const collapseAll = () => page.evaluate((ids) => { for (const id of ids) { const p = document.getElementById(id); if (!p.classList.contains('collapsed')) p.querySelector(`[data-collapse-target="${id}"]`).click(); } }, pillIds);
+  const closeCard = () => page.evaluate(() => { const card = document.getElementById('bio-card'); if (card && !card.hidden) card.querySelector('.bio-card-close').click(); });
+  const results = [];
+  let error = null;
+  try {
+    for (const [width, height] of SIZES) {
+      const size = `${width}x${height}`;
+      // Fix round 6 (critic r5 S2): where the open 460 px panel and the card fit side by side and the panel leaves the globe's centre clear, both
+      // stay; pinned per size (1024x500, 1024x580, 1280x600), not read from the page. Everywhere else the panel folds while the card shows.
+      const beside = BESIDE.has(size);
+      const r = { viewport: size, beside };
+      try {
+      await page.setViewport({ width, height });
+      await sleep(2500);
+      await closeCard();
+      await collapseAll();
+      await page.evaluate(() => window.__godsEyeView.dataManager.setLayerParams('species', { radiusKm: 50 }, { origin: 'user' }));
+      await flyTo(...TAVEUNI);
+      await page.evaluate(() => { document.getElementById('left-panel-stack').scrollTop = 0; });
+      r.collapsed = await pillsState();
+      r.headerCollapsed = await headerCovered();
+      await realClick('#species-panel [data-collapse-target="species-panel"]', 'the SPECIES +');
+      r.headerOpen = await headerCovered();
+      // A person scrolls the SPECIES body to WHAT LIVES HERE when a chosen species and its note sit above it (a 163 px panel at 360 px tall).
+      await page.evaluate(() => { const body = document.getElementById('species-body'); body.scrollTop = 0; document.getElementById('species-what-lives-here').scrollIntoView({ block: 'nearest' }); });
+      await sleep(300);
+      await realClick('#species-what-lives-here', 'WHAT LIVES HERE');
+      await sleep(600);
+      r.armed = await page.evaluate(() => {
+        const canvas = window.__godsEyeView.viewer.scene.canvas;
+        const c = canvas.getBoundingClientRect();
+        const x = c.left + c.width / 2;
+        const y = c.top + c.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        const card = document.getElementById('bio-card').getBoundingClientRect();
+        const sp = document.getElementById('species-panel');
+        const spr = sp.getBoundingClientRect();
+        return { x, y, onCanvas: hit === canvas, hit: hit ? (hit.id || String(hit.className).slice(0, 30)) : null, armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', card: { top: Math.round(card.top), bottom: Math.round(card.bottom), left: Math.round(card.left) }, speciesOpen: !sp.classList.contains('collapsed') && spr.height > 60, speciesOverlapsCard: !sp.classList.contains('collapsed') && spr.right > card.left + 0.5 && spr.left < card.right - 0.5 && spr.bottom > card.top + 0.5 && spr.top < card.bottom - 0.5 };
+      });
+      if (r.armed.onCanvas) {
+        await page.mouse.click(r.armed.x, r.armed.y);
+        r.picked = await page.waitForFunction(() => document.querySelectorAll('#bio-card .bio-card-row').length > 0 && document.querySelector('#bio-card .bio-card-foot > a'), { timeout: 60000 }).then(() => true, () => false);
+      } else r.picked = false;
+      await page.mouse.move(2, Math.round(height / 2));
+      await sleep(1000);
+      if (r.picked) {
+        r.results = await page.evaluate(() => {
+          const card = document.getElementById('bio-card');
+          const c = card.getBoundingClientRect();
+          const s = document.getElementById('left-panel-stack');
+          const shown = [...s.querySelectorAll(':scope > [data-panel-id]')].filter((p) => p.getClientRects().length > 0).map((p) => p.getBoundingClientRect());
+          const overlap = shown.some((p) => p.right > c.left + 0.5 && p.left < c.right - 0.5 && p.bottom > c.top + 0.5 && p.top < c.bottom - 0.5);
+          const clipOf = (el) => { let t = -Infinity; let b = Infinity; for (let n = el.parentElement; n; n = n.parentElement) { const cs = getComputedStyle(n); if (cs.overflowY === 'visible') continue; const nr = n.getBoundingClientRect(); t = Math.max(t, nr.top + n.clientTop); b = Math.min(b, nr.top + n.clientTop + n.clientHeight); } return [Math.max(t, c.top, 0), Math.min(b, c.bottom, innerHeight)]; };
+          const whole = (el) => { const r = el.getBoundingClientRect(); const [t, b] = clipOf(el); return r.height > 0 && r.top >= t - 0.5 && r.bottom <= b + 0.5; };
+          const link = card.querySelector('.bio-card-foot > a');
+          const lr = link.getBoundingClientRect();
+          const lh = document.elementFromPoint((lr.left + lr.right) / 2, (lr.top + lr.bottom) / 2);
+          const parts = Object.fromEntries(['.bio-card-head', '.bio-card-filter', '.bio-card-body', '.bio-card-foot', '.bio-card-foot-note', '.bio-card-foot > a'].map((sel) => { const e = card.querySelector(sel); const b = e?.getBoundingClientRect(); return [sel, b ? [Math.round(b.top), Math.round(b.height)] : null]; }));
+          const folds = [...card.classList].filter((name) => name.startsWith('bio-card--fold-'));
+          return { card: { left: Math.round(c.left), top: Math.round(c.top), right: Math.round(c.right), bottom: Math.round(c.bottom), maxHeight: getComputedStyle(card).maxHeight }, parts, folds, noteTitle: link.getAttribute('title'), overlap, linkWhole: whole(link) && lr.bottom <= c.bottom + 0.5, linkHit: Boolean(lh && (lh === link || link.contains(lh))), speciesRowsWhole: [...card.querySelectorAll('.bio-card-row')].filter(whole).length };
+        });
+        await shot(`landscape-regions-results-${size}`);
+        // Fix round 6 (critic r5 N1): where the note is folded, its reason is one real tap away: the info button in the head shows it.
+        if (r.results.folds.includes('bio-card--fold-note')) {
+          await realClick('#bio-card .bio-card-note-info', 'the note info button');
+          r.noteInfo = await page.evaluate(() => { const pop = document.querySelector('#bio-card .bio-card-note-pop'); const b = pop.getBoundingClientRect(); return { shown: pop.getClientRects().length > 0 && b.height > 10 && b.bottom <= innerHeight, text: pop.textContent }; });
+          await shot(`landscape-regions-note-${size}`);
+          await realClick('#bio-card .bio-card-note-info', 'the note info button again');
+          r.noteInfo.closed = await page.evaluate(() => document.querySelector('#bio-card .bio-card-note-pop').hidden);
+        }
+        r.speciesOpenAfterPick = await page.evaluate(() => { const p = document.getElementById('species-panel'); return !p.classList.contains('collapsed') && p.getBoundingClientRect().height > 60; });
+        if (!beside) {
+          r.afterPick = await pillsState();
+          await realClick('#species-panel [data-collapse-target="species-panel"]', 'the SPECIES + after the pick');
+          r.reopened = await page.evaluate(() => { const p = document.getElementById('species-panel'); return { open: !p.classList.contains('collapsed'), shown: p.getBoundingClientRect().height > 60, cardHidden: document.getElementById('bio-card').hidden }; });
+        }
+      }
+      // (5) keyboard
+      await closeCard();
+      await page.evaluate(() => { const p = document.getElementById('species-panel'); if (p.classList.contains('collapsed')) p.querySelector('[data-collapse-target="species-panel"]').click(); document.getElementById('species-body').scrollTop = 0; });
+      await sleep(900);
+      await page.evaluate(() => document.getElementById('species-what-lives-here').focus());
+      await page.keyboard.press('Enter');
+      await sleep(900);
+      r.keyboard = await page.evaluate(() => ({ armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', active: document.activeElement === document.body ? 'BODY' : (document.activeElement?.id || document.activeElement?.className || null) }));
+      await page.keyboard.press('Escape');
+      await sleep(900);
+      r.keyboardCancel = await page.evaluate(() => ({ armed: document.getElementById('species-what-lives-here').getAttribute('aria-pressed') === 'true', onButton: document.activeElement === document.getElementById('species-what-lives-here'), speciesOpen: !document.getElementById('species-panel').classList.contains('collapsed'), cardHidden: document.getElementById('bio-card').hidden }));
+      await shot(`landscape-regions-${size}`);
+      const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && (DESKTOP_LANE.has(size) || (st.scrollSlack <= 1 && st.pillsInBox)) && st.pills.every((p) => p.collapsed && p.hit);
+      // Fix round 5: no size is exempt from a whole species row (the card folds its Top datasets block and then the note first).
+      const headerOk = (h) => Boolean(h) && h.lines >= 2 && h.out.length === 0;
+      const turnsOk = beside
+        ? r.armed.speciesOpen && !r.armed.speciesOverlapsCard && r.speciesOpenAfterPick
+        : !r.armed.speciesOpen && !r.speciesOpenAfterPick && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown;
+      r.ok = headerOk(r.headerCollapsed) && headerOk(r.headerOpen) && pillsOk(r.collapsed) && r.armed.armed && r.armed.onCanvas && r.picked && Boolean(r.results) && !r.results.overlap && r.results.linkWhole && r.results.linkHit && r.results.speciesRowsWhole >= 1
+        && turnsOk && (!r.results.folds.includes('bio-card--fold-note') || (r.noteInfo?.shown && r.noteInfo.text === "gbif.org can't show this area as a circle" && r.noteInfo.closed)) && r.keyboard.armed && r.keyboard.active !== 'BODY' && !r.keyboardCancel.armed && r.keyboardCancel.onButton && r.keyboardCancel.speciesOpen;
+      } catch (caught) {
+        // One size's failure is recorded with its cause and the next size still runs.
+        r.error = String(caught?.message || caught).slice(0, 300);
+        r.ok = false;
+        await shot(`landscape-regions-${size}-error`);
+      }
+      results.push(r);
+      await page.keyboard.press('Escape');
+      await closeCard();
+    }
+    // Positive control for (5): portrait, where no panel moves; focus stays on the button while armed and after Escape.
+    await page.setViewport({ width: 375, height: 667 });
+    await sleep(2500);
+    await openSpeciesPanel();
+    await page.evaluate(() => { document.getElementById('species-body').scrollTop = 0; document.getElementById('species-what-lives-here').focus(); });
+    await page.keyboard.press('Enter');
+    await sleep(900);
+    const portraitArmed = await page.evaluate(() => document.activeElement === document.getElementById('species-what-lives-here'));
+    await page.keyboard.press('Escape');
+    await sleep(900);
+    const portraitCancel = await page.evaluate(() => document.activeElement === document.getElementById('species-what-lives-here'));
+    results.push({ viewport: '375x667', portraitArmed, portraitCancel, ok: portraitArmed && portraitCancel });
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await closeCard().catch(() => {});
+    await page.setViewport({ width: 1400, height: 900 });
+    await sleep(2000);
+  }
+  report('landscape-regions', error === null && results.length === SIZES.length + 1 && results.every((r) => r.ok), { results, ...(error ? { error } : {}) });
+}
+
+// Final review m-1 and critic r1 N3: at phone width the left stack is an accordion, whatever opens a panel. (1) A share link opening DATA
+// LAYERS and SPECIES (#…&v=2&ui=d.c.0_b.c.0), loaded fresh at 375x667: exactly one panel is open (SPECIES, restored last), it has height, and no other
+// panel shows. (2) Collapsing SPECIES brings the three pills back (positive control), and opening DATA LAYERS by a click shows it alone with
+// height. (3) At 667x375, DATA LAYERS opened by a click has height (it had 0 px on main 1f5d591: the pills filled the 110 px stack).
+if (CHECKS.has('phone-accordion')) {
+  const tab = await browser.newPage();
+  const stackState = () => tab.evaluate(() => [...document.querySelectorAll('#left-panel-stack > [data-panel-id]')].map((panel) => {
+    const r = panel.getBoundingClientRect();
+    return { id: panel.id, open: !panel.classList.contains('collapsed'), shown: panel.getClientRects().length > 0 && getComputedStyle(panel).display !== 'none', height: Math.round(r.height) };
+  }).filter((panel) => panel.id !== 'cctv-panel'));
+  // A real click on a panel's +/−; the page must hit that button first, else the check fails naming what it hit.
+  const clickToggle = async (id) => {
+    const box = await tab.evaluate((id) => {
+      const button = document.querySelector(`#${id} [data-collapse-target="${id}"]`);
+      const b = button.getBoundingClientRect();
+      const x = b.left + b.width / 2;
+      const y = b.top + b.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      return { x, y, hits: Boolean(hit && (hit === button || button.contains(hit))), hit: hit ? `${hit.tagName.toLowerCase()}#${hit.id}.${String(hit.className).slice(0, 60)}` : null };
+    }, id);
+    if (!box.hits) throw new Error(`phone-accordion: the ${id} toggle is under ${box.hit}`);
+    await tab.mouse.click(box.x, box.y);
+    await sleep(1500);
+  };
+  const steps = {};
+  let error = null;
+  try {
+    await tab.setViewport({ width: 375, height: 667 });
+    // A share link is a hash (sharelink.js parseInitialHash); it needs a position to restore anything.
+    const url = new URL(SITE);
+    url.hash = new URLSearchParams({ lat: '30.27', lon: '-97.74', alt: '400000', v: '2', ui: 'd.c.0_b.c.0' }).toString();
+    await tab.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 120000 });
+    await tab.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
+    await sleep(12000);
+    await tab.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
+    await tab.keyboard.press('Escape');
+    await sleep(1500);
+    steps.shareLink = await stackState();
+    await clickToggle('species-panel');
+    steps.speciesClosed = await stackState();
+    await clickToggle('data-panel');
+    steps.dataOpened = await stackState();
+    await tab.setViewport({ width: 667, height: 375 });
+    await sleep(2500);
+    steps.landscapeData = await stackState();
+    if (SHOTS) await tab.screenshot({ path: `${SHOTS}/phone-accordion-landscape-data.png` }); // the check's own tab, not the main page
+    // Fix round 3 (critic r2 N1): in phone landscape with every panel collapsed, each pill's + is what the page hits at its centre with the
+    // stack unscrolled, and the globe's centre stays on the canvas (positive control for the what-lives-here click).
+    await clickToggle('data-panel');
+    for (const [w, h] of [[667, 375], [640, 360]]) {
+      await tab.setViewport({ width: w, height: h });
+      await sleep(2500);
+      steps[`collapsed${w}x${h}`] = await tab.evaluate(() => {
+        const stack = document.getElementById('left-panel-stack');
+        stack.scrollTop = 0;
+        const canvas = window.__godsEyeView.viewer.scene.canvas;
+        const c = canvas.getBoundingClientRect();
+        const pills = ['data-panel', 'scene-panel', 'species-panel'].map((id) => {
+          const button = document.querySelector(`#${id} [data-collapse-target="${id}"]`);
+          const r = button.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return { id, collapsed: document.getElementById(id).classList.contains('collapsed'), hit: Boolean(hit && (hit === button || button.contains(hit))), top: Math.round(r.top) };
+        });
+        return { pills, scrollTop: stack.scrollTop, centreOnCanvas: document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2) === canvas };
+      });
+      if (SHOTS) await tab.screenshot({ path: `${SHOTS}/phone-accordion-collapsed-${w}x${h}.png` });
+    }
+  } catch (caught) {
+    error = String(caught?.stack || caught).slice(0, 500);
+  } finally {
+    await tab.close().catch(() => {});
+  }
+  const only = (state, id) => Boolean(state) && state.filter((p) => p.open).map((p) => p.id).join() === id && state.filter((p) => p.shown).map((p) => p.id).join() === id && state.find((p) => p.id === id).height > 60;
+  const pillsBack = Boolean(steps.speciesClosed) && steps.speciesClosed.every((p) => !p.open && p.shown && p.height > 20);
+  const reachable = (state) => Boolean(state) && state.scrollTop === 0 && state.centreOnCanvas && state.pills.every((p) => p.collapsed && p.hit);
+  report('phone-accordion', error === null && only(steps.shareLink, 'species-panel') && pillsBack && only(steps.dataOpened, 'data-panel') && only(steps.landscapeData, 'data-panel') && reachable(steps.collapsed667x375) && reachable(steps.collapsed640x360), { steps, ...(error ? { error } : {}) });
 }
 
 report('no-failed-requests', failed.length === 0, { failed: [...new Set(failed)].slice(0, 10), upstreamTileErrors: upstreamTileErrors.slice(0, 10) });

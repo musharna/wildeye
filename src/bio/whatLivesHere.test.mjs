@@ -36,6 +36,7 @@ function fakeCardDoc() {
       replaceChildren(...kids) { this.children = kids; this.innerHTML = ''; },
       addEventListener(type, fn) { this.listeners[type] = fn; },
       querySelector(selector) { return (parts[selector] ||= make(selector)); },
+      getClientRects() { return this.hidden ? [] : [{}]; },
     };
   };
   return { listeners, createElement: make, addEventListener(type, fn) { listeners[type] = fn; }, press(key) { listeners.keydown?.({ key }); } };
@@ -43,7 +44,7 @@ function fakeCardDoc() {
 
 // realCard: the real details card, wired to the controller as src/main.js wires them (onDismiss → cancel, onListEnd → listEnded).
 function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }], datasets: [{ key: INAT_RG, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, dataset = null, client: clientOverride = null, defaultArea = false, realCard = false, drawArea = null, depthTexture = true } = {}) {
-  const calls = { near: [], names: [], datasets: [], status: [], list: [], card: [], picked: [], armed: [] };
+  const calls = { near: [], names: [], datasets: [], status: [], list: [], card: [], picked: [], armed: [], armedReasons: [] };
   const params = { years: 'recent', radiusKm: 10 };
   // groundPrimitives stands in for Cesium's collection, for the default outline; `areas` records the injected outline seam.
   const groundPrimitives = { items: [], add(p) { this.items.push(p); return p; }, remove(p) { const i = this.items.indexOf(p); if (i >= 0) this.items.splice(i, 1); return i >= 0; } };
@@ -105,7 +106,7 @@ function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, spec
     card,
     getParams: () => ({ ...params }),
     onPickSpecies: (p) => calls.picked.push(p),
-    onArmedChange: (on) => calls.armed.push(on),
+    onArmedChange: (on, reason) => { calls.armed.push(on); calls.armedReasons.push(reason ?? null); },
     handlerFor: () => ({ setInputAction() {}, destroy() {} }),
     doc,
     ...areaSeam,
@@ -167,6 +168,7 @@ test('a ground click sends exactly one GBIF search at the clicked point and list
   assert.equal(viewer.scene.canvas.style.cursor, 'crosshair');
   assert.deepEqual(calls.armed, [true]);
   await controller.handleClick(CLICK);
+  assert.deepEqual(calls.armedReasons, ['arm', 'pick'], 'a ground click disarms as a pick');
   assert.equal(calls.near.length, 1);
   assert.equal(calls.near[0].radiusKm, 10);
   assert.equal(calls.near[0].years, 'recent');
@@ -328,7 +330,8 @@ test('arming again cancels a search still in flight, so the prompt stays on the 
   old.resolve({ total: 5, species: [{ key: 5232437, count: 5 }], datasets: [] });
   await first;
   const last = r.calls.card.at(-1);
-  assert.deepEqual({ kind: last.kind, message: last.message }, { kind: 'status', message: 'Click a spot on the globe. Esc cancels.' }, 'the prompt is still the last card call');
+  // Fix round 5 (critic r3 N3, r4 N4): the prompt names a cancel that works on touch (the card's ×) as well as Escape.
+  assert.deepEqual({ kind: last.kind, message: last.message }, { kind: 'status', message: 'Click a spot on the globe. Tap × or press Esc to cancel.' }, 'the prompt is still the last card call');
   assert.equal(r.calls.list.length, 0, 'the old search listed nothing');
   assert.equal(old.signal.aborted, true, 'arming aborted the old search');
   assert.equal(r.controller.armed, true);
@@ -381,6 +384,8 @@ test('Escape while armed disarms (cursor back, onArmedChange(false)); other keys
   assert.deepEqual(r.calls.armed, [true, false]);
   r.doc.press('Escape');
   assert.deepEqual(r.calls.armed, [true, false], 'Escape when not armed reports nothing');
+  // Fix round 3 (critic r2 S1): each change says why, so a panel cleared for the pick can come back on a cancel and stay away after a pick.
+  assert.deepEqual(r.calls.armedReasons, ['arm', 'cancel']);
   assert.equal(r.controller.handleClick(CLICK), null, 'a click after Escape sends nothing');
   assert.equal(r.calls.near.length, 0);
 });
@@ -465,7 +470,7 @@ test('a click where the circle cannot be a polygon lists species via geoDistance
     assert.equal(list.footer, 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations', where);
     const link = new URL(list.footerHref);
     assert.equal(link.origin + link.pathname, 'https://www.gbif.org/occurrence/search', where);
-    assert.deepEqual([...link.searchParams.keys()], ['license', 'license', 'year'], `${where}: the licences and years, no location`);
+    assert.deepEqual([...link.searchParams.keys()], ['checklistKey', 'license', 'license', 'year'], `${where}: the checklist, licences and years, no location`);
   }
   const ordinary = rig();
   ordinary.controller.arm();

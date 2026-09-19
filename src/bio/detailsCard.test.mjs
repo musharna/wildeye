@@ -85,12 +85,14 @@ function cardDoc() {
   const make = (tag) => {
     const parts = {};
     return {
-      tag, hidden: false, id: '', className: '', textContent: '', innerHTML: '', attributes: {}, children: [], listeners: {},
+      tag, hidden: false, id: '', className: '', textContent: '', innerHTML: '', attributes: {}, children: [], listeners: {}, style: {},
       setAttribute(name, value) { this.attributes[name] = String(value); },
       appendChild(child) { this.children.push(child); return child; },
       replaceChildren(...kids) { this.children = kids; this.innerHTML = ''; },
       addEventListener(type, fn) { this.listeners[type] = fn; },
+      removeEventListener(type, fn) { if (this.listeners[type] === fn) delete this.listeners[type]; },
       querySelector(selector) { return (parts[selector] ||= make(selector)); },
+      getClientRects() { return this.hidden ? [] : [{}]; },
     };
   };
   return { listeners, createElement: make, addEventListener(type, fn) { listeners[type] = fn; } };
@@ -111,6 +113,12 @@ function fakeViewer() {
     },
   };
 }
+
+// R13-M1: the body and the foot are the two children of .bio-card-main, the grid that shares the card's height between them (style.css).
+test('the card skeleton puts the body and the foot in the shared grid', () => {
+  const card = createDetailsCard({ viewer: fakeViewer(), doc: cardDoc(), sanitize: (html) => html });
+  assert.ok(card.element.innerHTML.includes('<div class="bio-card-filter"></div><div class="bio-card-main"><div class="bio-card-body"></div><div class="bio-card-foot"></div></div>'), card.element.innerHTML);
+});
 
 test('detail mode renders only what the sanitizer returns', () => {
   const doc = cardDoc();
@@ -205,6 +213,47 @@ test('an Escape another control handled leaves the card open; an unhandled Escap
 });
 
 // F9: where gbif.org cannot show the searched circle, the footer says so in plain text before its link.
+// Fix round 5 (critic r4 S1): when the card's content overflows its box (a short window), the parts give way in order before the species list
+// loses its one whole row: first the Top datasets block folds away (the credit stays), then the antimeridian note, whose text moves to the
+// credit link's title (the credit already says "all locations"). With room, nothing folds (positive control), and a later list starts over.
+test('a list too tall for its card folds the Top datasets block, then the note, before the species list gives up its row', () => {
+  const doc = cardDoc();
+  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html });
+  const root = card.element;
+  const classes = new Set();
+  root.classList = { add: (c) => classes.add(c), remove: (...cs) => cs.forEach((c) => classes.delete(c)), contains: (c) => classes.has(c) };
+  const main = root.querySelector('.bio-card-main');
+  let room = 166;
+  Object.defineProperty(main, 'clientHeight', { get: () => room });
+  Object.defineProperty(main, 'scrollHeight', { get: () => 205 - (classes.has('bio-card--fold-datasets') ? 24 : 0) - (classes.has('bio-card--fold-note') ? 18 : 0) });
+  const base = { heading: 'What lives here', filterLine: 'x', entries: [{ key: 1, count: 1, scientificName: 'A b', commonName: null }], onRow: () => {}, footer: 'Occurrence data: GBIF.org, CC0 and CC BY records, all locations', footerHref: 'https://www.gbif.org/occurrence/search', footerNote: "gbif.org can't show this area as a circle", datasets: [{ key: INAT_RG, count: 1, title: 't', doi: null }] };
+  card.showList(base);
+  assert.deepEqual([...classes].sort(), ['bio-card--fold-datasets', 'bio-card--fold-note']);
+  const link = card.element.querySelector('.bio-card-foot').children.at(-1);
+  assert.equal(link.title, "gbif.org can't show this area as a circle", 'the note stays reachable on the credit link');
+  // Fix round 6 (critic r5 N1): a title is hover-only, so the folded note also gets an info button in the card's head (touch reachable), which
+  // shows the note's text over the list and hides it again; it only shows while the note is folded.
+  const info = root.querySelector('.bio-card-note-info');
+  const pop = root.querySelector('.bio-card-note-pop');
+  assert.equal(info.hidden, false, 'the info button shows while the note is folded');
+  assert.equal(pop.hidden, true);
+  info.listeners.click();
+  assert.deepEqual([pop.hidden, pop.textContent, info.attributes['aria-expanded']], [false, "gbif.org can't show this area as a circle", 'true']);
+  info.listeners.click();
+  assert.deepEqual([pop.hidden, info.attributes['aria-expanded']], [true, 'false']);
+  info.listeners.click();
+  room = 190; // the datasets fold is enough
+  card.showList(base);
+  assert.deepEqual([...classes], ['bio-card--fold-datasets']);
+  assert.deepEqual([info.hidden, pop.hidden], [true, true], 'no info button while the note shows, and a new list closes the popover');
+  assert.equal(card.element.querySelector('.bio-card-foot').children.at(-1).title ?? '', '', 'no title while the note shows');
+  room = 400; // positive control: room for everything
+  card.showList(base);
+  assert.deepEqual([...classes], []);
+  card.showStatus({ heading: 'What lives here', message: 'Click a spot on the globe.' });
+  assert.deepEqual([...classes], [], 'a status card never folds');
+});
+
 test('a list footer can carry a plain-text note before its link; without one the footer is just the link', () => {
   const doc = cardDoc();
   const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html });
@@ -245,6 +294,41 @@ test('a list foot names the top datasets above the gbif.org link; with none it i
   assert.deepEqual(foot.children.map((c) => c.className), ['dataset-list', 'bio-card-foot-note', ''], 'the datasets, then the note about the link, then the link');
   card.showList(base);
   assert.deepEqual(foot.children.map((c) => c.tag), ['a'], 'no datasets: no block');
+});
+
+// Brief B S-1: the Top datasets rows carry the panel's "more ↓" cue (moreCue.js): shown while more rows are below their view, hidden at the
+// end and when nothing is cut, on scroll and on a size change; a new list stops the old list's watcher. Positive control in the same test:
+// the cue shows for a cut list before it is asserted hidden anywhere.
+test('the Top datasets rows in the card show the SPECIES panel "more" cue while more rows are below', () => {
+  const doc = cardDoc();
+  const watched = [];
+  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html, observeSize: (targets, onChange) => { const entry = { targets, onChange, stopped: false }; watched.push(entry); return () => { entry.stopped = true; }; } });
+  const foot = card.element.querySelector('.bio-card-foot');
+  const base = { heading: 'What lives here', filterLine: 'CC0 and CC BY records', entries: [], onRow: () => {}, footer: 'Occurrence data: GBIF.org', footerHref: 'https://www.gbif.org/occurrence/search?geometry=x' };
+  card.showList({ ...base, datasets: [{ key: INAT_RG, count: 1179, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }] });
+  const [, rows, cue] = foot.children[0].children;
+  assert.deepEqual([cue.tag, cue.className, cue.textContent, cue.attributes['aria-hidden']], ['span', 'dataset-list-more', 'more ↓', 'true']);
+  assert.equal(watched.length, 1);
+  assert.deepEqual(watched[0].targets, [rows, ...rows.children], 'the rows and each row are watched for size changes');
+  Object.assign(rows, { scrollTop: 0, scrollHeight: 185, clientHeight: 98 });
+  watched[0].onChange();
+  assert.equal(cue.style.visibility, 'visible', 'cut rows: the cue shows');
+  rows.scrollTop = 87;
+  rows.listeners.scroll();
+  assert.equal(cue.style.visibility, 'hidden', 'scrolled to the end: the cue goes');
+  Object.assign(rows, { scrollTop: 0, scrollHeight: 118, clientHeight: 118 });
+  watched[0].onChange();
+  assert.equal(cue.style.visibility, 'hidden', 'nothing cut: no cue');
+  card.showList(base);
+  assert.equal(watched[0].stopped, true, 'a new list stops the old watcher');
+  assert.equal(rows.listeners.scroll, undefined, 'and removes its scroll listener');
+  // Review M-4: closing the card stops the watcher too, not only the next render.
+  card.showList({ ...base, datasets: [{ key: INAT_RG, count: 1, title: 'iNaturalist Research-grade Observations', doi: null }] });
+  assert.equal(watched.length, 2);
+  assert.equal(watched[1].stopped, false, 'positive control: a showing list is watched');
+  card.close();
+  assert.equal(watched[1].stopped, true, 'a closed card stops its watcher');
+  assert.equal(foot.children[0].children[1].listeners.scroll, undefined, 'and removes its scroll listener');
 });
 
 // R-7e: the what-lives-here outline lives exactly as long as the card shows list or status content, so the card tells its
@@ -318,4 +402,124 @@ test('a throwing onListEnd is logged under its own label, and dismiss still reac
   assert.equal(card.element.hidden, false, 'and show');
   assert.deepEqual(logged.map(([label]) => label), ['[bio-card] onListEnd failed', '[bio-card] onListEnd failed']);
   assert.deepEqual(logged.map(([, context]) => [context.from, context.to, context.error.message]), [['list', null, 'outline already removed'], ['list', 'detail', 'outline already removed']]);
+});
+
+// R13-M8: the card was an aria-live region, so a screen reader read the whole card each time it filled. The card is now a region labelled by its
+// title and not live; a separate, visually hidden status line (outside the card, so it announces while the card is hidden) says in one short line
+// what opened: "<layer> details opened", a status card's heading and message, or a list's heading and how many species it lists.
+test('the card is not a live region; a short line in its own status region announces what opened', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const card = createDetailsCard({ viewer, doc, layerName: (id) => (id === 'occurrences' ? 'GBIF Occurrences' : id), sanitize: (html) => html });
+  const root = card.element;
+  const title = root.querySelector('.bio-card-title');
+  assert.equal(Object.hasOwn(root.attributes, 'aria-live'), false, 'the card is not a live region');
+  assert.equal(title.id, 'bio-card-title');
+  assert.equal(root.attributes['aria-labelledby'], 'bio-card-title', 'the card is labelled by its title');
+  // Fix round 1, I-1: a name needs a role that takes one. The card is an <aside> with no role override, so its role is complementary; a role-less
+  // <div> would be generic and the browser would drop the name (qa card-a11y reads the resolved role and name from Chrome's accessibility tree).
+  assert.equal(root.tag, 'aside', 'the card is an <aside> (role complementary, which can be named)');
+  assert.equal(Object.hasOwn(root.attributes, 'role'), false, 'no role override');
+  const announcer = card.announcer;
+  assert.ok(announcer, 'the card has an announcer');
+  assert.notEqual(announcer, root);
+  assert.deepEqual([announcer.id, announcer.className, announcer.attributes.role, announcer.attributes['aria-live'], announcer.attributes['aria-atomic']], ['bio-card-announce', 'bio-card-announce', 'status', 'polite', 'true']);
+  assert.equal(announcer.textContent, '', 'nothing is announced before the card opens');
+  viewer.selectedEntity = entityIn('occurrences', '<b>Blue whale</b><p>a long description the card shows</p>');
+  assert.equal(announcer.textContent, 'GBIF Occurrences details opened', 'a detail card announces one line, not its body');
+  card.showStatus({ heading: 'What lives here', message: 'Searching GBIF within 10 km…' });
+  assert.equal(announcer.textContent, 'What lives here: Searching GBIF within 10 km…');
+  const entries = [{ key: 1, count: 3, scientificName: 'Branta canadensis', commonName: 'Canada Goose' }, { key: 2, count: 1, scientificName: 'Salix exigua', commonName: null }];
+  card.showList({ heading: 'What lives here', filterLine: 'CC0 and CC BY records', entries, footer: 'GBIF.org', footerHref: 'https://www.gbif.org/', onRow: () => {} });
+  assert.equal(announcer.textContent, 'What lives here: 2 species listed');
+  card.close();
+  assert.equal(announcer.textContent, '', 'closing clears the line');
+});
+
+test('startup puts the card announcer in the page, and it is visually hidden', () => {
+  const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+  assert.match(main, /document\.body\.appendChild\(bioCard\.element\);\s*document\.body\.appendChild\(bioCard\.announcer\);/);
+  const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+  const rule = css.match(/\.bio-card-announce \{([^}]*)\}/)?.[1] ?? '';
+  for (const declaration of ['position: fixed;', 'width: 1px;', 'height: 1px;', 'overflow: hidden;', 'clip-path: inset(50%);', 'white-space: nowrap;']) assert.ok(rule.includes(declaration), `.bio-card-announce has ${declaration}`);
+});
+
+// Fix round 1, item 3: the line names the record that opened (the entity's name, else the first bold line of its details, else the layer), so
+// opening another record in the same layer is new text. A line identical to the one showing (another record of the same name) is cleared and
+// set again on the next frame, so a screen reader hears it again; a newer line or a close cancels that pending frame.
+test('the details line names the record, and an identical line is cleared and set again on the next frame', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  const frames = [];
+  const card = createDetailsCard({ viewer, doc, layerName: () => 'GBIF Occurrences', sanitize: (html) => html, nextFrame: (fn) => { frames.push(fn); return frames.length; }, cancelFrame: (id) => { frames[id - 1] = null; } });
+  const announcer = card.announcer;
+  const named = (id, name) => ({ ...entityIn('occurrences', '<b>x</b>'), id, name });
+  viewer.selectedEntity = named('a', 'Blue whale');
+  assert.equal(announcer.textContent, 'Blue whale details opened', 'the record is named');
+  viewer.selectedEntity = named('b', 'Fin whale');
+  assert.equal(announcer.textContent, 'Fin whale details opened', 'another record in the same layer is new text');
+  assert.equal(frames.length, 0, 'different text is set at once');
+  viewer.selectedEntity = named('c', 'Fin whale');
+  assert.equal(announcer.textContent, '', 'the same text is cleared first');
+  assert.equal(frames.length, 1);
+  frames[0]();
+  assert.equal(announcer.textContent, 'Fin whale details opened', 'and set again on the next frame');
+  viewer.selectedEntity = named('d', 'Fin whale');
+  card.close();
+  assert.equal(frames[1], null, 'a close cancels the pending line');
+  assert.equal(announcer.textContent, '');
+  // With no entity name, the first bold line of the details names the record; with neither, the layer does.
+  const body = card.element.querySelector('.bio-card-body');
+  body.querySelector('b').textContent = '  🐋 Blue whale ';
+  viewer.selectedEntity = entityIn('occurrences', '<b>🐋 Blue whale</b> <i>Balaenoptera musculus</i>');
+  // Brief B fix round 1, item 6: the layers lead a name with an icon ("🐋 Blue whale"), which a screen reader reads as "whale emoji"; the line
+  // names the record without leading pictographs (emoji, their variation selectors, joiners, keycaps and flags). Digits and letters stay.
+  // A name that is only an icon falls through to the details' bold line (here "Blue whale"), then to the layer.
+  assert.equal(announcer.textContent, 'Blue whale details opened');
+  for (const [name, heard] of [['🦋 Monarch', 'Monarch'], ['🏳️\u200d🌈  Pride', 'Pride'], ['🇺🇸 US bird', 'US bird'], ['7 spot ladybird', '7 spot ladybird'], ['Grey seal 🦭', 'Grey seal 🦭'], ['🦭', 'Blue whale']]) {
+    viewer.selectedEntity = { ...entityIn('occurrences', '<b>x</b>'), id: `emoji-${name}`, name };
+    assert.equal(announcer.textContent, `${heard} details opened`, name);
+  }
+  body.querySelector('b').textContent = '';
+  viewer.selectedEntity = { ...entityIn('occurrences', 'plain text'), id: 'e2' };
+  assert.equal(announcer.textContent, 'GBIF Occurrences details opened');
+});
+
+// Final review m-3: in clean view and recording mode the card is display: none (style.css), so its status line stays silent: no "details
+// opened" for a card nobody can see. Positive control in the same test: the same selection announces once the card renders again.
+test('the status line says nothing while the card is not rendered (clean view, recording mode)', () => {
+  const doc = cardDoc();
+  const viewer = fakeViewer();
+  let rendered = false;
+  const frames = [];
+  const card = createDetailsCard({ viewer, doc, layerName: () => 'GBIF Occurrences', sanitize: (html) => html, isRendered: () => rendered, nextFrame: (fn) => { frames.push(fn); return frames.length; }, cancelFrame: () => {} });
+  viewer.selectedEntity = { ...entityIn('occurrences', '<b>x</b>'), id: 'a', name: 'Blue whale' };
+  assert.equal(card.announcer.textContent, '', 'hidden card: nothing announced');
+  card.showStatus({ heading: 'What lives here', message: 'GBIF search failed (HTTP\u00a0503)' });
+  assert.equal(card.announcer.textContent, '', 'hidden card: a status is not announced either');
+  rendered = true;
+  viewer.selectedEntity = { ...entityIn('occurrences', '<b>x</b>'), id: 'b', name: 'Fin whale' };
+  assert.equal(card.announcer.textContent, 'Fin whale details opened', 'positive control: a rendered card announces');
+  viewer.selectedEntity = { ...entityIn('occurrences', '<b>x</b>'), id: 'c', name: 'Fin whale' };
+  rendered = false;
+  frames.at(-1)();
+  assert.equal(card.announcer.textContent, '', 'a repeat set after the card stopped rendering stays silent');
+});
+
+// Fix round 1, item 4: the card was a live region, so failed name and dataset lookups in a list were read out with it. The status line now says
+// them: how many of each failed and why, after the species count. Positive control in the same test: a list with no failures says only the count.
+test('a list line names its failed name and dataset lookups', () => {
+  const doc = cardDoc();
+  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html });
+  const base = { heading: 'What lives here', filterLine: 'CC0 and CC BY records', footer: 'GBIF.org', footerHref: 'https://www.gbif.org/', onRow: () => {} };
+  const ok = { key: 1, count: 3, scientificName: 'Branta canadensis', commonName: 'Canada Goose' };
+  card.showList({ ...base, entries: [ok], datasets: [{ key: INAT_RG, count: 3, title: 'iNaturalist', doi: null }] });
+  assert.equal(card.announcer.textContent, 'What lives here: 1 species listed', 'no failures: the count only');
+  const failedName = (key, error) => ({ key, count: 1, scientificName: `GBIF taxon ${key}`, commonName: null, error });
+  card.showList({
+    ...base,
+    entries: [ok, failedName(2, 'HTTP\u00a0503'), failedName(3, 'HTTP\u00a0503'), failedName(4, 'timeout')],
+    datasets: [{ key: INAT_RG, count: 3, title: null, doi: null, error: 'HTTP\u00a0503' }, { key: '6ac3f774-d9fb-4796-b3e9-92bf6c81c084', count: 1, title: 'Other', doi: null }],
+  });
+  assert.equal(card.announcer.textContent, 'What lives here: 4 species listed; 3 name lookups failed (HTTP\u00a0503, timeout); 1 dataset lookup failed (HTTP\u00a0503)');
 });

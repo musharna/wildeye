@@ -2189,7 +2189,8 @@ const satellitesLayer = {
 };
 
 function _onKeyDown(e) {
-  if (_enabled && e.key === 'Escape' && _trackedNorad) {
+  // One key, one thing: an Escape another control already handled (preventDefault) is not ours.
+  if (_enabled && e.key === 'Escape' && !e.defaultPrevented && _trackedNorad) {
     _cancelPendingTrackingRestore();
     _clearTracking(false, { origin: 'user' });
   }

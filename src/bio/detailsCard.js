@@ -8,6 +8,7 @@
  */
 import DOMPurify from 'dompurify';
 import { createDatasetList } from './datasetList.js';
+import { observeSizeWithResizeObserver, watchMoreBelow } from './moreCue.js';
 
 export const BIO_CARD_LAYER_IDS = new Set([
   'arbonet', 'birds', 'cetaceans', 'drought', 'ecoregions', 'fires', 'fishing', 'gfw', 'h5n1', 'hpai',
@@ -60,6 +61,15 @@ function browserSanitizer(doc) {
   return (html) => sanitizeDescription(html, purify);
 }
 
+/**
+ * Leading pictographs (emoji and their variation selectors, zero-width joiners, keycap marks and flag letters) and spaces, removed from a
+ * record's name for the spoken line. Digits and letters are kept, and so is an icon after the name.
+ */
+const LEADING_PICTOGRAPHS = /^[\p{Extended_Pictographic}\p{Regional_Indicator}\u200d\ufe0e\ufe0f\u20e3\s]+/u;
+export function spokenName(text) {
+  return typeof text === 'string' ? text.replace(LEADING_PICTOGRAPHS, '').trim() : '';
+}
+
 export function listRows(entries) {
   return entries.map((entry) => ({
     key: entry.key,
@@ -94,19 +104,100 @@ export function renderListInto(container, rows, doc, onRow) {
   }
 }
 
-export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {} }) {
+/**
+ * Fix round 1, item 4: "3 name lookups failed (HTTP 503, timeout)" for the rows that carry an error, each distinct message once, or '' with none.
+ * The card was a live region that read these out with the rows; the status line says them now.
+ */
+function failuresLine(rows, what) {
+  const failed = rows.filter((row) => row.error);
+  if (failed.length === 0) return '';
+  return `${failed.length} ${what}${failed.length === 1 ? '' : 's'} failed (${[...new Set(failed.map((row) => row.error))].join(', ')})`;
+}
+
+export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {}, observeSize = observeSizeWithResizeObserver, nextFrame = (fn) => setTimeout(fn, 50), cancelFrame = (id) => clearTimeout(id), isRendered = null }) {
   const root = doc.createElement('aside');
   root.id = 'bio-card';
   root.className = 'bio-card';
   root.hidden = true;
-  root.setAttribute('aria-live', 'polite');
-  // Static skeleton only; no data is interpolated here.
-  root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><div class="bio-card-filter"></div><div class="bio-card-body"></div><div class="bio-card-foot"></div>';
+  // R13-M8: the card is not a live region (a screen reader read all of it each time it filled); it is labelled by its title, and one short line
+  // in a visually hidden status region of its own, outside the card so it is heard while the card is hidden too, says what opened.
+  // Fix round 1, I-1: the name holds because the card is an <aside>, role complementary (it supports the map beside it and stands on its own),
+  // which takes a name; a role-less <div> is generic and would drop it.
+  root.setAttribute('aria-labelledby', 'bio-card-title');
+  const announcer = doc.createElement('div');
+  announcer.id = 'bio-card-announce';
+  announcer.className = 'bio-card-announce';
+  announcer.setAttribute('role', 'status');
+  announcer.setAttribute('aria-live', 'polite');
+  announcer.setAttribute('aria-atomic', 'true');
+  // Fix round 1, item 3: a line identical to the one showing is not a change a screen reader hears, so it is cleared and set again a moment later
+  // (50 ms, a later task than the clear, so the two are separate changes); a newer line or a close cancels that pending set.
+  let pendingFrame = null;
+  // Final review m-3: clean view and recording mode hide the card with display: none (style.css), and a line about a card nobody can see is
+  // noise; a line is said only while the card is rendered, checked again when a repeat is set.
+  const rendered = isRendered ?? (() => root.getClientRects().length > 0);
+  const announce = (text) => {
+    if (pendingFrame !== null) cancelFrame(pendingFrame);
+    pendingFrame = null;
+    if (text !== '' && !rendered()) {
+      announcer.textContent = '';
+      return;
+    }
+    if (text !== '' && announcer.textContent === text) {
+      announcer.textContent = '';
+      pendingFrame = nextFrame(() => { pendingFrame = null; if (rendered()) announcer.textContent = text; });
+      return;
+    }
+    announcer.textContent = text;
+  };
+  // Static skeleton only; no data is interpolated here. The body and the foot share .bio-card-main, the grid that divides the card's height
+  // between the species list and the Top datasets rows (style.css, R13-M1).
+  root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-note-info" aria-label="Why all locations" aria-expanded="false" aria-controls="bio-card-note-pop" hidden>i</button><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><div class="bio-card-filter"></div><div class="bio-card-main"><div class="bio-card-body"></div><div class="bio-card-foot"></div></div><p id="bio-card-note-pop" class="bio-card-note-pop" role="note" hidden></p>';
   const title = root.querySelector('.bio-card-title');
+  title.id = 'bio-card-title';
   const filter = root.querySelector('.bio-card-filter');
   const body = root.querySelector('.bio-card-body');
   const foot = root.querySelector('.bio-card-foot');
+  const main = root.querySelector('.bio-card-main');
+  // Fix round 6 (critic r5 N1): the folded note's text stays reachable on touch: an info button in the head shows it over the list.
+  const noteInfo = root.querySelector('.bio-card-note-info');
+  const notePop = root.querySelector('.bio-card-note-pop');
+  noteInfo.hidden = true;
+  notePop.hidden = true;
+  const showNotePop = (open) => {
+    notePop.hidden = !open;
+    notePop.textContent = open && listFoot?.note ? listFoot.note.textContent : '';
+    noteInfo.setAttribute('aria-expanded', String(open));
+  };
+  noteInfo.addEventListener('click', () => showNotePop(notePop.hidden));
+  // Fix round 5 (critic r4 S1): what a list's card gives up, in order, when its content does not fit its box (a short window): first the Top
+  // datasets block (secondary, and the gbif.org credit link carries the records), then the antimeridian note (its text moves to the credit
+  // link's title; the credit itself says "all locations"). The species list keeps its one whole row (its min-height), so it gives way last.
+  const FOLDS = ['bio-card--fold-datasets', 'bio-card--fold-note'];
+  let listFoot = null; // { hasDatasets, note, link } of the list showing
+  const fitFoot = () => {
+    root.classList?.remove(...FOLDS);
+    noteInfo.hidden = true;
+    if (listFoot?.link && listFoot.note) listFoot.link.removeAttribute?.('title');
+    if (!listFoot || root.hidden || mode !== 'list') return;
+    const overflows = () => main.scrollHeight > main.clientHeight + 1;
+    for (const fold of FOLDS) {
+      if (!overflows()) return;
+      if (fold === 'bio-card--fold-datasets' && !listFoot.hasDatasets) continue;
+      if (fold === 'bio-card--fold-note' && !listFoot.note) continue;
+      root.classList?.add(fold);
+      if (fold === 'bio-card--fold-note') {
+        listFoot.link.title = listFoot.note.textContent;
+        noteInfo.hidden = false;
+      }
+    }
+    if (noteInfo.hidden && !notePop.hidden) showNotePop(false); // the note shows again in the foot
+  };
+  doc.defaultView?.addEventListener?.('resize', fitFoot);
   let mode = null;
+  // Brief B S-1: stops the Top datasets rows' "more ↓" cue from watching a list the card no longer shows.
+  let stopDatasetsCue = null;
+  const stopCue = () => { stopDatasetsCue?.(); stopDatasetsCue = null; };
   // The owner is told (onListEnd), after the change, whenever list or status content stops showing for any reason: the card
   // is closed or dismissed, or a marker's details replace it. "What lives here" keeps its outline exactly that long (R-7e).
   // The owner's handler runs inside the card's own state change, so its failure is logged here under its own label: a dismiss still
@@ -123,12 +214,18 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   };
 
   const reset = (heading) => {
+    stopCue();
+    listFoot = null;
+    root.classList?.remove(...FOLDS);
+    showNotePop(false);
+    noteInfo.hidden = true;
     title.textContent = heading;
     filter.textContent = '';
     body.replaceChildren();
     foot.replaceChildren();
   };
-  const close = () => { root.hidden = true; setMode(null); };
+  // Review M-4: a hidden card stops watching its rows too; the next render would otherwise be the only thing that did.
+  const close = () => { root.hidden = true; stopCue(); announce(''); setMode(null); };
 
   viewer.selectedEntityChanged.addEventListener((entity) => {
     try {
@@ -138,9 +235,15 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         return;
       }
       const html = sanitize(decision.html);
-      reset(layerName(decision.layerId));
+      const heading = layerName(decision.layerId);
+      reset(heading);
       body.innerHTML = html;
       root.hidden = false;
+      // Fix round 1, item 3: the line names the record: the entity's name, else the first bold line of its details (the biology layers put the
+      // record's name there), else the layer.
+      // Brief B fix round 1, item 6: without the icon the layers put before a name ("🐋 Blue whale"), which a reader speaks as an emoji name.
+      const record = spokenName(typeof entity.name === 'string' ? entity.name : '') || spokenName(body.querySelector('b')?.textContent) || heading;
+      announce(`${record} details opened`);
       setMode('detail');
     } catch (error) {
       console.error('[bio-card] could not render details', { layerId: entity?.entityCollection?.owner?.name ?? null, entityId: entity?.id ?? null, error });
@@ -160,12 +263,14 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   root.querySelector('.bio-card-close').addEventListener('click', dismiss);
   // Status or list content replacing a detail card clears the selection too (R-4d), so the card and the selection
   // stay in sync. Deselect first: that raises selectedEntityChanged, whose listener closes the detail card.
-  const showListContent = (heading, render) => {
+  const showListContent = (heading, render, announcement) => {
     if (mode === 'detail' && viewer.selectedEntity) viewer.selectedEntity = undefined;
     reset(heading);
     render();
     root.hidden = false;
+    announce(announcement);
     setMode('list');
+    fitFoot();
   };
   // M2: an Escape another control already handled (the species search hiding its suggestions) is not the card's.
   doc.addEventListener('keydown', (event) => {
@@ -174,6 +279,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
 
   return {
     element: root,
+    /** The card's status line (R13-M8); the page appends it beside the card. */
+    announcer,
     get mode() { return mode; },
     close,
     showStatus({ heading, message, retry = null }) {
@@ -190,16 +297,21 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
           button.addEventListener('click', () => retry());
           body.appendChild(button);
         }
-      });
+      }, `${heading}: ${message}`);
     },
     /** `datasets` ({ key, count, title, doi, error }, facet order) are named above the foot's gbif.org link (R-7u). */
     showList({ heading, filterLine, entries, datasets = [], footer, footerHref, footerNote = null, onRow }) {
       showListContent(heading, () => {
         filter.textContent = filterLine;
         renderListInto(body, listRows(entries), doc, onRow);
-        if (datasets.length) foot.appendChild(createDatasetList(doc, datasets, { heading: 'Top datasets in this area' }));
+        if (datasets.length) {
+          const block = foot.appendChild(createDatasetList(doc, datasets, { heading: 'Top datasets in this area' }));
+          // [heading, rows, cue] (createDatasetList): the panel's cue, shown while more rows are below the rows' view.
+          stopDatasetsCue = watchMoreBelow(block.children[1], block.children[2], observeSize);
+        }
+        let note = null;
         if (footerNote) {
-          const note = doc.createElement('span');
+          note = doc.createElement('span');
           note.className = 'bio-card-foot-note';
           note.textContent = footerNote;
           foot.appendChild(note);
@@ -210,7 +322,8 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         link.rel = 'noopener noreferrer';
         link.textContent = footer;
         foot.appendChild(link);
-      });
+        listFoot = { hasDatasets: datasets.length > 0, note, link };
+      }, `${heading}: ${[`${entries.length} species listed`, failuresLine(entries, 'name lookup'), failuresLine(datasets, 'dataset lookup')].filter(Boolean).join('; ')}`);
     },
   };
 }

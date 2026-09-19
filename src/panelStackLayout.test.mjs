@@ -349,3 +349,28 @@ test('a hidden child of a visible panel still counts', () => {
   const rig = fakeLeftPanel({ panelVisibility: 'visible', cueVisibility: 'hidden', listScrollHeight: 300 });
   assert.equal(measureLeftPanelNaturalHeight(rig.panel, { getStyle: rig.getStyle }), 314 + 14 + 12 + 1);
 });
+
+// Final review m-1: at phone width the left stack is an accordion. Opening a panel collapses every other open one, whatever opened it: a click,
+// a voice command, or a share link restoring several open panels (restored in SHARE_PANEL_STATE order, so the last one opened stays open).
+test('phone accordion: opening a left-stack panel collapses the others, and a two-panel share link ends with one open', async () => {
+  const { phoneAccordionSiblingsToCollapse } = await import('./panelStackLayout.js');
+  assert.equal(typeof phoneAccordionSiblingsToCollapse, 'function');
+  const panels = [{ id: 'data-panel', collapsed: false }, { id: 'scene-panel', collapsed: true }, { id: 'species-panel', collapsed: true }];
+  assert.deepEqual(phoneAccordionSiblingsToCollapse({ panels, openedId: 'species-panel' }), ['data-panel']);
+  assert.deepEqual(phoneAccordionSiblingsToCollapse({ panels, openedId: 'data-panel' }), [], 'positive control: reopening the open one collapses nothing');
+  // The share-link restore path: ui=d.c.0_b.c.0 decodes to data and species open, applied in SHARE_PANEL_STATE order.
+  const { decodePanelStateParams } = await import('./sharelink.js');
+  const restored = decodePanelStateParams(new URLSearchParams('v=2&ui=d.c.0_b.c.0'));
+  assert.deepEqual(restored.specs.map((s) => [s.id, s.collapsed]), [['data-panel', false], ['species-panel', false]]);
+  const stack = [{ id: 'data-panel', collapsed: true }, { id: 'scene-panel', collapsed: true }, { id: 'species-panel', collapsed: true }];
+  for (const spec of restored.specs) {
+    for (const id of phoneAccordionSiblingsToCollapse({ panels: stack, openedId: spec.id })) stack.find((p) => p.id === id).collapsed = true;
+    stack.find((p) => p.id === spec.id).collapsed = spec.collapsed;
+  }
+  assert.deepEqual(stack.filter((p) => !p.collapsed).map((p) => p.id), ['species-panel'], 'one panel open after the restore');
+  // ui.js applies it in setPanelCollapsed, the one path every opener goes through, on phone widths only.
+  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
+  const body = ui.slice(ui.indexOf('  setPanelCollapsed(panelId, collapsed, {'), ui.indexOf("    panelEl.classList.toggle('collapsed', nextCollapsed);"));
+  assert.match(body, /phoneAccordionSiblingsToCollapse\(/);
+  assert.match(body, /matchMedia\('\(max-width: 720px\)'\)\.matches/);
+});

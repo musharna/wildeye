@@ -23,6 +23,10 @@ from .atomic import write_atomic
 log = logging.getLogger("occurrences")
 HERE = Path(__file__).parent
 GBIF = "https://api.gbif.org/v1/occurrence/search"
+# The GBIF Backbone Taxonomy's checklist: TAXA gbif_key values are Backbone keys. A key read under another checklist (gbif.org has
+# defaulted to Catalogue of Life XR since 2026-06-18) answers HTTP 200 with count 0, so every taxon query names this one, like the
+# app (src/bio/gbif.js GBIF_BACKBONE_CHECKLIST_KEY) and does not depend on the API default staying the Backbone.
+GBIF_BACKBONE_CHECKLIST_KEY = "d7dddbf4-2cf0-4f39-9b2a-bb099caae36c"
 OBIS = "https://api.obis.org/v3/occurrence"
 GBIF_LICENCES = ("CC0_1_0", "CC_BY_4_0")
 PAGE = 300
@@ -81,6 +85,7 @@ def gbif_records(
             break
         q = [
             ("taxonKey", taxon["gbif_key"]),
+            ("checklistKey", GBIF_BACKBONE_CHECKLIST_KEY),
             ("eventDate", f"{since},{until}"),
             ("hasCoordinate", "true"),
             ("hasGeospatialIssue", "false"),

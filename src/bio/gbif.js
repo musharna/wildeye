@@ -11,8 +11,13 @@ export const REQUEST_TIMEOUT_MS = 8000;
 /**
  * The GBIF Backbone Taxonomy's checklist. The app's taxon keys are Backbone keys, the default of api.gbif.org v1 and the map tiles. Since
  * 2026-06-18 www.gbif.org reads taxon keys under Catalogue of Life XR unless a link names a checklist, and there a Backbone key matches
- * no record, so a gbif.org link that filters a taxon carries this key. gbifPortalUrl and gbifPortalAnyLocationUrl filter no taxon and
- * carry none; one that gains a taxon filter needs it.
+ * no record, so a gbif.org link that filters a taxon carries this key. The area links (gbifPortalUrl, gbifPortalAnyLocationUrl) carry it
+ * too: the what-lives-here search names it, and naming a checklist drops the records with no taxon in it, so the card's count and its link's
+ * are counts under the same checklist (below).
+ * The API default is still the Backbone, but a key read under another checklist fails just as silently there (live 2026-09-18: HTTP 200
+ * count 0 for a search, an empty 204 tile), and the speciesKey facet returns the keys of whichever checklist applies. So every
+ * api.gbif.org request that carries a taxonKey or facets by speciesKey names this checklist too (densityTileTemplate, speciesNearUrl,
+ * taxonDatasetsUrl), and does not depend on the API default staying put.
  */
 export const GBIF_BACKBONE_CHECKLIST_KEY = 'd7dddbf4-2cf0-4f39-9b2a-bb099caae36c';
 
@@ -158,7 +163,7 @@ export const SPECIES_TILE_SIZE_PX = 512;
  */
 export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`densityTileTemplate: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), style: SPECIES_MAP_LEGEND.style, srs: 'EPSG:3857' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, style: SPECIES_MAP_LEGEND.style, srs: 'EPSG:3857' });
   appendRecordFilters(params, years, now);
   return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }
@@ -178,7 +183,8 @@ export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) 
   const area = polygonRefusal({ lat, lon, radiusKm }) === null
     ? { geometry: circlePolygonWkt({ lat, lon, radiusKm }) }
     : { geoDistance: `${lat.toFixed(4)},${lon.toFixed(4)},${radiusKm}km` };
-  const params = new URLSearchParams({ ...area, hasCoordinate: 'true', hasGeospatialIssue: 'false' });
+  // checklistKey: the speciesKey facet answers in the keys of the checklist the search names (GBIF_BACKBONE_CHECKLIST_KEY).
+  const params = new URLSearchParams({ ...area, checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, hasCoordinate: 'true', hasGeospatialIssue: 'false' });
   params.append('facet', 'speciesKey');
   params.append('facet', 'datasetKey');
   params.set('speciesKey.facetLimit', String(NEAR_SPECIES_LIMIT));
@@ -192,18 +198,20 @@ export function speciesNearUrl({ lat, lon, radiusKm, years, now = new Date() }) 
  * The same search on gbif.org, where a visitor can browse the records and request a citable download. It carries the
  * search's own `geometry` value: gbif.org drops `geo_distance`, which would open the link with no location filter. It carries the search's
  * `hasGeospatialIssue=false` too, so gbif.org counts the records the card counts (gbif-web lists hasGeospatialIssue among its occurrence
- * search fields; on 2026-09-14 a 50 km link without it counted 222,689 records where the card said 217,508).
+ * search fields; on 2026-09-14 a 50 km link without it counted 222,689 records where the card said 217,508). It carries the search's
+ * checklistKey (the Backbone) as well: live on 2026-09-19 the Yellowstone 10 km search counted 28,918 records under the Backbone, 28,920
+ * under COL XR (gbif.org's default) and 28,959 with no checklist, the difference being records with no taxon match.
  */
 export function gbifPortalUrl({ lat, lon, radiusKm, years, now = new Date() }) {
   checkPoint(lat, lon, radiusKm);
-  const params = new URLSearchParams({ geometry: circlePolygonWkt({ lat, lon, radiusKm }), hasGeospatialIssue: 'false' });
+  const params = new URLSearchParams({ geometry: circlePolygonWkt({ lat, lon, radiusKm }), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, hasGeospatialIssue: 'false' });
   appendRecordFilters(params, years, now);
   return `https://www.gbif.org/occurrence/search?${params}`;
 }
 
-/** gbif.org with the same licences and years and no location filter: the card's link where the circle cannot be a polygon. */
+/** gbif.org with the same checklist, licences and years and no location filter: the card's link where the circle cannot be a polygon. */
 export function gbifPortalAnyLocationUrl({ years, now = new Date() }) {
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({ checklistKey: GBIF_BACKBONE_CHECKLIST_KEY });
   appendRecordFilters(params, years, now);
   return `https://www.gbif.org/occurrence/search?${params}`;
 }
@@ -242,7 +250,7 @@ export function parseSpeciesNear(json) {
  */
 export function taxonDatasetsUrl({ taxonKey, years, now = new Date() }) {
   if (!Number.isInteger(taxonKey) || taxonKey <= 0) throw new Error(`taxonDatasetsUrl: bad taxonKey ${taxonKey}`);
-  const params = new URLSearchParams({ taxonKey: String(taxonKey), hasCoordinate: 'true', facet: 'datasetKey', 'datasetKey.facetLimit': String(TAXON_DATASET_LIMIT), limit: '0' });
+  const params = new URLSearchParams({ taxonKey: String(taxonKey), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, hasCoordinate: 'true', facet: 'datasetKey', 'datasetKey.facetLimit': String(TAXON_DATASET_LIMIT), limit: '0' });
   appendRecordFilters(params, years, now);
   return `${GBIF_API}/v1/occurrence/search?${params}`;
 }
@@ -299,6 +307,12 @@ export function parseInatSuggest(json) {
     .map((r) => ({ id: r.id ?? null, gbifKey: null, scientificName: r.name, commonName: r.preferred_common_name || null, rank: r.rank, matchedTerm: typeof r.matched_term === 'string' && r.matched_term ? r.matched_term : null }));
 }
 
+/**
+ * /v1/species/suggest, /v1/species/match and /v1/species/{key} (speciesUrl) take no checklistKey: they ignore it and always answer in
+ * the Backbone (live 2026-09-18, .superpowers/sdd/polish/D-research.md Q1: match with the COL XR checklistKey still gave usageKey
+ * 5133088; suggest gave Backbone key 6223161; /v1/species/4DXXM is HTTP 400). Their keys are Backbone keys, which is the checklist every
+ * taxon request names (GBIF_BACKBONE_CHECKLIST_KEY).
+ */
 export function gbifSuggestUrl(q) {
   return `${GBIF_API}/v1/species/suggest?${new URLSearchParams({ q, limit: '8' })}`;
 }
@@ -325,7 +339,7 @@ export function parseGbifMatch(json) {
   if (!Number.isInteger(json.usageKey)) throw new Error(`GBIF match: a ${matchType} match has no usageKey`);
   if (Number.isInteger(json.acceptedUsageKey)) {
     // R12-M3: a synonym is mapped as its accepted taxon, so it is named as that taxon: the classification field for its rank ("species" for a
-    // SPECIES synonym) when that field's key is the accepted key; otherwise null, and client.match looks the accepted key up.
+    // SPECIES synonym) when that field's key is the accepted key; otherwise null, and a caller that shows the name looks the accepted key up.
     const field = typeof json.rank === 'string' ? json.rank.toLowerCase() : null;
     const accepted = field && json[`${field}Key`] === json.acceptedUsageKey && typeof json[field] === 'string' && json[field] ? json[field] : null;
     return { key: json.acceptedUsageKey, matchType, canonicalName: accepted };
@@ -341,7 +355,9 @@ export function speciesUrl(key) {
 
 export function parseSpeciesName(json) {
   if (!json || !Number.isInteger(json.key)) throw new Error('GBIF species: response has no key');
-  return { key: json.key, scientificName: json.canonicalName || json.scientificName, commonName: json.vernacularName || null, className: json.class || null };
+  const scientificName = json.canonicalName || json.scientificName;
+  if (typeof scientificName !== 'string' || !scientificName) throw new Error(`GBIF species: key ${json.key} has no name`);
+  return { key: json.key, scientificName, commonName: json.vernacularName || null, className: json.class || null };
 }
 
 /** At most `maxPerWindow` acquisitions in any `windowMs` window. */
@@ -378,7 +394,10 @@ export function createPool(limit = 4) {
   };
 }
 
-/** GET JSON with a timeout. HTTP errors and timeouts become RequestError; a caller abort stays an AbortError. */
+/**
+ * GET JSON with a timeout. HTTP errors and timeouts become RequestError; a caller abort stays an AbortError. An HTTP error's message is
+ * "HTTP" and the status joined by a no-break space: the status lines show it, and a narrow panel wrapped "HTTP" and "503" apart.
+ */
 export async function fetchJson(url, { signal = null, timeoutMs = REQUEST_TIMEOUT_MS, fetchImpl = (...args) => globalThis.fetch(...args) } = {}) {
   const controller = new AbortController();
   const onCallerAbort = () => controller.abort(signal.reason);
@@ -387,7 +406,7 @@ export async function fetchJson(url, { signal = null, timeoutMs = REQUEST_TIMEOU
   const timer = setTimeout(() => controller.abort(new RequestError('timeout', { url })), timeoutMs);
   try {
     const res = await fetchImpl(url, { signal: controller.signal });
-    if (!res.ok) throw new RequestError(`HTTP ${res.status}`, { status: res.status, url });
+    if (!res.ok) throw new RequestError(`HTTP\u00a0${res.status}`, { status: res.status, url });
     return await res.json();
   } catch (error) {
     if (error instanceof RequestError) throw error;
@@ -445,12 +464,12 @@ export function createBioClient({
         throw new RequestError(`iNaturalist ${inatError.message}, GBIF ${error.message}`); // N-a: each failure once, the codes visible
       }
     },
-    /** GBIF's strict match; a synonym whose accepted name the response does not carry is named by looking the accepted key up (R12-M3). */
+    /**
+     * GBIF's strict match, one request. A synonym whose accepted name the response does not carry comes back with canonicalName null (R13-M3):
+     * only a caller that shows the name looks the accepted key up, so a match whose name is never shown needs no second request.
+     */
     async match(scientificName, { signal = null } = {}) {
-      const match = parseGbifMatch(await get(gbifMatchUrl(scientificName), signal));
-      if (match.key === null || match.canonicalName !== null) return match;
-      const accepted = await this.speciesName(match.key, { signal });
-      return { ...match, canonicalName: accepted.scientificName };
+      return parseGbifMatch(await get(gbifMatchUrl(scientificName), signal));
     },
     async speciesNear(args, { signal = null } = {}) {
       return parseSpeciesNear(await get(speciesNearUrl(args), signal));
