@@ -8,9 +8,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.local/node24/bin:$PATH"
 BASE="${PAGES_BASE:-/wildeye/}"
-# ~14 MB/night. The ~50 MB that survives this uplink (2026-09-12) now bounds the push DELTA, not the
-# whole site, so raise this a few nights at a time; the ceiling on the total is the 1 GB Pages limit.
-KEEP_NIGHTS="${KEEP_NIGHTS:-2}"
+# ~14 MB/night. The ~50 MB that survives this uplink (2026-09-12) bounds the push DELTA, not the whole
+# site, so the ceiling on the total is the 1 GB Pages limit instead: ship every night the pipeline has
+# (it prunes its own archive to ~30 nights / 424 MB). This default was 2 while each deploy re-uploaded
+# the site; leaving it there would have had the nightly cron prune the published archive back to two
+# nights the morning after it was filled. Lower it only to make a single deploy smaller.
+KEEP_NIGHTS="${KEEP_NIGHTS:-999}"
 PY="${WILDEYE_PYTHON:-$HOME/miniconda3/bin/python3}"
 BRANCH=gh-pages
 WT="$(mktemp -d "${TMPDIR:-/tmp}/wildeye-pages.XXXXXX")"
