@@ -96,6 +96,29 @@ try {
   const backLive = await page.evaluate(() => (document.getElementById('observed-time')?.querySelector('.ot-label')?.textContent || '').toLowerCase());
   report('live-return', backLive.includes('live') || backLive.trim() === '', { label: backLive });
 
+  // 5. Enable a layer WHILE the bar is already in the past. Until 2026-09-20 this silently showed live
+  // data under a past timestamp: the bridge waited for a visibility-transition carrying
+  // lifecycleState 'enabled', which the manager never sends (settled visibility is type 'visibility').
+  // Order matters — scrub first, enable second — so the layer cannot have been handed the time on the
+  // way in. A check that enables first can pass on the broken code.
+  await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('birds', false));
+  await page.evaluate((days) => {
+    const range = document.getElementById('observed-time').querySelector('.ot-range');
+    range.value = String(Math.max(0, Number(range.max) - days * 24));
+    range.dispatchEvent(new Event('input', { bubbles: true }));
+  }, BACK_DAYS - 1);
+  const target2 = new Date(Date.now() - (BACK_DAYS - 1) * 86400000);
+  const wantDay2 = target2.toISOString().slice(0, 10).replace(/-/g, '/');
+  const before2 = frameFetches.length;
+  await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('birds', true));
+  const deadline2 = Date.now() + 60000;
+  let hit2 = null;
+  while (Date.now() < deadline2 && !hit2) {
+    hit2 = frameFetches.slice(before2).find((f) => f.url.includes(`/birds_archive/${wantDay2}/`));
+    if (!hit2) await new Promise((r) => setTimeout(r, 1000));
+  }
+  report('enable-while-scrubbed', !!hit2 && hit2.status === 200, { wantDay: wantDay2, fetched: hit2?.url || null, status: hit2?.status ?? null });
+
   report('no-page-errors', pageErrors.length === 0, { errors: pageErrors.slice(0, 3) });
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/observed-time.png` });
 } finally {
