@@ -127,12 +127,14 @@ export function attachObservedTime(store, dataManager, layers) {
   const unsubStore = store.subscribe((iso) => {
     for (const l of samplers) if (dataManager.isEnabled(l.id)) push(l, iso);
   });
+  // "visibility", not "visibility-transition": the transition event is the manager's TRANSITIONAL
+  // announcement and only ever carries lifecycleState 'enabling'/'disabling' — manager.js:696 is its one
+  // call site — while the settle that writes 'enabled' notifies nobody. Settled visibility arrives as
+  // {type:"visibility", enabled} (manager.js:954, and again right after _settleLifecycle at :1228).
+  // Asking the transitional event for settled state meant this branch never ran in a browser: a layer
+  // switched on while the bar was scrubbed back kept showing live data under a past timestamp.
   const unsubManager = dataManager.subscribe((change) => {
-    if (
-      change?.type !== "visibility-transition" ||
-      change.lifecycleState !== "enabled"
-    )
-      return;
+    if (change?.type !== "visibility" || change.enabled !== true) return;
     const l = samplers.find((x) => x.id === change.layerId);
     if (l && !store.isLive()) push(l, store.get());
   });
@@ -199,7 +201,12 @@ export function installObservedTimeUi(
     syncDomain();
     label.textContent = describeObservedTime(store.get());
     play.textContent = store.isPlaying() ? "❚❚" : "▶";
-    root.hidden = ![...ids].some((id) => dataManager.isEnabled(id));
+    const show = [...ids].some((id) => dataManager.isEnabled(id));
+    // `hidden` alone hides nothing here: this bar styles itself with an inline display:flex, and an
+    // inline declaration outranks the UA stylesheet's [hidden]{display:none}. So display carries the
+    // visibility and `hidden` stays in step for assistive tech.
+    root.style.display = show ? "flex" : "none";
+    root.hidden = !show;
   };
   range.addEventListener("input", () => {
     const d = store.domain();
@@ -216,8 +223,15 @@ export function installObservedTimeUi(
     store.isPlaying() ? store.pause() : store.play(),
   );
   store.subscribe(render);
+  // Both: "visibility-transition" keeps the bar responsive while a layer is still coming up, and
+  // "visibility" is the settled announcement that arrives last and decides the final state. Listening
+  // only to the transition left the bar reading the state a layer had DURING its enable, forever.
   dataManager.subscribe((change) => {
-    if (change?.type === "visibility-transition") render();
+    if (
+      change?.type === "visibility" ||
+      change?.type === "visibility-transition"
+    )
+      render();
   });
   render();
   return root;

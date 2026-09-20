@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createObservedTime, attachObservedTime, describeObservedTime, isoHour, installObservedTimeUi } from './observedTime.js';
+import { DataLayerManager } from './data/manager.js';
 
 const NOW = Date.parse('2026-09-11T15:37:12Z');
 
@@ -60,7 +61,10 @@ test('bridge: only enabled sampling layers receive the time; a layer enabled lat
   await Promise.resolve();
   assert.deepEqual(calls, [['birds', '2026-09-11T10:00:00Z']]);
   enabled.add('oisst');
-  for (const fn of listeners) fn({ type: 'visibility-transition', layerId: 'oisst', lifecycleState: 'enabled' });
+  // The settled announcement the manager really sends. This read {type:'visibility-transition',
+  // lifecycleState:'enabled'} until 2026-09-20 — an event the manager never emits — so the test passed
+  // while the branch it covers was dead in the browser. The real-manager test below keeps it honest.
+  for (const fn of listeners) fn({ type: 'visibility', layerId: 'oisst', enabled: true });
   assert.deepEqual(calls.at(-1), ['oisst', '2026-09-11T10:00:00Z']);
   s.set(null);
   assert.deepEqual(calls.slice(-2), [['birds', null], ['oisst', null]]);
@@ -101,4 +105,74 @@ test('bar: hidden until a sampling layer is enabled, slider maps to the domain, 
   root.querySelector('.ot-live').handlers.click();
   assert.equal(s.get(), null); assert.equal(range.value, '24');
   assert.equal(installObservedTimeUi(s, dm, [], { ...doc, getElementById: () => root }), null, 'installed once');
+});
+
+// Minimal DOM stub shared by the bar tests below. `style` is a plain object, so a test reads back
+// exactly what the code assigned — including `display`, which is what actually hides the bar.
+function stubDoc() {
+  const mkEl = (tag) => ({
+    tag, children: [], style: {}, hidden: false, handlers: {}, _html: '', min: '0', max: '0', value: '0', textContent: '',
+    appendChild(c) { this.children.push(c); return c; },
+    addEventListener(ev, fn) { this.handlers[ev] = fn; },
+    set innerHTML(h) { this._html = h; this.children = [...h.matchAll(/class="([a-z-]+)"/g)].map((m) => Object.assign(mkEl('x'), { cls: m[1] })); },
+    get innerHTML() { return this._html; },
+    querySelector(sel) { return this.children.find((c) => c.cls === sel.slice(1)) || null; },
+    querySelectorAll() { return this.children; },
+  });
+  const doc = { body: mkEl('body'), getElementById: () => null, createElement: (t) => mkEl(t) };
+  return doc;
+}
+
+/** A layer module the real DataLayerManager can drive, recording the observed times it is handed. */
+function samplingLayer(id) {
+  const seen = [];
+  return {
+    seen,
+    module: {
+      id,
+      async init() {},
+      async enable() {},
+      async disable() {},
+      async update() {},
+      updateInterval: -1,
+      setObservedTime(iso) { seen.push(iso); },
+    },
+  };
+}
+
+test('bridge: a layer enabled through the REAL manager while scrubbed is handed the observed time', async () => {
+  // The fixture this replaces synthesised {type:'visibility-transition', lifecycleState:'enabled'} —
+  // an event DataLayerManager never sends. _setLifecycleTransition has one call site and passes only
+  // 'enabling'/'disabling'; the settle that sets 'enabled' notifies nobody. Settled visibility is
+  // announced as {type:'visibility', enabled}. Driving the real manager is what catches that.
+  const s = createObservedTime({ now: () => NOW, domainDays: 2 });
+  const mgr = new DataLayerManager({}, { hasBackend: false });
+  const birds = samplingLayer('birds');
+  mgr.register(birds.module);
+  const off = attachObservedTime(s, mgr, [birds.module]);
+  s.set('2026-09-11T10:00:00Z');
+  await Promise.resolve();
+  assert.deepEqual(birds.seen, [], 'a disabled layer is not sampled');
+  await mgr.setEnabled('birds', true);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(birds.seen, ['2026-09-11T10:00:00Z'],
+    'enabling while scrubbed must hand the layer the observed time, not leave it live');
+  off();
+});
+
+test('bar: shows and hides by display, driven by the REAL manager', async () => {
+  // `hidden` alone cannot hide this bar: installObservedTimeUi sets inline display:flex, which outranks
+  // the UA's [hidden]{display:none}. The assertion is therefore on display, which is what a user sees.
+  const s = createObservedTime({ now: () => NOW, domainDays: 1 });
+  const mgr = new DataLayerManager({}, { hasBackend: false });
+  const birds = samplingLayer('birds');
+  mgr.register(birds.module);
+  const root = installObservedTimeUi(s, mgr, [birds.module], stubDoc());
+  assert.equal(root.style.display, 'none', 'no sampling layer enabled: the bar is not displayed');
+  await mgr.setEnabled('birds', true);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(root.style.display, 'flex', 'the bar appears once a sampling layer is on');
+  await mgr.setEnabled('birds', false);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(root.style.display, 'none', 'and goes away again');
 });
