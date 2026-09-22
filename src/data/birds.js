@@ -415,10 +415,17 @@ export function createBirdsLayer() {
     },
 
     /**
-     * Fetch the archive manifest. `refresh=true` re-reads it (the cron appends a
-     * frame every hour; a memoised manifest froze the slider for the page's life —
-     * panel audit 2026-09-11). New frames sort after existing ones, so replay
-     * indices stay valid; the slider range is widened in place.
+     * Fetch the archive manifest. `refresh=true` re-reads it, so frames added
+     * while the page is open widen the slider instead of a memoised manifest
+     * freezing it for the page's life (panel audit 2026-09-11). New frames sort
+     * after existing ones, so replay indices stay valid.
+     *
+     * The archive is written by pipeline/build_archive.py over an explicit
+     * --start/--end range. As of 2026-09-22 no scheduled job advances it, so a
+     * refresh usually returns the same span; this comment previously claimed a
+     * cron appended a frame every hour, which is the belief the stale-archive
+     * defect rested on. getObservedExtent() below reports the real span either
+     * way, so the bar never advertises hours the archive does not hold.
      */
     async _loadManifest(refresh = false) {
       if (_manifest !== null && !refresh) return _manifest;
@@ -469,6 +476,22 @@ export function createBirdsLayer() {
       clearTimeout(_seekTimer);
       await this._showFrame(id);
       return true;
+    },
+
+    /**
+     * Shared observed-time hook: the span this layer can actually serve, read off
+     * the archive manifest (frame ids are UTC hours, 'YYYY-MM-DDTHH'). The bar's
+     * domain is the union of these across enabled layers, so it stops where the
+     * frames stop rather than at a 30-day constant nothing checked.
+     */
+    async getObservedExtent() {
+      const m = await this._loadManifest(true);
+      if (!m || !m.ids.length) return null;
+      const ms = (id) => Date.parse(`${id}:00:00Z`);
+      const startMs = ms(m.ids[0]);
+      const endMs = ms(m.ids[m.ids.length - 1]);
+      if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return null;
+      return { startMs, endMs };
     },
 
     /** Field JSON → drapes + particle seed. Absent field file is not an error (M1 data only). */

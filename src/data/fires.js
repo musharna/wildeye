@@ -258,6 +258,14 @@ export function createFiresLayer() {
     },
 
     /** Shared observed-time hook: colour each cell by the 6-hour bin containing the instant. */
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the bin geometry in the file header (bin0 to newest).
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return _geom ? { startMs: _geom.bin0Ms, endMs: _geom.newestMs } : null;
+    },
+
     setObservedTime(iso) {
       if (iso && !Number.isFinite(Date.parse(iso))) return false;
       const next = iso || null;

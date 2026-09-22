@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { extentFromTimes } from './observedExtent.js';
 
 /**
  * Generic single-image drape layer driven by public/data/rasters.json
@@ -122,6 +123,14 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
     },
 
     /** Observed-time hook: null = live/latest. Re-renders only when the target frame changes. */
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the acquisitions in its archive history.
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return extentFromTimes((_entry?.history || []).map((h) => h.time));
+    },
+
     async setObservedTime(isoTime) {
       _observed = isoTime || null;
       if (!_entry || !_viewer) return false;

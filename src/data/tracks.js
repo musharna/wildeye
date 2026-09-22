@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { extentFromTimes, pluck } from "./observedExtent.js";
 
 /**
  * Animal tracks (track contract): one polyline per segment of a tagged animal's
@@ -233,6 +234,14 @@ export function createTracksLayer() {
     },
 
     /** Shared observed-time hook: clip tracks to the instant, fade tracks outside their span. */
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the first and last fix of every track — archived telemetry reaches back years.
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return extentFromTimes([...pluck(_features, "start"), ...pluck(_features, "end")]);
+    },
+
     setObservedTime(iso) {
       const ms = iso ? Date.parse(iso) : null;
       if (iso && !Number.isFinite(ms)) return false;

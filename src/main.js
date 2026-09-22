@@ -273,7 +273,9 @@ async function init() {
     dataManager.register(arbonetLayer);
     dataManager.register(speciesLayer);
     // Shared observed-time selector: one bar, every bio layer samples its own data at the instant.
-    const observedTime = createObservedTime({ domainDays: 30 });
+    // No domain constant: the bar spans the union of what the enabled layers declare they can
+    // serve (getObservedExtent), so it cannot advertise hours no layer has data for.
+    const observedTime = createObservedTime();
     const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer];
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
@@ -414,6 +416,8 @@ async function init() {
       styleManager,
       tileset,
       dataManager,
+      // the shared observed-time store: qa-observed-time asserts the bar's span against the data
+      observedTime,
       sceneDirector,
       mapStackController,
       annotations,

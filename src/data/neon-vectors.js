@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { extentFromMonths, pluck } from "./observedExtent.js";
 
 /**
  * NEON ticks + mosquitoes (site-series contract, clone of neon.js): one point per NEON site
@@ -234,6 +235,14 @@ export function createNeonVectorsLayer() {
     },
 
     /** Shared observed-time hook: each site shows the calendar month containing the instant. */
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the months sampled, across both taxa.
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return extentFromMonths([...pluck(_features, "ticks", "m"), ...pluck(_features, "mosquitoes", "m")]);
+    },
+
     setObservedTime(iso) {
       if (iso && !Number.isFinite(Date.parse(iso))) return false;
       const next = iso || null;

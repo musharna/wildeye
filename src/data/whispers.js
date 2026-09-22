@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { binsAt, LIVE_WEEKS } from "./hpai.js";
+import { extentFromWeekDates, pluck } from "./observedExtent.js";
 
 /**
  * Wildlife mortality and morbidity events by county (polygon contract): USGS WHISPers
@@ -226,6 +227,14 @@ export function createWhispersLayer() {
       _features = [];
       _lastUpdate = null;
       _lastError = null;
+    },
+
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the 7-day bins it holds (each `w` is the bin's last day).
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return extentFromWeekDates(pluck(_features, "weeks", "w"));
     },
 
     setObservedTime(iso) {

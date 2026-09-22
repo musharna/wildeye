@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { extentFromWeekDates, pluck } from "./observedExtent.js";
 
 /**
  * H5N1 sampled spread (site-series contract): one point per place in the Nextstrain
@@ -258,6 +259,14 @@ export function createH5n1Layer() {
     },
 
     /** Shared observed-time hook: each place shows the 7-day bin containing the instant. */
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the 7-day bins it holds (each `w` is the bin's last day).
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return extentFromWeekDates(pluck(_features, "weeks", "w"));
+    },
+
     setObservedTime(iso) {
       if (iso && !Number.isFinite(Date.parse(iso))) return false;
       const next = iso || null;

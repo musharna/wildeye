@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { extentFromWeekDates, pluck } from "./observedExtent.js";
 
 /**
  * Whale detections from NOAA passive acoustics (site-series contract): one point per
@@ -279,6 +280,14 @@ export function createCetaceansLayer() {
     },
 
     /** Shared observed-time hook: each station shows the 7-day bin containing the instant. */
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the 7-day bins it holds (each `w` is the bin's last day).
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return extentFromWeekDates(pluck(_features, "weeks", "w"));
+    },
+
     setObservedTime(iso) {
       if (iso && !Number.isFinite(Date.parse(iso))) return false;
       const next = iso || null;

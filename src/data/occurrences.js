@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { loadIucn, iucnBadge } from "./iucn.js";
+import { extentFromDays, pluck } from "./observedExtent.js";
 
 /**
  * Recent wildlife sightings from GBIF + OBIS (CC0 / CC-BY records only),
@@ -230,6 +231,14 @@ export function createOccurrencesLayer() {
     },
 
     /** Shared observed-time hook: records after the instant are hidden, age fades relative to it. */
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the days its records fall on.
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return extentFromDays(pluck(_features, "date"));
+    },
+
     setObservedTime(iso) {
       const ms = iso ? Date.parse(iso) : null;
       if (iso && !Number.isFinite(ms)) return false;

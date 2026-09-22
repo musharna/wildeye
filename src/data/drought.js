@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { extentFromWeekDates, pluck } from "./observedExtent.js";
 
 /**
  * U.S. drought categories (polygon contract): the U.S. Drought Monitor's weekly D0–D4
@@ -209,6 +210,14 @@ export function createDroughtLayer() {
       _weeks = [];
       _lastUpdate = null;
       _lastError = null;
+    },
+
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the weeks it holds (one `w` per feature).
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return extentFromWeekDates(pluck(_features, "w"));
     },
 
     setObservedTime(iso) {

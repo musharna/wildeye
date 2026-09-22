@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { extentFromDays, pluck } from "./observedExtent.js";
 
 /**
  * USGS river temperature and flow (site-series contract): one point per stream gage,
@@ -295,6 +296,14 @@ export function createRiversLayer() {
     },
 
     /** Shared observed-time hook: each gage shows the UTC day containing the instant. */
+    /**
+     * Shared observed-time hook: the span this layer can serve, read off the daily series it holds, from each gage's d0 to the file's data_end.
+     * The bar's domain is the union of these across enabled layers (src/observedTime.js).
+     */
+    getObservedExtent() {
+      return extentFromDays([...pluck(_features, "d0"), ...(_dataEnd ? [_dataEnd] : [])]);
+    },
+
     setObservedTime(iso) {
       if (iso && !Number.isFinite(Date.parse(iso))) return false;
       const next = iso || null;
