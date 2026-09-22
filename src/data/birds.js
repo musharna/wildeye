@@ -420,12 +420,14 @@ export function createBirdsLayer() {
      * freezing it for the page's life (panel audit 2026-09-11). New frames sort
      * after existing ones, so replay indices stay valid.
      *
-     * The archive is written by pipeline/build_archive.py over an explicit
-     * --start/--end range. As of 2026-09-22 no scheduled job advances it, so a
-     * refresh usually returns the same span; this comment previously claimed a
-     * cron appended a frame every hour, which is the belief the stale-archive
-     * defect rested on. getObservedExtent() below reports the real span either
-     * way, so the bar never advertises hours the archive does not hold.
+     * The archive is written by pipeline/build_archive.py. Since 2026-09-22 a
+     * daily cron (pipeline/run_archive.sh, 08:35 local) appends the previous
+     * night's 00-12 UTC frames in one batch and prunes to 30 nights, so a
+     * refresh during the day usually returns the same span. This comment once
+     * claimed a cron appended a frame every hour when none existed, which is
+     * the belief the stale-archive defect rested on. getObservedExtent() below
+     * reports the real span either way, so the bar never advertises hours the
+     * archive does not hold.
      */
     async _loadManifest(refresh = false) {
       if (_manifest !== null && !refresh) return _manifest;
