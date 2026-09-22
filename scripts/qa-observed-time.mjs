@@ -135,7 +135,11 @@ try {
 
   // 4. Scrub back BACK_DAYS and assert the page fetched a frame dated that far back. A site shipping
   // only the newest nights passes every UI assertion and fails this one.
-  const targetMs = Date.now() - BACK_DAYS * 86400000;
+  // Anchored on the domain's END, not on `now`: the domain is the data now, so an archive that has
+  // aged (nothing advances it) still gets checked to its full depth instead of failing the day its
+  // newest night falls more than BACK_DAYS behind the clock. A pruned archive still fails — the seek
+  // clamps to a start only days from the end and no frame for wantDay is ever requested.
+  const targetMs = state.domain.end - BACK_DAYS * 86400000;
   const wantDay = new Date(targetMs).toISOString().slice(0, 10).replace(/-/g, '/');
   const before = frameFetches.length;
   const seek = await seekTo(targetMs);
@@ -156,9 +160,10 @@ try {
   // Order matters — scrub first, enable second — so the layer cannot have been handed the time on the
   // way in. A check that enables first can pass on the broken code. The scrub needs a second layer's
   // extent to stand on, since with birds off its own extent is withdrawn and the bar has no domain.
-  await page.evaluate(() => window.__godsEyeView.observedTime.setLayerExtent('qa-probe', { rollingDays: 40 }));
+  await page.evaluate((e) => window.__godsEyeView.observedTime.setLayerExtent('qa-probe', e),
+    { startMs: state.domain.start, endMs: state.domain.end });
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('birds', false));
-  const targetMs2 = Date.now() - (BACK_DAYS - 1) * 86400000;
+  const targetMs2 = state.domain.end - (BACK_DAYS - 1) * 86400000;
   const wantDay2 = new Date(targetMs2).toISOString().slice(0, 10).replace(/-/g, '/');
   const seek2 = await seekTo(targetMs2);
   const before2 = frameFetches.length;
