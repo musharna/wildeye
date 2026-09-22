@@ -107,21 +107,51 @@ if (cd "$WT" && git diff --cached --quiet); then
 	echo "no change to publish; $BRANCH left at $(git rev-parse --short "$BRANCH")"
 	exit 0
 fi
-(cd "$WT" && git -c user.name="wildeye deploy" -c user.email="deploy@wildeye.local" commit -qm "deploy $(date -u +%Y-%m-%dT%H:%MZ) from $SRC")
-# the regression this design exists to prevent: a commit with no parent means the history was orphaned
-# and the next push is a full re-upload again.
-if [ "$REMOTE_EXISTS" = 1 ]; then
-	git rev-parse -q --verify "$BRANCH^" >/dev/null || {
-		echo "new $BRANCH commit has no parent: history was orphaned" >&2
-		exit 1
+STAMP="$(date -u +%Y-%m-%dT%H:%MZ)"
+publish() { # commit what is staged, push it
+	(cd "$WT" && git -c user.name="wildeye deploy" -c user.email="deploy@wildeye.local" commit -qm "$1")
+	# the regression this design exists to prevent: a commit with no parent means the history was orphaned
+	# and the next push is a full re-upload again.
+	if [ "$REMOTE_EXISTS" = 1 ]; then
+		git rev-parse -q --verify "$BRANCH^" >/dev/null || {
+			echo "new $BRANCH commit has no parent: history was orphaned" >&2
+			exit 1
+		}
+	fi
+	for attempt in 1 2 3; do
+		if (cd "$WT" && git push -q origin "$BRANCH"); then return 0; fi
+		echo "push attempt $attempt failed" >&2
+		[ "$attempt" = 3 ] && exit 1
+		sleep 10
+	done
+}
+# A push near 50 MB does not survive this uplink, and a night of replay frames is ~14 MB, so the first
+# deploy after the archive catches up on several nights cannot go as one push. New archive frame files
+# go up first in commits of at most $BATCH_MB, while the published manifest still lists only the old
+# frames: every tip the uplink leaves behind is a site whose manifest names only files it has. The
+# manifest and everything else go last.
+BATCH_MB="${BATCH_MB:-40}"
+mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=A -- data/birds_archive ':(exclude)data/birds_archive/manifest.json')
+NEW_BYTES=0
+[ "${#NEW[@]}" -gt 0 ] && NEW_BYTES="$(cd "$WT" && printf '%s\0' "${NEW[@]}" | du -cb --files0-from=- | tail -1 | cut -f1)"
+if [ "$NEW_BYTES" -gt $((BATCH_MB * 1000000)) ]; then
+	(cd "$WT" && git reset -q)
+	part=0 size=0 batch=()
+	flush() {
+		part=$((part + 1))
+		(cd "$WT" && printf '%s\n' "${batch[@]}" | git add --pathspec-from-file=-)
+		publish "deploy $STAMP from $SRC: archive frames, part $part"
+		echo "pushed archive part $part: ${#batch[@]} files, $((size / 1000000)) MB"
+		size=0 batch=()
 	}
+	while IFS=$'\t' read -r bytes f; do
+		if [ "${#batch[@]}" -gt 0 ] && [ $((size + bytes)) -gt $((BATCH_MB * 1000000)) ]; then flush; fi
+		batch+=("$f") size=$((size + bytes))
+	done < <(cd "$WT" && printf '%s\0' "${NEW[@]}" | du -b --files0-from=-)
+	[ "${#batch[@]}" -gt 0 ] && flush
+	(cd "$WT" && git add -A >/dev/null)
 fi
-for attempt in 1 2 3; do
-	if (cd "$WT" && git push -q origin "$BRANCH"); then break; fi
-	echo "push attempt $attempt failed" >&2
-	[ "$attempt" = 3 ] && exit 1
-	sleep 10
-done
+publish "deploy $STAMP from $SRC"
 LOCAL="$(git rev-parse "$BRANCH")"
 REMOTE="$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)"
 [ "$LOCAL" = "$REMOTE" ] || {
