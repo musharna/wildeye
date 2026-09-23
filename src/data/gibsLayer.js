@@ -73,6 +73,8 @@ export function createGibsLayer({
     drop();
     _generation += 1;
     _tileFailures = 0;
+    // a tile failure belongs to the provider that earned it, not to the layer
+    if (_lastError === "map tiles failing") _lastError = null;
     const generation = _generation;
     const provider = providerFor(gibsTileUrl(_entry, date), {
       maximumLevel: _entry.maximumLevel,
@@ -132,6 +134,8 @@ export function createGibsLayer({
           return false;
         }
         _entry = entry;
+        // Cesium never re-requests a failed tile; a fresh provider on the same date is the retry
+        if (_lastError === "map tiles failing") drop();
         apply();
         _lastUpdate = Date.now();
         return true;

@@ -145,6 +145,33 @@ test('bridge: only enabled sampling layers receive the time; a layer enabled lat
   assert.equal(describeObservedTime(null), 'LIVE');
 });
 
+test('bridge: a layer switched off while scrubbed and back on under LIVE is told LIVE; a never-scrubbed one is left alone', async () => {
+  // Review 2026-09-22: night lights scrubbed to 2014, switched off, bar sent to LIVE (disabled layers
+  // get no push), switched on again → drew 2012 tiles under a LIVE bar.
+  const s = createObservedTime({ now: () => NOW });
+  const calls = [];
+  const mk = (id) => ({ id, setObservedTime: (iso) => { calls.push([id, iso]); }, getObservedExtent: () => ({ rollingDays: 2 }) });
+  const nl = mk('gibs-nightlights'), lst = mk('gibs-lst');
+  const enabled = new Set(['gibs-nightlights']);
+  const listeners = new Set();
+  const dm = { isEnabled: (id) => enabled.has(id), subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); } };
+  const off = attachObservedTime(s, dm, [nl, lst]);
+  const settle = (id, on) => { if (on) enabled.add(id); else enabled.delete(id); for (const fn of listeners) fn({ type: 'visibility', layerId: id, enabled: on }); };
+  await Promise.resolve(); await Promise.resolve();
+  s.set('2026-09-11T10:00:00Z');
+  await Promise.resolve();
+  settle('gibs-nightlights', false);
+  s.set(null);
+  await Promise.resolve();
+  assert.deepEqual(calls.at(-1), ['gibs-nightlights', '2026-09-11T10:00:00Z'], 'the switched-off layer missed LIVE');
+  settle('gibs-nightlights', true);
+  assert.deepEqual(calls.at(-1), ['gibs-nightlights', null], 're-enabled under LIVE is told LIVE');
+  const n = calls.length;
+  settle('gibs-lst', true);
+  assert.equal(calls.length, n, 'a layer never told a past time gets no redundant push under LIVE');
+  off();
+});
+
 // Minimal DOM stub shared by the bar tests below. `style` is a plain object, so a test reads back
 // exactly what the code assigned — including `display`, which is what actually hides the bar.
 function stubDoc() {

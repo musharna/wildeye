@@ -197,10 +197,15 @@ export function attachObservedTime(store, dataManager, layers) {
   const samplers = layers.filter(
     (l) => l && typeof l.setObservedTime === "function",
   );
-  const push = (layer, iso) =>
-    Promise.resolve(layer.setObservedTime(iso)).catch((e) =>
+  // What each layer was last told. A layer switched off misses every push until it is back on, so
+  // one last told a past instant must be told LIVE on re-enable or it draws that past under a LIVE bar.
+  const told = new Map();
+  const push = (layer, iso) => {
+    told.set(layer.id, iso ?? null);
+    return Promise.resolve(layer.setObservedTime(iso)).catch((e) =>
       console.warn(`[observedTime] ${layer.id}:`, e),
     );
+  };
   // An extent may need a fetch (birds reads its archive manifest), so this is async and the store is
   // told when the answer lands. The store notifies on the change, which is what re-renders the bar —
   // that is how the slider grows to the archive's real span once the manifest arrives.
@@ -231,7 +236,8 @@ export function attachObservedTime(store, dataManager, layers) {
     const l = samplers.find((x) => x.id === change.layerId);
     if (!l) return;
     refreshExtent(l);
-    if (change.enabled === true && !store.isLive()) push(l, store.get());
+    if (change.enabled === true && (!store.isLive() || (told.get(l.id) ?? null) !== null))
+      push(l, store.get());
   });
   for (const l of samplers) refreshExtent(l);
   return () => {

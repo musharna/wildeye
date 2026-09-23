@@ -49,6 +49,7 @@ LAYERS = {
     "gibs-nightlights": {
         "gibsId": "VIIRS_Black_Marble",
         "legend": "Night lights, true colour (no values)",
+        "colormap": False,  # true-colour imagery: GIBS publishes no colour map for it
     },
     "gibs-biomass": {
         "gibsId": "GEDI_ISS_L4B_Aboveground_Biomass_Density_Mean_201904-202303",
@@ -152,7 +153,9 @@ def build(fetch=_get, layers=LAYERS) -> dict:
             "legend": cfg["legend"],
             **{k: c[k] for k in ("tileMatrixSet", "maximumLevel", "format", "times")},
         }
-        if c["colormapUrl"]:
+        if cfg.get("colormap", True):
+            if not c["colormapUrl"]:
+                raise LookupError(f"{key}: GIBS lists no v1.3 colour map for {cfg['gibsId']}")
             entry |= parse_colormap(fetch(c["colormapUrl"]))
         out[key] = entry
     return {

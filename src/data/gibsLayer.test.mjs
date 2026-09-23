@@ -134,6 +134,35 @@ test("tile request failures surface after the limit; other tile errors do not co
   }
 });
 
+test("failing tiles recover: a new date clears the error, and a refresh on the same date re-requests the tiles", async () => {
+  // Review 2026-09-22: the error outlived the provider that earned it, and nothing re-requested failed tiles.
+  const { layer, providers } = harness();
+  await layer.update();
+  const origError = console.error;
+  console.error = () => {};
+  const failAll = (p) => {
+    for (let i = 0; i < TILE_FAILURE_LIMIT; i++)
+      p.fail(new Cesium.RequestErrorEvent(503));
+  };
+  try {
+    failAll(providers.at(-1));
+    assert.equal(layer.getStats().error, "map tiles failing");
+    await layer.setObservedTime("2014-06-01T00:00:00Z"); // 2012: a new provider
+    assert.equal(layer.getStats().error, null);
+    failAll(providers.at(-1));
+    assert.equal(layer.getStats().error, "map tiles failing"); // positive control: still detected
+    const n = providers.length;
+    await layer.update(); // the 6-hourly refresh, date unchanged
+    assert.equal(providers.length, n + 1, "failed tiles are re-requested");
+    assert.match(providers.at(-1).url, /\/2012-01-01\//);
+    assert.equal(layer.getStats().error, null);
+    await layer.update(); // healthy refresh
+    assert.equal(providers.length, n + 1, "a healthy layer is not rebuilt");
+  } finally {
+    console.error = origError;
+  }
+});
+
 test("a manifest without this layer is an error, not a blank layer", async () => {
   const { layer } = harness();
   const bare = createGibsLayer({

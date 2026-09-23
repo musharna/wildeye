@@ -96,3 +96,26 @@ def test_build_keys_by_wildeye_id_and_carries_captions(tmp_path):
     )
     bm = doc["layers"]["gibs-nightlights"]
     assert "classes" not in bm and "ramp" not in bm and bm["legend"]  # caption only
+
+
+def test_a_missing_colour_map_link_is_an_error_where_one_is_expected(tmp_path):
+    # Review 2026-09-22: only a failed colour-map *fetch* raised; a dropped link wrote a caption-only
+    # legend and exited 0. Black Marble is true colour and has none, which must still pass.
+    out = tmp_path / "gibs.json"
+    out.write_text('{"old": true}')
+    cls = (FIX / "gibs_colormap_classes.xml").read_bytes()
+    ramp = (FIX / "gibs_colormap_ramp.xml").read_bytes()
+    no_evi_map = CAP.replace(
+        b"colormaps/v1.3/MODIS_L3_EVI.xml", b"colormaps/v1.2/MODIS_L3_EVI.xml"
+    )
+    assert no_evi_map != CAP
+
+    def fetch_from(cap):
+        return lambda url: cls if "IGBP" in url else ramp if "colormaps" in url else cap
+
+    layers = {k: v for k, v in g.LAYERS.items() if v["gibsId"] in IDS}
+    with pytest.raises(LookupError, match="gibs-evi"):
+        g.main(["--out", str(out)], fetch=fetch_from(no_evi_map), layers=layers)
+    assert json.loads(out.read_text()) == {"old": True}
+    assert g.main(["--out", str(out)], fetch=fetch_from(CAP), layers=layers) == 0
+    assert "gibs-nightlights" in json.loads(out.read_text())["layers"]

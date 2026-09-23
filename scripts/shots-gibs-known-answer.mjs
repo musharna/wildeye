@@ -16,7 +16,8 @@ const SITE = arg("--url", "https://musharna.github.io/wildeye/");
 const OUT = arg("--out", null);
 if (!OUT) throw new Error("--out <dir> is required");
 mkdirSync(OUT, { recursive: true });
-const LAYERS = ["gibs-nightlights", "gibs-landcover"];
+// --layers picks a subset; SwiftShader Chrome needs several GB, so run it in its own memory budget (jobd / heavy-run)
+const LAYERS = arg("--layers", "gibs-nightlights,gibs-landcover").split(",");
 const PLACES = {
   cairo: [31.24, 30.04],
   chicago: [-87.63, 41.88],
