@@ -216,3 +216,16 @@ test('cmp codec: registry tokens round-trip for every one of the 14 drapes; malf
     );
   }
 });
+
+// Local qa-compare 2026-09-23: picking both sides while the default pair was still enabling left the
+// stale pair's second side on alone and compare ended. A superseded set() went on to enable its own
+// right side after a newer set() owned the state; that enable, outside the new pair, tripped the
+// one-drape rule and turned both real sides off.
+test('a newer set wins: a superseded set enables nothing further', async () => {
+  const { mgr, compare } = setup();
+  const first = compare.set('oisst', 'chlor-a'); // still enabling oisst when the user picks again
+  await compare.set('ndvi', 'oisst');
+  await first;
+  assert.deepEqual(compare.getState(), { left: 'ndvi', right: 'oisst', position: 0.5 });
+  assert.deepEqual(on(mgr), ['oisst', 'ndvi']);
+});

@@ -48,7 +48,7 @@ const time = {
   ndvi: null,
 };
 const error = { oisst: null, 'chlor-a': null, ndvi: null };
-function setup() {
+function setup(extra = {}) {
   const mgr = new DataLayerManager({});
   for (const { id } of DRAPES)
     mgr.register({
@@ -75,7 +75,7 @@ function setup() {
     setPosition() {},
   });
   installDrapeExclusivity(mgr, ids, { exempt: compare.exempt });
-  const doc = stubDoc();
+  const doc = { ...stubDoc(), ...extra.doc };
   const container = {
     ...doc.createElement('div'),
     getBoundingClientRect: () => ({ left: 100, width: 800 }),
@@ -83,6 +83,7 @@ function setup() {
   let restack = null;
   const ui = installCompareUi({
     doc,
+    avoid: extra.avoid,
     compare,
     dataManager: mgr,
     drapes: DRAPES,
@@ -192,4 +193,34 @@ test('close ends compare and hides the panel; compare ended elsewhere hides it t
   await compare.set('oisst', 'chlor-a');
   await mgr.setEnabled('ndvi', true, { origin: 'user' });
   assert.equal(ui.panel.style.display, 'none');
+});
+
+// The command dock sits bottom-centre at z 145 and its voice widget covered the pill's centre, so a
+// click on the pill hit the dock (local qa-compare, 2026-09-23). The pill and panel sit above whatever
+// they must avoid, measured, because the dock's height changes with the viewport.
+test('the pill and panel sit above the elements they must avoid, including a child that pokes out; hidden ones ignored', async () => {
+  const box = (top, height, children = []) => ({ children, getBoundingClientRect: () => ({ top, height }) });
+  const dock = box(820, 62, [box(804, 86)]); // the voice widget reaches above the dock's own box
+  const hidden = box(0, 0);
+  let resize = null;
+  let tick1s = null;
+  const { compare, ui } = setup({
+    doc: { defaultView: { innerHeight: 900, addEventListener: (ev, fn) => { if (ev === 'resize') resize = fn; }, setInterval: (fn, ms) => { if (ms === 1000) tick1s = fn; } } },
+    avoid: () => [dock, hidden, null],
+  });
+  assert.equal(ui.toggle.style.bottom, '104px'); // 900 - 804 + 8
+  await compare.set('oisst', 'chlor-a');
+  assert.equal(ui.panel.style.bottom, '104px');
+  dock.children[0].getBoundingClientRect = () => ({ top: 700, height: 190 });
+  resize();
+  assert.equal(ui.panel.style.bottom, '208px');
+  // the dock settles after install with no resize event (live: pill at 88px under the voice widget)
+  dock.children[0].getBoundingClientRect = () => ({ top: 750, height: 140 });
+  tick1s();
+  assert.equal(ui.panel.style.bottom, '158px');
+});
+
+test('with nothing to avoid, the pill keeps its default place above the time bar', () => {
+  const { ui } = setup();
+  assert.equal(ui.toggle.style.bottom, '72px');
 });

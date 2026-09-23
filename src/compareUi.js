@@ -19,6 +19,8 @@ export function installCompareUi({
   drapes,
   container,
   onRestack = () => () => {},
+  // bottom-centre chrome the pill must not sit under (the command dock and its voice widget)
+  avoid = () => [],
 }) {
   if (!doc || !container)
     throw new Error(
@@ -83,8 +85,21 @@ export function installCompareUi({
   container.appendChild(divider);
 
   const statsOf = (id) => dataManager.getAll().find((l) => l.id === id)?.stats;
+  // 8px above the highest visible edge of what it must avoid; a child can poke out of its parent's box.
+  const place = () => {
+    const vh = doc.defaultView?.innerHeight;
+    const tops = avoid()
+      .filter(Boolean)
+      .flatMap((e) => [e, ...(e.children || [])])
+      .map((e) => e.getBoundingClientRect?.())
+      .filter((r) => r && r.height > 0)
+      .map((r) => r.top);
+    const bottom = vh && tops.length ? Math.max(72, Math.round(vh - Math.min(...tops) + 8)) : 72;
+    toggle.style.bottom = panel.style.bottom = `${bottom}px`;
+  };
   const render = () => {
     const s = compare.getState();
+    place();
     toggle.style.display = s ? 'none' : '';
     panel.style.display = s ? 'flex' : 'none';
     divider.style.display = s ? 'block' : 'none';
@@ -136,6 +151,9 @@ export function installCompareUi({
   compare.subscribe(render);
   dataManager.subscribe(render);
   onRestack(render);
+  doc.defaultView?.addEventListener?.('resize', render);
+  // The dock settles after install (loading cover, first-run, voice widget) with no event to hear.
+  doc.defaultView?.setInterval?.(place, 1000);
   render();
   return { toggle, panel, divider, render };
 }

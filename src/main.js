@@ -31,9 +31,11 @@ import cetaceansLayer from './data/cetaceans.js';
 import neonVectorsLayer from './data/neon-vectors.js';
 import phenologyLayer from './data/phenology.js';
 import arbonetLayer from './data/arbonet.js';
-import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer } from './data/rasterDrape.js';
+import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, setDrapeSplit, drapeStackState, onDrapeRestack } from './data/rasterDrape.js';
 import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer } from './data/gibsLayer.js';
 import { installDrapeExclusivity } from './data/drapeExclusive.js';
+import { createCompare, encodeCompareParam, decodeCompareParam } from './compare.js';
+import { installCompareUi } from './compareUi.js';
 import { createObservedTime, attachObservedTime, installObservedTimeUi } from './observedTime.js';
 import satellitesLayer from './data/satellites.js';
 import rocketLaunchesLayer from './data/rocketLaunches.js';
@@ -255,8 +257,40 @@ async function init() {
     dataManager.register(cmemsPhLayer);
     const gibsLayers = [gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer];
     for (const layer of gibsLayers) dataManager.register(layer);
-    // One drape at a time: enabling any raster drape turns the others off (W0-3).
-    installDrapeExclusivity(dataManager, [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers].map((l) => l.id));
+    // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
+    const drapeLayers = [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers];
+    const drapeIds = drapeLayers.map((l) => l.id);
+    const compare = createCompare({
+      dataManager,
+      drapeIds,
+      setSplit: (id, dir) => setDrapeSplit(viewer.imageryLayers, id, dir),
+      setPosition: (p) => {
+        viewer.scene.splitPosition = p;
+        governorRequestRender('compare-divider');
+      },
+    });
+    installDrapeExclusivity(dataManager, drapeIds, { exempt: compare.exempt });
+    installCompareUi({
+      doc: document,
+      compare,
+      dataManager,
+      container: document.getElementById('cesiumContainer'),
+      drapes: drapeLayers.map((l) => ({ id: l.id, name: l.name })),
+      onRestack: onDrapeRestack,
+      avoid: () => [document.getElementById('command-dock'), document.getElementById('observed-time')],
+    });
+    styleManager.shareLinkManager.setCompareParamProvider(() => encodeCompareParam(compare.getState()));
+    compare.subscribe(() => styleManager.shareLinkManager.onCompareStateChange());
+    const initialCmp = styleManager.initialCompareParam;
+    if (initialCmp) {
+      // After the share restore: its layer lane would otherwise leave only the last-restored drape on.
+      styleManager.initialRestorePromise
+        .then(() => {
+          const c = decodeCompareParam(initialCmp, drapeIds);
+          return c && compare.set(c.left, c.right, c.position);
+        })
+        .catch((e) => console.error(`[compare] share link cmp=${initialCmp} not restored:`, e));
+    }
     dataManager.register(occurrencesLayer);
     dataManager.register(tracksLayer);
     dataManager.register(wastewaterLayer);
@@ -421,6 +455,9 @@ async function init() {
       dataManager,
       // the shared observed-time store: qa-observed-time asserts the bar's span against the data
       observedTime,
+      // swipe compare + what each stacked drape is drawing: qa-compare asserts the split on the live layers
+      compare,
+      drapeStack: () => drapeStackState(viewer.imageryLayers),
       sceneDirector,
       mapStackController,
       annotations,

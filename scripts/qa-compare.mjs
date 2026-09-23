@@ -85,7 +85,7 @@ const sides = (page) =>
       state: g.compare?.getState() ?? null,
       stack: g.drapeStack ? g.drapeStack() : null,
       splitPosition: g.viewer.scene.splitPosition,
-      enabled: g.dataManager.getEnabledLayerIds(),
+      enabled: [...g.dataManager.getEnabledLayerIds()], // a Set: would serialize as {}
       hash: window.location.hash,
       divider: (() => {
         const d = document.getElementById("compare-divider");

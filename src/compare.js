@@ -61,9 +61,13 @@ export function createCompare({
       setPosition(position);
       emit();
       // A failed enable resolves (manager.js finishFailedEnable) with the layer still off; it does not throw.
-      await dataManager.setEnabled(left, true, { origin: 'user' });
-      await dataManager.setEnabled(right, true, { origin: 'user' });
-      if (state !== next) return; // superseded by a newer set/off, or a side went off meanwhile
+      // Checked before EACH enable: a superseded set that went on to enable its own side would put a
+      // drape outside the new pair on, and the one-drape rule would turn the real pair off.
+      for (const id of [left, right]) {
+        if (state !== next) return; // superseded by a newer set/off, or a side went off meanwhile
+        await dataManager.setEnabled(id, true, { origin: 'user' });
+      }
+      if (state !== next) return;
       const dead = [left, right].filter((id) => !dataManager.isEnabled(id));
       if (dead.length) {
         end(); // the side that did enable stays on, full-globe: it was exempt, so nothing turned it off
