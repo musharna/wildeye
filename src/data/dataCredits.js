@@ -82,6 +82,13 @@ export const DATA_CREDITS = [
     html: 'Vegetation greenness: <a href="https://www.ncei.noaa.gov/products/climate-data-records/normalized-difference-vegetation-index" target="_blank" rel="noopener">NOAA NDVI Climate Data Record</a> (VIIRS daily 0.05°, NCEI THREDDS WMS)',
   },
   {
+    key: 'nasa-gibs',
+    html: 'Land cover, vegetation (EVI), land surface temperature, night lights and forest biomass: '
+      + 'We acknowledge the use of imagery provided by services from NASA\'s '
+      + '<a href="https://nasa-gibs.github.io/gibs-api-docs/" target="_blank" rel="noopener">Global Imagery Browse Services (GIBS)</a>, '
+      + 'part of NASA\'s Earth Science Data and Information System (ESDIS).',
+  },
+  {
     key: 'ioos-atn',
     html: 'Animal tracks: <a href="https://atn.ioos.us" target="_blank" rel="noopener">IOOS Animal Telemetry Network</a> — each deployment carries its own citation and licence in the info box',
   },

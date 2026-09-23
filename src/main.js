@@ -32,6 +32,7 @@ import neonVectorsLayer from './data/neon-vectors.js';
 import phenologyLayer from './data/phenology.js';
 import arbonetLayer from './data/arbonet.js';
 import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer } from './data/rasterDrape.js';
+import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer } from './data/gibsLayer.js';
 import { installDrapeExclusivity } from './data/drapeExclusive.js';
 import { createObservedTime, attachObservedTime, installObservedTimeUi } from './observedTime.js';
 import satellitesLayer from './data/satellites.js';
@@ -252,8 +253,10 @@ async function init() {
     dataManager.register(ndviLayer);
     dataManager.register(cmemsO2Layer);
     dataManager.register(cmemsPhLayer);
+    const gibsLayers = [gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer];
+    for (const layer of gibsLayers) dataManager.register(layer);
     // One drape at a time: enabling any raster drape turns the others off (W0-3).
-    installDrapeExclusivity(dataManager, [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer].map((l) => l.id));
+    installDrapeExclusivity(dataManager, [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers].map((l) => l.id));
     dataManager.register(occurrencesLayer);
     dataManager.register(tracksLayer);
     dataManager.register(wastewaterLayer);
@@ -276,7 +279,7 @@ async function init() {
     // No domain constant: the bar spans the union of what the enabled layers declare they can
     // serve (getObservedExtent), so it cannot advertise hours no layer has data for.
     const observedTime = createObservedTime();
-    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer];
+    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer, ...gibsLayers.filter((l) => l !== gibsBiomassLayer)];
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
     dataManager.register(satellitesLayer);
