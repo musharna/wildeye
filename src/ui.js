@@ -2588,6 +2588,7 @@ export class StyleManager {
     // from deterministic markup defaults instead of recipient-local panel
     // preferences. Encoded panel fields are applied after all panels exist.
     this._initialShareState = this.shareLinkManager.parseInitialHash();
+    this._initialCompareParam = this._initialShareState?.compare ?? null;
 
     this._detectionBtn = document.getElementById('detection-toggle');
     this._models3dBtn = document.getElementById('models3d-toggle');
@@ -10113,6 +10114,11 @@ export class StyleManager {
   /** Whether a share link was used to load the page */
   get hasShareState() {
     return !!this._hasShareState;
+  }
+
+  /** The share link's raw `cmp`, for main.js to restore once the share restore settles. */
+  get initialCompareParam() {
+    return this._initialCompareParam ?? null;
   }
 
   /** Terminal result for the complete initial share restoration. */

@@ -232,6 +232,7 @@ export class ShareLinkManager {
         && params.has('l')
         && decodedLayerState === null,
       panelState: decodePanelStateParams(params),
+      compare: params.get('cmp'),
       sharedAtMs: decodeShareCreatedAtMs(params),
     };
     state.restoreAuthority = {
@@ -367,6 +368,16 @@ export class ShareLinkManager {
   /** Install the finalized panel-state source used by URL generation. */
   setPanelStateProvider(provider) {
     this._panelStateProvider = typeof provider === 'function' ? provider : null;
+  }
+
+  /** Install the swipe-compare source: returns the `cmp` value while compare is on, else null. */
+  setCompareParamProvider(provider) {
+    this._compareParamProvider = typeof provider === 'function' ? provider : null;
+  }
+
+  /** Called when compare starts, ends, changes a side, or moves its divider. */
+  onCompareStateChange() {
+    this._scheduleUpdate();
   }
 
   /** Install the active visual preset parameter source used by URL generation. */
@@ -513,6 +524,8 @@ export class ShareLinkManager {
     const layerState = this._layerStateProvider?.();
     if (layerState) encodeLayerStateParams(params, layerState);
     this._encodePanelStateParam(params, this._panelStateProvider?.());
+    const cmp = this._compareParamProvider?.();
+    if (cmp) params.set('cmp', cmp);
     encodeStyleParamState(
       params,
       this._currentStyle,
