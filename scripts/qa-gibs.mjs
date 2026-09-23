@@ -62,10 +62,14 @@ try {
       window.__godsEyeView?.dataManager && window.__godsEyeView?.observedTime,
     { timeout: 180000 },
   );
-  await page.evaluate(() =>
-    document.querySelector("[data-first-run-suppress]")?.click(),
-  );
+  // boot flies to a first view after the manager is up; dismissing before it lands lets it move the camera
+  await new Promise((r) => setTimeout(r, 12000));
+  await page.evaluate(() => document.querySelector("[data-first-run-suppress]")?.click());
   await page.keyboard.press("Escape");
+  const launcherGone = await page
+    .waitForFunction(() => !document.querySelector("[data-first-run-choice]")?.offsetParent, { timeout: 15000 })
+    .then(() => true, () => false);
+  if (!launcherGone) throw new Error("first-run launcher still visible after 15 s; screenshots would be covered");
   const fetched = await page.evaluate(async () => {
     const res = await fetch(`data/gibs.json?t=${Date.now()}`);
     return {

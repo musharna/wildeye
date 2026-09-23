@@ -46,8 +46,14 @@ try {
   const page = await browser.newPage();
   await page.goto(SITE, { waitUntil: "domcontentloaded", timeout: 180000 });
   await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
+  // boot flies to a first view after the manager is up; dismissing before it lands lets it move the camera
+  await new Promise((r) => setTimeout(r, 12000));
   await page.evaluate(() => document.querySelector("[data-first-run-suppress]")?.click());
   await page.keyboard.press("Escape");
+  const launcherGone = await page
+    .waitForFunction(() => !document.querySelector("[data-first-run-choice]")?.offsetParent, { timeout: 15000 })
+    .then(() => true, () => false);
+  if (!launcherGone) throw new Error("first-run launcher still visible after 15 s; screenshots would be covered");
   for (const id of LAYERS) {
     const stats = await page.evaluate(async (id) => {
       const dm = window.__godsEyeView.dataManager;
@@ -79,7 +85,7 @@ try {
           }),
           orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
         });
-        const deadline = Date.now() + 120000;
+        const deadline = Date.now() + 240000;
         await new Promise((r) => setTimeout(r, 2000));
         while (Date.now() < deadline && !v.scene.globe.tilesLoaded) await new Promise((r) => setTimeout(r, 500));
         return v.scene.globe.tilesLoaded;
