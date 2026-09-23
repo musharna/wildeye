@@ -167,10 +167,22 @@ try {
   const wantDay2 = new Date(targetMs2).toISOString().slice(0, 10).replace(/-/g, '/');
   const seek2 = await seekTo(targetMs2);
   const before2 = frameFetches.length;
+  // The page's own record of what it asked for: a miss on 2026-09-23 said only "fetched: null", which
+  // cannot tell "birds never asked for the frame" from "asked, no response seen within the window".
+  await page.evaluate(() => {
+    window.__qaRequested = [];
+    const orig = window.fetch.bind(window);
+    window.fetch = (u, o) => { window.__qaRequested.push(String(u?.url ?? u)); return orig(u, o); };
+  });
   await page.evaluate(() => window.__godsEyeView.dataManager.setEnabled('birds', true));
   const hit2 = await waitForFrame(before2, wantDay2);
+  const asked = await page.evaluate((day) => ({
+    requested: window.__qaRequested.filter((u) => u.includes(`/birds_archive/${day}/`)),
+    frameId: window.__godsEyeView.dataManager.layers.get('birds')?.module?.getReplayInfo?.()?.frameId ?? null,
+  }), wantDay2);
   report('enable-while-scrubbed', !!hit2 && hit2.status === 200, {
     wantDay: wantDay2, seek: seek2, fetched: hit2?.url || null, status: hit2?.status ?? null,
+    birdsFrame: asked.frameId, requestedByPage: asked.requested.length,
   });
   await page.evaluate(() => window.__godsEyeView.observedTime.setLayerExtent('qa-probe', null));
 
