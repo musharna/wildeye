@@ -43,8 +43,8 @@ function fakeCardDoc() {
 }
 
 // realCard: the real details card, wired to the controller as src/main.js wires them (onDismiss → cancel, onListEnd → listEnded).
-function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }], datasets: [{ key: INAT_RG, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, dataset = null, client: clientOverride = null, defaultArea = false, realCard = false, drawArea = null, depthTexture = true } = {}) {
-  const calls = { near: [], names: [], datasets: [], status: [], list: [], card: [], picked: [], armed: [], armedReasons: [] };
+function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, species: [{ key: 5232437, count: 5 }], datasets: [{ key: INAT_RG, count: 5 }] }, nearError = null, speciesNear = null, speciesName = null, dataset = null, client: clientOverride = null, defaultArea = false, realCard = false, drawArea = null, depthTexture = true, readLayers = null } = {}) {
+  const calls = { near: [], names: [], datasets: [], status: [], list: [], card: [], picked: [], armed: [], armedReasons: [], setLayers: [] };
   const params = { years: 'recent', radiusKm: 10 };
   // groundPrimitives stands in for Cesium's collection, for the default outline; `areas` records the injected outline seam.
   const groundPrimitives = { items: [], add(p) { this.items.push(p); return p; }, remove(p) { const i = this.items.indexOf(p); if (i >= 0) this.items.splice(i, 1); return i >= 0; } };
@@ -93,6 +93,7 @@ function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, spec
     : {
       showStatus: (s) => { calls.status.push(s); calls.card.push({ kind: 'status', ...s }); },
       showList: (l) => { calls.list.push(l); calls.card.push({ kind: 'list', ...l }); },
+      setLayers: (rows) => { calls.setLayers.push(rows); },
     };
   // Records keydown listeners so a test can press a key.
   const doc = {
@@ -109,6 +110,7 @@ function rig({ picked = undefined, ground = YELLOWSTONE, near = { total: 5, spec
     onArmedChange: (on, reason) => { calls.armed.push(on); calls.armedReasons.push(reason ?? null); },
     handlerFor: () => ({ setInputAction() {}, destroy() {} }),
     doc,
+    ...(readLayers ? { readLayers } : {}),
     ...areaSeam,
   });
   return { controller, calls, viewer, doc, params, areas, groundPrimitives, card, cardDoc };
@@ -739,3 +741,88 @@ test('the default outline is a ground polyline loop that cannot be picked, added
   r.controller.cancel();
   assert.equal(r.groundPrimitives.items.length, 0, 'dismissing the card removes it');
 }));
+
+// Stage 3 "What's here" (grill A14): a ground click also reads every enabled GIBS layer at the spot. Each row is
+// labelled with the layer's own date (A7), shows while GBIF is still searching, and never holds up the species list.
+const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
+const LC_ROW = { id: 'gibs-landcover', name: 'Land cover', icon: '🗺️', status: 'class', text: 'Evergreen Broadleaf Forests', date: '2024-01-01' };
+
+test('the layer rows show while GBIF is still searching and stay when the list arrives', async () => {
+  const lc = deferred();
+  const pending = pendingNear();
+  const { controller, calls } = rig({ speciesNear: pending.speciesNear, readLayers: () => [{ icon: '🗺️', name: 'Land cover', result: lc.promise }] });
+  controller.arm();
+  const done = controller.handleClick(CLICK);
+  await until(() => pending.searches.length === 1, 'the GBIF search');
+  assert.deepEqual(calls.status.at(-1).layers, ['🗺️ Land cover: reading…']);
+  lc.resolve(LC_ROW);
+  await until(() => calls.setLayers.length === 1, 'the readout row');
+  assert.deepEqual(calls.setLayers[0], ['🗺️ Land cover: Evergreen Broadleaf Forests · 2024-01-01']);
+  pending.searches[0].resolve({ total: 5, species: [{ key: 5232437, count: 5 }], datasets: [] });
+  await done;
+  assert.deepEqual(calls.list.at(-1).layers, ['🗺️ Land cover: Evergreen Broadleaf Forests · 2024-01-01']);
+});
+
+test('a failed readout marks its row, the species list still shows', async () => {
+  const { controller, calls } = await captureConsoleErrorResult(() => {
+    const r = rig({ readLayers: () => [
+      { icon: '♨️', name: 'Surface temp', result: Promise.reject(new Error('GIBS tile HTTP 500')) },
+      { icon: '🗺️', name: 'Land cover', result: Promise.resolve({ ...LC_ROW, status: 'nodata', text: null }) },
+    ] });
+    return r;
+  });
+  controller.arm();
+  await controller.handleClick(CLICK);
+  await until(() => calls.setLayers.length === 2, 'both readout rows');
+  assert.equal(calls.list.length, 1, 'the species list shows');
+  assert.deepEqual(calls.setLayers.at(-1), ['♨️ Surface temp: ⚠ GIBS tile HTTP 500', '🗺️ Land cover: no data here on 2024-01-01']);
+});
+
+test('a newer click drops the older click\'s late rows', async () => {
+  const first = deferred();
+  let n = 0;
+  const { controller, calls } = rig({ readLayers: () => (n++ === 0 ? [{ icon: '🗺️', name: 'Land cover', result: first.promise }] : [{ icon: '🗺️', name: 'Land cover', result: Promise.resolve(LC_ROW) }]) });
+  controller.arm();
+  const a = controller.handleClick(CLICK);
+  controller.arm();
+  await controller.handleClick(CLICK);
+  await a;
+  await until(() => calls.setLayers.length === 1, 'the second click\'s row');
+  first.resolve({ ...LC_ROW, text: 'Barren' });
+  for (let i = 0; i < 20; i += 1) await tick();
+  assert.deepEqual(calls.setLayers, [['🗺️ Land cover: Evergreen Broadleaf Forests · 2024-01-01']]);
+});
+
+test('each readout status reads as a sentence with its own date', async () => {
+  const rows = [
+    { ...LC_ROW, status: 'gap', text: null, date: null, observed: '2000-06-01T00' },
+    { ...LC_ROW, status: 'viewonly', text: null, date: null, name: 'Night lights', icon: '🌃' },
+    { ...LC_ROW, status: 'outside', text: null },
+    { ...LC_ROW, status: 'value', text: '25.6 °C', name: 'Surface temp', icon: '♨️', date: '2026-08-21' },
+  ];
+  const { controller, calls } = rig({ readLayers: () => rows.map((r) => ({ icon: r.icon, name: r.name, result: Promise.resolve(r) })) });
+  controller.arm();
+  await controller.handleClick(CLICK);
+  await until(() => calls.setLayers.length === 4, 'all four rows');
+  assert.deepEqual(calls.setLayers.at(-1), [
+    '🗺️ Land cover: no data at or before 2000-06-01',
+    '🌃 Night lights: view only (no values)',
+    '🗺️ Land cover: outside the map',
+    '♨️ Surface temp: 25.6 °C · 2026-08-21',
+  ]);
+});
+
+test('with no reader the card calls are exactly as before (no layers field)', async () => {
+  const { controller, calls } = rig();
+  controller.arm();
+  await controller.handleClick(CLICK);
+  assert.equal('layers' in calls.status.at(-1), false);
+  assert.equal('layers' in calls.list.at(-1), false);
+  assert.equal(calls.setLayers.length, 0);
+});
+
+async function captureConsoleErrorResult(fn) {
+  const original = console.error;
+  console.error = () => {};
+  try { return await fn(); } finally { console.error = original; }
+}

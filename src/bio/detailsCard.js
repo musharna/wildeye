@@ -152,13 +152,24 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
   };
   // Static skeleton only; no data is interpolated here. The body and the foot share .bio-card-main, the grid that divides the card's height
   // between the species list and the Top datasets rows (style.css, R13-M1).
-  root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-note-info" aria-label="Why all locations" aria-expanded="false" aria-controls="bio-card-note-pop" hidden>i</button><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><div class="bio-card-filter"></div><div class="bio-card-main"><div class="bio-card-body"></div><div class="bio-card-foot"></div></div><p id="bio-card-note-pop" class="bio-card-note-pop" role="note" hidden></p>';
+  root.innerHTML = '<div class="bio-card-head"><span class="bio-card-title"></span><button type="button" class="bio-card-note-info" aria-label="Why all locations" aria-expanded="false" aria-controls="bio-card-note-pop" hidden>i</button><button type="button" class="bio-card-close" aria-label="Close details">×</button></div><ul class="bio-card-layers" hidden></ul><div class="bio-card-filter"></div><div class="bio-card-main"><div class="bio-card-body"></div><div class="bio-card-foot"></div></div><p id="bio-card-note-pop" class="bio-card-note-pop" role="note" hidden></p>';
   const title = root.querySelector('.bio-card-title');
   title.id = 'bio-card-title';
   const filter = root.querySelector('.bio-card-filter');
   const body = root.querySelector('.bio-card-body');
   const foot = root.querySelector('.bio-card-foot');
   const main = root.querySelector('.bio-card-main');
+  // Stage 3 "What's here": one text row per enabled GIBS layer at the searched spot. Rows belong to one status/list
+  // render (reset clears them), so a marker's details never show another search's values.
+  const layersEl = root.querySelector('.bio-card-layers');
+  const renderLayers = (rows = []) => {
+    layersEl.replaceChildren(...rows.map((text) => {
+      const li = doc.createElement('li');
+      li.textContent = text;
+      return li;
+    }));
+    layersEl.hidden = rows.length === 0;
+  };
   // Fix round 6 (critic r5 N1): the folded note's text stays reachable on touch: an info button in the head shows it over the list.
   const noteInfo = root.querySelector('.bio-card-note-info');
   const notePop = root.querySelector('.bio-card-note-pop');
@@ -223,6 +234,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     filter.textContent = '';
     body.replaceChildren();
     foot.replaceChildren();
+    renderLayers();
   };
   // Review M-4: a hidden card stops watching its rows too; the next render would otherwise be the only thing that did.
   const close = () => { root.hidden = true; stopCue(); announce(''); setMode(null); };
@@ -283,8 +295,13 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
     announcer,
     get mode() { return mode; },
     close,
-    showStatus({ heading, message, retry = null }) {
+    /** Replace the layer rows of the status or list on show, without re-rendering it (a readout that lands mid-search). */
+    setLayers(rows) {
+      if (mode === 'list' && !root.hidden) renderLayers(rows);
+    },
+    showStatus({ heading, message, retry = null, layers = [] }) {
       showListContent(heading, () => {
+        renderLayers(layers);
         const text = doc.createElement('p');
         text.className = 'bio-card-status';
         text.textContent = message;
@@ -300,8 +317,9 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
       }, `${heading}: ${message}`);
     },
     /** `datasets` ({ key, count, title, doi, error }, facet order) are named above the foot's gbif.org link (R-7u). */
-    showList({ heading, filterLine, entries, datasets = [], footer, footerHref, footerNote = null, onRow }) {
+    showList({ heading, filterLine, entries, datasets = [], footer, footerHref, footerNote = null, onRow, layers = [] }) {
       showListContent(heading, () => {
+        renderLayers(layers);
         filter.textContent = filterLine;
         renderListInto(body, listRows(entries), doc, onRow);
         if (datasets.length) {

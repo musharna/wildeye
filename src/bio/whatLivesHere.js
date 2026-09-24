@@ -75,6 +75,20 @@ export function areaOutlinePrimitive({ lat, lon, radiusKm }) {
   return primitive;
 }
 
+/** One readout row (gibsLayer.readoutAt) as a card line, each value with its own date (grill A7). */
+export function layerRowText(row) {
+  const head = `${row.icon} ${row.name}: `;
+  switch (row.status) {
+    case 'value':
+    case 'class': return `${head}${row.text} · ${row.date}`;
+    case 'nodata': return `${head}no data here on ${row.date}`;
+    case 'gap': return `${head}no data at or before ${String(row.observed ?? '').slice(0, 10)}`;
+    case 'viewonly': return `${head}view only (no values)`;
+    case 'outside': return `${head}outside the map`;
+    default: return `${head}⚠ ${row.error ?? 'readout failed'}`;
+  }
+}
+
 export function createWhatLivesHere({
   viewer,
   client,
@@ -93,6 +107,9 @@ export function createWhatLivesHere({
     return viewer.scene.groundPrimitives.add(areaOutlinePrimitive(area));
   },
   clearArea = (primitive) => { viewer.scene.groundPrimitives.remove(primitive); },
+  // Stage 3 "What's here" (grill A14): ({ lat, lon }) → [{ icon, name, result: Promise<readout row> }] for every enabled
+  // GIBS layer. Null leaves the card calls exactly as they were.
+  readLayers = null,
 }) {
   let armed = false;
   let controller = null;
@@ -133,11 +150,31 @@ export function createWhatLivesHere({
       console.error('[what-lives-here] could not outline the searched circle', { lat, lon, radiusKm, error });
       area = null;
     }
-    card.showStatus({ heading: HEADING, message: `Searching GBIF within ${radiusKm} km…` });
+    // The layer rows are read beside the GBIF search and shown with every status and the list; each lands on its own,
+    // and a newer search or a cancel (the aborted signal) drops the late ones.
+    let layerRows = [];
+    const withLayers = (content) => (readLayers ? { ...content, layers: layerRows } : content);
+    if (readLayers) {
+      const items = readLayers({ lat, lon });
+      layerRows = items.map((item) => `${item.icon} ${item.name}: reading…`);
+      items.forEach((item, i) => {
+        Promise.resolve(item.result)
+          .catch((error) => {
+            console.error('[what-lives-here] layer readout failed', { lat, lon, layer: item.name, error });
+            return { icon: item.icon, name: item.name, status: 'error', error: error?.message || String(error) };
+          })
+          .then((row) => {
+            if (signal.aborted) return;
+            layerRows = layerRows.map((text, j) => (j === i ? layerRowText(row) : text));
+            card.setLayers(layerRows);
+          });
+      });
+    }
+    card.showStatus(withLayers({ heading: HEADING, message: `Searching GBIF within ${radiusKm} km…` }));
     try {
       const near = await client.speciesNear({ lat, lon, radiusKm, years }, { signal });
       if (near.species.length === 0) {
-        card.showStatus({ heading: HEADING, message: `No CC0/CC BY records within ${radiusKm} km for ${yearLabel(years)}. Try a larger radius or all years.` });
+        card.showStatus(withLayers({ heading: HEADING, message: `No CC0/CC BY records within ${radiusKm} km for ${yearLabel(years)}. Try a larger radius or all years.` }));
         return near;
       }
       // Names and datasets are looked up together under the search's signal, so a newer search or a cancel aborts both. A failed lookup
@@ -154,7 +191,7 @@ export function createWhatLivesHere({
       // gbif.org's location filter is a polygon. Where the circle cannot be one (the search used geoDistance), the card says
       // so and links the same licences and years with no location filter.
       const circleOnGbif = polygonRefusal({ lat, lon, radiusKm }) === null;
-      card.showList({
+      card.showList(withLayers({
         heading: HEADING,
         filterLine: `CC0 and CC BY records · ${yearLabel(years)} · within ${radiusKm} km · ${near.total.toLocaleString('en-US')} records`,
         entries: near.species.map((s, i) => ({ key: s.key, count: s.count, scientificName: names[i].scientificName, commonName: names[i].commonName, error: names[i].error })),
@@ -163,12 +200,12 @@ export function createWhatLivesHere({
         footerHref: circleOnGbif ? gbifPortalUrl({ lat, lon, radiusKm, years }) : gbifPortalAnyLocationUrl({ years }),
         footerNote: circleOnGbif ? null : "gbif.org can't show this area as a circle",
         onRow: (row) => onPickSpecies({ taxonKey: row.key, name: row.primary }),
-      });
+      }));
       return near;
     } catch (error) {
       if (error?.name === 'AbortError') return null;
       console.error('[what-lives-here] GBIF search failed', { lat, lon, radiusKm, years, error });
-      card.showStatus({ heading: HEADING, message: `GBIF search failed (${error.message})`, retry: () => run(lat, lon) });
+      card.showStatus(withLayers({ heading: HEADING, message: `GBIF search failed (${error.message})`, retry: () => run(lat, lon) }));
       return null;
     }
   }
