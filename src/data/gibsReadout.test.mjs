@@ -25,7 +25,15 @@ test('a ramp pixel decodes to its interval and a midpoint text at the table\'s p
   const rgb = evi.decode.find((e) => e[3] === 0.4251).slice(0, 3);
   assert.deepEqual(decodePixel(evi, [...rgb, 255]), { kind: 'value', lo: 0.4251, hi: 0.4326, text: '0.429' });
   const g = gedi.decode.find((e) => e[3] === 12).slice(0, 3);
-  assert.equal(decodePixel(gedi, [...g, 255]).text, '13 Mg ha-1'); // [12,13) → 12.5 → 13 at 0 dp
+  // Final review I1: at 0 dp the midpoint 12.5 rounded to 13, a value its own bin [12,13) excludes. The shown
+  // value must lie inside its bin for every table, so precision comes from the half-width.
+  assert.equal(decodePixel(gedi, [...g, 255]).text, '12.5 Mg ha-1');
+  for (const e of [evi, lst, gedi]) for (const [, , , lo, hi] of e.decode) {
+    const text = formatValue({ ...e, ramp: { ...e.ramp, unit: '' } }, lo, hi); // '' unit: LST stays in K, comparable to the bin
+    if (/^[≥<]| – /.test(text)) continue; // wide/open bins read as bounds (next test)
+    const shown = Number.parseFloat(text);
+    assert.ok(shown >= lo && shown < hi, `${e.gibsId} [${lo},${hi}) shown as ${shown}`);
+  }
 });
 
 test('LST reads in °C with one decimal', () => {
@@ -35,7 +43,7 @@ test('LST reads in °C with one decimal', () => {
 test('an open-ended or wide bin reads as a bound, never a made-up midpoint', () => {
   assert.equal(formatValue(lst, 350.02, 652.0), '≥ 76.9 °C'); // last bin, 500× the median width
   assert.equal(formatValue(lst, 0.02, 200.0), '< -73.1 °C'); // first bin
-  assert.equal(formatValue(gedi, 250, null), '≥ 250 Mg ha-1'); // null = open end (pipeline)
+  assert.equal(formatValue(gedi, 250, null), '≥ 250.0 Mg ha-1'); // null = open end (pipeline)
   assert.equal(formatValue(evi, -0.0999, 0.0001), '-0.100 – 0.000'); // wide, not at an end
   assert.equal(formatValue(evi, 0.4251, 0.4326), '0.429'); // positive control: a normal bin is a midpoint
 });

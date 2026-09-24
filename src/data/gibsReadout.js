@@ -55,7 +55,8 @@ function tableOf(entry) {
     classes,
     values,
     median,
-    decimals: Math.max(0, Math.ceil(-Math.log10(median))),
+    // from the half-width, so the midpoint of every bin prints inside it (review I1: [12,13) printed as 13)
+    decimals: Math.max(0, Math.ceil(-Math.log10(median / 2))),
   };
   tables.set(entry, t);
   return t;
