@@ -37,3 +37,18 @@ test('enabling a drape disables the other enabled drapes; non-drapes untouched',
 test('rejects a manager without the request hook', () => {
   assert.throws(() => installDrapeExclusivity({}, ['a']), /subscribeVisibilityRequests/);
 });
+
+test('the compare pair may both be on; a third drape turns both off; no pair means the old rule', async () => {
+  const mgr = new DataLayerManager({});
+  for (const id of ['oisst', 'chlor-a', 'ndvi', 'birds']) mgr.register(fakeLayer(id));
+  let pair = ['oisst', 'chlor-a'];
+  installDrapeExclusivity(mgr, ['oisst', 'chlor-a', 'ndvi'], { exempt: () => pair });
+  await mgr.setEnabled('oisst', true, { origin: 'user' });
+  await mgr.setEnabled('chlor-a', true, { origin: 'user' });
+  assert.deepEqual(['oisst', 'chlor-a', 'ndvi'].map((id) => mgr.isEnabled(id)), [true, true, false]);
+  await mgr.setEnabled('ndvi', true, { origin: 'user' });
+  assert.deepEqual(['oisst', 'chlor-a', 'ndvi'].map((id) => mgr.isEnabled(id)), [false, false, true]);
+  pair = null; // compare off: back to one at a time
+  await mgr.setEnabled('oisst', true, { origin: 'user' });
+  assert.deepEqual(['oisst', 'chlor-a', 'ndvi'].map((id) => mgr.isEnabled(id)), [true, false, false]);
+});

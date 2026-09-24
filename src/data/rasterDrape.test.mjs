@@ -1,7 +1,7 @@
 // src/data/rasterDrape.test.mjs — manifest selection + layer contract.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore } from './rasterDrape.js';
+import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack } from './rasterDrape.js';
 
 test('pickProduct: finds by id, null when absent or malformed', () => {
   const m = { products: [{ id: 'a', png: 'x' }, { id: 'b' }] };
@@ -85,4 +85,50 @@ test('drape: setObservedTime picks an archived frame and update() keeps it; null
     assert.equal(l.getStats().frames, 2);
     l.destroy(viewer);
   } finally { globalThis.fetch = saved; stack.clear(); }
+});
+
+const fakeImagery = () => {
+  const on = [];
+  return {
+    on,
+    add(l) { on.push(l); },
+    remove(l) { const i = on.indexOf(l); if (i >= 0) on.splice(i, 1); return i >= 0; },
+    contains(l) { return on.includes(l); },
+  };
+};
+
+test('a drape split survives the drape rebuilding its ImageryLayer; other drapes draw full-globe', () => {
+  const il = fakeImagery();
+  const a1 = { id: 'a1' }, a2 = { id: 'a2' }, b = { id: 'b' };
+  setStackedImagery(il, 'split-a', a1, 10);
+  setStackedImagery(il, 'split-b', b, 20);
+  setDrapeSplit(il, 'split-a', -1);
+  assert.equal(a1.splitDirection, -1);
+  assert.equal(b.splitDirection, 0);
+  // the layer rebuilds (new date / new frame): the new ImageryLayer must carry the split too
+  setStackedImagery(il, 'split-a', a2, 10);
+  assert.equal(a2.splitDirection, -1);
+  assert.deepEqual(drapeStackState(il).filter((e) => e.id.startsWith('split-')), [
+    { id: 'split-a', splitDirection: -1, onGlobe: true },
+    { id: 'split-b', splitDirection: 0, onGlobe: true },
+  ]);
+  setDrapeSplit(il, 'split-a', 0);
+  assert.equal(a2.splitDirection, 0);
+  setStackedImagery(il, 'split-a', null);
+  setStackedImagery(il, 'split-b', null);
+});
+
+test("restack listeners run after the caller's synchronous bookkeeping", async () => {
+  const il = fakeImagery();
+  let shown = 'old';
+  const seen = [];
+  const off = onDrapeRestack(() => seen.push(shown));
+  setStackedImagery(il, 'listen-a', { id: 'x' }, 10);
+  shown = 'new'; // gibsLayer.js sets _shownDate right AFTER stack(); rasterDrape sets _shown after restackDrapes
+  await Promise.resolve();
+  assert.deepEqual(seen, ['new']);
+  off();
+  setStackedImagery(il, 'listen-a', null);
+  await Promise.resolve();
+  assert.deepEqual(seen, ['new']);
 });

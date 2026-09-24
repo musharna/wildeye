@@ -16,10 +16,19 @@ const MANIFEST_URL = 'data/rasters.json';
  * overlays (bleaching alerts) high, ties broken by id.
  */
 const _stack = new Map(); // id → { layer, zrank }
+// id → Cesium.SplitDirection (-1 left, 1 right). Kept apart from the layer because every drape
+// rebuilds its ImageryLayer on a new date or frame; restack re-applies it to whatever layer is current.
+const _split = new Map();
+const _restackListeners = new Set();
 export function restackDrapes(imageryLayers) {
   const order = [..._stack.entries()].sort(([ia, a], [ib, b]) => (a.zrank - b.zrank) || (ia < ib ? -1 : 1));
   for (const [, e] of order) if (imageryLayers.contains?.(e.layer) ?? true) imageryLayers.remove(e.layer, false);
-  for (const [, e] of order) imageryLayers.add(e.layer);
+  for (const [id, e] of order) {
+    e.layer.splitDirection = _split.get(id) ?? Cesium.SplitDirection.NONE;
+    imageryLayers.add(e.layer);
+  }
+  // A microtask, not now: both callers record what they are showing (date, frame) just after this returns.
+  if (_restackListeners.size) queueMicrotask(() => { for (const fn of _restackListeners) fn(); });
   return order.map(([id]) => id);
 }
 export function _drapeStackForTest() { return _stack; }
@@ -28,6 +37,25 @@ export function setStackedImagery(imageryLayers, id, layer, zrank = 50) {
   if (layer) _stack.set(id, { layer, zrank });
   else _stack.delete(id);
   return restackDrapes(imageryLayers);
+}
+/** Draw drape `id` on one side of the split only (Cesium.SplitDirection; 0 = whole globe). */
+export function setDrapeSplit(imageryLayers, id, direction) {
+  if (direction) _split.set(id, direction);
+  else _split.delete(id);
+  return restackDrapes(imageryLayers);
+}
+/** What the globe is drawing, per stacked drape: the split read off the live ImageryLayer. */
+export function drapeStackState(imageryLayers) {
+  return [..._stack.entries()].map(([id, e]) => ({
+    id,
+    splitDirection: e.layer.splitDirection ?? 0,
+    onGlobe: Boolean(imageryLayers.contains?.(e.layer)),
+  }));
+}
+/** Run `fn` after every restack (a drape changed image, split or order). Returns unsubscribe. */
+export function onDrapeRestack(fn) {
+  _restackListeners.add(fn);
+  return () => _restackListeners.delete(fn);
 }
 
 const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
