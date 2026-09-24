@@ -1,6 +1,7 @@
 """S3 season rerun (docs/analysis/s3_season_prereg.md): pixel unit, peak rule, gate, readings, controls."""
 
 import inspect
+import json
 
 import numpy as np
 
@@ -154,3 +155,45 @@ def test_planted_effects_at_kano_sized_pixel_counts():
     )
     r0 = s.region_stats(*_clustered(rng, 139, 7800, 0.0), rng)
     assert not (r0["ci_lo"] > 0 and r0["p"] < 0.05)
+
+
+def test_check_date_is_the_most_common_peak_earliest_on_ties():
+    from analysis.s3_season_checkpoints import check_date
+
+    assert check_date({"a": "2024-07-11", "b": "2024-07-11", "c": "2024-03-05", "d": None}) == "2024-07-11"
+    assert check_date({"a": "2024-07-27", "b": "2024-03-05"}) == "2024-03-05"
+
+
+def test_peaks_come_from_cropland_evi_only(tmp_path):
+    from analysis.s3_season_checkpoints import peaks_from
+
+    rows = [
+        ("R", 1, 1, "cropland", "2024-01-01", "0.2", "40.0"),
+        ("R", 2, 1, "cropland", "2024-01-01", "0.4", "40.0"),
+        ("R", 1, 1, "cropland", "2024-07-11", "0.5", "10.0"),
+        ("R", 2, 1, "cropland", "2024-07-11", "0.6", "10.0"),
+        ("R", 3, 1, "city", "2024-01-01", "0.9", "0.0"),  # a city pixel never decides the peak
+    ]
+    p = tmp_path / "pixels.csv"
+    p.write_text("region,gx,gy,cls,date,evi,lst\n" + "".join(",".join(map(str, r)) + "\n" for r in rows))
+    peaks, med, pix = peaks_from(p)
+    assert peaks == {"R": "2024-07-11"}
+    assert abs(med["R"]["2024-01-01"] - 0.3) < 1e-12  # np.median, the same rule as peak_date
+    assert pix["R"] == [(1, 1), (2, 1), (3, 1)]
+
+
+def test_harness_control_needs_the_right_classes_and_a_hotter_sahara():
+    from analysis.s3_season_stats import harness_control
+
+    ok = {"control": {"sahara": {"lc": ["class", "Barren"], "lst": ["value", 320.0, 320.6]},
+                      "forest": {"lc": ["class", "Evergreen Broadleaf Forests"], "lst": ["value", 300.0, 300.6]}}}
+    assert harness_control(ok)
+    swapped = json.loads(json.dumps(ok))
+    swapped["control"]["sahara"]["lst"], swapped["control"]["forest"]["lst"] = ok["control"]["forest"]["lst"], ok["control"]["sahara"]["lst"]
+    assert not harness_control(swapped)
+    wrong = json.loads(json.dumps(ok))
+    wrong["control"]["forest"]["lc"] = ["class", "Croplands"]
+    assert not harness_control(wrong)
+    cloud = json.loads(json.dumps(ok))
+    cloud["control"]["forest"]["lst"] = ["nodata"]
+    assert not harness_control(cloud)
