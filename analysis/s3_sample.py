@@ -127,17 +127,24 @@ def lc_pixels_in_box(lat0: float, lon0: float, z: int):
                         yield lat, lon
 
 
+def pick_dates(entries: dict, overrides: dict) -> dict:
+    """Each layer's latest served date, unless a fixed date is given for it (S3 year-vs-counting)."""
+    return {k: overrides.get(k) or latest_date(e["times"]) for k, e in entries.items()}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--site", default="https://musharna.github.io/wildeye/")
     ap.add_argument("--out", type=Path, default=Path("analysis/out"))
     ap.add_argument("--cache", type=Path, default=Path("analysis/.cache"))
+    for k in LAYERS:
+        ap.add_argument(f"--{k}-date", default=None, help="fixed date instead of the latest")
     a = ap.parse_args(argv)
     manifest = json.loads(
         get(f"{a.site.rstrip('/')}/data/gibs.json?t={int(time.time())}")[0]
     )["layers"]
     entries = {k: manifest[v] for k, v in LAYERS.items()}
-    dates = {k: latest_date(e["times"]) for k, e in entries.items()}
+    dates = pick_dates(entries, {k: getattr(a, f"{k}_date") for k in LAYERS})
     dec = {k: s.Decoder(e) for k, e in entries.items()}
     tiles = {k: Tiles(e, dates[k], a.cache) for k, e in entries.items()}
     print(json.dumps({"dates": dates}), flush=True)

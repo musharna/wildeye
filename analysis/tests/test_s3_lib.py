@@ -101,3 +101,12 @@ def test_written_coordinates_read_back_into_the_same_pixel_at_every_level():
     for z in (7, 8, 9):
         assert s.tile_pixel(*back, z) == s.tile_pixel(lat, lon, z)
     assert fmt_coord(0.5) == "0.5"  # positive control: plain values stay plain
+
+
+def test_sampler_dates_default_to_latest_and_take_overrides():
+    from analysis.s3_sample import pick_dates
+
+    entries = {k: {"times": ["2024-01-01/2024-12-18/P16D"]} for k in ("lc", "evi", "lst")}
+    assert pick_dates(entries, {}) == {"lc": "2024-12-18", "evi": "2024-12-18", "lst": "2024-12-18"}
+    got = pick_dates(entries, {"evi": "2024-09-13", "lst": None})
+    assert got == {"lc": "2024-12-18", "evi": "2024-09-13", "lst": "2024-12-18"}
