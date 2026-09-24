@@ -75,3 +75,6 @@ pipeline/cron_rivers.log
 pipeline/cron_drought.log
 pipeline/cron_iucn.log
 .qa-static/
+# S3 pilot: tile cache and raw point tables (the committed outputs live in docs/analysis/)
+analysis/.cache/
+analysis/out/
