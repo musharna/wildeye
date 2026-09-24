@@ -270,15 +270,6 @@ async function init() {
       },
     });
     installDrapeExclusivity(dataManager, drapeIds, { exempt: compare.exempt });
-    installCompareUi({
-      doc: document,
-      compare,
-      dataManager,
-      container: document.getElementById('cesiumContainer'),
-      drapes: drapeLayers.map((l) => ({ id: l.id, name: l.name })),
-      onRestack: onDrapeRestack,
-      avoid: () => [document.getElementById('command-dock'), document.getElementById('observed-time')],
-    });
     styleManager.shareLinkManager.setCompareParamProvider(() => encodeCompareParam(compare.getState()));
     compare.subscribe(() => styleManager.shareLinkManager.onCompareStateChange());
     const initialCmp = styleManager.initialCompareParam;
@@ -316,6 +307,17 @@ async function init() {
     const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer, ...gibsLayers.filter((l) => l !== gibsBiomassLayer)];
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
+    // After the time bar's store exists: a scrub relabels each compare side (a gap has no restack).
+    installCompareUi({
+      doc: document,
+      compare,
+      dataManager,
+      container: document.getElementById('cesiumContainer'),
+      drapes: drapeLayers.map((l) => ({ id: l.id, name: l.name })),
+      onRestack: onDrapeRestack,
+      observedTime,
+      avoid: () => [document.getElementById('command-dock'), document.getElementById('observed-time')],
+    });
     dataManager.register(satellitesLayer);
     dataManager.register(rocketLaunchesLayer);
     rocketLaunchesLayer.attachDataManager(dataManager);

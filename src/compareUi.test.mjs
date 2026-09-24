@@ -4,6 +4,7 @@ import { DataLayerManager } from './data/manager.js';
 import { installDrapeExclusivity } from './data/drapeExclusive.js';
 import { createCompare } from './compare.js';
 import { installCompareUi } from './compareUi.js';
+import { createObservedTime, attachObservedTime } from './observedTime.js';
 
 // A DOM stub: `style` is a plain object, so a test reads back exactly what the code assigned.
 function stubDoc() {
@@ -84,6 +85,7 @@ function setup(extra = {}) {
   const ui = installCompareUi({
     doc,
     avoid: extra.avoid,
+    observedTime: extra.observedTime,
     compare,
     dataManager: mgr,
     drapes: DRAPES,
@@ -223,4 +225,28 @@ test('the pill and panel sit above the elements they must avoid, including a chi
 test('with nothing to avoid, the pill keeps its default place above the time bar', () => {
   const { ui } = setup();
   assert.equal(ui.toggle.style.bottom, '72px');
+});
+
+// Final review I1: a scrub reaches a side through setObservedTime, not the manager, and a scrub into a
+// gap hides the imagery without a restack, so nothing re-rendered the panel — the side kept its old date
+// over an empty half of the globe, and a warning, once shown, stuck after scrubbing back out.
+test('a scrub that puts a side into a gap relabels it without a restack; scrubbing back out clears it', async () => {
+  const store = createObservedTime();
+  const { mgr, compare, ui } = setup({ observedTime: store });
+  const ndvi = mgr.layers.get('ndvi').module;
+  ndvi.setObservedTime = (iso) => {
+    error.ndvi = iso && iso < '2020' ? `no ndvi data at or before ${iso.slice(0, 10)}` : null;
+  };
+  attachObservedTime(store, mgr, [ndvi]); // after the UI: the bridge's listener runs second
+  await compare.set('oisst', 'ndvi');
+  const label = () => byClass(ui.panel, 'cmp-right-date').textContent;
+  assert.equal(label(), 'no date');
+  store.setLayerExtent('probe', { startMs: Date.parse('2010-01-01T00:00:00Z'), endMs: Date.parse('2026-01-01T00:00:00Z') });
+  store.set('2015-06-01T00:00:00Z');
+  await tick();
+  assert.equal(label(), '⚠ no ndvi data at or before 2015-06-01');
+  store.set(null);
+  await tick();
+  assert.equal(label(), 'no date');
+  error.ndvi = null;
 });

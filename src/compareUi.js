@@ -21,6 +21,8 @@ export function installCompareUi({
   onRestack = () => () => {},
   // bottom-centre chrome the pill must not sit under (the command dock and its voice widget)
   avoid = () => [],
+  // the shared time bar: a scrub reaches a side through setObservedTime, not the manager
+  observedTime = null,
 }) {
   if (!doc || !container)
     throw new Error(
@@ -151,6 +153,9 @@ export function installCompareUi({
   compare.subscribe(render);
   dataManager.subscribe(render);
   onRestack(render);
+  // A microtask: the bridge's listener may run after this one, and a scrub into a gap only sets the
+  // layer's error (no restack, no manager event), so render once its bookkeeping has landed.
+  observedTime?.subscribe(() => queueMicrotask(render));
   doc.defaultView?.addEventListener?.('resize', render);
   // The dock settles after install (loading cover, first-run, voice widget) with no event to hear.
   doc.defaultView?.setInterval?.(place, 1000);
