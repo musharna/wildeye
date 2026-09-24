@@ -79,3 +79,34 @@ These apply to each region that failed in the pilot (Paris, Chicago, Córdoba):
 - `docs/analysis/s3_season_verdict.png`: the pilot's figure at each region's peak date.
 - `docs/analysis/s3_season_curve.png`: the gap and CI through 2024 per region, with median cropland EVI on the same time axis; the peak and the September arm are marked.
 - One sentence in the grill ledger.
+
+## Result (added 2026-09-24, after the run; nothing above was edited)
+
+**PASS.** 6 of 7 testable regions pass at their peak-greenness date; 6 were needed. Manaus has no cropland, so it has no peak date and can't be tested.
+
+| region | peak date | gap at peak, °C [95% CI] | pass | Sep-2024 arm gap [CI] | reading |
+|---|---|---|---|---|---|
+| Kano | 2024-08-28 | +5.55 [+4.08, +6.14] | ✓ | +5.40 [+4.38, +5.88] | — |
+| Paris | 2024-05-08 | +3.91 [+3.65, +4.22] | ✓ | +2.67 [+2.53, +2.76] | year or counting, not season |
+| Chicago | 2024-07-27 | +1.45 [+0.83, +1.95] | ✓ | +0.87 [+0.66, +1.08] | year or counting, not season |
+| Córdoba | 2024-03-05 | +0.98 [+0.54, +1.26] | ✓ | −2.38 [−2.52, −2.22] | harvest idea supported |
+| Delhi | 2024-08-28 | +0.86 [+0.62, +1.07] | ✓ | +1.16 [+0.98, +1.23] | — |
+| Beijing | 2024-08-12 | +0.82 [+0.65, +0.92] | ✓ | +0.39 [+0.26, +0.53] | — |
+| Cairo | 2024-02-02 | −0.21 [−0.42, +0.29] | ✗ | +0.39 [−0.05, +0.49] | — |
+
+**Controls.**
+- **Harness:** passed. Sahara 313.1 K vs Amazon forest 303.5 K, at 2024-08-28.
+- **Site agreement:** passed, 150/150 (50 points × 3 layers). The site was scrubbed to 2024-08-28 and showed land cover 2024-01-01, EVI and LST 2024-08-28. Evidence: `s3_season_site_check.json`, `s3_season_peaks_and_control.json`.
+- **Engagement gate:** engaged in all 7 testable regions. Cropland was greener at the peak than in September: Córdoba 0.68 vs 0.18, Paris 0.58 vs 0.37, Chicago 0.65 vs 0.43.
+
+**Readings.**
+- **Córdoba:** the harvest idea is supported. Cities read 2.4 °C cooler than fallow cropland in September and 1.0 °C warmer at peak crop.
+- **Paris and Chicago:** cities were already warmer in September 2024. The pilot's negative gaps there came from its year (2026 imagery against a 2024 land-cover map) or its counting (mixed points rather than pure pixels), not from season. This design cannot say which.
+
+**Shown by the curve but not tested (descriptive only).**
+- In Delhi, Córdoba and Beijing the gap is negative through the fallow or dry months and positive at crop peaks. At the same EVI, bare or sparse cropland is hotter than city.
+- In Paris the gap is positive almost all year.
+
+**Deviations, all before any 2024 LST was examined:**
+- The pseudo-replication control uses a pooled-null rejection rate over 400 simulated regions instead of per-run p-values. The 60-run version could not reliably tell 20% from 5%.
+- An extra output, `s3_season_bins.csv`, feeds the verdict figure.

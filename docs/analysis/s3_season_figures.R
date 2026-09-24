@@ -14,12 +14,16 @@ reg <- read.csv(file.path(in_dir, "s3_season_regions.csv"), encoding = "UTF-8")
 curve <- read.csv(file.path(in_dir, "s3_season_curve.csv"), encoding = "UTF-8")
 bins <- read.csv(file.path(in_dir, "s3_season_bins.csv"), encoding = "UTF-8")
 curve$date <- as.Date(curve$date)
-testable <- reg$peak_testable %in% c("True", TRUE)
-passes <- reg$peak_passes %in% c("True", TRUE)
+# a gap from fewer than 30 matched pixels per group is not a result: blank it (the line breaks there)
+untestable <- !(curve$testable %in% c("True", TRUE))
+curve[untestable, c("gap", "ci_lo", "ci_hi")] <- NA
+# kept as columns so they stay aligned when reg is re-sorted below
+reg$is_testable <- reg$peak_testable %in% c("True", TRUE)
+reg$is_pass <- reg$peak_passes %in% c("True", TRUE)
 reg$label <- ifelse(
-  testable,
-  sprintf("%s  peak %s   city − cropland %+.2f °C [%+.2f, %+.2f]%s", reg$region, reg$peak_date, reg$peak_gap,
-          reg$peak_ci_lo, reg$peak_ci_hi, ifelse(passes, "  ✓", "  ✗")),
+  reg$is_testable,
+  sprintf("%s · peak %s\ncity − cropland %+.2f °C [%+.2f, %+.2f]%s", reg$region, reg$peak_date, reg$peak_gap,
+          reg$peak_ci_lo, reg$peak_ci_hi, ifelse(reg$is_pass, "  ✓", "  ✗")),
   sprintf("%s   not testable%s", reg$region, ifelse(is.na(reg$peak_date) | reg$peak_date == "", " (no cropland)", ""))
 )
 reg <- reg[order(-ifelse(is.na(reg$peak_gap), -Inf, reg$peak_gap)), ]
@@ -41,8 +45,10 @@ p1 <- ggplot(bins, aes(evi, mean_lst_c, colour = group)) +
   theme_wildeye()
 ggsave(file.path(out_dir, "s3_season_verdict.png"), p1, width = 11, height = 11, dpi = 150, bg = c$bg)
 
-# curve figure
-curve$region <- factor(curve$region, levels = reg$region)
+# curve figure: regions with no testable date (no cropland) are left out, and named in the subtitle
+shown <- reg$region[reg$is_testable]
+curve <- curve[curve$region %in% shown, ]
+curve$region <- factor(curve$region, levels = shown)
 gap <- data.frame(region = curve$region, date = curve$date, panel = "city − cropland gap (°C)",
                   y = curve$gap, lo = curve$ci_lo, hi = curve$ci_hi, series = "gap")
 evi <- rbind(
@@ -56,7 +62,7 @@ lvl <- as.vector(t(outer(levels(curve$region), c("city − cropland gap (°C)", 
 fac <- function(d) factor(paste(d$region, d$panel, sep = " · "), levels = lvl)
 long$facet <- fac(long)
 gap$facet <- fac(gap)
-marks <- data.frame(region = factor(reg$region, levels = reg$region), peak = as.Date(reg$peak_date))
+marks <- data.frame(region = factor(shown, levels = shown), peak = as.Date(reg$peak_date[reg$is_testable]))
 marks <- rbind(transform(marks, panel = "city − cropland gap (°C)"), transform(marks, panel = "median EVI"))
 marks$facet <- fac(marks)
 sep <- as.Date("2024-09-13")
@@ -73,6 +79,7 @@ p2 <- ggplot(long, aes(date, y)) +
   scale_x_date(date_breaks = "2 months", date_labels = "%b") +
   labs(x = "2024 (16-day composites)", y = NULL,
        title = "Does the city − cropland heat gap follow the cropland's season?",
-       subtitle = "solid line: each region's peak-greenness date (the verdict date) · dashed: the September arm") +
+       subtitle = sprintf("solid: verdict (peak-greenness) date · dashed: September arm · gap blanked under 30 matched pixels · %s: no cropland",
+                          paste(reg$region[!reg$is_testable], collapse = ", "))) +
   theme_wildeye()
 ggsave(file.path(out_dir, "s3_season_curve.png"), p2, width = 11, height = 1.9 * nlevels(curve$region) + 1.5, dpi = 150, bg = c$bg)

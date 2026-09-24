@@ -1,0 +1,14 @@
+{
+ "site": "https://musharna.github.io/wildeye/",
+ "date": "2024-08-28",
+ "shown": {
+  "gibs-landcover": "2024-01-01",
+  "gibs-evi": "2024-08-28",
+  "gibs-lst": "2024-08-28"
+ },
+ "n": 50,
+ "compared": 150,
+ "mismatches": [],
+ "retried": [],
+ "agree": true
+}
