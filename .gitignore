@@ -78,3 +78,4 @@ pipeline/cron_iucn.log
 # S3 pilot: tile cache and raw point tables (the committed outputs live in docs/analysis/)
 analysis/.cache/
 analysis/out/
+analysis/out_season/

@@ -1,0 +1,9 @@
+region,peak_date,crop_median_evi_peak,crop_median_evi_sep,engaged,peak_n_city,peak_n_crop,peak_n_city_matched,peak_n_crop_matched,peak_unmatched_gap,peak_gap,peak_ci_lo,peak_ci_hi,peak_p,peak_testable,peak_passes,sep_n_city,sep_n_crop,sep_n_city_matched,sep_n_crop_matched,sep_unmatched_gap,sep_gap,sep_ci_lo,sep_ci_hi,sep_p,sep_testable,reading,verdict
+Beijing,2024-08-12,0.5115,0.3989,True,3843,2618,2757,2347,2.0388,0.8213,0.646,0.9161,0.0,True,True,3843,2618,3142,2575,0.7938,0.3855,0.2616,0.5296,0.0,True,,PASS
+Cairo,2024-02-02,0.4872,0.2475,True,1055,1582,264,738,1.7861,-0.211,-0.4157,0.2919,1.0,True,False,1055,1582,825,1464,1.37,0.3931,-0.0492,0.4934,0.0,True,,PASS
+Chicago,2024-07-27,0.6454,0.4326,True,3974,687,1922,212,4.4262,1.4474,0.827,1.9458,0.0,True,True,3974,687,2596,588,1.4699,0.8666,0.6605,1.0761,0.0,True,"year or counting, not season",PASS
+Córdoba,2024-03-05,0.6785,0.1829,True,335,5513,240,1062,2.6804,0.9766,0.5378,1.265,0.0,True,True,335,5513,309,5006,-2.1981,-2.3771,-2.5181,-2.2248,1.0,True,harvest idea supported,PASS
+Delhi,2024-08-28,0.5277,0.4828,True,878,6324,734,5513,1.3376,0.8608,0.6203,1.0696,0.0,True,True,1421,6539,1394,4855,1.6305,1.1568,0.9837,1.2314,0.0,True,,PASS
+Kano,2024-08-28,0.4546,0.4218,True,97,5657,95,1385,5.8557,5.5472,4.0841,6.1441,0.0,True,True,139,7812,115,2216,4.8152,5.3982,4.3846,5.8789,0.0,True,,PASS
+Manaus,,,,False,0,0,0,0,nan,nan,nan,nan,nan,False,False,143,0,0,0,nan,nan,nan,nan,nan,False,,PASS
+Paris,2024-05-08,0.5845,0.3688,True,2615,4721,2448,4377,4.7186,3.9123,3.6517,4.2194,0.0,True,True,2615,4728,2567,4612,2.7182,2.6657,2.5314,2.7611,0.0,True,"year or counting, not season",PASS
