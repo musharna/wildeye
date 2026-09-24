@@ -36,6 +36,7 @@ import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, g
 import { installDrapeExclusivity } from './data/drapeExclusive.js';
 import { createCompare, encodeCompareParam, decodeCompareParam } from './compare.js';
 import { installCompareUi } from './compareUi.js';
+import { stackAboveChrome } from './bottomStack.js';
 import { createObservedTime, attachObservedTime, installObservedTimeUi } from './observedTime.js';
 import satellitesLayer from './data/satellites.js';
 import rocketLaunchesLayer from './data/rocketLaunches.js';
@@ -308,7 +309,7 @@ async function init() {
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
     // After the time bar's store exists: a scrub relabels each compare side (a gap has no restack).
-    installCompareUi({
+    const compareUi = installCompareUi({
       doc: document,
       compare,
       dataManager,
@@ -316,7 +317,15 @@ async function init() {
       drapes: drapeLayers.map((l) => ({ id: l.id, name: l.name })),
       onRestack: onDrapeRestack,
       observedTime,
-      avoid: () => [document.getElementById('command-dock'), document.getElementById('observed-time')],
+    });
+    // Bottom-centre is one stack above the dock and the map credits: time bar, then compare pill | panel.
+    stackAboveChrome({
+      doc: document,
+      below: () => [document.getElementById('command-dock'), document.getElementById('cesium-credits')],
+      items: () => [
+        document.getElementById('observed-time'),
+        [compareUi.toggle, compareUi.panel],
+      ],
     });
     dataManager.register(satellitesLayer);
     dataManager.register(rocketLaunchesLayer);
