@@ -133,6 +133,30 @@ try {
     notchSpanHours: Math.round(notchSpan / 3600000), display: state.display,
   });
 
+  // 3b. The slider is reachable by a pointer along its whole track, and a real click at its centre
+  // scrubs there. Every other check drives the range with dispatchEvent, which reaches it through
+  // anything on top: until 2026-09-23 the command dock covered the track from ~15% rightward at every
+  // viewport, and all seven checks passed.
+  const track = await page.evaluate(() => {
+    const r = document.querySelector('#observed-time .ot-range');
+    const b = r.getBoundingClientRect();
+    const hits = [0.1, 0.5, 0.9].map((f) => {
+      const hit = document.elementFromPoint(b.left + b.width * f, b.top + b.height / 2);
+      return hit === r ? 'range' : (hit?.id || String(hit?.className || hit?.tagName || 'nothing').slice(0, 30));
+    });
+    return { hits, x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  });
+  const beforeClick = await page.evaluate(() => window.__godsEyeView.observedTime.getMs());
+  await page.mouse.click(track.x, track.y);
+  await new Promise((r) => setTimeout(r, 500));
+  const clicked = await page.evaluate(() => {
+    const s = window.__godsEyeView.observedTime; const d = s.domain(); const ms = s.getMs();
+    return { frac: ms === null || !d ? null : (ms - d.start) / (d.end - d.start) };
+  });
+  report('slider-clickable', track.hits.every((h) => h === 'range') && clicked.frac !== null && Math.abs(clicked.frac - 0.5) < 0.1, {
+    hitsAt10_50_90: track.hits, beforeClick, clickedAtFraction: clicked.frac,
+  });
+
   // 4. Scrub back BACK_DAYS and assert the page fetched a frame dated that far back. A site shipping
   // only the newest nights passes every UI assertion and fails this one.
   // Anchored on the domain's END, not on `now`: the domain is the data now, so an archive that has
