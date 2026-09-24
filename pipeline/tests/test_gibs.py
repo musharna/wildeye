@@ -119,3 +119,38 @@ def test_a_missing_colour_map_link_is_an_error_where_one_is_expected(tmp_path):
     assert json.loads(out.read_text()) == {"old": True}
     assert g.main(["--out", str(out)], fetch=fetch_from(CAP), layers=layers) == 0
     assert "gibs-nightlights" in json.loads(out.read_text())["layers"]
+
+
+def test_ramp_decode_table_is_every_data_entry_with_its_interval():
+    cm = g.parse_colormap((FIX / "gibs_colormap_ramp.xml").read_bytes())  # LST, K
+    d = cm["decode"]
+    assert len(d) == 252  # 253 entries minus the one nodata entry
+    assert d[-1] == [255, 1, 0, 350.02, 652.0]
+    assert all(len(e) == 5 and e[3] < e[4] for e in d)
+    assert len({tuple(e[:3]) for e in d}) == len(d)  # exact lookup needs unique colours
+    assert cm["ramp"]["stops"][-1] == [255, 1, 0]  # the legend is unchanged
+
+
+def test_evi_decode_table_from_the_real_colormap():
+    cm = g.parse_colormap((FIX / "gibs_colormap_evi.xml").read_bytes())
+    d = cm["decode"]
+    assert len(d) == 134
+    assert d[-1] == [0, 0, 1, 0.9751, 1.0001]
+    assert not any(e[3] < -0.2 for e in d)  # the nodata "Classifications" map is not in it
+
+
+def test_class_layers_carry_no_decode_table():
+    cm = g.parse_colormap((FIX / "gibs_colormap_classes.xml").read_bytes())
+    assert "decode" not in cm and len(cm["classes"]) == 18
+
+
+def test_an_open_ended_bin_is_stored_with_a_null_end():
+    # GEDI's real colour map ends with value="[250,+INF)"; JSON has no infinity, so the open end is null
+    # and the browser reads "≥ 250". The live pipeline run raised on it (2026-09-23), the fixtures did not.
+    cm = g.parse_colormap((FIX / "gibs_colormap_gedi.xml").read_bytes())
+    d = cm["decode"]
+    assert d[-1][3:] == [250.0, None]
+    assert all(e[4] is not None and e[3] < e[4] for e in d[:-1])  # every closed bin still parses
+    json.dumps(cm, allow_nan=False)  # and the manifest stays strict JSON
+    with pytest.raises(ValueError, match="unparseable colour-map value 'x'"):
+        g._interval("x")

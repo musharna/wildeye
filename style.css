@@ -9587,6 +9587,9 @@ body.scene-playback-mode #key-setup {
 .bio-card-note-pop[hidden] { display: none; }
 /* 0.8 white: the shared --text-secondary (0.5 white) measured 4.09:1 over the card (visual critic 5). */
 .bio-card-filter { color: rgba(232, 234, 237, 0.8); font-size: 11px; }
+/* Stage 3 "What's here": one line per enabled GIBS layer at the searched spot, each with its own date. */
+.bio-card-layers { list-style: none; margin: 0 0 6px; padding: 0; color: rgba(232, 234, 237, 0.9); font-size: 11px; line-height: 1.45; }
+.bio-card-layers[hidden] { display: none; }
 .bio-card-filter:empty { display: none; }
 /* R13-M1: the species list (the body) and the Top datasets rows share the card's height. .bio-card-main is a flex item of the card, so it takes
    what the card has left under its 52vh cap after the heading and the filter line, and that height is definite for its grid. The grid gives

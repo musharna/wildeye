@@ -373,6 +373,10 @@ async function init() {
       dismissCard: () => bioCard.element.querySelector('.bio-card-close')?.click(),
       setPanelCollapsed: (id, collapsed) => styleManager.setPanelCollapsed(id, collapsed, { persist: false, syncShare: false }),
     });
+    // Stage 3 "What's here": a WHAT LIVES HERE click also reads every enabled GIBS layer at the spot (grill A14).
+    const readGibsLayers = ({ lat, lon }) => gibsLayers
+      .filter((l) => dataManager.isEnabled(l.id))
+      .map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
       viewer,
       client: bioClient,
@@ -382,6 +386,7 @@ async function init() {
         speciesPanel?.chooseTaxon({ taxonKey, name }).catch((error) => console.error('[species] could not map the picked species', { taxonKey, error }));
       },
       onArmedChange: () => speciesPanel?.render(),
+      readLayers: readGibsLayers,
     });
     speciesPanel = createSpeciesPanel({ dataManager, speciesLayer, client: bioClient, whatLivesHere });
 
@@ -460,6 +465,8 @@ async function init() {
     syncVisibilitySuspension();
 
     window.__godsEyeView = {
+      // QA (scripts/qa-readout.mjs, qa-known-answer.mjs): every enabled GIBS layer's readout rows at a point.
+      readoutAt: (lat, lon) => Promise.all(readGibsLayers({ lat, lon }).map((r) => r.result)),
       viewer,
       styleManager,
       tileset,

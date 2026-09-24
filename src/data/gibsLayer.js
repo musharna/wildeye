@@ -1,6 +1,7 @@
 import * as Cesium from "cesium";
 import { setStackedImagery, legendItems } from "./rasterDrape.js";
 import { dateAtOrBefore, latestDate, extentOfTimes } from "./gibsTime.js";
+import { createTilePixelReader, decodePixel, gibsTileRequest } from "./gibsReadout.js";
 
 /**
  * NASA GIBS tile layers (grill ledger 2026-09-22). Tiles load straight from GIBS; public/data/gibs.json
@@ -39,6 +40,8 @@ export function createGibsLayer({
   imageryLayerFor = (provider, options) =>
     new Cesium.ImageryLayer(provider, options),
   stack = setStackedImagery,
+  // (url, px, py) → {rgba, timeActual}: one pixel of the raw tile (stage 3 readout)
+  readTilePixel = createTilePixelReader(),
 }) {
   let _viewer = null,
     _entry = null,
@@ -170,6 +173,38 @@ export function createGibsLayer({
           count: null,
         });
       return { chips: [], legend };
+    },
+    /**
+     * What this layer holds at a point, labelled with ITS OWN date (grill A7): the date on screen, unless
+     * GIBS's layer-time-actual header says otherwise (then the header wins, loudly). Night lights has no
+     * colour map, so it is view only (A8). A layer in a time-bar gap reads no tile. Null when disabled.
+     */
+    async readoutAt(lat, lon) {
+      if (!_enabled) return null;
+      const row = (status, extra = {}) => ({ id, name, icon, status, text: null, date: null, ...extra });
+      if (!_entry) return row("error", { error: `${id} not loaded` });
+      if (!_entry.classes && !_entry.decode) return row("viewonly");
+      if (_gap) return row("gap", { observed: _observed });
+      if (!_shownDate) return row("error", { error: `${id} not loaded` });
+      const date = _shownDate;
+      const req = gibsTileRequest(gibsTileUrl(_entry, date), _entry.maximumLevel, lat, lon);
+      if (!req) return row("outside", { date });
+      let pixel;
+      try {
+        pixel = await readTilePixel(req.url, req.px, req.py);
+      } catch (e) {
+        console.error(`[Data:${id}] readout failed`, { lat, lon, url: req.url, error: e });
+        return row("error", { date, error: e?.message || String(e) });
+      }
+      let shown = date;
+      if (pixel.timeActual && pixel.timeActual !== date) {
+        console.error(`[Data:${id}] layer-time-actual ${pixel.timeActual} differs from the date shown ${date}`, { url: req.url });
+        shown = pixel.timeActual;
+      }
+      const v = decodePixel(_entry, pixel.rgba);
+      if (v.kind === "nodata") return row("nodata", { date: shown });
+      if (v.kind === "unknown") return row("error", { date: shown, error: `unknown colour ${v.rgb.join(",")}` });
+      return row(v.kind, { date: shown, text: v.kind === "class" ? v.label : v.text });
     },
     getStats() {
       return {
