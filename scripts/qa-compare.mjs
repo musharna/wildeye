@@ -40,11 +40,17 @@ const browser = await puppeteer.launch({
   defaultViewport: { width: 1400, height: 900 },
 });
 const pageErrors = [];
+// The app's own failure reports (a side that did not enable, GIBS tiles failing): a failed check says why.
+const consoleErrors = [];
 const open = async (url) => {
   const page = await browser.newPage();
   page.on("pageerror", (e) =>
     pageErrors.push(String(e?.message || e).slice(0, 160)),
   );
+  page.on("console", (m) => {
+    if (m.type() === "error" && /compare|gibs|Data/.test(m.text()))
+      consoleErrors.push(m.text().slice(0, 200));
+  });
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 180000 });
   await page.waitForFunction(
     () =>
@@ -228,7 +234,13 @@ try {
       splitOf(r, LEFT) === -1 &&
       splitOf(r, RIGHT) === 1 &&
       Math.abs(r.splitPosition - 0.25) < 1e-9,
-    { state: r.state, left: splitOf(r, LEFT), right: splitOf(r, RIGHT) },
+    {
+      state: r.state,
+      left: splitOf(r, LEFT),
+      right: splitOf(r, RIGHT),
+      enabled: r.enabled.filter((id) => /gibs/.test(id)),
+      consoleErrors: consoleErrors.slice(-4),
+    },
   );
 
   // 6. A third drape ends compare: both sides off, splits cleared, divider hidden.
