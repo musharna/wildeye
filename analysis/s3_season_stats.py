@@ -180,6 +180,20 @@ def main(argv=None) -> int:
                     + [fmt(crop_med[reg].get(d)), fmt(city_med.get((reg, d)))]
                 )
 
+    with open(docs / "s3_season_bins.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["region", "date", "evi_bin_lo", "group", "n", "mean_lst_c"])
+        for r in rows:
+            if not r["peak_date"] or (r["region"], r["peak_date"]) not in data:
+                continue
+            evi, lst, city = data[(r["region"], r["peak_date"])]
+            b = np.floor(evi / s.EVI_BIN).astype(int)
+            for k in np.unique(b):
+                for g, sel in (("city", city), ("cropland", ~city)):
+                    m = (b == k) & sel
+                    if m.any():
+                        w.writerow([r["region"], r["peak_date"], round(k * s.EVI_BIN, 2), g, int(m.sum()), round(float(lst[m].mean()), 3)])
+
     for r in rows:
         pk, sp = r["peak"], r["sep"]
         print(
