@@ -139,8 +139,24 @@ def parse_colormap(xml: bytes) -> dict:
             "min": _num(legend.get("minLabel")),
             "max": _num(legend.get("maxLabel")),
             "unit": f" {unit}" if unit else "",
-        }
+        },
+        # Tiles are palette PNGs whose every opaque pixel is one of these colours (probe 2026-09-23),
+        # so the browser reads a value by exact lookup: [r, g, b, lo, hi] for value="[lo,hi)", with
+        # null for an open end (GEDI's top bin is "[250,+INF)"; JSON has no infinity).
+        "decode": [
+            [*(int(c) for c in e.get("rgb").split(",")), *_interval(e.get("value"))]
+            for e in cm.iter("ColorMapEntry")
+            if e.get("nodata") != "true"
+        ],
     }
+
+
+def _interval(value: str) -> tuple[float | None, float | None]:
+    m = re.fullmatch(r"\[(-?[\d.]+|-INF),(-?[\d.]+|\+INF)\)", value or "")
+    if not m:
+        raise ValueError(f"unparseable colour-map value {value!r}")
+    lo, hi = m.groups()
+    return (None if lo == "-INF" else float(lo)), (None if hi == "+INF" else float(hi))
 
 
 def build(fetch=_get, layers=LAYERS) -> dict:
@@ -155,7 +171,9 @@ def build(fetch=_get, layers=LAYERS) -> dict:
         }
         if cfg.get("colormap", True):
             if not c["colormapUrl"]:
-                raise LookupError(f"{key}: GIBS lists no v1.3 colour map for {cfg['gibsId']}")
+                raise LookupError(
+                    f"{key}: GIBS lists no v1.3 colour map for {cfg['gibsId']}"
+                )
             entry |= parse_colormap(fetch(c["colormapUrl"]))
         out[key] = entry
     return {
