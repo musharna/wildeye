@@ -37,3 +37,18 @@ Which one flips the sign?
 
 - `docs/analysis/s3_year_vs_counting.csv`: per region, the gap, CI and n for arms P, A, A-pure and B, and the reading.
 - One line in the grill ledger.
+
+## Result (added 2026-09-24, after the run; nothing above was edited)
+
+**Paris and Chicago: year, not counting.** The pilot's own point method on September 2024 data gives cities warmer than cropland:
+
+| region | P, pilot (2026, points) | A (2024, points) | A-pure (2024, points in pure pixels) | B, season arm (2024, pure pixels) |
+|---|---|---|---|---|
+| Paris | −1.95 [−2.01, −1.90] | +1.47 [+1.44, +1.50] | +1.65 [+1.61, +1.69] | +2.67 [+2.53, +2.76] |
+| Chicago | −1.36 [−1.65, −1.01] | +0.80 [+0.69, +0.89] | +1.10 [+0.94, +1.22] | +0.87 [+0.66, +1.08] |
+
+- **Keeping only points in pure pixels makes each gap larger and never changes its sign,** in all 7 regions. Mixed pixels dilute the gap toward 0, as expected when a mixed pixel's single LST is shared by city and cropland points.
+- **The flip comes from 2026 vs 2024.** This design cannot say which part of that:
+  - weather in that one week;
+  - land cover changed since the 2024 map;
+  - the two-week EVI date offset.
