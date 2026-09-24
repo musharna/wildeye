@@ -61,3 +61,18 @@ The gap estimator, bootstrap and shuffle must behave on synthetic data:
 - `docs/analysis/s3_heat_greenness_bins.csv`: per region × EVI bin × group, n and mean LST.
 - `docs/analysis/s3_heat_greenness.png`: one figure, one panel per region, LST against EVI by group, matched gap and CI in the panel strip. R + ggplot2, drawn in `docs/analysis/wildeye_theme.R`.
 - One sentence in the grill ledger.
+
+## Result (added 2026-09-24, after the run; nothing above was edited)
+
+**FAIL.** 7 regions were testable; Manaus has no cropland in its box. 4 passed: Kano +1.62 °C, Beijing +1.21, Cairo +0.68, Delhi +0.36. Passing needed 6. In the other 3, cities read cooler than cropland at the same EVI: Córdoba −0.80, Chicago −1.36, Paris −1.95. No region showed the "just less green" pattern (unmatched gap > 0, matched gap ≤ 0).
+
+- **Harness control:** passed. Sahara barren 308.3 K, Amazon forest 298.1 K.
+- **Site agreement:** passed, 150/150 (50 points × 3 layers). Evidence: `s3_heat_greenness_site_check.json`.
+- **Script:** `analysis/s3_stats.py`. Figure: `s3_heat_greenness_figure.R`.
+
+**Deviations, all made before any gap was computed:**
+
+1. **Coordinates written at full precision (the first check failed 35/150).** A level-8 land-cover centre lies exactly on a level-9 EVI pixel edge. The sampler wrote coordinates to 5 decimals, which moved the site's read one EVI pixel over. The CSV now holds full-precision coordinates. The same run found a CRLF parsing bug in the check itself.
+2. **The site check re-reads a point whose tile fetch errored, up to 3 times.** 4 fetch errors occurred on one run and none on the final run; their cause was not established.
+
+**Caveat.** About 4 land-cover points share one LST pixel, so points are not independent and the CIs and p-values are too narrow. Correcting this could only remove passes, so the verdict stands. Paris, Chicago and Córdoba are the mid-latitude regions near harvest or fallow in mid-September. Whether the result holds in another season is untested.

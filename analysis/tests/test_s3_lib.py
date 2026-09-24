@@ -90,3 +90,14 @@ def test_latest_date_is_the_sites_last_step_not_the_interval_end():
     # an end that is not on a step: the site (src/data/gibsTime.js latestDate) keeps the last step before it
     assert latest_date(["2026-01-01/2026-01-20/P8D"]) == "2026-01-17"
     assert latest_date(["2019-04-18/2019-04-18/P1429D"]) == "2019-04-18"
+
+
+def test_written_coordinates_read_back_into_the_same_pixel_at_every_level():
+    # a level-8 land-cover centre lies on a level-9 EVI pixel edge; the CSV must not move it across
+    from analysis.s3_sample import fmt_coord
+
+    lat, lon = s.pixel_centre(8, 210, 97, 12, 200)  # Paris-ish
+    back = float(fmt_coord(lat)), float(fmt_coord(lon))
+    for z in (7, 8, 9):
+        assert s.tile_pixel(*back, z) == s.tile_pixel(lat, lon, z)
+    assert fmt_coord(0.5) == "0.5"  # positive control: plain values stay plain

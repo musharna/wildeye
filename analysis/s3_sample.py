@@ -61,6 +61,11 @@ def latest_date(times: list[str]) -> str:
     return best.isoformat()
 
 
+def fmt_coord(v: float) -> str:
+    """Full precision: a level-8 centre sits on a level-9 edge, so rounding would move it a pixel."""
+    return repr(v)
+
+
 def get(url: str, tries: int = 4) -> tuple[bytes, dict]:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     for k in range(tries):
@@ -180,8 +185,8 @@ def main(argv=None) -> int:
                 w.writerow(
                     [
                         region,
-                        f"{lat:.5f}",
-                        f"{lon:.5f}",
+                        fmt_coord(lat),
+                        fmt_coord(lon),
                         lc[1],
                         e_lo,
                         e_hi,
