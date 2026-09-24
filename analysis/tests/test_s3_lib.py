@@ -81,3 +81,12 @@ def test_overall_verdict_needs_four_testable_and_three_quarters_passing():
     assert s.verdict([ok, ok, ok, no]) == "PASS"
     assert s.verdict([ok, ok, no, no]) == "FAIL"
     assert s.verdict([ok, ok, ok, untestable, untestable]) == "NOT TESTABLE"
+
+
+def test_latest_date_is_the_sites_last_step_not_the_interval_end():
+    from analysis.s3_sample import latest_date
+    assert latest_date(["2025-01-01/2025-12-19/P16D", "2026-01-01/2026-08-29/P16D"]) == "2026-08-29"
+    assert latest_date(["2001-01-01/2024-01-01/P1Y"]) == "2024-01-01"
+    # an end that is not on a step: the site (src/data/gibsTime.js latestDate) keeps the last step before it
+    assert latest_date(["2026-01-01/2026-01-20/P8D"]) == "2026-01-17"
+    assert latest_date(["2019-04-18/2019-04-18/P1429D"]) == "2019-04-18"
