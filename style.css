@@ -9900,3 +9900,27 @@ body.recording-mode #bio-card { display: none !important; }
 body.cockpit-mode #left-panel-stack > #species-panel { display: none !important; }
 body.ui-clean-view #species-panel,
 body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
+
+/* Observed-time bar (src/observedTime.js). Bounded by the viewport; the slider is the part that gives.
+   Below 600 px the title keeps only its icon and the time label takes its own row: one row of fixed
+   minimums was 616 px wide on a 390 px phone and started off-screen (2026-09-24). display is set inline
+   by the bar itself (it carries the show/hide state). Centred by left/right 0 + auto margins, not
+   left:50% + translate: a fixed box at left:50% shrink-fits into half the viewport, which wrapped the
+   desktop bar into three rows. */
+#observed-time { position: fixed; left: 0; right: 0; margin-inline: auto; width: fit-content; bottom: 28px; z-index: 30;
+  box-sizing: border-box; max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center;
+  gap: 8px; align-items: center; padding: 6px 10px; border-radius: 8px;
+  background: rgba(8, 12, 18, 0.82); color: #cfe3ff; font: 12px/1.2 var(--font-mono, ui-monospace, monospace);
+  border: 1px solid rgba(120, 170, 255, 0.35); backdrop-filter: blur(4px); }
+#observed-time .ot-title { min-width: 9em; opacity: 0.8; }
+#observed-time .ot-range { width: 38vw; max-width: 520px; min-width: 120px; flex: 0 1 auto; }
+#observed-time .ot-label { min-width: 14em; }
+#observed-time button { background: #16233a; color: #cfe3ff; border: 1px solid rgba(120, 170, 255, 0.4);
+  border-radius: 5px; padding: 2px 7px; cursor: pointer; font: inherit; }
+@media (max-width: 600px) {
+  #observed-time { width: calc(100vw - 16px); }
+  #observed-time .ot-title { min-width: 0; }
+  #observed-time .ot-title-text { display: none; }
+  #observed-time .ot-range { flex: 1 1 120px; width: auto; }
+  #observed-time .ot-label { flex-basis: 100%; min-width: 0; text-align: center; }
+}

@@ -137,7 +137,11 @@ try {
   // scrubs there. Every other check drives the range with dispatchEvent, which reaches it through
   // anything on top: until 2026-09-23 the command dock covered the track from ~15% rightward at every
   // viewport, and all seven checks passed.
-  const track = await page.evaluate(() => {
+  const track = await page.evaluate(async () => {
+    // Hit-test what a user could click: after a paint. The bottom stack re-places the compare pill from a
+    // ResizeObserver, which runs in the next rendering update; a query landing between a layer toggle and
+    // that update saw the pill over the slider (1 in 228 live samples, 0 of 115 after two frames).
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     const r = document.querySelector('#observed-time .ot-range');
     const b = r.getBoundingClientRect();
     const hits = [0.1, 0.5, 0.9].map((f) => {
@@ -212,6 +216,56 @@ try {
 
   report('no-page-errors', pageErrors.length === 0, { errors: pageErrors.slice(0, 3) });
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/observed-time.png` });
+
+  // 6. Phone widths. Until 2026-09-24 the bar was one unwrapping row of fixed minimums (9em title, 14em
+  // label, 38vw slider), 616 px wide at 390 px, starting off-screen left. Every check above runs at
+  // 1400x900, so none could see it. The whole bar must lie on screen, and every control must take a real
+  // pointer at its centre (the slider along its length), not just exist. 1400x900 rides along for the
+  // one-row assertion.
+  for (const [w, h] of [[390, 844], [844, 390], [1400, 900]]) {
+    const m = await browser.newPage();
+    await m.setViewport({ width: w, height: h, isMobile: w < 1000, hasTouch: w < 1000, deviceScaleFactor: 1 });
+    await m.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
+    await m.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView.styleManager, { timeout: 180000 });
+    await m.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
+    // the first-run launcher arrives after boot and covers the bottom of a phone; dismissed as qa-compare does
+    await new Promise((r) => setTimeout(r, 12000));
+    await m.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
+    await m.keyboard.press('Escape');
+    const launcherGone = await m.waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 15000 }).then(() => true, () => false);
+    if (!launcherGone) { report(`fits-viewport-${w}x${h}`, false, { error: 'first-run launcher still up after 15 s' }); await m.close(); continue; }
+    await m.evaluate(() => window.__godsEyeView.dataManager.setEnabled('gibs-landcover', true, { origin: 'user' }));
+    await m.waitForFunction(() => { const b = document.getElementById('observed-time'); return b && b.getBoundingClientRect().width > 0; }, { timeout: 60000 }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 2000));
+    const fit = await m.evaluate(async () => {
+      await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+      const bar = document.getElementById('observed-time');
+      const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+      const R = (e) => { const b = e.getBoundingClientRect(); return { x: Math.round(b.left), y: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) }; };
+      const hit = (e, f = 0.5) => { const b = e.getBoundingClientRect(); const x = b.left + b.width * f, y = b.top + b.height / 2;
+        if (x < 0 || x >= vw || y < 0 || y >= vh) return 'off-screen';
+        const t = document.elementFromPoint(x, y); return t === e || e.contains(t) ? 'ok' : (t?.id || String(t?.className || t?.tagName).slice(0, 30)); };
+      if (!bar) return { missing: true };
+      const q = (s) => bar.querySelector(s);
+      const bb = bar.getBoundingClientRect();
+      return {
+        vw, bar: R(bar), inside: bb.left >= 0 && bb.right <= vw && bb.top >= 0 && bb.bottom <= vh,
+        controls: { play: hit(q('.ot-play')), back: hit(q('.ot-back')), fwd: hit(q('.ot-fwd')), live: hit(q('.ot-live')),
+          range: [0.1, 0.5, 0.9].map((f) => hit(q('.ot-range'), f)) },
+        rangeWidth: Math.round(q('.ot-range').getBoundingClientRect().width),
+        label: R(q('.ot-label')),
+      };
+    });
+    const c = fit.controls || {};
+    const ok = !fit.missing && fit.inside && [c.play, c.back, c.fwd, c.live, ...(c.range || [])].every((v) => v === 'ok')
+      && fit.rangeWidth >= 120 && fit.label.x >= 0 && fit.label.x + fit.label.w <= fit.vw
+      // above the phone breakpoint the bar is one row: centring by left:50% once halved its room and
+      // wrapped the desktop bar into three rows while every other check here still passed
+      && (fit.vw <= 600 || fit.bar.h <= 50);
+    report(`fits-viewport-${w}x${h}`, ok, fit);
+    if (SHOTS) await m.screenshot({ path: `${SHOTS}/observed-time-${w}x${h}.png` });
+    await m.close();
+  }
 } finally {
   await browser.close();
 }

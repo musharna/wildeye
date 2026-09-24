@@ -271,23 +271,17 @@ export function installObservedTimeUi(
   );
   const root = doc.createElement("div");
   root.id = "observed-time";
-  root.style.cssText =
-    "position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:30;" +
-    "display:flex;gap:8px;align-items:center;padding:6px 10px;border-radius:8px;" +
-    "background:rgba(8,12,18,0.82);color:#cfe3ff;font:12px/1.2 var(--font-mono, ui-monospace, monospace);" +
-    "border:1px solid rgba(120,170,255,0.35);backdrop-filter:blur(4px)";
+  // Layout lives in style.css (#observed-time), not inline: an inline width cannot answer a media query,
+  // and the fixed inline minimums made the bar 616 px wide on a 390 px phone (2026-09-24).
+  root.style.display = "flex";
   root.innerHTML =
-    '<span class="ot-title" style="min-width:9em;opacity:.8">🕒 observed time</span>' +
+    '<span class="ot-title"><span aria-hidden="true">🕒</span><span class="ot-title-text"> observed time</span></span>' +
     '<button class="ot-play" title="Play / pause (1 hour per second)">▶</button>' +
     '<button class="ot-back" title="Back one hour">◀</button>' +
-    '<input class="ot-range" type="range" min="0" max="0" value="0" style="width:38vw;max-width:520px">' +
+    '<input class="ot-range" type="range" min="0" max="0" value="0" aria-label="Observed time">' +
     '<button class="ot-fwd" title="Forward one hour">▶|</button>' +
     '<button class="ot-live" title="Return to live data">LIVE</button>' +
-    '<span class="ot-label" style="min-width:14em"></span>';
-  for (const b of root.querySelectorAll("button")) {
-    b.style.cssText =
-      "background:#16233a;color:#cfe3ff;border:1px solid rgba(120,170,255,.4);border-radius:5px;padding:2px 7px;cursor:pointer;font:inherit";
-  }
+    '<span class="ot-label"></span>';
   doc.body.appendChild(root);
   const range = root.querySelector(".ot-range"),
     label = root.querySelector(".ot-label"),
