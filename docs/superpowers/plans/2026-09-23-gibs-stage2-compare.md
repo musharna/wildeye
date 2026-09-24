@@ -1615,19 +1615,19 @@ git commit -m "Compare is live in the app: the 14 drapes are pickable, the pair 
 
 ```bash
 cd ~/wildeye && git merge --no-ff feat/gibs-stage2-compare -m "GIBS stage 2: swipe Compare panel" && git push origin main-wildeye
-pipeline/deploy_pages.sh > ~/.claude/jobs/19dcbb5d/tmp/deploy-stage2.log 2>&1; echo deploy=$?; tail -5 ~/.claude/jobs/19dcbb5d/tmp/deploy-stage2.log
+pipeline/deploy_pages.sh > /home/<user>/.claude/jobs/<job>/tmp/deploy-stage2.log 2>&1; echo deploy=$?; tail -5 /home/<user>/.claude/jobs/<job>/tmp/deploy-stage2.log
 ```
 
 Expected: deploy=0. Then wait for Pages to publish: poll `curl -s https://musharna.github.io/wildeye/ | grep -c compareUi\|assets/` until the new asset hash is served (compare it with `ls dist/assets/index-*.js`).
 
 - [ ] **Step 3: Live acceptance (A18)**
 
-Run: `cd ~/wildeye && PATH="$HOME/.local/node24/bin:$PATH" heavy-run node scripts/qa-compare.mjs --shots ~/.claude/jobs/19dcbb5d/tmp/compare-shots; echo exit=$?`
+Run: `cd ~/wildeye && PATH="$HOME/.local/node24/bin:$PATH" heavy-run node scripts/qa-compare.mjs --shots /home/<user>/.claude/jobs/<job>/tmp/compare-shots; echo exit=$?`
 Expected: 8/8 ok, exit=0. The same command exited 1 in Task 1 against the old site.
 
 - [ ] **Step 4: Regressions still green live:** `heavy-run node scripts/qa-gibs.mjs` (23/23) and `heavy-run node scripts/qa-observed-time.mjs` (7/7).
 
-- [ ] **Step 5: Independent critic (visual carve-out).** Copy the 4 shots to `C:\Users\a2b32\Downloads\wildeye-compare-2026-09-23\`. Dispatch one critic subagent with the image paths and these criteria:
+- [ ] **Step 5: Independent critic (visual carve-out).** Copy the 4 shots to `C:\Users\<user>\Downloads\wildeye-compare-2026-09-23\`. Dispatch one critic subagent with the image paths and these criteria:
   - the left of the divider shows night lights and the right shows IGBP land cover;
   - the divider is visible and aligned with the colour boundary;
   - each side's date label is readable and matches its layer (night lights 2016-01-01, land cover 2024-01-01);
