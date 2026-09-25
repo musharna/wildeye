@@ -2158,10 +2158,10 @@ if (CHECKS.has('landscape-regions')) {
     await page.mouse.click(at.x, at.y);
     await sleep(900);
   };
-  // Fix round 6 (critic r5 S1): the header's text (the title and the "NO PLACE LEFT BEHIND" tagline, its line boxes) is never under a pill or
+  // Fix round 6 (critic r5 S1): the header's text (the title's line boxes) is never under a pill or
   // an open panel. Returns the overlaps, empty when clear.
   const headerCovered = () => page.evaluate(() => {
-    const lines = [...document.querySelectorAll('#title-bar h1, #title-bar .subtitle')].flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()].map((r) => ({ text: el.textContent.trim().slice(0, 20), r })); });
+    const lines = [...document.querySelectorAll('#title-bar h1')].flatMap((el) => { const range = document.createRange(); range.selectNodeContents(el); return [...range.getClientRects()].map((r) => ({ text: el.textContent.trim().slice(0, 20), r })); });
     const boxes = [...document.querySelectorAll('#left-panel-stack > [data-panel-id]')].filter((p) => p.getClientRects().length > 0).map((p) => ({ id: p.id, r: p.getBoundingClientRect() }));
     const out = [];
     for (const { text, r } of lines) for (const b of boxes) if (Math.min(r.right, b.r.right) - Math.max(r.left, b.r.left) > 0.5 && Math.min(r.bottom, b.r.bottom) - Math.max(r.top, b.r.top) > 0.5) out.push(`${b.id} over "${text}"`);

@@ -1,7 +1,7 @@
 // The HUD summary's locality tag. The 2026-08-20 QA hunt caught the HUD calling
 // out landmarks on other continents — NEAR SACRE-COEUR (PARIS) 2470KM while
 // parked over Moscow — because the NEAR bound was 2,500 km. These pin the metro
-// bound, both sides of it, and the SECTOR fallback that already worked.
+// bound, both sides of it, and the plain lat/lon fallback that already worked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -26,16 +26,16 @@ test('a landmark under the camera reads NEAR', () => {
   );
 });
 
-test('the field failures now fall through to the SECTOR readout', () => {
+test('the field failures now fall through to the lat/lon readout', () => {
   // Over Moscow, 2,470 km from the nearest catalogued POI.
   assert.equal(
     composeLocalityTag({ ...SACRE_COEUR, distKm: 2470 }, 55.7558, 37.6173),
-    'SECTOR 55.76N 37.62E',
+    '55.76N 37.62E',
   );
   // Over Chicago, 962 km from the Lincoln Memorial.
   assert.equal(
     composeLocalityTag({ ...LINCOLN, distKm: 962 }, 41.8781, -87.6298),
-    'SECTOR 41.88N 87.63W',
+    '41.88N 87.63W',
   );
 });
 
@@ -47,20 +47,18 @@ test('the boundary is pinned on both sides, inclusive at the bound', () => {
   assert.match(just_under, /^NEAR LINCOLN MEMORIAL/);
 
   const just_over = composeLocalityTag({ ...LINCOLN, distKm: NEAR_POI_MAX_KM + 0.1 }, 40, -78);
-  assert.match(just_over, /^SECTOR /, 'one step past the bound falls through');
+  assert.match(just_over, /^40\.00N 78\.00W$/, 'one step past the bound falls through');
 });
 
 test('southern and western hemispheres carry the right suffixes', () => {
   // Rio and Honolulu — the two the fallback already handled correctly in the field.
-  assert.equal(composeLocalityTag(null, -22.9068, -43.1729), 'SECTOR 22.91S 43.17W');
-  assert.equal(composeLocalityTag(null, 21.3069, -157.8583), 'SECTOR 21.31N 157.86W');
+  assert.equal(composeLocalityTag(null, -22.9068, -43.1729), '22.91S 43.17W');
+  assert.equal(composeLocalityTag(null, 21.3069, -157.8583), '21.31N 157.86W');
 });
 
 // The tests above all pass against a hud.js that still computes the tag inline —
 // they only exercise the helper. This pins the PRODUCTION wiring: hud.js must
 // import the helper, call it, and no longer carry the old 2,500 km branch.
-// (hud.js itself cannot be imported here: it pulls in the `mgrs` CommonJS package,
-// which Vite resolves but plain Node cannot import by named export.)
 test('hud.js actually composes its summary through this helper', () => {
   const source = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
   // Boolean probes, not assert.match on the whole file — a failure here should
@@ -89,8 +87,8 @@ test('hud.js actually composes its summary through this helper', () => {
 });
 
 test('a missing or malformed nearest POI never crashes the summary', () => {
-  assert.match(composeLocalityTag(null, 0, 0), /^SECTOR /);
-  assert.match(composeLocalityTag(undefined, 0, 0), /^SECTOR /);
-  assert.match(composeLocalityTag({ ...LINCOLN, distKm: NaN }, 10, 10), /^SECTOR /);
-  assert.match(composeLocalityTag({ ...LINCOLN }, 10, 10), /^SECTOR /);
+  assert.equal(composeLocalityTag(null, 0, 0), '0.00N 0.00E');
+  assert.equal(composeLocalityTag(undefined, 0, 0), '0.00N 0.00E');
+  assert.equal(composeLocalityTag({ ...LINCOLN, distKm: NaN }, 10, 10), '10.00N 10.00E');
+  assert.equal(composeLocalityTag({ ...LINCOLN }, 10, 10), '10.00N 10.00E');
 });
