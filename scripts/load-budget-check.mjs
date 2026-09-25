@@ -117,8 +117,21 @@ async function measureLoad(browser, url, dependencyNames) {
     const page = await context.newPage();
     await page.setViewport({ width: 1440, height: 900 });
     await page.setCacheEnabled(false);
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(`pageerror: ${error.message}`));
+    page.on('console', (message) => { if (message.type() === 'error') pageErrors.push(`console: ${message.text()}`); });
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: READY_TIMEOUT_MS });
-    await page.waitForFunction(() => !!window.__godsEyeView?.styleManager, { timeout: READY_TIMEOUT_MS, polling: 50 });
+    try {
+      await page.waitForFunction(() => !!window.__godsEyeView?.styleManager, { timeout: READY_TIMEOUT_MS, polling: 50 });
+    } catch (error) {
+      // Fail loud: say why the app never became ready, not just that it didn't.
+      const state = await page.evaluate(() => {
+        const gl = document.createElement('canvas').getContext('webgl2');
+        const info = gl?.getExtension('WEBGL_debug_renderer_info');
+        return { webgl2: gl ? gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) : null, app: typeof window.__godsEyeView };
+      }).catch((probeError) => ({ probeError: probeError.message }));
+      throw new Error(`${error.message}\n  page state: ${JSON.stringify(state)}\n  ${pageErrors.slice(0, 8).join('\n  ') || '(no page or console errors)'}`);
+    }
     const entries = await page.evaluate(() => {
       const readyAt = performance.now();
       return performance.getEntriesByType('resource')
