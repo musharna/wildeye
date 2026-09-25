@@ -422,11 +422,12 @@ export class IntelHUD {
    * @returns {string} Formatted DMS string, e.g. `"38°53'23.10"N"`.
    */
   _toDMS(decimal, type) {
-    const abs = Math.abs(decimal);
-    const deg = Math.floor(abs);
-    const minFloat = (abs - deg) * 60;
-    const min = Math.floor(minFloat);
-    const sec = ((minFloat - min) * 60).toFixed(2);
+    // Round ONCE, in hundredths of an arc-second, then split: rounding the seconds on their own after
+    // cutting degrees and minutes printed 134°E as 133°59'60.00"E (seen live 2026-09-25).
+    const total = Math.round(Math.abs(decimal) * 360000);
+    const deg = Math.floor(total / 360000);
+    const min = Math.floor((total % 360000) / 6000);
+    const sec = ((total % 6000) / 100).toFixed(2);
 
     let dir;
     if (type === 'lat') dir = decimal >= 0 ? 'N' : 'S';
