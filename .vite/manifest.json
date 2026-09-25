@@ -1,9 +1,16 @@
 {
+  "_vendor-cesium-COa84Irs.js": {
+    "file": "assets/vendor-cesium-COa84Irs.js",
+    "name": "vendor-cesium"
+  },
   "index.html": {
-    "file": "assets/index-yok3g3_4.js",
+    "file": "assets/index-CnJhLLNh.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
+    "imports": [
+      "_vendor-cesium-COa84Irs.js"
+    ],
     "dynamicImports": [
       "src/data/local_data/neighborhoods/san-francisco.json",
       "src/data/local_data/natural_earth/regions.json",
@@ -21,7 +28,7 @@
     ]
   },
   "src/data/egm96Grid.generated.js": {
-    "file": "assets/egm96Grid.generated-DJj3_6xz.js",
+    "file": "assets/egm96Grid.generated-BvAJVAbN.js",
     "name": "egm96Grid.generated",
     "src": "src/data/egm96Grid.generated.js",
     "isDynamicEntry": true
@@ -35,19 +42,19 @@
     "src": "src/data/local_data/datacenters/datacenters.geojsonl"
   },
   "src/data/local_data/natural_earth/marine.json": {
-    "file": "assets/marine-BJ61ZZ9E.js",
+    "file": "assets/marine-BOD1SOq9.js",
     "name": "marine",
     "src": "src/data/local_data/natural_earth/marine.json",
     "isDynamicEntry": true
   },
   "src/data/local_data/natural_earth/regions.json": {
-    "file": "assets/regions-RPMKg9pq.js",
+    "file": "assets/regions-iO9fN03W.js",
     "name": "regions",
     "src": "src/data/local_data/natural_earth/regions.json",
     "isDynamicEntry": true
   },
   "src/data/local_data/neighborhoods/san-francisco.json": {
-    "file": "assets/san-francisco-B-TUYeaR.js",
+    "file": "assets/san-francisco-MZ170vc-.js",
     "name": "san-francisco",
     "src": "src/data/local_data/neighborhoods/san-francisco.json",
     "isDynamicEntry": true
