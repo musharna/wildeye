@@ -41,8 +41,21 @@ test('the grid edges agree with the source: poles, the antimeridian and its seam
     assert.ok(Number.isFinite(n), `geoidHeight(${lat}, ${lon}) = ${n}`);
     assert.ok(Math.abs(n - meanSeaLevel(lat, lon)) <= MAX_LIMIT_M, `edge (${lat}, ${lon}): ${n} vs ${meanSeaLevel(lat, lon)}`);
   }
-  // Both sides of the antimeridian name one physical meridian.
-  assert.equal(geoidHeight(10, 180), geoidHeight(10, -180));
+});
+
+test('the antimeridian is continuous: approaching ±180° from either side gives one value', async () => {
+  // ±180 itself normalizes to -180 on both sides, so it cannot test the seam.
+  // Just inside each edge reads grid column 720 (lon +180) on the east side and
+  // column 0 (lon -180) on the west, so this fails if the two edge columns disagree.
+  await ensureGeoidReady();
+  const EDGE = 180 - 1e-6;
+  let worst = 0;
+  for (let lat = -89.75; lat <= 89.75; lat += 0.25) {
+    worst = Math.max(worst, Math.abs(geoidHeight(lat, EDGE) - geoidHeight(lat, -EDGE)));
+  }
+  // Positive control: the seam check is not comparing a number to itself.
+  assert.notEqual(geoidHeight(45, EDGE), geoidHeight(45, -EDGE + 0.5));
+  assert.ok(worst < 1e-3, `seam discontinuity ${worst.toFixed(4)} m`);
 });
 
 test('the committed grid module is exactly what the generator produces', () => {
