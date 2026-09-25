@@ -201,7 +201,14 @@ PRESENT = {
     "reported",
     "invasive",
 }  # "Invasive" in the status column (Niue): the species is there
-NOT_PRESENT = {"uncertain", "eradicated", "absent", "on-going eradication", ""}
+NOT_PRESENT = {
+    "uncertain",
+    "eradicated",
+    "absent",
+    "on-going eradication",
+    "",
+    "cryptogenic|uncertain",  # an origin value in the status column (TAAF): the occurrence is not asserted
+}
 INTRODUCED = {
     "alien",
     "introduced",
@@ -213,15 +220,22 @@ INTRODUCED = {
     "native|introduced",
     "alien/native",
     "native/alien",
+    "native|invasive",
 }
 ORIGIN_UNKNOWN = {
     "cryptogenic|uncertain",
     "cryptogenic|uncerain",
     "cryptogenic/uncertain",
+    "cryptogenic|unknown",
     "uncertain",
     "",
 }  # "" = origin not stated
-FLAG_TRUE = {"invasive", "yes", "true"}
+FLAG_TRUE = {
+    "invasive",
+    "yes",
+    "true",
+    "invasive in the north of the island (122).",  # Montserrat: invasive, with where
+}
 FLAG_FALSE = {
     "",
     "null",

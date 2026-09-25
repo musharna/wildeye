@@ -343,6 +343,10 @@ def test_count_list_griis_flag_counts_present_introduced_species_and_their_invas
             ),  # a flag written in the status column: the species is there
             ("10", "Present", ""),  # origin not stated
             ("11", "Present", "Cryptogenic/Uncertain"),
+            # Bulgaria, Montserrat, TAAF (2026-09-25)
+            ("12", "present", "Native|Invasive"),  # native in part, invasive elsewhere: alien there
+            ("13", "present", "Cryptogenic|Unknown"),
+            ("14", "cryptogenic|uncertain", "introduced"),  # an origin value in the status column
         ],
         {
             "1": "Invasive",
@@ -356,15 +360,18 @@ def test_count_list_griis_flag_counts_present_introduced_species_and_their_invas
             "9": "Invasive",
             "10": "Invasive",
             "11": "Null",
+            "12": "Invasive in the north of the island (122).",
+            "13": "Null",
+            "14": "Invasive",
         },
     )
     got = count_list(t)
     assert got["basis"] == "impact"
-    assert got["introduced"] == 6, "1, 2, 3, 7, 8, 9 are present and introduced"
-    assert got["invasive"] == 3, (
-        "1, 2, 9; 'Invasive?' is not a flag, 4/5/6/10 are not present introduced species"
+    assert got["introduced"] == 7, "1, 2, 3, 7, 8, 9, 12 are present and introduced"
+    assert got["invasive"] == 4, (
+        "1, 2, 9, 12; 'Invasive?' is not a flag, 4/5/6/10/14 are not present introduced species"
     )
-    assert got["excluded"] == {"not present": 2, "origin unknown": 3}
+    assert got["excluded"] == {"not present": 3, "origin unknown": 4}
 
 
 def test_count_list_us_riis_layout_reads_the_spread_category():
