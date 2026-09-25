@@ -50,6 +50,14 @@ jobs:
       - name: Build production bundle
         run: npm run build
 
+      # Which files a fresh load fetches before the app is ready, plus exact
+      # vendor bytes (scripts/load-budget-check.mjs). The file set does not
+      # depend on the Node version, so one leg is enough. Chrome comes from the
+      # runner image (PUPPETEER_SKIP_DOWNLOAD skips Puppeteer's own download).
+      - name: Check startup weight
+        if: matrix.node == '24.14.0'
+        run: npm run perf:load
+
   windows-onboarding:
     name: Windows onboarding
     runs-on: windows-latest

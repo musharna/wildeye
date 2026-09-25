@@ -7793,6 +7793,9 @@ export default defineConfig(({ mode }) => {
       // The Cesium engine bundle is inherently large; raise the warning ceiling
       // so the build log isn't dominated by an expected chunk-size notice.
       chunkSizeWarningLimit: 1500,
+      // dist/.vite/manifest.json maps each built file to its source module;
+      // scripts/load-budget-check.mjs keys the startup gate by it.
+      manifest: true,
     },
   };
 });
