@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as Cesium from 'cesium';
 import { tilePixel, decodePixel, formatValue, gibsTileRequest, createTilePixelReader } from './gibsReadout.js';
 
 // Real tables from the live pipeline (fixtures/gibs-readout.json), not hand-written ones: a fixture
@@ -77,4 +78,28 @@ test('the tile reader fetches a tile once, returns the pixel and layer-time-actu
   await assert.rejects(read('bad', 0, 0), /GIBS tile HTTP 404/);
   await assert.rejects(read('bad', 0, 0), /GIBS tile HTTP 404/);
   assert.equal(calls.filter((u) => u === 'bad').length, 2);
+});
+
+test('tile and pixel agree with Cesium\'s own web-mercator tiling, including both latitude limits', () => {
+  // qa-known-answer re-typed this same formula, so a shared mistake would read land cover and night lights
+  // at the same wrong pixel and still pass; Cesium's WebMercatorTilingScheme is an independent reference.
+  // The pixel is the tile index at zoom z + 8 (256 = 2^8 pixels a tile).
+  const scheme = new Cesium.WebMercatorTilingScheme();
+  const LIM = 85.0511287798;
+  // the true limit is atan(sinh(π)) = 85.05112877980659°: the truncated constant called a sliver of the map
+  // "outside", and at the exact limit the row index is 2^z, one past the last tile
+  const TRUE_LIM = (Math.atan(Math.sinh(Math.PI)) * 180) / Math.PI;
+  const lats = [LIM, -LIM, TRUE_LIM, -TRUE_LIM, 84.9, -84.9, 41.88, -3.1, 0, 0.0001, -0.0001, 60.123456];
+  const lons = [-180, -179.999, -87.63, 0, 31.24, 179.999];
+  let checked = 0;
+  for (const z of [0, 3, 7, 8, 9]) for (const lat of lats) for (const lon of lons) {
+    const c = Cesium.Cartographic.fromDegrees(lon, lat);
+    const t = scheme.positionToTileXY(c, z);
+    const p = scheme.positionToTileXY(c, z + 8);
+    const got = tilePixel(lat, lon, z);
+    assert.ok(got, `null at ${lat},${lon} z${z}`);
+    assert.deepEqual([got.x, got.y, got.px, got.py], [t.x, t.y, p.x - t.x * 256, p.y - t.y * 256], `${lat},${lon} z${z}`);
+    checked += 1;
+  }
+  assert.equal(checked, 5 * lats.length * lons.length);
 });

@@ -41,6 +41,8 @@ try {
   page.on('pageerror', (e) => pageErrors.push(String(e?.message || e).slice(0, 160)));
   page.on('console', (m) => { if (m.type() === 'error' && /gibs|Data|what-lives-here/.test(m.text())) consoleErrors.push(m.text().slice(0, 200)); });
   await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
+  // QA_SELFTEST_CONSOLE=1 logs one readout-shaped console error, so the no-console-errors check can be seen to fail
+  if (process.env.QA_SELFTEST_CONSOLE) await page.evaluate(() => console.error('[Data:gibs-selftest] injected by QA_SELFTEST_CONSOLE'));
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.styleManager, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
   // Boot flies the camera and shows a first-run launcher over the centre (the qa-gibs / qa-compare pattern).
@@ -151,6 +153,9 @@ try {
 } finally {
   await browser.close();
 }
+// The readout logs every failure it swallows (tile HTTP errors, unknown colours, date mismatches); until
+// 2026-09-24 these were printed in the summary and never failed the run.
+report('no-console-errors', consoleErrors.length === 0 && pageErrors.length === 0, { consoleErrors: consoleErrors.slice(0, 8), pageErrors: pageErrors.slice(0, 5) });
 const failed = results.filter((r) => !r.ok).length;
 console.log(JSON.stringify({ summary: true, checks: results.length, failed, pageErrors: pageErrors.slice(0, 5), consoleErrors: consoleErrors.slice(0, 8) }));
 process.exit(failed ? 1 : 0);

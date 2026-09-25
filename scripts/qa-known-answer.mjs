@@ -66,12 +66,16 @@ try {
       })());
       return tiles.get(url);
     };
+    // This re-types src/data/gibsReadout.js tilePixel (a page script cannot import it); that function is
+    // checked against Cesium's WebMercatorTilingScheme in gibsReadout.test.mjs, so a mistake shared by
+    // both copies cannot pass there. Keep the two identical.
     window.__qaBm = { date, async lum(lat, lon) {
       const z = entry.maximumLevel, n = 2 ** z;
       const fx = ((lon + 180) / 360) * n, fy = ((1 - Math.asinh(Math.tan((lat * Math.PI) / 180)) / Math.PI) / 2) * n;
-      const x = Math.floor(fx), y = Math.floor(fy);
+      const gx = Math.min(Math.floor(fx * 256), n * 256 - 1), gy = Math.min(Math.floor(fy * 256), n * 256 - 1);
+      const x = Math.floor(gx / 256), y = Math.floor(gy / 256);
       const t = await tile(z, x, y);
-      const i = (Math.floor((fy - y) * 256) * t.w + Math.floor((fx - x) * 256)) * 4;
+      const i = ((gy - y * 256) * t.w + (gx - x * 256)) * 4;
       return 0.2126 * t.data[i] + 0.7152 * t.data[i + 1] + 0.0722 * t.data[i + 2];
     } };
   });

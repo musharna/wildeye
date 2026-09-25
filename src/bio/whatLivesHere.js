@@ -77,12 +77,13 @@ export function areaOutlinePrimitive({ lat, lon, radiusKm }) {
 
 /** One readout row (gibsLayer.readoutAt) as a card line, each value with its own date (grill A7). */
 export function layerRowText(row) {
+  if (row.status === 'off') return `${row.icon} ${row.name}: turned off before it was read`;
   const head = `${row.icon} ${row.name}: `;
   switch (row.status) {
     case 'value':
     case 'class': return `${head}${row.text} · ${row.date}`;
     case 'nodata': return `${head}no data here on ${row.date}`;
-    case 'gap': return `${head}no data at or before ${String(row.observed ?? '').slice(0, 10)}`;
+    case 'gap': return row.observed ? `${head}no data at or before ${String(row.observed).slice(0, 10)}` : `${head}no date served yet`;
     case 'viewonly': return `${head}view only (no values)`;
     case 'outside': return `${head}outside the map`;
     default: return `${head}⚠ ${row.error ?? 'readout failed'}`;
@@ -154,8 +155,17 @@ export function createWhatLivesHere({
     // and a newer search or a cancel (the aborted signal) drops the late ones.
     let layerRows = [];
     const withLayers = (content) => (readLayers ? { ...content, layers: layerRows } : content);
+    let items = [];
     if (readLayers) {
-      const items = readLayers({ lat, lon });
+      // The layer rows are an addition to the card: listing them failing must not end the species search.
+      try {
+        items = readLayers({ lat, lon });
+      } catch (error) {
+        console.error('[what-lives-here] could not list the map layers to read', { lat, lon, error });
+        layerRows = [`⚠ map layers could not be read: ${error?.message || String(error)}`];
+      }
+    }
+    if (items.length) {
       layerRows = items.map((item) => `${item.icon} ${item.name}: reading…`);
       items.forEach((item, i) => {
         Promise.resolve(item.result)
@@ -163,6 +173,8 @@ export function createWhatLivesHere({
             console.error('[what-lives-here] layer readout failed', { lat, lon, layer: item.name, error });
             return { icon: item.icon, name: item.name, status: 'error', error: error?.message || String(error) };
           })
+          // readoutAt answers null for a layer turned off after it was listed
+          .then((row) => row ?? { icon: item.icon, name: item.name, status: 'off' })
           .then((row) => {
             if (signal.aborted) return;
             layerRows = layerRows.map((text, j) => (j === i ? layerRowText(row) : text));
