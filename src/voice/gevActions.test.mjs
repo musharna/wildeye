@@ -3020,3 +3020,17 @@ test('front5: 0.99 km due EAST is the subject, though a degree box rejects it', 
     assert.equal(result.window.centeredOn, 'N546PC');
   });
 });
+
+test('layer aliases: a phrase names one layer — a duplicate key throws instead of silently keeping the later entry', async () => {
+  const { aliasMap, normalizeLayerId } = await import('./gevActions.js');
+  assert.throws(() => aliasMap([['whales', 'cetaceans'], ['whales', 'occurrences']]), /duplicate alias "whales".*cetaceans.*occurrences/);
+  assert.equal(aliasMap([['a', 1], ['b', 2]]).get('b'), 2, 'positive control: distinct keys build a Map');
+  // Each of these was a duplicate whose later (older) entry won, so the layer added with the phrase never heard it (2026-09-25).
+  assert.equal(normalizeLayerId('forest loss'), 'hansen-loss');
+  assert.equal(normalizeLayerId('Tree cover loss'), 'hansen-loss');
+  assert.equal(normalizeLayerId('h5n1'), 'h5n1');
+  assert.equal(normalizeLayerId('whales'), 'cetaceans');
+  assert.equal(normalizeLayerId('deforestation'), 'gfw');
+  assert.equal(normalizeLayerId('mangroves'), 'gmw');
+  assert.equal(normalizeLayerId('global mangrove watch'), 'gmw');
+});
