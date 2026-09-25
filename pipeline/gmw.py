@@ -138,6 +138,31 @@ def build(stats: dict, units: dict) -> tuple[list[dict], list[dict]]:
     return feats, missing
 
 
+SEED_N, SEED_TOL, SEED_MIN_AREA = 20, 0.25, 0.1
+
+
+def seed_collection(gj: dict, n: int = SEED_N, tol: float = SEED_TOL, min_area: float = SEED_MIN_AREA) -> dict:
+    """The committed fresh-clone seed (< 100 KB): the `n` countries with the most mangrove in the last year,
+    shapes simplified (pipeline.ecoregions.simplify_geometry); every value kept as is."""
+    from .ecoregions import simplify_geometry
+
+    feats = sorted(gj["features"], key=lambda f: -f["properties"]["ha"][-1])
+    keep = feats[:n]
+    total = sum(f["properties"]["ha"][-1] for f in feats)
+    share = sum(f["properties"]["ha"][-1] for f in keep) / total * 100 if total else 0.0
+    last = gj["years"][1]
+    return {
+        **gj,
+        "source": {
+            **gj["source"],
+            "subsample": f"seed: {len(keep)} of {len(feats)} countries with the most mangrove in {last} "
+            f"({share:.1f}% of {last} extent), shapes simplified at {tol} deg with parts under {min_area} square degrees "
+            "dropped; run pipeline/run_gmw.sh for every country",
+        },
+        "features": [{**f, "geometry": simplify_geometry(f["geometry"], tol, min_area)} for f in keep],
+    }
+
+
 def _fetch_bytes(url: str) -> bytes:
     return urllib.request.urlopen(
         urllib.request.Request(url, headers={"User-Agent": UA}), timeout=300
@@ -161,6 +186,7 @@ def main(argv=None, *, fetch_bytes=_fetch_bytes, md5=XLSX_MD5):
             os.environ.get("WILDEYE_CACHE", Path.home() / ".cache" / "wildeye")
         ),
     )
+    ap.add_argument("--seed-out", type=Path, default=None, help="also write the < 100 KB fresh-clone seed here")
     a = ap.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
@@ -183,9 +209,7 @@ def main(argv=None, *, fetch_bytes=_fetch_bytes, md5=XLSX_MD5):
     feats, missing = build(stats, units)
     if not feats:
         raise SystemExit("no mangrove countries matched a shape")
-    write_atomic(
-        a.out,
-        {
+    gj = {
             "type": "FeatureCollection",
             "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "years": [YEARS[0], YEARS[-1]],
@@ -202,8 +226,11 @@ def main(argv=None, *, fetch_bytes=_fetch_bytes, md5=XLSX_MD5):
             },
             "missing": missing,
             "features": feats,
-        },
-    )
+        }
+    write_atomic(a.out, gj)
+    if a.seed_out:
+        write_atomic(a.seed_out, seed_collection(gj))
+        log.info("wrote seed %s: %d bytes", a.seed_out, a.seed_out.stat().st_size)
     log.info(
         "wrote %s: %d countries, %d without a shape (%.0f s)",
         a.out,

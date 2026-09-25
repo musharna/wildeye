@@ -144,6 +144,19 @@ archive/history handling as the PNG products. Measured 2026-09-12: 19 s + 10 s. 
 one Copernicus requires ("Generated using E.U. Copernicus Marine Service Information") plus the
 product DOI 10.48670/moi-00015.
 
+## Mangrove extent by country: Global Mangrove Watch (polygon contract)
+```bash
+python3 -m pipeline.gmw --out public/data/gmw.geojson                  # cron 1st of month 06:10
+python3 -m pipeline.gmw --out /tmp/g.geojson --seed-out public/data/seed/gmw.geojson
+```
+GMW v4.1.12 country statistics (Zenodo record 21346457, CC BY 4.0): extent in hectares per year
+1985–2025 with lower/upper 95% bounds, one sheet each; the xlsx is md5-checked against the record
+and the run refuses a mismatch before writing. Shapes: Natural Earth 50m admin-0 MAP UNITS (split
+overseas territories such as French Guiana from France), ISO3 from `ISO_A3` or `ADM0_A3` when -99.
+4 small territories have no map unit (Europa, Glorioso, Bonaire, Chagos; 0.006% of extent) and are
+written to `missing` and named in the layer's legend. Measured 2026-09-25: 125 countries, 745 KB, 7 s.
+The seed is the 20 countries with the most mangrove (83% of 2025 extent), shapes simplified.
+
 ## Deforestation alerts: Global Forest Watch (polygon contract)
 ```bash
 python3 -m pipeline.gfw --out public/data/gfw.geojson              # cron daily 07:40 (GFW versions the table daily)
@@ -279,6 +292,7 @@ Licences and caveats per source are in `DATA_SOURCES.md`; `node scripts/qa-gap-l
 | `h5n1` | `pipeline.h5n1` | Mon 06:55 | Nextstrain open builds (USDA/GenBank), US only; GISAID builds declined | none |
 | `fires` | `pipeline.fires` | 01/07/13/19:15 | FIRMS VIIRS global 7-day CSVs, 0.5° × 6 h | none |
 | `ecoregions` | `pipeline.ecoregions` | 1st of month 06:00 | RESOLVE 2017 zip cached in `~/.cache/wildeye` | none |
+| `gmw` | `pipeline.gmw` | 1st of month 06:10 | Global Mangrove Watch v4.1.12 country xlsx (Zenodo, md5-checked) + Natural Earth 50m map units, cached in `~/.cache/wildeye` | none |
 | `rivers` | `pipeline.rivers` | daily 06:45 | USGS OGC API `daily` (not legacy WaterServices) | optional `USGS_WATER_API_KEY` |
 | `fishing` (not wired) | `pipeline.fishing` | — | GFW 4Wings effort | `GFW_FISHING_TOKEN` (not `GFW_API_KEY`) |
 | `iucn` (badge, dormant) | `pipeline.iucn` | — | IUCN Red List v4 | `IUCN_TOKEN` |

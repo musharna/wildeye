@@ -4,7 +4,7 @@ import json
 import openpyxl
 import pytest
 
-from pipeline.gmw import YEARS, read_stats, load_units, build, main
+from pipeline.gmw import YEARS, read_stats, load_units, build, main, seed_collection
 
 SQ = [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]
 SQ2 = [[[5, 5], [6, 5], [6, 6], [5, 6], [5, 5]]]
@@ -221,3 +221,22 @@ def test_main_refuses_a_download_whose_checksum_does_not_match(tmp_path):
             md5="0" * 32,
         )
     assert not (tmp_path / "bad.geojson").exists()
+
+
+def test_seed_collection_keeps_the_largest_countries_simplified_and_says_so():
+    def feat(iso, last, x):
+        ring = [[x, 0], [x + 0.5, 0.001], [x + 1, 0], [x + 1, 1], [x, 1], [x, 0]]
+        speck = [[x + 3, 3], [x + 3.01, 3], [x + 3.01, 3.01], [x + 3, 3]]
+        return {"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[ring], [speck]]},
+                "properties": {"iso": iso, "name": iso, "ha": [1.0] * 40 + [last], "lo": [0.5] * 41, "hi": [2.0] * 41}}
+
+    gj = {"type": "FeatureCollection", "years": [1985, 2025], "source": {"name": "GMW"}, "missing": [],
+          "features": [feat("SML", 10.0, 0), feat("BIG", 300.0, 10), feat("MID", 90.0, 20)]}
+    s = seed_collection(gj, n=2, tol=0.1, min_area=0.05)
+    assert [f["properties"]["iso"] for f in s["features"]] == ["BIG", "MID"]
+    g = s["features"][0]["geometry"]
+    assert g["type"] == "Polygon" and len(g["coordinates"][0]) == 5, "speck dropped, near-collinear vertex simplified"
+    assert s["features"][0]["properties"] == gj["features"][1]["properties"], "values are never subsampled"
+    assert "seed: 2 of 3 countries" in s["source"]["subsample"] and "97.5% of 2025 extent" in s["source"]["subsample"]
+    assert gj["features"][1]["geometry"]["type"] == "MultiPolygon", "input left untouched"
+    assert s["years"] == [1985, 2025] and s["missing"] == []
