@@ -247,7 +247,7 @@ _CATEGORY = re.compile(r"\(category ([A-E]\d?)\)$")
 SPREAD_INVASIVE = {
     "D2",
     "E",
-}  # Blackburn et al. 2011: D2 invasive, E widespread invasive (US-RIIS)
+}  # Darwin Core degreeOfEstablishment (TDWG, after Blackburn et al. 2011, doi:10.1016/j.tree.2011.03.023): D2 invasive, E widespread invasive
 
 
 def _norm(v) -> str:
