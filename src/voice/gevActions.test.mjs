@@ -3034,3 +3034,10 @@ test('layer aliases: a phrase names one layer — a duplicate key throws instead
   assert.equal(normalizeLayerId('mangroves'), 'gmw');
   assert.equal(normalizeLayerId('global mangrove watch'), 'gmw');
 });
+
+test('GRIIS voice aliases (A33) reach the griis layer', async () => {
+  const { normalizeLayerId } = await import('./gevActions.js');
+  for (const phrase of ['invasive species', 'Introduced species', 'griis', 'GRIIS'])
+    assert.equal(normalizeLayerId(phrase), 'griis', phrase);
+  assert.equal(normalizeLayerId('mangroves'), 'gmw', 'positive control: a neighbouring alias is untouched');
+});

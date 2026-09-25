@@ -81,3 +81,5 @@ analysis/out/
 analysis/out_season/
 public/data/gmw.geojson
 pipeline/cron_gmw.log
+public/data/griis.geojson
+pipeline/cron_griis.log

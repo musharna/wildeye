@@ -1,0 +1,1703 @@
+{
+ "0046fb5b-505f-49f4-87f7-6069b0fe31d4": {
+  "area": "Greenland",
+  "units": [
+   "GRL"
+  ]
+ },
+ "0103d6f8-1f34-4f5d-a456-93dbcfe9f615": {
+  "area": "Wallis and Futuna",
+  "units": [
+   "WLF"
+  ]
+ },
+ "016c16c3-d907-4c88-97dd-97ad62c8130e": {
+  "area": "Andorra",
+  "units": [
+   "AND"
+  ]
+ },
+ "0196d958-c097-4cf4-a39a-00b3bbd5d486": {
+  "area": "Sao Tome and Principe",
+  "units": [
+   "STP"
+  ]
+ },
+ "01f0104e-a40a-4b9b-a1c2-bd21a37509e7": {
+  "area": "Erikub Atoll, Marshall Islands",
+  "units": []
+ },
+ "02245864-1814-4c93-a38b-0b72c1c96edc": {
+  "area": "Tonga",
+  "units": [
+   "TON"
+  ]
+ },
+ "02dbfd0d-3cb1-46bf-94b1-72e5a8bfb181": {
+  "area": "Mozambique",
+  "units": [
+   "MOZ"
+  ]
+ },
+ "0367838c-18e9-459b-a45e-54e08982c2ca": {
+  "area": "Sierra Leone",
+  "units": [
+   "SLE"
+  ]
+ },
+ "04e4514b-76c0-48c6-8ad0-a78e1ce17415": {
+  "area": "Mauritania",
+  "units": [
+   "MRT"
+  ]
+ },
+ "05539304-10a1-4ce8-a01f-693fbacf6ceb": {
+  "area": "Mwali (Mohéli), Comoros",
+  "units": []
+ },
+ "0596023f-dc69-45d4-b300-b7c08f1ebf93": {
+  "area": "El Hierro, Islas Canarias, Spain",
+  "units": []
+ },
+ "0620579e-9ee4-453a-be7d-ce14149aec76": {
+  "area": "Libya",
+  "units": [
+   "LBY"
+  ]
+ },
+ "06d566fc-ac40-4283-bac4-7b4198204259": {
+  "area": "Yemen",
+  "units": [
+   "YEM"
+  ]
+ },
+ "089ede6e-6496-4638-915e-f28f016c2f89": {
+  "area": "Russian Federation",
+  "units": [
+   "RUS"
+  ]
+ },
+ "09d0256f-a986-4fee-9252-819ff12069e1": {
+  "area": "Pohnpei, Federated States of Micronesia",
+  "units": []
+ },
+ "0b8ba0b8-c071-47db-85bc-3238eae7e79d": {
+  "area": "Dominican Republic",
+  "units": [
+   "DOM"
+  ]
+ },
+ "0c0ac27f-c7cb-4a1a-b5d7-6d9a386b2c53": {
+  "area": "Myanmar",
+  "units": [
+   "MMR"
+  ]
+ },
+ "0c26bdd0-7641-42e5-a7de-d62217b28953": {
+  "area": "Ghana",
+  "units": [
+   "GHA"
+  ]
+ },
+ "0cc3426f-dc3c-4de2-996c-87167ebaea9e": {
+  "area": "Anguilla",
+  "units": [
+   "AIA"
+  ]
+ },
+ "0d245352-1c26-4f7c-b3ff-3f6ecc4a57c3": {
+  "area": "Guadeloupe",
+  "units": [
+   "GLP"
+  ]
+ },
+ "0e80523c-2ab2-4ca2-acb3-7bc531cd2300": {
+  "area": "Mili Atoll, Marshall Islands",
+  "units": []
+ },
+ "100b176f-c442-4cd7-85c7-6503ee216db7": {
+  "area": "Lebanon",
+  "units": [
+   "LBN"
+  ]
+ },
+ "104438d0-40fb-44e5-bb7c-062cd3995d27": {
+  "area": "Paraguay",
+  "units": [
+   "PRY"
+  ]
+ },
+ "1100c043-55c0-433d-b2f3-60747ab9de11": {
+  "area": "Austria",
+  "units": [
+   "AUT"
+  ]
+ },
+ "11128400-5fe0-4376-adf0-bbb18aad70d1": {
+  "area": "Qatar",
+  "units": [
+   "QAT"
+  ]
+ },
+ "11891f2f-3cd7-4d13-a340-8041295af072": {
+  "area": "Chuuk, Federated States of Micronesia",
+  "units": []
+ },
+ "11d0c404-1d1c-4a80-93a4-73d41b9b6286": {
+  "area": "Ujae Atoll, Marshall Islands",
+  "units": []
+ },
+ "11f97e2c-f887-4af8-8e13-861cbab23915": {
+  "area": "Senegal",
+  "units": [
+   "SEN"
+  ]
+ },
+ "1203ae3c-5ab1-4232-a083-43d6f89179a2": {
+  "area": "Venezuela",
+  "units": [
+   "VEN"
+  ]
+ },
+ "1288ee7d-d67c-4e23-8d95-409973067383": {
+  "area": "United Kingdom",
+  "units": [
+   "ENG",
+   "SCT",
+   "WLS",
+   "NIR"
+  ]
+ },
+ "1353de13-65e6-4e97-ab77-8b1830498152": {
+  "area": "Slovakia",
+  "units": [
+   "SVK"
+  ]
+ },
+ "137a287c-911c-40b5-8051-6dc86b110bcc": {
+  "area": "Greece",
+  "units": [
+   "GRC"
+  ]
+ },
+ "13c7e891-a257-484a-b1e4-bbc501fecf43": {
+  "area": "Likiep Atoll, Marshall Islands",
+  "units": []
+ },
+ "142d00e3-09c2-4556-8100-c869ec55c490": {
+  "area": "Guinea",
+  "units": [
+   "GIN"
+  ]
+ },
+ "15147db1-27c3-49b5-9c69-c78d55a4b8ff": {
+  "area": "Australia",
+  "units": [
+   "AUS",
+   "ATC"
+  ]
+ },
+ "15a62570-58d3-4423-97d0-c8159318db07": {
+  "area": "Trinidad and Tobago",
+  "units": [
+   "TTO"
+  ]
+ },
+ "161b4964-f1ff-461a-ab82-970c61f90b19": {
+  "area": "Iran",
+  "units": [
+   "IRN"
+  ]
+ },
+ "1638ae64-d657-4aca-b970-50f469fe81aa": {
+  "area": "State of Palestine",
+  "units": [
+   "GAZ",
+   "WEB"
+  ]
+ },
+ "168568e7-eb5f-4ef6-8c59-f73ceaf57e91": {
+  "area": "Colombia",
+  "units": [
+   "COL"
+  ]
+ },
+ "170628a2-26c6-49e4-8f73-13c282163298": {
+  "area": "Lesotho",
+  "units": [
+   "LSO"
+  ]
+ },
+ "19c4f3c3-597d-4ef5-adaa-fc09e2b70561": {
+  "area": "Saint Martin (French part)",
+  "units": [
+   "MAF"
+  ]
+ },
+ "1a98ef74-885b-403b-8337-e530493c8cc2": {
+  "area": "Botswana",
+  "units": [
+   "BWA"
+  ]
+ },
+ "1aac3463-39ee-4a81-81f0-0a5718b218f3": {
+  "area": "Moldova",
+  "units": [
+   "MDA"
+  ]
+ },
+ "1b1f1153-f54e-418f-b9c8-3f86a2f680b4": {
+  "area": "Philippines",
+  "units": [
+   "PHL"
+  ]
+ },
+ "1df9467e-0c60-4e5a-a7b0-2b60bd6648ed": {
+  "area": "Ecuador",
+  "units": [
+   "ECU"
+  ]
+ },
+ "1e049ac8-c0af-4ffe-aa7e-48a443c94635": {
+  "area": "Nigeria",
+  "units": [
+   "NGA"
+  ]
+ },
+ "2001dd74-2069-43cf-95e4-1f9b39238a1b": {
+  "area": "Jamaica",
+  "units": [
+   "JAM"
+  ]
+ },
+ "20ec7a58-e20f-451b-9a00-4edc25d588f3": {
+  "area": "Bangladesh",
+  "units": [
+   "BGD"
+  ]
+ },
+ "21cf83b3-fec6-4c42-95bc-b8555a991bc3": {
+  "area": "Brazil",
+  "units": [
+   "BRA"
+  ]
+ },
+ "23ab48b2-3732-466d-b318-1ee1ef789d85": {
+  "area": "Guyana",
+  "units": [
+   "GUY"
+  ]
+ },
+ "24f17577-c3b9-4bc5-be8f-2f902b25cbbb": {
+  "area": "Saint Lucia",
+  "units": [
+   "LCA"
+  ]
+ },
+ "250aa99d-b510-4f89-a68a-0a463ab7c530": {
+  "area": "Poland",
+  "units": [
+   "POL"
+  ]
+ },
+ "278c9199-be97-4fd0-9c6c-6c46c4e2369e": {
+  "area": "Ireland",
+  "units": [
+   "IRL"
+  ]
+ },
+ "27b457b5-198a-4d84-b1a8-d4c5b3f0ce2f": {
+  "area": "Solomon Islands",
+  "units": [
+   "SLB"
+  ]
+ },
+ "28f540aa-d383-4673-a780-66b07142b7e8": {
+  "area": "Jabat Island, Marshall Islands",
+  "units": []
+ },
+ "29d2d5a6-db22-4abd-b784-9ab2f9757c3c": {
+  "area": "Socotra Archipelago, Yemen",
+  "units": []
+ },
+ "2a25bba9-eb59-461e-b458-a4a609b5154e": {
+  "area": "Galápagos Islands, Ecuador",
+  "units": []
+ },
+ "2a281675-c184-4d54-a47e-5d3a7ec6653f": {
+  "area": "Germany",
+  "units": [
+   "DEU"
+  ]
+ },
+ "2e76af52-48a9-4b89-81b8-441860dbed9e": {
+  "area": "Kiribati",
+  "units": [
+   "KIR"
+  ]
+ },
+ "2f7008d1-a69e-4bed-b947-92b7c006aa4e": {
+  "area": "North Sea",
+  "units": []
+ },
+ "2f7ea7d1-a73f-46f6-b790-7339126a999f": {
+  "area": "Cyprus",
+  "units": [
+   "CYN",
+   "CYP"
+  ]
+ },
+ "309cbe80-0be8-4196-a3d0-93f338e7cc4e": {
+  "area": "British Indian Ocean Territory",
+  "units": [
+   "IOT"
+  ]
+ },
+ "32ad19ed-6b89-447a-9242-795c0897f345": {
+  "area": "United States (Contiguous)",
+  "units": [
+   "USA-CONT"
+  ]
+ },
+ "337e0ed1-e829-476c-9dfa-9a54ea9af1fd": {
+  "area": "Uruguay",
+  "units": [
+   "URY"
+  ]
+ },
+ "34611cd2-6c04-4525-92f3-ee550221f916": {
+  "area": "Grand Cayman, Cayman Islands",
+  "units": []
+ },
+ "346daa13-6677-4f13-a401-7daafec50315": {
+  "area": "Central African Republic",
+  "units": [
+   "CAF"
+  ]
+ },
+ "34cd8707-e84d-40a6-82bc-75c1dbf8aa28": {
+  "area": "Maloelap Atoll, Marshall Islands",
+  "units": []
+ },
+ "3826508e-9461-42ab-b3c9-a327efa57a23": {
+  "area": "Uganda",
+  "units": [
+   "UGA"
+  ]
+ },
+ "3840e95d-a55d-4372-a924-b1ff34b856d0": {
+  "area": "Estonia",
+  "units": [
+   "EST"
+  ]
+ },
+ "38de3b7a-5af3-4b6f-a1c5-4c0aa6abf010": {
+  "area": "Norway",
+  "units": [
+   "NOR",
+   "NJM"
+  ]
+ },
+ "3c188f76-6053-4747-b6e6-45484f112a20": {
+  "area": "Kosrae, Federated States of Micronesia",
+  "units": []
+ },
+ "3cabcf37-db13-4dc1-9bf3-e6f3fbfbbe23": {
+  "area": "South Africa",
+  "units": [
+   "ZAF"
+  ]
+ },
+ "3d2aae09-7b89-45f1-a339-c7019862d803": {
+  "area": "Morocco",
+  "units": [
+   "MAR"
+  ]
+ },
+ "3e02c926-84ec-47be-a8a0-f5df0f404a28": {
+  "area": "Wotje Atoll, Marshall Islands",
+  "units": []
+ },
+ "3e4a9e27-157e-41e6-8ffd-2ad5b8b34fed": {
+  "area": "Brunei Darussalam",
+  "units": [
+   "BRN"
+  ]
+ },
+ "40b6dcac-cd25-4d2b-bf00-36bc9314ab9a": {
+  "area": "Aruba",
+  "units": [
+   "ABW"
+  ]
+ },
+ "423c220b-b6e7-4645-9c12-f60b07a1eb0d": {
+  "area": "Guatemala",
+  "units": [
+   "GTM"
+  ]
+ },
+ "42a0b82e-4ab4-48ae-85b9-887bd733b872": {
+  "area": "Turks and Caicos Islands",
+  "units": [
+   "TCA"
+  ]
+ },
+ "42e9b7bc-81d7-41d7-9508-1b06a688f062": {
+  "area": "Czechia",
+  "units": [
+   "CZE"
+  ]
+ },
+ "43fdafb4-67ff-43b4-92d0-01c7f938be0f": {
+  "area": "South Georgia and the South Sandwich Islands",
+  "units": [
+   "SGS"
+  ]
+ },
+ "448aabf8-1a3b-4f89-8863-0739d04997f6": {
+  "area": "Namu Atoll, Marshall Islands",
+  "units": []
+ },
+ "454c926c-d7dc-43e1-ba66-87990b1cefe1": {
+  "area": "Saint Pierre and Miquelon",
+  "units": [
+   "SPM"
+  ]
+ },
+ "45760a8e-818e-4fe9-9537-c069500b09ea": {
+  "area": "Gran Canaria, Islas Canarias, Spain",
+  "units": []
+ },
+ "4591953b-5f25-4d12-bae3-0aaded050618": {
+  "area": "Island Niulakita, Niutao - Tuvalu",
+  "units": []
+ },
+ "46689e23-c7bc-45d1-8cb6-29211cd1ae46": {
+  "area": "Fiji",
+  "units": [
+   "FJI"
+  ]
+ },
+ "466a1a11-abc8-46d0-8edf-e8f2f9743a67": {
+  "area": "Kazakhstan",
+  "units": [
+   "KAZ"
+  ]
+ },
+ "46d612a6-90b3-4f50-8b9a-a290d1780b76": {
+  "area": "Timor-Leste",
+  "units": [
+   "TLS"
+  ]
+ },
+ "46dfe0f7-0121-494b-97ba-88017948efa5": {
+  "area": "Rwanda",
+  "units": [
+   "RWA"
+  ]
+ },
+ "471fa55a-3d00-4bde-acb1-3b118248f50d": {
+  "area": "Costa Rica",
+  "units": [
+   "CRI"
+  ]
+ },
+ "47937586-eb88-4ec2-bba9-6300399bd134": {
+  "area": "Aur Atoll, Marshall Islands",
+  "units": []
+ },
+ "47b078e6-3e1e-49fe-ac05-1e9e41706804": {
+  "area": "Namdrik Atoll, Marshall Islands",
+  "units": []
+ },
+ "483aece9-a70d-4b29-acbc-2358c1595d30": {
+  "area": "Reunion",
+  "units": [
+   "REU"
+  ]
+ },
+ "491237d0-ea65-44e9-b8e5-9cdccf8dfc23": {
+  "area": "Gabon",
+  "units": [
+   "GAB"
+  ]
+ },
+ "497fa25f-6a32-4a2a-8f42-d01d8a0b7c22": {
+  "area": "Sovereign Base Areas of Cyprus, Cyprus",
+  "units": []
+ },
+ "498fc188-a018-4133-808c-6302e80c68b9": {
+  "area": "Uzbekistan",
+  "units": [
+   "UZB"
+  ]
+ },
+ "4a5c1429-3f25-4b2e-8ab6-d281c2c3df49": {
+  "area": "Algeria",
+  "units": [
+   "DZA"
+  ]
+ },
+ "4c575729-705c-47b8-adad-f1f2410395aa": {
+  "area": "Cabo Verde",
+  "units": [
+   "CPV"
+  ]
+ },
+ "4d57dd28-77f1-46c9-8054-2c92329eefbe": {
+  "area": "Yap, Federated States of Micronesia",
+  "units": []
+ },
+ "4eaf645b-5116-4eeb-bc48-29d5ffa5461e": {
+  "area": "Grenada",
+  "units": [
+   "GRD"
+  ]
+ },
+ "506e844e-5d60-4be5-a5a0-59e822a5f477": {
+  "area": "Albania",
+  "units": [
+   "ALB"
+  ]
+ },
+ "513952e5-a510-4a71-85b2-bc5581c93b47": {
+  "area": "Saba, Bonaire, Sint Eustatius and Saba",
+  "units": []
+ },
+ "5149ebfa-3873-4b11-8acb-3940303c793f": {
+  "area": "Burundi",
+  "units": [
+   "BDI"
+  ]
+ },
+ "51f5af06-7176-4ec1-b86e-776d11bc49c8": {
+  "area": "Marshall Islands",
+  "units": [
+   "MHL"
+  ]
+ },
+ "52ac9be8-150d-42a9-a480-65d023c51b76": {
+  "area": "Ethiopia",
+  "units": [
+   "ETH"
+  ]
+ },
+ "543c8dbe-d386-4f87-8125-3a0ebd7784a4": {
+  "area": "Vietnam",
+  "units": [
+   "VNM"
+  ]
+ },
+ "54cee6f0-1e40-4e12-9191-16331c1b61ec": {
+  "area": "Zambia",
+  "units": [
+   "ZMB"
+  ]
+ },
+ "56ca4807-3e5d-4637-9add-8692fe14643d": {
+  "area": "Wotho Atoll, Marshall Islands",
+  "units": []
+ },
+ "5a49f00b-4a4b-418b-90c1-9b986be36a75": {
+  "area": "Namdrik Atoll Ramsar site, Marshall Islands",
+  "units": []
+ },
+ "5aa5f29e-532e-4ae5-81c0-f8a9eb4dcaf2": {
+  "area": "Peru",
+  "units": [
+   "PER"
+  ]
+ },
+ "5c5a6e45-d510-45ed-b7bf-6d0624fac056": {
+  "area": "Japan",
+  "units": [
+   "JPN"
+  ]
+ },
+ "5c648b65-631c-4978-9d4e-a3e6f93663f2": {
+  "area": "Eswatini (Swaziland)",
+  "units": [
+   "SWZ"
+  ]
+ },
+ "5dc177e0-4651-4ea1-8133-3687fffc963c": {
+  "area": "Cambodia",
+  "units": [
+   "KHM"
+  ]
+ },
+ "5f4edb1f-5624-4066-8e83-5f3b09de87eb": {
+  "area": "Switzerland",
+  "units": [
+   "CHE"
+  ]
+ },
+ "5f5cfa6d-1cb3-4d61-91d9-d6910ab54d8d": {
+  "area": "Lae Atoll, Marshall Islands",
+  "units": []
+ },
+ "5f6eb04e-24a8-4616-9214-0202c6167ad9": {
+  "area": "Liechtenstein",
+  "units": [
+   "LIE"
+  ]
+ },
+ "5fd0d7a4-0381-4d6b-ad34-24e99a7b4247": {
+  "area": "Comoros",
+  "units": [
+   "COM"
+  ]
+ },
+ "61b67ae8-c623-42a9-9172-3283f2f1473b": {
+  "area": "Portugal",
+  "units": [
+   "PRX"
+  ]
+ },
+ "61d9f253-6635-4bdf-a13b-948d499bbce1": {
+  "area": "Bolivia",
+  "units": [
+   "BOL"
+  ]
+ },
+ "61e1cb71-4e14-4b36-9e4c-72db90c1210a": {
+  "area": "National Park of American Samoa",
+  "units": []
+ },
+ "61fb216d-1216-4287-8b78-fdfef45e8e18": {
+  "area": "Indonesia",
+  "units": [
+   "IDN"
+  ]
+ },
+ "623d3b11-c96a-48b7-a31f-eeaa4f7e327e": {
+  "area": "Panama",
+  "units": [
+   "PAN"
+  ]
+ },
+ "628b9441-36ba-41bc-a260-be5c655bd04b": {
+  "area": "Slovenia",
+  "units": [
+   "SVN"
+  ]
+ },
+ "629699d2-0ce0-4aeb-a9f3-7e4695129b51": {
+  "area": "Atoll Nui, Tuvalu",
+  "units": []
+ },
+ "647a95b5-3b3c-48ab-9ff7-8b88de159094": {
+  "area": "Ailinglaplap Atoll, Marshall Islands",
+  "units": []
+ },
+ "653f4397-63a3-47ec-bcfd-46d5f6379818": {
+  "area": "Nicaragua",
+  "units": [
+   "NIC"
+  ]
+ },
+ "65c98ad9-e7d2-4fcf-b7d0-2908030833ce": {
+  "area": "Little Cayman, Cayman Islands",
+  "units": []
+ },
+ "68611f8b-9f9c-4d1d-a15a-be000691dd45": {
+  "area": "Vava'u group, Tonga",
+  "units": []
+ },
+ "68c1fc2d-4b61-4e88-b9f1-d086ce9a8ffd": {
+  "area": "Kenya",
+  "units": [
+   "KEN"
+  ]
+ },
+ "69233277-0946-4931-8115-3b247a81a051": {
+  "area": "Mauritius",
+  "units": [
+   "MUS"
+  ]
+ },
+ "692a0aec-70e2-4038-ac9c-9a1d7acc025f": {
+  "area": "France",
+  "units": [
+   "FXX"
+  ]
+ },
+ "69449228-b89e-4302-9ba6-c840997bfebc": {
+  "area": "North Macedonia",
+  "units": [
+   "MKD"
+  ]
+ },
+ "69650e82-e276-441e-beb5-cbae5577df05": {
+  "area": "Ujaelang Atoll, Marshall Islands",
+  "units": []
+ },
+ "69c3d481-f867-4e34-a068-dcd79213b4b9": {
+  "area": "United Arab Emirates",
+  "units": [
+   "ARE"
+  ]
+ },
+ "6b45e498-23e8-4e39-8620-77011495e42c": {
+  "area": "Israel",
+  "units": [
+   "ISR"
+  ]
+ },
+ "6baf6a53-c106-40fb-bbde-f6d4e4051513": {
+  "area": "Hawaii, United States",
+  "units": [
+   "USA-HI"
+  ]
+ },
+ "6c8f4307-6759-41d8-bf15-3ff5773aa51f": {
+  "area": "Bhutan",
+  "units": [
+   "BTN"
+  ]
+ },
+ "6d11211b-caa0-4e63-b99c-e944099d5017": {
+  "area": "China",
+  "units": [
+   "CHN"
+  ]
+ },
+ "6d9e952f-948c-4483-9807-575348147c7e": {
+  "area": "Belgium",
+  "units": [
+   "BFR",
+   "BWR",
+   "BCR"
+  ]
+ },
+ "6dc163b3-79fb-4090-9dc9-0730d630bc91": {
+  "area": "Saint Helena, Saint Helena, Ascension and Tristan da Cunha",
+  "units": []
+ },
+ "6e74aa5e-d156-4fd9-9299-049307da6fe8": {
+  "area": "Netherlands",
+  "units": [
+   "NLD"
+  ]
+ },
+ "6edd6aff-7dac-4029-9bb4-b025f4af352c": {
+  "area": "Bahrain",
+  "units": [
+   "BHR"
+  ]
+ },
+ "7016eb31-d386-4eb3-80bc-0c40b8a89029": {
+  "area": "Svalbard, Norway",
+  "units": [
+   "NSV"
+  ]
+ },
+ "7185a1d5-9dc2-44fc-b3ef-5e4d068f12f1": {
+  "area": "Mexico",
+  "units": [
+   "MEX"
+  ]
+ },
+ "72340f0c-a018-4c3e-8aa5-88c0ffb2386f": {
+  "area": "Republic of Korea",
+  "units": [
+   "KOR"
+  ]
+ },
+ "723d7003-acdb-44b0-be0e-1c589aaa7d90": {
+  "area": "Barbados",
+  "units": [
+   "BRB"
+  ]
+ },
+ "72b33757-b2f9-477d-8a52-6a91a4656215": {
+  "area": "Arno Atoll, Marshall Islands",
+  "units": []
+ },
+ "72e7aab4-aa85-4fcf-b95e-3d835d3e408a": {
+  "area": "Armenia",
+  "units": [
+   "ARM"
+  ]
+ },
+ "73eec6b3-3b63-40a8-a7ed-978fb2a648c6": {
+  "area": "Majuro Atoll, Marshall Islands",
+  "units": []
+ },
+ "75f7af83-958b-47f6-b7f9-9b6dde7b43de": {
+  "area": "Cayman Islands",
+  "units": [
+   "CYM"
+  ]
+ },
+ "761356be-38ac-4289-884d-99918afe4d9f": {
+  "area": "Clipperton Island, France",
+  "units": []
+ },
+ "7a62e189-0e05-45c4-aabe-320d001ed31b": {
+  "area": "Malaysia",
+  "units": [
+   "MYS"
+  ]
+ },
+ "7a636a97-aab5-48b1-82fd-55ee4d94ad53": {
+  "area": "Niue",
+  "units": [
+   "NIU"
+  ]
+ },
+ "7a9e2043-9b54-4ab8-9bb2-c95341dbee37": {
+  "area": "Egypt",
+  "units": [
+   "EGY"
+  ]
+ },
+ "7b091962-fdb2-49eb-9bfb-7d66561f1a8a": {
+  "area": "Alaska, United States",
+  "units": [
+   "USA-AK"
+  ]
+ },
+ "7b6661a3-5bbd-4dbb-b3e4-0c26df341977": {
+  "area": "Singapore",
+  "units": [
+   "SGP"
+  ]
+ },
+ "7c822f4a-3eb7-4956-af71-052a2c0167bc": {
+  "area": "Madeira, Portugal",
+  "units": [
+   "PMD"
+  ]
+ },
+ "7d22d94b-61e5-4d34-9156-eeddd2cd5f59": {
+  "area": "Serbia",
+  "units": [
+   "SRS",
+   "SRV"
+  ]
+ },
+ "82fe28e9-0b8d-485f-a54e-ae5f4051314f": {
+  "area": "Iceland",
+  "units": [
+   "ISL"
+  ]
+ },
+ "83ca3188-af12-4545-aaf4-304df32ff9d7": {
+  "area": "Seychelles",
+  "units": [
+   "SYC"
+  ]
+ },
+ "842eaa6f-8857-4169-8830-49a11abc672b": {
+  "area": "Utirik Atoll, Marshall Islands",
+  "units": []
+ },
+ "849c64f3-ed8e-44c2-b45f-952f6c013c02": {
+  "area": "Ha'apai group, Tonga",
+  "units": []
+ },
+ "85183816-d5ea-460c-81fa-e934ceacae10": {
+  "area": "Cook Islands",
+  "units": [
+   "COK"
+  ]
+ },
+ "85d83019-fad8-477e-9a52-ebb4f91a91bf": {
+  "area": "Atoll Nanumea, Tuvalu",
+  "units": []
+ },
+ "87939381-bbbb-4976-8d70-f686cbce4d58": {
+  "area": "Equatorial Guinea",
+  "units": [
+   "GNQ"
+  ]
+ },
+ "87e29a00-b9e6-4acf-b187-abcaaf070467": {
+  "area": "French Guiana",
+  "units": [
+   "GUF"
+  ]
+ },
+ "88875dc2-4e00-48e5-9e72-2de3ab964da9": {
+  "area": "Sri Lanka",
+  "units": [
+   "LKA"
+  ]
+ },
+ "88b8354b-e131-407f-8754-5b35af6cc05a": {
+  "area": "Saint Kitts and Nevis",
+  "units": [
+   "KNA"
+  ]
+ },
+ "8a73c1ea-82bb-4ada-bb69-d17b73e4719a": {
+  "area": "Pakistan",
+  "units": [
+   "PAK"
+  ]
+ },
+ "8bc70ed7-ccf6-4c98-9feb-5cb5a8362520": {
+  "area": "Virgin Islands, British",
+  "units": [
+   "VGB"
+  ]
+ },
+ "8ce42176-127f-4b50-8339-97eafb2486a9": {
+  "area": "Korea (Democratic People's Republic of)",
+  "units": [
+   "PRK"
+  ]
+ },
+ "8e77944c-d207-49ae-8f9d-d674853a09fc": {
+  "area": "Angola",
+  "units": [
+   "AGO"
+  ]
+ },
+ "8ed237a6-0b9f-4522-88d1-1dbae4b75336": {
+  "area": "Falkland Islands (Islas Malvinas)",
+  "units": [
+   "FLK"
+  ]
+ },
+ "8fe26f02-4260-4219-8b2b-44c66afd681b": {
+  "area": "Jaluit Atoll, Marshall Islands",
+  "units": []
+ },
+ "9291f33c-8cd3-45b0-b840-d460ef88c155": {
+  "area": "Djibouti",
+  "units": [
+   "DJI"
+  ]
+ },
+ "933d260c-fb6d-4823-aeff-ad3bde1a1f12": {
+  "area": "Ebon Atoll, Marshall Islands",
+  "units": []
+ },
+ "9560647c-14bf-46af-b1f3-0525c2f8a53d": {
+  "area": "Hungary",
+  "units": [
+   "HUN"
+  ]
+ },
+ "96b68c0f-0fce-4301-a789-cad7b9049a5e": {
+  "area": "Chad",
+  "units": [
+   "TCD"
+  ]
+ },
+ "97ee2123-27de-4a95-9e6f-ea1f57c7c115": {
+  "area": "Faroe Islands",
+  "units": [
+   "FRO"
+  ]
+ },
+ "9a866be5-f329-49ef-b173-906bd759feb1": {
+  "area": "Congo",
+  "units": [
+   "COG"
+  ]
+ },
+ "9aa43311-1414-4bae-a242-c1affe300690": {
+  "area": "Eritrea",
+  "units": [
+   "ERI"
+  ]
+ },
+ "9be328f1-d274-4e27-974b-4663ce0903d2": {
+  "area": "Niger",
+  "units": [
+   "NER"
+  ]
+ },
+ "9c27c275-f71b-482d-8ff0-ec579b85e653": {
+  "area": "Huvalu Conservation Area, Niue",
+  "units": []
+ },
+ "9cfd5f70-968c-4690-94ef-834f01b0cea8": {
+  "area": "Nepal",
+  "units": [
+   "NPL"
+  ]
+ },
+ "9e4e8de7-acad-4bd5-8796-d6d530981209": {
+  "area": "Niua Islands, Tonga",
+  "units": []
+ },
+ "9f0bf15f-4f76-4c82-93d6-cd85e77c3f01": {
+  "area": "Kwajalein Atoll, Marshall Islands",
+  "units": []
+ },
+ "9fd43cf4-d96f-4f78-be0d-496ec81059b4": {
+  "area": "French Polynesia",
+  "units": [
+   "PYF"
+  ]
+ },
+ "a0c74038-3622-4964-a42c-de14e19e677b": {
+  "area": "Ailinginae Atoll, Marshall Islands",
+  "units": []
+ },
+ "a0c837d7-8db6-45d1-84ae-af2bf7c90e46": {
+  "area": "Gambia",
+  "units": [
+   "GMB"
+  ]
+ },
+ "a1651f19-dec4-42ba-9f53-ca15bc3071d5": {
+  "area": "Burkina Faso",
+  "units": [
+   "BFA"
+  ]
+ },
+ "a368d019-028c-4f87-adcf-90771fd666f9": {
+  "area": "Saint Barthelemy",
+  "units": [
+   "BLM"
+  ]
+ },
+ "a3b0b3f0-17c8-42d2-af2f-be16f1e5dcb6": {
+  "area": "Dominica",
+  "units": [
+   "DMA"
+  ]
+ },
+ "a52633e8-8bc2-46a4-ab54-723af0ac24d0": {
+  "area": "South Sudan",
+  "units": [
+   "SDS"
+  ]
+ },
+ "a811c07f-206d-46b8-ad59-93af4e2ce7c0": {
+  "area": "Luxembourg",
+  "units": [
+   "LUX"
+  ]
+ },
+ "a943a869-9a79-4350-98f6-33cb77439aac": {
+  "area": "Zimbabwe",
+  "units": [
+   "ZWE"
+  ]
+ },
+ "a9b698f5-bc51-47a3-9105-66db48e5f426": {
+  "area": "Bahamas",
+  "units": [
+   "BHS"
+  ]
+ },
+ "a9df0f79-9e6d-4062-a303-d764d7424ad0": {
+  "area": "Lanzarote, Islas Canarias, Spain",
+  "units": []
+ },
+ "aa713c13-f522-4381-9729-7ae29bb4620f": {
+  "area": "Côte d'Ivoire",
+  "units": [
+   "CIV"
+  ]
+ },
+ "aaa48ec4-fd8c-466c-ae23-6cf72184ddb0": {
+  "area": "Tenerife, Islas Canarias, Spain",
+  "units": []
+ },
+ "ab28b92a-a74d-4c6f-a8da-4fe1eb1f7e98": {
+  "area": "Jemo Island, Marshall Islands",
+  "units": []
+ },
+ "ac13df75-40b4-4022-9173-c074d3d843df": {
+  "area": "Mejit Island, Marshall Islands",
+  "units": []
+ },
+ "ac1cd9af-3b82-42f7-9e65-ba3afa74404c": {
+  "area": "Sint Eustatius, Bonaire, Sint Eustatius and Saba",
+  "units": []
+ },
+ "acaa145f-7944-4bc8-a4cc-4e3410c41e99": {
+  "area": "Turkey",
+  "units": [
+   "TUR"
+  ]
+ },
+ "ad5cba8c-45fb-428c-aafa-7ff013d0fdaf": {
+  "area": "Denmark",
+  "units": [
+   "DNK"
+  ]
+ },
+ "ad95a6e9-a462-4bce-838f-bb4cd3296665": {
+  "area": "Belarus",
+  "units": [
+   "BLR"
+  ]
+ },
+ "ade7d714-7921-4cb4-a961-c93081c90131": {
+  "area": "Oman",
+  "units": [
+   "OMN"
+  ]
+ },
+ "ae521be6-8809-4e17-8614-212f076b7924": {
+  "area": "Rapa Nui (Isla de Pascua, Easter Island)",
+  "units": []
+ },
+ "b09c3987-af9a-4658-9bfd-19cf712ac3d1": {
+  "area": "India",
+  "units": [
+   "IND"
+  ]
+ },
+ "b0fb6a53-934a-4457-b7f9-fa55dc82254b": {
+  "area": "Afghanistan",
+  "units": [
+   "AFG"
+  ]
+ },
+ "b18767ad-2b44-40f6-b1e7-4199cbbc7a4f": {
+  "area": "Montserrat",
+  "units": [
+   "MSR"
+  ]
+ },
+ "b286f8ee-1e29-4f8a-a041-9106bb1796f3": {
+  "area": "New Zealand",
+  "units": [
+   "NZL"
+  ]
+ },
+ "b2e5f15d-44e2-480d-b68c-c6d0627288f2": {
+  "area": "Tokelau",
+  "units": [
+   "TKL"
+  ]
+ },
+ "b41e8700-0a15-4d7d-9a47-6b718f41d368": {
+  "area": "Honduras",
+  "units": [
+   "HND"
+  ]
+ },
+ "b4247768-7a3d-4d4d-83b6-9f99be6ee562": {
+  "area": "Liberia",
+  "units": [
+   "LBR"
+  ]
+ },
+ "b491e505-0de3-40fc-827b-19a78d67055b": {
+  "area": "Tristan da Cunha, Saint Helena, Ascension and Tristan da Cunha",
+  "units": []
+ },
+ "b4f2aa67-c64a-4ba4-a665-ce8c4bff5beb": {
+  "area": "Montenegro",
+  "units": [
+   "MNE"
+  ]
+ },
+ "b618b6dd-0294-4ca6-af5b-1739d633e4af": {
+  "area": "Mali",
+  "units": [
+   "MLI"
+  ]
+ },
+ "b6a3a56d-6000-4c77-ac49-3f45d381bffa": {
+  "area": "Bermuda",
+  "units": [
+   "BMU"
+  ]
+ },
+ "b79c5ba3-d447-4a73-bcbf-557f3241eeb2": {
+  "area": "Finland",
+  "units": [
+   "FIN"
+  ]
+ },
+ "b803c027-cf94-4bf0-bc17-b67076cd5b55": {
+  "area": "British Antarctic Territory, Antarctica",
+  "units": []
+ },
+ "b95e74e0-b772-430c-a729-9d56ce0182e2": {
+  "area": "Canada",
+  "units": [
+   "CAN"
+  ]
+ },
+ "babc7551-a940-4beb-a43b-bc986edd03bf": {
+  "area": "Benin",
+  "units": [
+   "BEN"
+  ]
+ },
+ "baf86ad8-24ad-4603-a723-dcc9647846da": {
+  "area": "Madagascar",
+  "units": [
+   "MDG"
+  ]
+ },
+ "bba03061-2924-4716-a3e8-8b8c268cfb89": {
+  "area": "Saint Vincent and the Grenadines",
+  "units": [
+   "VCT"
+  ]
+ },
+ "bbab5788-88ba-4eb7-b7f9-3e103303d5bb": {
+  "area": "Juan Fernandez Islands, Chile",
+  "units": []
+ },
+ "bc3c1a1c-ff40-4e99-8497-1ed2f533dfa9": {
+  "area": "Protected areas, Tonga",
+  "units": []
+ },
+ "bd5ac264-bc88-4ee8-8fbb-e16247e1119c": {
+  "area": "Togo",
+  "units": [
+   "TGO"
+  ]
+ },
+ "be3f6376-9b93-41e3-8077-eda6c94b720f": {
+  "area": "Turkmenistan",
+  "units": [
+   "TKM"
+  ]
+ },
+ "bfee7c90-f429-4a53-b7d8-227bef85ff39": {
+  "area": "Belize",
+  "units": [
+   "BLZ"
+  ]
+ },
+ "c0ade5d0-7b28-47bb-bae5-6fb44d599eb3": {
+  "area": "Rongelap Atoll, Marshall Islands",
+  "units": []
+ },
+ "c0d03d85-e50c-44b9-af32-d860a8fd58c8": {
+  "area": "Somalia",
+  "units": [
+   "SOM",
+   "SOL"
+  ]
+ },
+ "c1a61294-6195-4055-9b22-a2e48e5e16d7": {
+  "area": "Sweden",
+  "units": [
+   "SWE"
+  ]
+ },
+ "c1dd2cc1-edc0-4d31-bdae-b30e637c7263": {
+  "area": "Atoll Nukulaelae, Tuvalu",
+  "units": []
+ },
+ "c328523e-1e63-4384-b52a-4773639a475b": {
+  "area": "Chile",
+  "units": [
+   "CHL"
+  ]
+ },
+ "c42ad93c-88a8-440f-8842-118f2a1927a8": {
+  "area": "Cuba",
+  "units": [
+   "CUB"
+  ]
+ },
+ "c4925778-5311-4208-9df9-a70155221340": {
+  "area": "Taka Atoll, Marshall Islands",
+  "units": []
+ },
+ "c5051b17-4662-4e0c-9087-beb15a4fca5b": {
+  "area": "San Marino",
+  "units": [
+   "SMR"
+  ]
+ },
+ "c59b6585-a46d-4d18-9f5d-d472e4b7569f": {
+  "area": "Rongdrik Atoll, Marshall Islands",
+  "units": []
+ },
+ "c6007fb8-2cf5-47cf-9e3a-d93fe1673418": {
+  "area": "Enewetak Atoll, Marshall Islands",
+  "units": []
+ },
+ "c7056977-c11e-45d7-a348-11ff192a3cae": {
+  "area": "Latvia",
+  "units": [
+   "LVA"
+  ]
+ },
+ "c77d8bb7-e1d3-4b68-9db4-de6594dafd6f": {
+  "area": "Kili Atoll, Marshall Islands",
+  "units": []
+ },
+ "c7873d63-4c63-419f-8d84-a7a6cb29c5e8": {
+  "area": "Spain",
+  "units": [
+   "ESP"
+  ]
+ },
+ "c98ad48e-d449-4e52-90fe-9bb189799131": {
+  "area": "Thailand",
+  "units": [
+   "THA"
+  ]
+ },
+ "ca2270c9-0a06-45f0-b845-6fe7fb1d586c": {
+  "area": "Tajikistan",
+  "units": [
+   "TJK"
+  ]
+ },
+ "ca55b876-88ef-44a1-b752-c38977af7d2f": {
+  "area": "Mongolia",
+  "units": [
+   "MNG"
+  ]
+ },
+ "cb587c48-7c65-41a0-a8aa-e568584a1400": {
+  "area": "Laos",
+  "units": [
+   "LAO"
+  ]
+ },
+ "cbd5726e-b5b7-4a1a-af70-0bc4a842aa2b": {
+  "area": "Jordan",
+  "units": [
+   "JOR"
+  ]
+ },
+ "cbf356f0-f2a3-48ef-9217-5410654bf2d2": {
+  "area": "Georgia",
+  "units": [
+   "GEG"
+  ]
+ },
+ "cc602af7-0477-4179-a797-4a0c74fe9934": {
+  "area": "Iraq",
+  "units": [
+   "IRQ"
+  ]
+ },
+ "cec980b2-63d3-4a38-a70a-3af3e6b7e6f5": {
+  "area": "Vanuatu",
+  "units": [
+   "VUT"
+  ]
+ },
+ "ced4b662-2201-4c55-b31b-fc5643a9a72f": {
+  "area": "Lithuania",
+  "units": [
+   "LTU"
+  ]
+ },
+ "ced9186d-2778-4a32-b245-7506893061bc": {
+  "area": "Ngazidja (Grande Comore), Comoros",
+  "units": []
+ },
+ "cf8d9d81-cc6e-4fd3-b285-1cd7c5883fa2": {
+  "area": "Curacao, Netherlands",
+  "units": [
+   "CUW"
+  ]
+ },
+ "d006d8bb-cf1e-46ff-a054-c6768e23d86d": {
+  "area": "Ukraine",
+  "units": [
+   "UKR"
+  ]
+ },
+ "d015d9e7-9eed-47c6-a0cd-62c627ad1e8b": {
+  "area": "Bulgaria",
+  "units": [
+   "BGR"
+  ]
+ },
+ "d20e290d-4921-4244-a9a1-59ffa3bfa975": {
+  "area": "Romania",
+  "units": [
+   "ROU"
+  ]
+ },
+ "d34f596f-0e3c-443b-a648-ca0479af8bf0": {
+  "area": "Ascension Island, Saint Helena, Ascension and Tristan da Cunha",
+  "units": []
+ },
+ "d46d249e-0142-4e4d-b452-e1b420b19d3b": {
+  "area": "Bokak Atoll, Marshall Islands",
+  "units": []
+ },
+ "d47f153b-bab2-4cca-8dfa-ec3098d8c55d": {
+  "area": "Cameroon",
+  "units": [
+   "CMR"
+  ]
+ },
+ "d598d466-3227-4bc5-81cf-538f21e4cc6d": {
+  "area": "Cayman Brac, Cayman Islands",
+  "units": []
+ },
+ "d6921013-1279-4b9e-8ea6-2d7f3b68e7c0": {
+  "area": "Tuvalu",
+  "units": [
+   "TUV"
+  ]
+ },
+ "d7193913-6b9e-4e8e-b81a-6f150442842e": {
+  "area": "La Gomera, Islas Canarias, Spain",
+  "units": []
+ },
+ "d893c53b-a6b3-4e43-829f-fcd0cbb9bad3": {
+  "area": "Kyrgyzstan",
+  "units": [
+   "KGZ"
+  ]
+ },
+ "d8a293b1-7e5b-483e-be40-44bf7affa034": {
+  "area": "Saudi Arabia",
+  "units": [
+   "SAU"
+  ]
+ },
+ "d9b8781d-94c6-447e-976e-d8aba57d1dd2": {
+  "area": "Malawi",
+  "units": [
+   "MWI"
+  ]
+ },
+ "db6aa2fd-87ae-47d7-b284-9f00571de9fe": {
+  "area": "Bikini Atoll, Marshall Islands",
+  "units": []
+ },
+ "dce81df5-39dc-4464-8c5b-ff85d287f810": {
+  "area": "Bonaire, Bonaire, Sint Eustatius and Saba",
+  "units": []
+ },
+ "dd216b75-0282-4ee3-b99a-cfd00b1c8b3f": {
+  "area": "French Southern and Antarctic Territories (TAAF), Scattered Islands - Îles Éparses, France",
+  "units": []
+ },
+ "ddcdefb6-4fbf-40f5-b92c-d6aae132f720": {
+  "area": "Sudan",
+  "units": [
+   "SDN"
+  ]
+ },
+ "dfaf6b4a-43d6-4649-82c7-60f34ddf13ba": {
+  "area": "Malta",
+  "units": [
+   "MLT"
+  ]
+ },
+ "e1459ba8-561c-4be1-9ede-c31d16c3ef87": {
+  "area": "Federated States of Micronesia",
+  "units": [
+   "FSM"
+  ]
+ },
+ "e17feadc-fd09-4736-b827-4b677318f167": {
+  "area": "Fuerteventura, Islas Canarias, Spain",
+  "units": []
+ },
+ "e2ec65d2-1ff9-4aac-ba2e-33b6fcba31f9": {
+  "area": "Tunisia",
+  "units": [
+   "TUN"
+  ]
+ },
+ "e4942a44-e352-4113-8a49-f91a97281b1d": {
+  "area": "Samoa",
+  "units": [
+   "WSM"
+  ]
+ },
+ "e5570365-8abb-4598-88a3-b6235d11033e": {
+  "area": "Guadalcanal Island, Solomon Islands",
+  "units": []
+ },
+ "e69281bf-debf-4443-812f-3fb130673273": {
+  "area": "Azores, Portugal",
+  "units": [
+   "PAZ"
+  ]
+ },
+ "e8508e67-3e63-4a77-94b1-47c3fb1d07b7": {
+  "area": "Bosnia and Herzegovina",
+  "units": [
+   "BIS",
+   "BHF"
+  ]
+ },
+ "e8f1f791-d6fd-4ae7-aa49-3cc95a2d60a4": {
+  "area": "New Caledonia, France",
+  "units": [
+   "NCL"
+  ]
+ },
+ "e8f7df4a-7e6f-472a-9b76-a3feabe4c182": {
+  "area": "Mayotte, France",
+  "units": [
+   "MYT"
+  ]
+ },
+ "e91a6451-c247-4bf6-a6de-d53ce0b30852": {
+  "area": "Pitcairn Islands- Great Britain",
+  "units": [
+   "PCN"
+  ]
+ },
+ "e98cc325-bc7a-4489-a841-15b734ab2514": {
+  "area": "Suriname",
+  "units": [
+   "SUR"
+  ]
+ },
+ "eb3de39f-9dab-48b0-b5ed-454cb01cac1c": {
+  "area": "Kuwait",
+  "units": [
+   "KWT"
+  ]
+ },
+ "eb5717c8-fa55-4a28-9586-078cf2a428f2": {
+  "area": "El Salvador",
+  "units": [
+   "SLV"
+  ]
+ },
+ "eb69f51d-f69e-4a11-abad-fb4642698bec": {
+  "area": "Martinique",
+  "units": [
+   "MTQ"
+  ]
+ },
+ "eb88c716-cca7-4810-8c07-11e78227200a": {
+  "area": "Haiti",
+  "units": [
+   "HTI"
+  ]
+ },
+ "eba9e464-3ad5-4896-9076-2d9a62494b2e": {
+  "area": "Guinea-Bissau",
+  "units": [
+   "GNB"
+  ]
+ },
+ "ed28b567-5c70-4cc7-8e37-6dca8de0425d": {
+  "area": "Atoll Funafuti, Tuvalu",
+  "units": []
+ },
+ "ed581dc4-7008-4116-95a1-060b4c305d79": {
+  "area": "Namibia",
+  "units": [
+   "NAM"
+  ]
+ },
+ "edda45c9-c2d6-40ea-821b-307d3f25c85d": {
+  "area": "Tongatapu Island, Tonga",
+  "units": []
+ },
+ "eedb7ade-5c51-4787-9635-949b704e1194": {
+  "area": "Argentina",
+  "units": [
+   "ARG"
+  ]
+ },
+ "ef827675-98c0-4e63-aab7-18748e61fb12": {
+  "area": "Maldives",
+  "units": [
+   "MDV"
+  ]
+ },
+ "efc3c005-1477-409e-b3cd-2503e17042dc": {
+  "area": "Bikar Atoll, Marshall Islands",
+  "units": []
+ },
+ "f14b5352-5e8b-4d36-bc38-45c2e5fd7297": {
+  "area": "Antigua and Barbuda",
+  "units": [
+   "ACA",
+   "ACB"
+  ]
+ },
+ "f150e77b-824f-4f14-b994-75fbd3d5f150": {
+  "area": "Papua New Guinea",
+  "units": [
+   "PNX",
+   "PNB"
+  ]
+ },
+ "f63d54f6-aa33-4bfe-88a3-c685067b8997": {
+  "area": "Sint Maarten, Netherlands",
+  "units": [
+   "SXM"
+  ]
+ },
+ "f681e6e8-fdaa-4a99-ac01-f8eafce9a389": {
+  "area": "Tanzania",
+  "units": [
+   "TZZ",
+   "TZA"
+  ]
+ },
+ "f6ae66a3-f267-4d03-8541-fdfa7ffc9eaf": {
+  "area": "Italy",
+  "units": [
+   "ITA"
+  ]
+ },
+ "f6dc16dc-9195-4dee-972f-0a02f8dafd4b": {
+  "area": "Ailuk Atoll, Marshall Islands",
+  "units": []
+ },
+ "f6e7601b-3457-4a1b-b5a8-01490566a3b8": {
+  "area": "Democratic Republic of Congo",
+  "units": [
+   "COD"
+  ]
+ },
+ "f77acd30-c3d5-429e-8592-d277e3f4cef3": {
+  "area": "Ndzuwani (Anjouan), Comoros",
+  "units": []
+ },
+ "f7aa0922-0923-461c-9bfb-caacc7ede5d7": {
+  "area": "Palau",
+  "units": [
+   "PLW"
+  ]
+ },
+ "f82a4f7f-6f84-4b58-82e6-6b41ec9a1f49": {
+  "area": "Croatia",
+  "units": [
+   "HRV"
+  ]
+ },
+ "f83db6d8-9849-4554-9d78-375bce27660f": {
+  "area": "Nauru",
+  "units": [
+   "NRU"
+  ]
+ },
+ "f8c3eca8-349d-4e4c-9374-af8177cc1901": {
+  "area": "La Palma, Islas Canarias, Spain",
+  "units": []
+ },
+ "f998e11b-5074-464e-84ba-a8bdc9556472": {
+  "area": "French Southern and Antarctic Lands Terres australes et antarctiques françaises (TAAF), France",
+  "units": [
+   "ATF"
+  ]
+ },
+ "f9c8f84c-a4ff-4c1d-86ae-6a1a472f2aa3": {
+  "area": "Azerbaijan",
+  "units": [
+   "AZE"
+  ]
+ },
+ "fbba79dc-ca5b-47ab-9a88-9bdf15a1d11f": {
+  "area": "Monaco",
+  "units": [
+   "MCO"
+  ]
+ },
+ "fc7caddf-3fbc-4ee5-b99a-2518e93ce579": {
+  "area": "Syrian Arab Republic",
+  "units": [
+   "SYR"
+  ]
+ }
+}

@@ -144,6 +144,22 @@ archive/history handling as the PNG products. Measured 2026-09-12: 19 s + 10 s. 
 one Copernicus requires ("Generated using E.U. Copernicus Marine Service Information") plus the
 product DOI 10.48670/moi-00015.
 
+## Introduced species by checklist: GRIIS (polygon contract)
+```bash
+python3 -m pipeline.griis --out public/data/griis.geojson                  # cron 1st of month 06:20
+python3 -m pipeline.griis --out /tmp/g.geojson --seed-out public/data/seed/griis.geojson
+```
+The Global Register of Introduced and Invasive Species as ISSG publishes it on GBIF: one Darwin Core
+Archive per country, territory or island, downloaded once per version. Every ISSG checklist must be an
+area register, a protected-area register (named in `protected_areas`, not drawn) or listed in
+`NOT_A_REGISTER`, else the run raises. Per list: `introduced` = taxa present and introduced;
+`invasive` by the list's own basis — `impact` (GRIIS isInvasive), `spread` (degreeOfEstablishment
+D2/E or invasive/widespreadInvasive: US-RIIS, Belgium) or `not stated` (None). Any status, origin,
+flag or degree value without a rule raises with the list's name. `pipeline/griis_areas.json` is the
+reviewed area → Natural Earth map-unit table (GU_A3; the US split into USA-CONT/USA-AK/USA-HI); a list
+missing from it raises, one mapped to `[]` is named in `not_drawn`. When GBIF adds a list, map it
+there by hand. The run refuses a listing missing more than a tenth of the table's lists.
+
 ## Mangrove extent by country: Global Mangrove Watch (polygon contract)
 ```bash
 python3 -m pipeline.gmw --out public/data/gmw.geojson                  # cron 1st of month 06:10
@@ -293,6 +309,7 @@ Licences and caveats per source are in `DATA_SOURCES.md`; `node scripts/qa-gap-l
 | `fires` | `pipeline.fires` | 01/07/13/19:15 | FIRMS VIIRS global 7-day CSVs, 0.5° × 6 h | none |
 | `ecoregions` | `pipeline.ecoregions` | 1st of month 06:00 | RESOLVE 2017 zip cached in `~/.cache/wildeye` | none |
 | `gmw` | `pipeline.gmw` | 1st of month 06:10 | Global Mangrove Watch v4.1.12 country xlsx (Zenodo, md5-checked) + Natural Earth 50m map units, cached in `~/.cache/wildeye` | none |
+| `griis` | `pipeline.griis` | 1st of month 06:20 | GBIF publisher listing for ISSG + one GRIIS Darwin Core Archive per checklist (cached per version in `~/.cache/wildeye/griis`) + Natural Earth 50m map units; area → unit table `pipeline/griis_areas.json` | none |
 | `rivers` | `pipeline.rivers` | daily 06:45 | USGS OGC API `daily` (not legacy WaterServices) | optional `USGS_WATER_API_KEY` |
 | `fishing` (not wired) | `pipeline.fishing` | — | GFW 4Wings effort | `GFW_FISHING_TOKEN` (not `GFW_API_KEY`) |
 | `iucn` (badge, dormant) | `pipeline.iucn` | — | IUCN Red List v4 | `IUCN_TOKEN` |

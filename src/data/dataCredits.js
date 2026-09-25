@@ -121,6 +121,10 @@ export const DATA_CREDITS = [
     html: 'Mangrove extent by country: <a href="https://doi.org/10.5281/zenodo.21346457" target="_blank" rel="noopener">Global Mangrove Watch: Timeseries of Mangrove Extent v4.1.12</a> (Bunting, Hilarides, Rosenqvist, Oakes et al. 2026, Zenodo), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; country totals shown on Natural Earth map units, coloured by change since 1985.',
   },
   {
+    key: 'griis',
+    html: 'Introduced species by checklist: GRIIS, ISSG via GBIF, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a> (three lists CC0). <a href="https://www.gbif.org/publisher/cdef28b1-db4e-4c58-aa71-3c5238c2d0b5" target="_blank" rel="noopener">Global Register of Introduced and Invasive Species</a> checklists published by the Invasive Species Specialist Group; each list\'s own citation and DOI are in its info box. Counts shown on Natural Earth map units.',
+  },
+  {
     key: 'hansen-loss',
     html: 'Forest loss: Source: Hansen/UMD/Google/USGS/NASA. <a href="https://storage.googleapis.com/earthenginepartners-hansen/GFC-2024-v1.12/download.html" target="_blank" rel="noopener">Global Forest Change 2000–2024 v1.12</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Hansen et al. 2013, <i>Science</i> 342:850–853, <a href="https://doi.org/10.1126/science.1244693" target="_blank" rel="noopener">doi:10.1126/science.1244693</a>. Tiles served by Global Forest Watch; recoloured by loss year for display.',
   },

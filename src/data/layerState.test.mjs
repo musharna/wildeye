@@ -155,8 +155,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 52);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 52);
+  assert.equal(REGISTERED_LAYER_IDS.length, 53);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 53);
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   for (const [id, token] of [
     ['gibs-biomass', 'gd'],
@@ -166,6 +166,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     ['gibs-nightlights', 'bm'],
     ['hansen-loss', 'hl'],
     ['gmw', 'mg'],
+    ['griis', 'gr'],
   ]) {
     assert.equal(LAYER_STATE_REGISTRY.find((e) => e.id === id)?.token, token, `${id} share token`);
   }
