@@ -196,3 +196,19 @@ test("legend rows come from the manifest entry; a caption-only entry shows its c
     true,
   );
 });
+
+test("a class layer draws opaque so its colours match the legend; a value layer keeps its alpha", async () => {
+  // Land cover was drawn at the default 0.7 over the basemap, so every class read darker than its legend
+  // swatch and desert showed the tan basemap through (ledger 2026-09-23). In a class map the colour IS the
+  // datum; only a continuous overlay may be translucent.
+  const classes = { ...ENTRY, classes: [{ rgb: [5, 69, 10], label: "Evergreen needleleaf forest" }] };
+  const cls = harness({ entry: classes });
+  cls.layer.enable();
+  await cls.layer.update();
+  assert.equal(cls.list.at(-1).alpha, 1);
+
+  const value = harness();
+  value.layer.enable();
+  await value.layer.update();
+  assert.equal(value.list.at(-1).alpha, 0.7);
+});
