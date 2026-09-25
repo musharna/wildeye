@@ -22,8 +22,18 @@ import { resolveRegionRingForQuery } from '../annotations/annotationResolver.js'
 import { normalizeRadioCountryInput } from '../data/radioCountry.js';
 import { TR3B_CLASS } from '../data/tr3bRegistry.js';
 
+/** A Map from [key, value] pairs that refuses a repeated key: `new Map` keeps the later entry silently, which left four voice phrases on the wrong layer (2026-09-25). */
+export function aliasMap(entries) {
+  const m = new Map();
+  for (const [k, v] of entries) {
+    if (m.has(k)) throw new Error(`duplicate alias "${k}": ${JSON.stringify(m.get(k))} and ${JSON.stringify(v)}`);
+    m.set(k, v);
+  }
+  return m;
+}
+
 const ALLOWED_STYLES = new Set(['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir', 'snow']);
-const PANEL_ALIASES = new Map([
+const PANEL_ALIASES = aliasMap([
   ['data', 'data-panel'],
   ['data layers', 'data-panel'],
   ['layers', 'data-panel'],
@@ -56,7 +66,7 @@ const PANEL_ALIASES = new Map([
 ]);
 
 const PANEL_IDS = new Set(['data-panel', 'location-bar', 'control-panel', 'cctv-panel', 'radio-panel', 'global-context-panel', 'scene-panel', 'pp-toggles']);
-const CONTEXT_MODE_ALIASES = new Map([
+const CONTEXT_MODE_ALIASES = aliasMap([
   ['off', 'off'],
   ['none', 'off'],
   ['clear', 'off'],
@@ -124,7 +134,7 @@ function withContextModeVocabulary(state) {
   return out;
 }
 
-const COCKPIT_ACTION_ALIASES = new Map([
+const COCKPIT_ACTION_ALIASES = aliasMap([
   ['next', 'next'],
   ['previous', 'previous'],
   ['prev', 'previous'],
@@ -142,7 +152,7 @@ const COCKPIT_ACTION_ALIASES = new Map([
 ]);
 const COCKPIT_TARGET_LAYERS = new Set(['flights', 'military', 'ais-live-vessels', 'military-installations']);
 
-const LAYER_ALIASES = new Map([
+const LAYER_ALIASES = aliasMap([
   ['flights', 'flights'],
   ['planes', 'flights'],
   ['aircraft', 'flights'],
@@ -188,6 +198,10 @@ const LAYER_ALIASES = new Map([
   ['deforestation', 'gfw'],
   ['forest loss', 'hansen-loss'],
   ['tree cover loss', 'hansen-loss'],
+  ['mangroves', 'gmw'],
+  ['mangrove', 'gmw'],
+  ['mangrove extent', 'gmw'],
+  ['global mangrove watch', 'gmw'],
   ['oxygen', 'cmems-o2'],
   ['die-offs', 'whispers'],
   ['die offs', 'whispers'],
@@ -243,8 +257,6 @@ const LAYER_ALIASES = new Map([
   ['ocean ph', 'cmems-ph'],
   ['acidification', 'cmems-ph'],
   ['ocean acidification', 'cmems-ph'],
-  ['forest loss', 'gfw'],
-  ['tree cover loss', 'gfw'],
   ['forest alerts', 'gfw'],
   ['global forest watch', 'gfw'],
   ['mice', 'neon'],
@@ -254,7 +266,6 @@ const LAYER_ALIASES = new Map([
   ['avian influenza', 'hpai'],
   ['avian flu', 'hpai'],
   ['hpai', 'hpai'],
-  ['h5n1', 'hpai'],
   ['receivers', 'otn'],
   ['ocean tracking', 'otn'],
   ['fish detections', 'otn'],
@@ -267,7 +278,6 @@ const LAYER_ALIASES = new Map([
   ['sea surface temperature', 'oisst'],
   ['sst', 'oisst'],
   ['wildlife sightings', 'occurrences'],
-  ['whales', 'occurrences'],
   ['sharks', 'occurrences'],
   ['sightings', 'occurrences'],
   ['chlorophyll', 'chlor-a'],
@@ -304,7 +314,7 @@ const LAYER_ALIASES = new Map([
   ['active fires', 'local-firms'],
 ]);
 
-const CITY_ALIASES = new Map([
+const CITY_ALIASES = aliasMap([
   ['new york', 'nyc'],
   ['new york city', 'nyc'],
   ['san francisco', 'sf'],
@@ -322,7 +332,7 @@ const CITY_ALIASES = new Map([
 // must name a live `MAP_STACKS` id: an alias for a retired stack would resolve
 // cleanly and then fail at the controller with "Unknown map stack", which reads
 // to the operator as a broken command rather than a retired source.
-const STACK_ALIASES = new Map([
+const STACK_ALIASES = aliasMap([
   ['photoreal', 'photoreal'],
   ['google 3d', 'photoreal'],
   ['google', 'photoreal'],
@@ -354,7 +364,7 @@ const TRACKABLE_FAMILIES = [
   { layerId: 'satellites', kind: 'satellite' },
 ];
 
-const FRAME_TARGETS = new Map([
+const FRAME_TARGETS = aliasMap([
   ['flights', 'flights'],
   ['planes', 'flights'],
   ['aircraft', 'flights'],
@@ -1327,7 +1337,7 @@ export async function controlCctv(dataManager, args = {}, styleManager = null) {
   throw new Error(`Unknown CCTV action: ${args.action || 'missing'}`);
 }
 
-const RADIO_COUNTRY_CENTERS = new Map([
+const RADIO_COUNTRY_CENTERS = aliasMap([
   ['us', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
   ['usa', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
   ['united states', { lat: 39.8, lon: -98.6, country: 'US', label: 'United States' }],
@@ -2213,7 +2223,7 @@ function normalizePanelId(value) {
   return PANEL_ALIASES.get(raw.toLowerCase()) || null;
 }
 
-function normalizeLayerId(value) {
+export function normalizeLayerId(value) {
   const raw = String(value || '').trim();
   if (!raw) return null;
   if (LAYER_ALIASES.has(raw.toLowerCase())) return LAYER_ALIASES.get(raw.toLowerCase());

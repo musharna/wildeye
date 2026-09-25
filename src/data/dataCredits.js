@@ -117,6 +117,14 @@ export const DATA_CREDITS = [
     html: 'Deforestation alerts: <a href="https://www.globalforestwatch.org" target="_blank" rel="noopener">Global Forest Watch</a> integrated alerts (GLAD-L, GLAD-S2, RADD; CC BY 4.0), aggregated by country; country shapes made with Natural Earth',
   },
   {
+    key: 'gmw',
+    html: 'Mangrove extent by country: <a href="https://doi.org/10.5281/zenodo.21346457" target="_blank" rel="noopener">Global Mangrove Watch: Timeseries of Mangrove Extent v4.1.12</a> (Bunting, Hilarides, Rosenqvist, Oakes et al. 2026, Zenodo), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; country totals shown on Natural Earth map units, coloured by change since 1985.',
+  },
+  {
+    key: 'hansen-loss',
+    html: 'Forest loss: Source: Hansen/UMD/Google/USGS/NASA. <a href="https://storage.googleapis.com/earthenginepartners-hansen/GFC-2024-v1.12/download.html" target="_blank" rel="noopener">Global Forest Change 2000–2024 v1.12</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Hansen et al. 2013, <i>Science</i> 342:850–853, <a href="https://doi.org/10.1126/science.1244693" target="_blank" rel="noopener">doi:10.1126/science.1244693</a>. Tiles served by Global Forest Watch; recoloured by loss year for display.',
+  },
+  {
     key: 'cmems',
     html: 'Ocean oxygen and pH: Generated using E.U. Copernicus Marine Service Information; <a href="https://doi.org/10.48670/moi-00015" target="_blank" rel="noopener">Global Ocean Biogeochemistry Analysis and Forecast</a> (daily 0.25° surface analysis)',
   },

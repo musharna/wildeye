@@ -79,3 +79,5 @@ pipeline/cron_iucn.log
 analysis/.cache/
 analysis/out/
 analysis/out_season/
+public/data/gmw.geojson
+pipeline/cron_gmw.log

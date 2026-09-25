@@ -34,6 +34,7 @@ import arbonetLayer from './data/arbonet.js';
 import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, setDrapeSplit, drapeStackState, onDrapeRestack } from './data/rasterDrape.js';
 import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer } from './data/gibsLayer.js';
 import { hansenLossLayer } from './data/hansenLoss.js';
+import { mangrovesLayer } from './data/mangroves.js';
 import { installDrapeExclusivity } from './data/drapeExclusive.js';
 import { createCompare, encodeCompareParam, decodeCompareParam } from './compare.js';
 import { installCompareUi } from './compareUi.js';
@@ -298,6 +299,7 @@ async function init() {
     dataManager.register(hpaiLayer);
     dataManager.register(neonLayer);
     dataManager.register(gfwLayer);
+    dataManager.register(mangrovesLayer);
     dataManager.register(whispersLayer);
     dataManager.register(riversLayer);
     dataManager.register(ecoregionsLayer);
@@ -313,7 +315,7 @@ async function init() {
     // No domain constant: the bar spans the union of what the enabled layers declare they can
     // serve (getObservedExtent), so it cannot advertise hours no layer has data for.
     const observedTime = createObservedTime();
-    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer, ...gibsLayers.filter((l) => l !== gibsBiomassLayer), hansenLossLayer];
+    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer, ...gibsLayers.filter((l) => l !== gibsBiomassLayer), hansenLossLayer, mangrovesLayer];
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
     // After the time bar's store exists: a scrub relabels each compare side (a gap has no restack).
@@ -381,8 +383,8 @@ async function init() {
       dismissCard: () => bioCard.element.querySelector('.bio-card-close')?.click(),
       setPanelCollapsed: (id, collapsed) => styleManager.setPanelCollapsed(id, collapsed, { persist: false, syncShare: false }),
     });
-    // Stage 3 "What's here": a WHAT LIVES HERE click also reads every enabled GIBS layer (and forest loss) at the spot (grill A14).
-    const readGibsLayers = ({ lat, lon }) => [...gibsLayers, hansenLossLayer]
+    // Stage 3 "What's here": a WHAT LIVES HERE click also reads every enabled GIBS layer (and forest loss, mangroves) at the spot (grill A14).
+    const readGibsLayers = ({ lat, lon }) => [...gibsLayers, hansenLossLayer, mangrovesLayer]
       .filter((l) => dataManager.isEnabled(l.id))
       .map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({

@@ -324,6 +324,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'gibs-landcover', token: 'lc', disposition: 'enabled-only' }),
   Object.freeze({ id: 'gibs-lst', token: 'ls', disposition: 'enabled-only' }),
   Object.freeze({ id: 'gibs-nightlights', token: 'bm', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'gmw', token: 'mg', disposition: 'enabled-only' }),
   Object.freeze({ id: 'h5n1', token: 'h5', disposition: 'enabled-only' }),
   Object.freeze({ id: 'hansen-loss', token: 'hl', disposition: 'enabled-only' }),
   Object.freeze({ id: 'hpai', token: '4', disposition: 'enabled-only' }),
