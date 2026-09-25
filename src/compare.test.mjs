@@ -229,3 +229,36 @@ test('a newer set wins: a superseded set enables nothing further', async () => {
   assert.deepEqual(compare.getState(), { left: 'ndvi', right: 'oisst', position: 0.5 });
   assert.deepEqual(on(mgr), ['oisst', 'ndvi']);
 });
+
+test('set() leaves a side that is already on alone: the share restore turned it on, a second enable is a second user event', async () => {
+  const { mgr, compare } = setup();
+  await mgr.setEnabled('oisst', true, { origin: 'user' });
+  const calls = [];
+  const real = mgr.setEnabled.bind(mgr);
+  mgr.setEnabled = (id, ...rest) => {
+    calls.push(id);
+    return real(id, ...rest);
+  };
+  await compare.set('oisst', 'chlor-a');
+  assert.deepEqual(calls, ['chlor-a']);
+  assert.deepEqual(on(mgr), ['oisst', 'chlor-a']); // both sides on: the skipped enable lost nothing
+});
+
+test('cmp with an unknown token names the token; a known layer that is not a drape names the layer', () => {
+  assert.throws(() => decodeCompareParam('zz.v.50', DRAPES), /token 'zz', which is not a layer/);
+  assert.throws(() => decodeCompareParam('n.v.50', DRAPES), /'birds', which is not a drape/);
+  assert.deepEqual(decodeCompareParam('j.v.50', DRAPES), { left: 'oisst', right: 'chlor-a', position: 0.5 });
+});
+
+test('destroy() ends compare and drops every subscription it took', async () => {
+  const { mgr, compare, splits, seen } = setup();
+  const before = mgr._listeners.size;
+  await compare.set('oisst', 'chlor-a');
+  compare.destroy();
+  assert.equal(compare.getState(), null);
+  assert.equal(splits.size, 0);
+  assert.equal(mgr._listeners.size, before - 1); // its own manager subscription is gone
+  const n = seen.length;
+  await compare.set('oisst', 'ndvi').catch(() => {});
+  assert.equal(seen.length, n); // a destroyed compare tells no one anything
+});

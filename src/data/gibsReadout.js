@@ -4,7 +4,8 @@
  * 2026-09-23), so a value is an exact lookup of one pixel of the raw tile — never of the rendered
  * globe, which is alpha-blended and filtered. An unknown colour is named, never snapped to a neighbour.
  */
-const MERCATOR_LIMIT = 85.0511287798;
+// atan(sinh(π)), not a truncated decimal: 85.0511287798 called a sliver of the map "outside"
+const MERCATOR_LIMIT = (Math.atan(Math.sinh(Math.PI)) * 180) / Math.PI;
 const TILE = 256;
 const WIDE = 10; // a bin wider than 10× the median is shown as a bound or a range, not a midpoint
 
@@ -16,14 +17,13 @@ export function tilePixel(lat, lon, z) {
   const fx = ((wrapped + 180) / 360) * n;
   const fy =
     ((1 - Math.asinh(Math.tan((lat * Math.PI) / 180)) / Math.PI) / 2) * n;
-  const x = Math.floor(fx),
-    y = Math.floor(fy);
-  return {
-    x,
-    y,
-    px: Math.floor((fx - x) * TILE),
-    py: Math.floor((fy - y) * TILE),
-  };
+  // A point on the map's south edge has fy = n exactly: it belongs to the last row and pixel, as in
+  // Cesium's WebMercatorTilingScheme, not to a row that does not exist.
+  const gx = Math.min(Math.floor(fx * TILE), n * TILE - 1),
+    gy = Math.min(Math.floor(fy * TILE), n * TILE - 1);
+  const x = Math.floor(gx / TILE),
+    y = Math.floor(gy / TILE);
+  return { x, y, px: gx - x * TILE, py: gy - y * TILE };
 }
 
 /** The tile URL (a `{z}/{y}/{x}` template) and pixel for a point at zoom `z`. */

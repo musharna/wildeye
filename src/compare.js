@@ -19,7 +19,9 @@ export function createCompare({
   const ids = new Set(drapeIds);
   const listeners = new Set();
   let state = null;
+  let destroyed = false;
   const emit = () => {
+    if (destroyed) return;
     const s = state && { ...state };
     for (const fn of listeners) fn(s);
   };
@@ -31,7 +33,7 @@ export function createCompare({
     setSplit(s.right, SPLIT.NONE);
     emit();
   };
-  dataManager.subscribe((change) => {
+  const unsubscribe = dataManager.subscribe((change) => {
     if (change?.type !== 'visibility' || change.enabled || !state) return;
     if (change.layerId === state.left || change.layerId === state.right) end();
   });
@@ -45,6 +47,7 @@ export function createCompare({
     },
 
     async set(left, right, position = state?.position ?? 0.5) {
+      if (destroyed) throw new Error('compare: destroyed');
       for (const id of [left, right])
         if (!ids.has(id)) throw new Error(`compare: '${id}' is not a drape`);
       if (left === right) throw new Error(`compare: both sides are '${left}'`);
@@ -65,6 +68,9 @@ export function createCompare({
       // drape outside the new pair on, and the one-drape rule would turn the real pair off.
       for (const id of [left, right]) {
         if (state !== next) return; // superseded by a newer set/off, or a side went off meanwhile
+        // A side already on (the share restore's layer lane turned it on) is left alone: a second
+        // enable would record a second user visibility event for a change nobody made.
+        if (dataManager.isEnabled(id)) continue;
         await dataManager.setEnabled(id, true, { origin: 'user' });
       }
       if (state !== next) return;
@@ -82,6 +88,14 @@ export function createCompare({
       state.position = Math.min(1, Math.max(0, Number(p) || 0));
       setPosition(state.position);
       emit();
+    },
+
+    /** End compare and drop every subscription; the controller is inert afterwards. */
+    destroy() {
+      end();
+      destroyed = true;
+      unsubscribe?.();
+      listeners.clear();
     },
 
     async off() {
@@ -113,10 +127,13 @@ export function decodeCompareParam(raw, drapeIds) {
   const m = /^([a-z0-9]{1,2})\.([a-z0-9]{1,2})\.(\d{1,3})$/.exec(raw);
   const bad = (why) => new Error(`compare: cmp='${raw}' ${why}`);
   if (!m) throw bad('is not <token>.<token>.<percent>');
-  const [left, right] = [ID_OF.get(m[1]), ID_OF.get(m[2])];
   const drapes = new Set(drapeIds);
-  if (!drapes.has(left) || !drapes.has(right))
-    throw bad('names a layer that is not a drape');
+  const [left, right] = [m[1], m[2]].map((tok) => {
+    const id = ID_OF.get(tok);
+    if (!id) throw bad(`has token '${tok}', which is not a layer`);
+    if (!drapes.has(id)) throw bad(`names '${id}', which is not a drape`);
+    return id;
+  });
   if (left === right) throw bad('names the same drape twice');
   const pct = Number(m[3]);
   if (pct > 100) throw bad('has a position over 100');

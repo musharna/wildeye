@@ -132,3 +132,31 @@ test("restack listeners run after the caller's synchronous bookkeeping", async (
   await Promise.resolve();
   assert.deepEqual(seen, ['new']);
 });
+
+test('stats name the frame being fetched until it lands, and the frame on the globe meanwhile', async () => {
+  // The compare label read stats.time only, so while a scrubbed frame downloaded it showed the old date
+  // with nothing to say a change was on its way (stage 2 review minor).
+  const stack = _drapeStackForTest(); stack.clear();
+  const viewer = { imageryLayers: fakeImagery() };
+  const entry = { id: 'y', png: 'data/rasters/y.png', time: '2026-09-11T12:00:00Z', bounds: { west: -1, south: -1, east: 1, north: 1 },
+    history: [{ time: '2026-09-10T12:00:00Z', png: 'data/rasters/y/a.png' }, { time: '2026-09-11T12:00:00Z', png: 'data/rasters/y/b.png' }] };
+  const saved = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ products: [entry] }) });
+  let release = null;
+  try {
+    const l = createRasterDrapeLayer({ id: 'y', name: 'y', icon: 'i', source: 's',
+      providerFor: (url) => (url.includes('/a.png') ? new Promise((r) => { release = () => r({ url }); }) : Promise.resolve({ url })),
+      imageryLayerFor: (p) => ({ p, show: true }) });
+    l.init(viewer); l.enable();
+    await l.update();
+    assert.equal(l.getStats().loadingTime, null); // nothing in flight
+    const pending = l.setObservedTime('2026-09-10T20:00:00Z');
+    assert.equal(l.getStats().time, '2026-09-11T12:00:00Z'); // still drawing the old frame
+    assert.equal(l.getStats().loadingTime, '2026-09-10T12:00:00Z');
+    release();
+    assert.equal(await pending, true);
+    assert.equal(l.getStats().time, '2026-09-10T12:00:00Z');
+    assert.equal(l.getStats().loadingTime, null);
+    l.destroy(viewer);
+  } finally { globalThis.fetch = saved; stack.clear(); }
+});

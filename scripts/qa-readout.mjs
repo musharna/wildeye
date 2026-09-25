@@ -39,8 +39,17 @@ const consoleErrors = [];
 try {
   const page = await browser.newPage();
   page.on('pageerror', (e) => pageErrors.push(String(e?.message || e).slice(0, 160)));
-  page.on('console', (m) => { if (m.type() === 'error' && /gibs|Data|what-lives-here/.test(m.text())) consoleErrors.push(m.text().slice(0, 200)); });
+  // m.text() renders an object argument as "[object Object]", which hid every readout failure's reason; the
+  // context object's `error` is read out of the page instead
+  page.on('console', (m) => {
+    if (m.type() !== 'error' || !/gibs|Data|what-lives-here/.test(m.text())) return;
+    const at = consoleErrors.push(m.text().slice(0, 200)) - 1;
+    m.args()[1]?.evaluate((o) => { const e = o?.error ?? o; return e?.message ? `${e.name}: ${e.message}` : String(e); })
+      .then((why) => { consoleErrors[at] += ` — ${why}`; }, () => {});
+  });
   await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
+  // QA_SELFTEST_CONSOLE=1 logs one readout-shaped console error, so the no-console-errors check can be seen to fail
+  if (process.env.QA_SELFTEST_CONSOLE) await page.evaluate(() => console.error('[Data:gibs-selftest] injected by QA_SELFTEST_CONSOLE'));
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.styleManager, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
   // Boot flies the camera and shows a first-run launcher over the centre (the qa-gibs / qa-compare pattern).
@@ -71,7 +80,8 @@ try {
   const lc = await readWith('gibs-landcover', { forest: P.forest, sahara: P.sahara, chicago: P.chicago });
   const want = { forest: 'Evergreen Broadleaf Forests', sahara: 'Barren', chicago: 'Urban and Built-up Lands' };
   report('class-known', Object.entries(want).every(([k, label]) => lc.rows[k]?.status === 'class' && lc.rows[k].text === label),
-    { got: Object.fromEntries(Object.entries(lc.rows).map(([k, r]) => [k, r && `${r.status}:${r.text}`])) });
+    // an error row carries its reason in `error`, not `text`: print it, or a failure reads "error:null"
+    { got: Object.fromEntries(Object.entries(lc.rows).map(([k, r]) => [k, r && `${r.status}:${r.text ?? r.error}`])) });
 
   const evi = await readWith('gibs-evi', { forest: P.forest, sahara: P.sahara });
   const lst = await readWith('gibs-lst', { forest: P.forest, sahara: P.sahara, delhi: P.delhi });
@@ -151,6 +161,9 @@ try {
 } finally {
   await browser.close();
 }
+// The readout logs every failure it swallows (tile HTTP errors, unknown colours, date mismatches); until
+// 2026-09-24 these were printed in the summary and never failed the run.
+report('no-console-errors', consoleErrors.length === 0 && pageErrors.length === 0, { consoleErrors: consoleErrors.slice(0, 8), pageErrors: pageErrors.slice(0, 5) });
 const failed = results.filter((r) => !r.ok).length;
 console.log(JSON.stringify({ summary: true, checks: results.length, failed, pageErrors: pageErrors.slice(0, 5), consoleErrors: consoleErrors.slice(0, 8) }));
 process.exit(failed ? 1 : 0);

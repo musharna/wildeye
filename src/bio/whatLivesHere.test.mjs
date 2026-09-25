@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { AREA_OUTLINE_ROLE, areaOutlinePrimitive, CENTRE_MARK_FRACTION, centreMark, circleOutline, classifyClick, createWhatLivesHere, HEADING } from './whatLivesHere.js';
+import { AREA_OUTLINE_ROLE, areaOutlinePrimitive, CENTRE_MARK_FRACTION, centreMark, circleOutline, classifyClick, createWhatLivesHere, HEADING, layerRowText } from './whatLivesHere.js';
 import { createBioClient, circlePolygonWkt, SEARCH_POLYGON_VERTICES } from './gbif.js';
 import { createDetailsCard } from './detailsCard.js';
 
@@ -826,3 +826,27 @@ async function captureConsoleErrorResult(fn) {
   console.error = () => {};
   try { return await fn(); } finally { console.error = original; }
 }
+
+test('readLayers throwing does not take the species search down with it', async () => {
+  // readLayers was called bare inside run(): a synchronous throw ended the whole search (stage 3 review minor).
+  const { controller, calls } = await captureConsoleErrorResult(() => rig({ readLayers: () => { throw new Error('layer list broke'); } }));
+  controller.arm();
+  await controller.handleClick(CLICK);
+  assert.equal(calls.near.length, 1, 'the GBIF search still ran');
+  assert.equal(calls.list.length, 1, 'and its list still shows');
+  assert.deepEqual(calls.list.at(-1).layers, ['⚠ map layers could not be read: layer list broke']);
+});
+
+test('a layer turned off before its reading lands says so, instead of reading… forever', async () => {
+  // readoutAt resolves null for a disabled layer; layerRowText(null) threw inside .then and the row never left "reading…".
+  const { controller, calls } = rig({ readLayers: () => [{ icon: '🗺️', name: 'Land cover', result: Promise.resolve(null) }] });
+  controller.arm();
+  await controller.handleClick(CLICK);
+  await until(() => calls.setLayers.length === 1, 'the row');
+  assert.deepEqual(calls.setLayers.at(-1), ['🗺️ Land cover: turned off before it was read']);
+});
+
+test('a gap with no selected time does not end on an empty date', () => {
+  assert.equal(layerRowText({ ...LC_ROW, status: 'gap', observed: null }), '🗺️ Land cover: no date served yet');
+  assert.equal(layerRowText({ ...LC_ROW, status: 'gap', observed: '2000-06-01T00' }), '🗺️ Land cover: no data at or before 2000-06-01');
+});

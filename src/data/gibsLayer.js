@@ -92,7 +92,9 @@ export function createGibsLayer({
         console.error(`[Data:${id}] GIBS tiles failing`, { date, error });
       }
     });
-    _imagery = imageryLayerFor(provider, { alpha });
+    // In a class map the colour is the datum, so it is drawn opaque to match its legend swatch; only a
+    // continuous overlay may let the basemap through.
+    _imagery = imageryLayerFor(provider, { alpha: _entry.classes?.length ? 1 : alpha });
     _imagery.show = _enabled;
     _viewer.imageryLayers.add(_imagery);
     stack(_viewer.imageryLayers, id, _imagery, zrank);

@@ -5,12 +5,17 @@
  */
 const BTN =
   'background:#16233a;color:#cfe3ff;border:1px solid rgba(120,170,255,.4);border-radius:5px;padding:2px 7px;cursor:pointer;font:inherit';
+const day = (t) => String(t).slice(0, 10);
+// A drape keeps drawing its old frame while the next one downloads, so the label names both.
+// (`loadingTime`, not `loading`: the manager owns stats.loading as its own enable/disable flag.)
 const dateOf = (stats) =>
   stats?.error
     ? `⚠ ${stats.error}`
-    : stats?.time
-      ? String(stats.time).slice(0, 10)
-      : 'no date';
+    : stats?.loadingTime && stats.loadingTime !== stats.time
+      ? `${stats.time ? day(stats.time) : 'no date'} → loading ${day(stats.loadingTime)}`
+      : stats?.time
+        ? day(stats.time)
+        : 'no date';
 
 export function installCompareUi({
   doc = globalThis.document,
@@ -118,30 +123,44 @@ export function installCompareUi({
   R.select.addEventListener('change', pick('right'));
   close.addEventListener('click', () => compare.off().catch(fail));
 
-  let dragging = false;
-  divider.addEventListener('pointerdown', (e) => {
-    dragging = true;
-    divider.setPointerCapture?.(e.pointerId);
-    e.preventDefault?.();
-  });
-  divider.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
+  // The drag listens on the document, not the 4 px divider: pointer capture is a bonus, not the
+  // mechanism, because setPointerCapture throws for a pointer the browser no longer counts as active.
+  const drag = (e) => {
     const r = container.getBoundingClientRect();
     compare.move((e.clientX - r.left) / r.width);
-  });
-  const stop = () => {
-    dragging = false;
   };
-  divider.addEventListener('pointerup', stop);
-  divider.addEventListener('pointercancel', stop);
+  const stop = () => {
+    doc.removeEventListener?.('pointermove', drag);
+    doc.removeEventListener?.('pointerup', stop);
+    doc.removeEventListener?.('pointercancel', stop);
+  };
+  divider.addEventListener('pointerdown', (e) => {
+    try {
+      divider.setPointerCapture?.(e.pointerId);
+    } catch {
+      // no capture: the document listeners below still carry the drag
+    }
+    e.preventDefault?.();
+    doc.addEventListener?.('pointermove', drag);
+    doc.addEventListener?.('pointerup', stop);
+    doc.addEventListener?.('pointercancel', stop);
+  });
 
-  compare.subscribe(render);
-  dataManager.subscribe(render);
-  onRestack(render);
-  // A microtask: the bridge's listener may run after this one, and a scrub into a gap only sets the
-  // layer's error (no restack, no manager event), so render once its bookkeeping has landed.
-  observedTime?.subscribe(() => queueMicrotask(render));
+  const unsubs = [
+    compare.subscribe(render),
+    dataManager.subscribe(render),
+    onRestack(render),
+    // A microtask: the bridge's listener may run after this one, and a scrub into a gap only sets the
+    // layer's error (no restack, no manager event), so render once its bookkeeping has landed.
+    observedTime?.subscribe(() => queueMicrotask(render)),
+  ];
   doc.defaultView?.addEventListener?.('resize', render);
   render();
-  return { toggle, panel, divider, render };
+  const destroy = () => {
+    stop();
+    for (const u of unsubs) if (typeof u === 'function') u();
+    doc.defaultView?.removeEventListener?.('resize', render);
+    for (const n of [toggle, panel, divider]) n.parentNode?.removeChild(n);
+  };
+  return { toggle, panel, divider, render, destroy };
 }
