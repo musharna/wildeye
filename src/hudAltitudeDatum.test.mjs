@@ -105,7 +105,7 @@ test('hud.js corrects the camera height to MSL through the geoid module', () => 
   assert.equal(
     has(/this\._geoidRequested = true;/),
     true,
-    'the ~2.7 MB grid must be requested once, on demand — not at HUD construction',
+    'the lazy geoid grid must be requested once, on demand — not at HUD construction',
   );
   assert.equal(
     has(/\.catch\(\(\) => \{ \/\* readout falls back to the uncorrected height \*\/ \}\)/),
@@ -170,7 +170,7 @@ test('the sensor model keeps the ellipsoidal height it was tuned against', () =>
 
 // ── The cold → resolved transition, driven live ─────────────────────────────
 //
-// The grid is a lazy ~2.7 MB chunk, so the first telemetry ticks of a session
+// The grid is a lazy ~0.69 MB chunk, so the first telemetry ticks of a session
 // paint UNCORRECTED. The corner readout picks the correction up on the very
 // next tick once it lands; the summary line has no such cadence — it repaints
 // on camera settle or its own 15 s retry. That left a window at SFO where the

@@ -5,12 +5,11 @@
     "/cesium/Assets/approximateTerrainHeights.json",
     "/cesium/Cesium.js",
     "index.html",
-    "node_modules/egm96-universal/dist/egm96-universal.esm.js"
+    "src/data/egm96Grid.generated.js"
   ],
   "vendorBytes": {
     "/cesium/Cesium.js": 5726887,
     "/cesium/Assets/approximateTerrainHeights.json": 299471,
-    "/cesium/Assets/IAU2006_XYS/IAU2006_XYS_18.json": 65310,
-    "node_modules/egm96-universal/dist/egm96-universal.esm.js": 2770496
+    "/cesium/Assets/IAU2006_XYS/IAU2006_XYS_18.json": 65310
   }
 }
