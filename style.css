@@ -9924,3 +9924,53 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
   #observed-time .ot-range { flex: 1 1 120px; width: auto; }
   #observed-time .ot-label { flex-basis: 100%; min-width: 0; text-align: center; }
 }
+
+/* ── Command dock at 900 px and below: trays centred on the dock, tabs sized to their label ──
+   The narrow rules above centre each tray from its own tab with
+   (side + side + voice − tray) / 2, i.e. they assume the dock is two tabs plus the voice control.
+   This fork has no voice control, so every tray sat half a voice width (70 px) off centre: at 390 px
+   presets began off the left edge and location ran off the right (2026-09-24). The tabs were also
+   fixed at 52-68 px, narrower than "VISUAL PRESETS", so labels were cut to "ESETS" and "L".
+   Here the tabs stop being the trays' containing block, so a tray centres on the dock's own box
+   whatever the dock holds, and a tab is as wide as its label. Checked by scripts/qa-command-dock.mjs. */
+@media (max-width: 900px) {
+  /* 1.25rem a side, not 0.75rem: the pin floats ~15 px past the tray's top-right corner and at
+     0.75rem it ran 3 px off the screen */
+  #command-dock {
+    --dock-popover-mobile-width: calc(100vw - 2.5rem);
+  }
+
+  #command-dock > #location-bar,
+  #command-dock > #location-bar:not(.collapsed),
+  #command-dock > #control-panel,
+  #command-dock > #control-panel:not(.collapsed),
+  #command-dock:has(#location-bar:not(.collapsed)) > #control-panel,
+  #command-dock:has(#control-panel:not(.collapsed)) > #location-bar {
+    position: static;
+    flex: 0 0 auto;
+    width: auto;
+    /* a backdrop-filter makes an element the containing block of its absolute descendants even when
+       static, which kept each tray centred on its tab; the dock behind already blurs the scene */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  #command-dock .location-inner,
+  #command-dock .panel-inner,
+  #command-dock #location-bar.collapsed .location-inner,
+  #command-dock #control-panel.collapsed .panel-inner {
+    position: static;
+  }
+
+  #command-dock .panel-title,
+  #command-dock .location-toolbar-label {
+    max-width: none;
+    overflow: visible;
+  }
+
+  #command-dock #location-bar .dock-popover-content,
+  #command-dock #control-panel .dock-popover-content {
+    right: auto;
+    left: calc(50% - var(--dock-popover-mobile-width) / 2);
+  }
+}
