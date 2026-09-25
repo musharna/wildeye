@@ -204,6 +204,8 @@ def test_list_checklists_pages_through_the_publisher_keeps_griis_and_refuses_a_l
                     "Global Register of Introduced and Invasive Species - occurrences",
                     dtype="OCCURRENCE",
                 ),
+                ds("lu", "Global Register of Introduced and Invasive Species GRIIS - Luxembourg"),
+                ds("no", "Global Register of Invasive and Introduced Species - Norway"),
             ],
         },
     }
@@ -215,12 +217,13 @@ def test_list_checklists_pages_through_the_publisher_keeps_griis_and_refuses_a_l
         return pages[off]
 
     got, protected = list_checklists(fetch_json, limit=2)
-    assert [c["key"] for c in got] == ["mw", "nz", "re"], (
+    assert [c["key"] for c in got] == ["lu", "mw", "no", "nz", "re"], (
         "GRIIS area checklists only, sorted by key"
     )
     assert protected == ["Lake Mburo, Uganda"], "protected-area checklists are set aside and named, not dropped"
     assert len(seen) == 2 and "limit=2" in seen[0]
-    nz = got[1]
+    assert [c["area"] for c in got] == ["Luxembourg", "Malawi", "Norway", "New Zealand", "Reunion"]
+    nz = got[3]
     assert nz == {
         "key": "nz",
         "title": "Global Register of Introduced and Invasive Species - New Zealand",
@@ -267,7 +270,7 @@ def test_list_checklists_pages_through_the_publisher_keeps_griis_and_refuses_a_l
         list_checklists(lambda url: odd[int(url.split("offset=")[1])], limit=2)
 
     unknown = {0: {"count": 1, "endOfRecords": True, "results": [
-        ds("z", "Introduced and Invasive Species of Zedland (draft)")]}}
+        ds("z", "Alien plants of Zedland (draft)")]}}
     with pytest.raises(ValueError, match="Zedland.*title"):
         list_checklists(lambda url: unknown[int(url.split("offset=")[1])], limit=2)
 

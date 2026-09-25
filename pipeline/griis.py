@@ -27,13 +27,14 @@ LICENCES = {
     "http://creativecommons.org/licenses/by/4.0/legalcode": "CC BY 4.0",
     "http://creativecommons.org/publicdomain/zero/1.0/legalcode": "CC0 1.0",
 }
-_TITLE = re.compile(
-    r"^(?:Global Register|GRIIS Checklist) of Introduced and Invasive Species\s*[-–]\s*(.+?)\s*$"
+_REGISTER = (
+    r"(?:Global Register|GRIIS Checklist) of (?:Introduced and Invasive|Invasive and Introduced) Species"
+    r"(?: GRIIS)?\s*[-–]\s*(.+?)\s*$"
 )
-_PROTECTED = re.compile(
-    r"^Protected Areas\s*[-–]\s*(?:Global Register|GRIIS Checklist) of Introduced and Invasive Species"
-    r"\s*[-–]\s*(.+?)\s*$"
-)
+_TITLE = re.compile("^" + _REGISTER)
+_PROTECTED = re.compile(r"^Protected Areas\s*[-–]\s*" + _REGISTER)
+# ISSG checklists that are not area registers; any other title that fits neither form raises.
+NOT_A_REGISTER = {"Global Invasive Species Database"}
 _VERSION_TAG = re.compile(r"\s*\(ver\.[^()]*\)$")
 
 
@@ -47,8 +48,8 @@ def area_of(title: str) -> str:
 
 def list_checklists(fetch_json, limit: int = 1000) -> tuple[list[dict], list[str]]:
     """Every national GRIIS checklist ISSG publishes, sorted by GBIF dataset key, and the areas of the
-    protected-area lists (named, not drawn). A checklist whose title mentions introduced and invasive species
-    but matches neither form raises, as does a GRIIS list without a Darwin Core Archive or under a licence
+    protected-area lists (named, not drawn). A checklist whose title matches neither form and is not in
+    NOT_A_REGISTER raises, as does a GRIIS list without a Darwin Core Archive or under a licence
     other than CC BY 4.0 / CC0: nothing is skipped silently."""
     out, protected, offset = [], [], 0
     while True:
@@ -60,10 +61,10 @@ def list_checklists(fetch_json, limit: int = 1000) -> tuple[list[dict], list[str
             if m := _PROTECTED.match(title):
                 protected.append(_VERSION_TAG.sub("", m.group(1)).strip())
                 continue
-            if not _TITLE.match(title):
-                if "Introduced and Invasive Species" in title:
-                    raise ValueError(f"{title}: unrecognised GRIIS title")
+            if title in NOT_A_REGISTER:
                 continue
+            if not _TITLE.match(title):
+                raise ValueError(f"{title}: unrecognised GRIIS title")
             arch = [
                 e["url"]
                 for e in d.get("endpoints", [])
