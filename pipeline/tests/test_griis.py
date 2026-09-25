@@ -166,6 +166,8 @@ def test_area_of_strips_the_register_prefix_and_the_version_tag():
         )
         == "Eswatini (Swaziland)"
     )
+    # 20 live titles use an en dash (2026-09-25: Reunion, Guadeloupe, Martinique, Azerbaijan, ...)
+    assert area_of("Global Register of Introduced and Invasive Species – Reunion") == "Reunion"
     with pytest.raises(ValueError, match="not a GRIIS title"):
         area_of("Global Invasive Species Database")
 
@@ -181,6 +183,11 @@ def test_list_checklists_pages_through_the_publisher_keeps_griis_and_refuses_a_l
                     "Global Register of Introduced and Invasive Species - New Zealand",
                 ),
                 ds("gisd", "Global Invasive Species Database"),
+                ds("re", "Global Register of Introduced and Invasive Species – Reunion"),
+                ds(
+                    "pa",
+                    "Protected Areas - Global Register of Introduced and Invasive Species - Lake Mburo, Uganda",
+                ),
             ],
         },
         2: {
@@ -207,10 +214,11 @@ def test_list_checklists_pages_through_the_publisher_keeps_griis_and_refuses_a_l
         off = int(url.split("offset=")[1])
         return pages[off]
 
-    got = list_checklists(fetch_json, limit=2)
-    assert [c["key"] for c in got] == ["mw", "nz"], (
-        "GRIIS checklists only, sorted by key"
+    got, protected = list_checklists(fetch_json, limit=2)
+    assert [c["key"] for c in got] == ["mw", "nz", "re"], (
+        "GRIIS area checklists only, sorted by key"
     )
+    assert protected == ["Lake Mburo, Uganda"], "protected-area checklists are set aside and named, not dropped"
     assert len(seen) == 2 and "limit=2" in seen[0]
     nz = got[1]
     assert nz == {
@@ -257,6 +265,11 @@ def test_list_checklists_pages_through_the_publisher_keeps_griis_and_refuses_a_l
     }
     with pytest.raises(ValueError, match="Oddland.*licence"):
         list_checklists(lambda url: odd[int(url.split("offset=")[1])], limit=2)
+
+    unknown = {0: {"count": 1, "endOfRecords": True, "results": [
+        ds("z", "Introduced and Invasive Species of Zedland (draft)")]}}
+    with pytest.raises(ValueError, match="Zedland.*title"):
+        list_checklists(lambda url: unknown[int(url.split("offset=")[1])], limit=2)
 
 
 def test_cached_archive_downloads_once_per_version_and_refetches_a_new_one(tmp_path):

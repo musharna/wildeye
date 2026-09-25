@@ -28,7 +28,11 @@ LICENCES = {
     "http://creativecommons.org/publicdomain/zero/1.0/legalcode": "CC0 1.0",
 }
 _TITLE = re.compile(
-    r"^(?:Global Register|GRIIS Checklist) of Introduced and Invasive Species\s*-\s*(.+?)\s*$"
+    r"^(?:Global Register|GRIIS Checklist) of Introduced and Invasive Species\s*[-–]\s*(.+?)\s*$"
+)
+_PROTECTED = re.compile(
+    r"^Protected Areas\s*[-–]\s*(?:Global Register|GRIIS Checklist) of Introduced and Invasive Species"
+    r"\s*[-–]\s*(.+?)\s*$"
 )
 _VERSION_TAG = re.compile(r"\s*\(ver\.[^()]*\)$")
 
@@ -41,16 +45,25 @@ def area_of(title: str) -> str:
     return _VERSION_TAG.sub("", m.group(1)).strip()
 
 
-def list_checklists(fetch_json, limit: int = 1000) -> list[dict]:
-    """Every GRIIS checklist ISSG publishes, sorted by GBIF dataset key. A GRIIS list without a Darwin Core
-    Archive, or under a licence other than CC BY 4.0 / CC0, raises rather than being skipped."""
-    out, offset = [], 0
+def list_checklists(fetch_json, limit: int = 1000) -> tuple[list[dict], list[str]]:
+    """Every national GRIIS checklist ISSG publishes, sorted by GBIF dataset key, and the areas of the
+    protected-area lists (named, not drawn). A checklist whose title mentions introduced and invasive species
+    but matches neither form raises, as does a GRIIS list without a Darwin Core Archive or under a licence
+    other than CC BY 4.0 / CC0: nothing is skipped silently."""
+    out, protected, offset = [], [], 0
     while True:
         page = fetch_json(LIST_URL.format(limit=limit, offset=offset))
         for d in page["results"]:
-            if d.get("type") != "CHECKLIST" or not _TITLE.match(d.get("title", "")):
+            if d.get("type") != "CHECKLIST":
                 continue
-            title = d["title"]
+            title = d.get("title", "")
+            if m := _PROTECTED.match(title):
+                protected.append(_VERSION_TAG.sub("", m.group(1)).strip())
+                continue
+            if not _TITLE.match(title):
+                if "Introduced and Invasive Species" in title:
+                    raise ValueError(f"{title}: unrecognised GRIIS title")
+                continue
             arch = [
                 e["url"]
                 for e in d.get("endpoints", [])
@@ -78,7 +91,7 @@ def list_checklists(fetch_json, limit: int = 1000) -> list[dict]:
         if page.get("endOfRecords", True):
             break
         offset += limit
-    return sorted(out, key=lambda c: c["key"])
+    return sorted(out, key=lambda c: c["key"]), sorted(protected)
 
 
 def cached_archive(c: dict, cache: Path, fetch_bytes) -> Path:
