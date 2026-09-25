@@ -529,21 +529,6 @@ body.cockpit-mode #cockpit-cloud-effects.active {
   height: 100%;
 }
 
-#title-bar .title-accent,
-.loader-content .title-accent {
-  color: var(--accent);
-  font-weight: 300;
-}
-
-#title-bar .subtitle {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 5px;
-  color: var(--text-dim);
-  margin-top: 8px;
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
-}
-
 /* ── Style Indicator ──────────────────────────── */
 #style-indicator {
   position: fixed;
@@ -3899,8 +3884,6 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
 }
 body.cockpit-mode #intel-hud .hud-summary-wrap { max-width: min(34vw, 380px); }
 body.cockpit-mode #intel-hud .hud-summary { font-size: 9px; }
-body.cockpit-mode #intel-hud .hud-left-edge { left: 22px; }
-body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 
 @media (max-width: 760px) {
   #view-switcher { right: 16px; bottom: 16px; }
@@ -4139,7 +4122,6 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   line-height: 1.6;
 }
 
-.hud-top-bar,
 .hud-bottom-bar {
   display: none;
   position: absolute;
@@ -4156,22 +4138,9 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   pointer-events: none;
 }
 
-.hud-top-bar {
-  top: 70px;
-}
-
 .hud-bottom-bar {
   bottom: 110px;
   justify-content: center;
-}
-
-.hud-top-bar-center {
-  opacity: 0.84;
-}
-
-.hud-top-bar-left,
-.hud-top-bar-right {
-  opacity: 0.6;
 }
 
 /* Corner blocks */
@@ -4226,18 +4195,6 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   opacity: 0.95;
 }
 
-.hud-classification {
-  font-size: 12px;
-  letter-spacing: 2.5px;
-  font-weight: 600;
-  margin-bottom: 3px;
-}
-
-.hud-system {
-  font-size: 13px;
-  opacity: 0.8;
-}
-
 .hud-mode {
   font-size: 16px;
   font-weight: 700;
@@ -4267,71 +4224,12 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
   text-overflow: ellipsis;
 }
 
-.hud-rec {
-  font-size: 13px;
-  letter-spacing: 2px;
-}
-
-#hud-rec-dot {
-  color: #ff3333;
-  text-shadow: 0 0 6px rgba(255, 51, 51, 0.8);
-  font-size: 14px;
-  vertical-align: middle;
-}
-
-.hud-orbital {
-  font-size: 12px;
-  opacity: 0.7;
-  letter-spacing: 1.5px;
-}
-
-/* Edge annotations (vertical text) */
-.hud-edge {
-  position: absolute;
-  font-size: 10px;
-  letter-spacing: 1.5px;
-  opacity: 0.5;
-}
-
-.hud-left-edge {
-  left: 36px;
-  top: 50%;
-  transform: translateY(-50%) rotate(-90deg);
-  transform-origin: left center;
-  white-space: nowrap;
-  display: flex;
-  gap: 20px;
-}
-
-.hud-right-edge {
-  right: 36px;
-  top: 50%;
-  transform: translateY(-50%) rotate(90deg);
-  transform-origin: right center;
-  white-space: nowrap;
-  display: flex;
-  gap: 20px;
-}
-
-#intel-hud[data-variant='tactical'] .hud-top-bar,
 #intel-hud[data-variant='tactical'] .hud-bottom-bar {
   display: none;
 }
 
-#intel-hud[data-variant='operator'] .hud-top-bar,
 #intel-hud[data-variant='operator'] .hud-bottom-bar {
   display: flex;
-}
-
-#intel-hud[data-variant='operator'] .hud-top-bar {
-  top: max(10vh, 90px);
-  left: 50%;
-  right: auto;
-  width: min(52vw, 720px);
-  transform: translateX(-50%);
-  border-color: rgba(255, 255, 255, 0.24);
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0.56), rgba(8, 26, 34, 0.5));
-  box-shadow: 0 0 24px rgba(0, 255, 255, 0.08);
 }
 
 #intel-hud[data-variant='tactical'] .hud-top-left,
@@ -4358,11 +4256,7 @@ body.cockpit-mode #intel-hud .hud-right-edge { right: 22px; }
 }
 
 #intel-hud[data-variant='minimal'] .hud-top-right,
-#intel-hud[data-variant='minimal'] .hud-bottom-right,
-#intel-hud[data-variant='minimal'] .hud-left-edge,
-#intel-hud[data-variant='minimal'] .hud-right-edge,
-#intel-hud[data-variant='minimal'] .hud-classification,
-#intel-hud[data-variant='minimal'] .hud-system {
+#intel-hud[data-variant='minimal'] .hud-bottom-right {
   display: none;
 }
 
@@ -6838,27 +6732,9 @@ body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
     right: 16px;
   }
 
-  .hud-left-edge,
-  .hud-right-edge {
-    display: none;
-  }
-
-  .hud-top-bar,
   .hud-bottom-bar {
     width: calc(100vw - 24px);
     left: 12px;
-    transform: none;
-  }
-
-  .hud-top-bar {
-    top: 54px;
-    font-size: 9px;
-  }
-
-  #intel-hud[data-variant='operator'] .hud-top-bar {
-    left: 12px;
-    right: auto;
-    width: calc(100vw - 24px);
     transform: none;
   }
 

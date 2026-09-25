@@ -2,7 +2,7 @@
   "note": "Exact src/ call counts per world-overlay workload (121 frames). Gated by scripts/callcount-check.mjs: totals must equal these. Regenerate with `npm run perf:callcount -- --update`.",
   "workloads": {
     "generic-above-cap": {
-      "total": 1547628,
+      "total": 1547626,
       "functions": {
         "src/annotations/annotationResolver.js:(anonymous)": 1,
         "src/backend.js:(anonymous)": 1,
@@ -200,7 +200,7 @@
         "src/overlays/worldOverlayAllocation.worker.mjs:perCandidate": 2,
         "src/overlays/worldOverlayAllocation.worker.mjs:position": 30250,
         "src/overlays/worldOverlayAllocation.worker.mjs:querySelector": 2,
-        "src/overlays/worldOverlayAllocation.worker.mjs:querySelectorAll": 44,
+        "src/overlays/worldOverlayAllocation.worker.mjs:querySelectorAll": 42,
         "src/overlays/worldOverlayAllocation.worker.mjs:raise": 121,
         "src/overlays/worldOverlayAllocation.worker.mjs:remove": 3,
         "src/overlays/worldOverlayAllocation.worker.mjs:removeEventListener": 2,
@@ -233,7 +233,7 @@
       }
     },
     "all-live-radio": {
-      "total": 5178163,
+      "total": 5178161,
       "functions": {
         "src/annotations/annotationResolver.js:(anonymous)": 1,
         "src/backend.js:(anonymous)": 1,
@@ -486,7 +486,7 @@
         "src/overlays/worldOverlayAllocation.worker.mjs:perCandidate": 2,
         "src/overlays/worldOverlayAllocation.worker.mjs:position": 62436,
         "src/overlays/worldOverlayAllocation.worker.mjs:querySelector": 2,
-        "src/overlays/worldOverlayAllocation.worker.mjs:querySelectorAll": 44,
+        "src/overlays/worldOverlayAllocation.worker.mjs:querySelectorAll": 42,
         "src/overlays/worldOverlayAllocation.worker.mjs:raise": 121,
         "src/overlays/worldOverlayAllocation.worker.mjs:remove": 3,
         "src/overlays/worldOverlayAllocation.worker.mjs:removeEventListener": 2,
@@ -532,7 +532,7 @@
       }
     },
     "phase6-detection": {
-      "total": 12885909,
+      "total": 12885907,
       "functions": {
         "src/annotations/annotationResolver.js:(anonymous)": 1,
         "src/backend.js:(anonymous)": 1,
@@ -769,7 +769,7 @@
         "src/overlays/worldOverlayAllocation.worker.mjs:observe": 2,
         "src/overlays/worldOverlayAllocation.worker.mjs:perCandidate": 2,
         "src/overlays/worldOverlayAllocation.worker.mjs:querySelector": 2,
-        "src/overlays/worldOverlayAllocation.worker.mjs:querySelectorAll": 44,
+        "src/overlays/worldOverlayAllocation.worker.mjs:querySelectorAll": 42,
         "src/overlays/worldOverlayAllocation.worker.mjs:raise": 121,
         "src/overlays/worldOverlayAllocation.worker.mjs:remove": 3,
         "src/overlays/worldOverlayAllocation.worker.mjs:removeEventListener": 3,

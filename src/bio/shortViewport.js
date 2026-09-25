@@ -101,8 +101,8 @@ export function createShortViewportRegions({
   return { stop: typeof stop === 'function' ? stop : () => {} };
 }
 
-/** The selector of the header boxes the short-viewport columns keep clear of: the title, its tagline and the top-centre buttons. */
-export const SHORT_HEADER_SELECTOR = '#title-bar h1, #title-bar .subtitle, #top-center-actions';
+/** The selector of the header boxes the short-viewport columns keep clear of: the title and the top-centre buttons. */
+export const SHORT_HEADER_SELECTOR = '#title-bar h1, #top-center-actions';
 
 /**
  * Fix round 6 (critic r5 S1): where a column running from `left` to `right` can start: 8 px below the lowest header box over it (a non-empty box

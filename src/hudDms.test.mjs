@@ -2,18 +2,6 @@
 // after degrees and minutes were cut, so 134°E printed as 133°59'60.00"E.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { registerHooks } from 'node:module';
-
-registerHooks({
-  resolve(specifier, context, next) {
-    if (specifier === 'mgrs') return { url: 'gev-test-stub:mgrs-dms', shortCircuit: true };
-    return next(specifier, context);
-  },
-  load(url, context, next) {
-    if (url === 'gev-test-stub:mgrs-dms') return { format: 'module', shortCircuit: true, source: 'export function forward() { return ""; }\nexport default { forward };\n' };
-    return next(url, context);
-  },
-});
 
 const { IntelHUD } = await import('./hud.js');
 

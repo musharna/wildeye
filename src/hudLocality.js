@@ -1,10 +1,9 @@
 /**
  * @module hudLocality
  * @description The locality half of the HUD summary line — either "NEAR <landmark>"
- * or the "SECTOR <lat/lon>" fallback.
+ * or the plain "<lat> <lon>" fallback.
  *
- * Split out of `hud.js` purely so it is unit-testable: `hud.js` pulls in the `mgrs`
- * CommonJS package, which Vite resolves but plain Node cannot import by named export.
+ * Split out of `hud.js` so it is unit-testable on its own.
  */
 
 /**
@@ -18,7 +17,7 @@
  *
  * 150 km is metro scale: a camera over San Francisco still reads NEAR ALCATRAZ, a
  * camera over DC still reads NEAR its monuments, and Chicago (962 km from the
- * nearest catalogued POI) correctly falls through to the SECTOR readout that
+ * nearest catalogued POI) correctly falls through to the lat/lon readout that
  * already worked for Honolulu and Rio.
  */
 export const NEAR_POI_MAX_KM = 150;
@@ -43,12 +42,12 @@ function coordinateTag(value, positive, negative) {
  * @param {number} latDeg Camera latitude in decimal degrees.
  * @param {number} lonDeg Camera longitude in decimal degrees.
  * @returns {string} `NEAR <POI> (<CITY>) <N>KM` within the bound (inclusive),
- *   otherwise `SECTOR <lat> <lon>`.
+ *   otherwise `<lat> <lon>`.
  */
 export function composeLocalityTag(nearest, latDeg, lonDeg) {
   const distKm = Number(nearest?.distKm);
   if (nearest && Number.isFinite(distKm) && distKm <= NEAR_POI_MAX_KM) {
     return `NEAR ${String(nearest.poi).toUpperCase()} (${String(nearest.city).toUpperCase()}) ${Math.round(distKm)}KM`;
   }
-  return `SECTOR ${coordinateTag(latDeg, 'N', 'S')} ${coordinateTag(lonDeg, 'E', 'W')}`;
+  return `${coordinateTag(latDeg, 'N', 'S')} ${coordinateTag(lonDeg, 'E', 'W')}`;
 }
