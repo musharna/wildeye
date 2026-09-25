@@ -45,6 +45,15 @@ const LOADS = 2;
 const READY_TIMEOUT_MS = 120_000;
 const SETTLE_QUIET_MS = 3_000;
 const SETTLE_MAX_MS = 30_000;
+/**
+ * Cesium's web workers (/cesium/Workers/*) are started by the engine as terrain
+ * tiles stream in, so WHICH of them a load starts depends on how far streaming
+ * got, not on the app's code: under load one run started
+ * incrementallyBuildTerrainPicker.js and the next did not. They are out of the
+ * file set and the settle count. Their bytes move only with the Cesium version,
+ * which the gated vendor-cesium chunk already tracks.
+ */
+export const STREAMING_DRIVEN = /^\/cesium\/Workers\//;
 
 /**
  * Map each built file to the source module it came from, using Vite's build
@@ -53,14 +62,23 @@ const SETTLE_MAX_MS = 30_000;
  * `node_modules/egm96-universal/dist/egm96-universal.esm.js`. Keying by source
  * rather than by a hash-stripped file name keeps two chunks that share a name
  * distinct, and tells vendor code from app code by where it actually lives.
- * @param {Record<string, {file: string, src?: string}>} manifest
+ *
+ * A chunk with no source module (a `manualChunks` group such as Cesium's) has
+ * a manifest key like `_vendor-cesium-CNfq2d1x.js`, which changes with every
+ * content hash; it is keyed by its chunk NAME instead, `chunk:vendor-cesium`.
+ * @param {Record<string, {file: string, src?: string, name?: string}>} manifest
  */
 export function manifestSources(manifest) {
   const sources = {};
   for (const [key, chunk] of Object.entries(manifest)) {
+    if (!chunk.src) {
+      if (!chunk.name) throw new Error(`manifest chunk ${key} has neither src nor name: cannot key it stably`);
+      sources[`/${chunk.file}`] = `chunk:${chunk.name}`;
+      continue;
+    }
     // A symlinked node_modules resolves to e.g. `../wildeye/node_modules/...`;
     // key from the last node_modules/ so the baseline is checkout-independent.
-    const source = chunk.src ?? key;
+    const source = chunk.src;
     const at = source.lastIndexOf('node_modules/');
     sources[`/${chunk.file}`] = at >= 0 ? source.slice(at) : source;
   }
@@ -83,7 +101,7 @@ export function startupKey(pathname, sources) {
 
 /** Vendor = code that lives in a dependency: a node_modules source or Cesium's static tree. */
 export function isVendorKey(key) {
-  return key.startsWith('node_modules/') || key.startsWith('/cesium/');
+  return key.startsWith('node_modules/') || key.startsWith('/cesium/') || key.startsWith('chunk:vendor-');
 }
 
 /**
@@ -104,6 +122,31 @@ export function compareLoad(baseline, measured) {
   const dropped = removed.length > 0 || vendorDeltas.some((row) => row.delta < 0);
   const verdict = rose ? 'regressed' : dropped ? 'improved' : 'equal';
   return { verdict, added, removed, vendorDeltas };
+}
+
+/**
+ * Collapse resource-timing entries into the startup file set and per-file
+ * bytes. A file can appear more than once — Cesium's workers each import the
+ * same shared chunks — and a repeat fetch served from a coalesced or cached
+ * request records decodedBodySize 0. Taking the FIRST entry made the bytes
+ * depend on which fetch finished first, so two loads disagreed; a file's size
+ * is a property of the file, so the largest body seen is used.
+ * @param {{url: string, bytes: number}[]} entries
+ */
+export function summarizeEntries(entries, origin, sources) {
+  const vendorBytes = {};
+  const appBytes = {};
+  for (const entry of entries) {
+    const resource = new URL(entry.url);
+    if (resource.origin !== origin) continue;
+    if (!/\.(m?js|json|geojsonl?|wasm|bin)$/i.test(resource.pathname)) continue;
+    if (STREAMING_DRIVEN.test(resource.pathname)) continue;
+    const key = startupKey(resource.pathname, sources);
+    const bucket = isVendorKey(key) ? vendorBytes : appBytes;
+    bucket[key] = Math.max(bucket[key] ?? 0, entry.bytes);
+  }
+  const files = [...Object.keys(vendorBytes), ...Object.keys(appBytes)].sort();
+  return { files, vendorBytes, appBytes };
 }
 
 function freePort() {
@@ -149,6 +192,12 @@ async function measureLoad(browser, url, sources) {
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(`pageerror: ${error.message}`));
     page.on('console', (message) => { if (message.type() === 'error') pageErrors.push(`console: ${message.text()}`); });
+    // A worker started from a blob: or data: URL loads its code with
+    // importScripts inside the worker, which never reaches the page's resource
+    // timeline — the prebuilt Cesium.js ran its workers that way and ~360 KB of
+    // /cesium/Workers/* went uncounted. Such a load cannot be measured, so fail.
+    const opaqueWorkers = [];
+    page.on('workercreated', (worker) => { if (!/^https?:/.test(worker.url())) opaqueWorkers.push(worker.url().slice(0, 80)); });
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: READY_TIMEOUT_MS });
     try {
       await page.waitForFunction(() => !!window.__godsEyeView?.styleManager, { timeout: READY_TIMEOUT_MS, polling: 50 });
@@ -165,9 +214,11 @@ async function measureLoad(browser, url, sources) {
     // tick, which lands either side of the ready signal from load to load.
     // Count every static file startup fetches instead: wait until no new one
     // has arrived for SETTLE_QUIET_MS. Quiet that never arrives is a failure.
-    const staticCount = () => page.evaluate((origin) => performance.getEntriesByType('resource')
-      .filter((entry) => entry.name.startsWith(origin) && /\.(m?js|json|geojsonl?|wasm|bin)(\?|#|$)/i.test(new URL(entry.name).pathname))
-      .length, new URL(url).origin);
+    const staticCount = () => page.evaluate((origin, streamingPrefix) => performance.getEntriesByType('resource')
+      .filter((entry) => entry.name.startsWith(origin)
+        && /\.(m?js|json|geojsonl?|wasm|bin)(\?|#|$)/i.test(new URL(entry.name).pathname)
+        && !new URL(entry.name).pathname.startsWith(streamingPrefix))
+      .length, new URL(url).origin, '/cesium/Workers/');
     const settleDeadline = Date.now() + SETTLE_MAX_MS;
     let lastCount = await staticCount();
     let quietSince = Date.now();
@@ -182,23 +233,12 @@ async function measureLoad(browser, url, sources) {
         quietSince = Date.now();
       }
     }
+    if (opaqueWorkers.length > 0) {
+      throw new Error(`${opaqueWorkers.length} worker(s) started from a non-http URL (${opaqueWorkers[0]}…): what they load is invisible to this gate`);
+    }
     const entries = await page.evaluate(() => performance.getEntriesByType('resource')
       .map((entry) => ({ url: entry.name, bytes: entry.decodedBodySize || 0 })));
-    const origin = new URL(url).origin;
-    const files = [];
-    const vendorBytes = {};
-    const appBytes = {};
-    for (const entry of entries) {
-      const resource = new URL(entry.url);
-      if (resource.origin !== origin) continue;
-      if (!/\.(m?js|json|geojsonl?|wasm|bin)$/i.test(resource.pathname)) continue;
-      const key = startupKey(resource.pathname, sources);
-      if (files.includes(key)) continue;
-      files.push(key);
-      if (isVendorKey(key)) vendorBytes[key] = entry.bytes;
-      else appBytes[key] = entry.bytes;
-    }
-    files.sort();
+    const { files, vendorBytes, appBytes } = summarizeEntries(entries, new URL(url).origin, sources);
     // Harness assertion: the real app bundle loaded, not an error page that
     // happened to define nothing.
     if (!files.includes('index.html')) {

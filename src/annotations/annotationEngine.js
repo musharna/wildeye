@@ -4,7 +4,9 @@ import { isRateLimitedOutcome, resolveAnnotationTarget } from './annotationResol
 
 // Dev convenience: expose the app's Cesium instance for console/preview probing
 // (single shared module instance — avoids dual-Cesium state bugs when testing).
-if (typeof window !== 'undefined' && !window.__CESIUM__) window.__CESIUM__ = Cesium;
+// Dev only: a production build that stores the namespace object keeps all of
+// Cesium, since Rollup can no longer see which members are used. Nothing reads it.
+if (import.meta.env?.DEV && typeof window !== 'undefined' && !window.__CESIUM__) window.__CESIUM__ = Cesium;
 
 /**
  * Annotation engine — the voice agent's "whiteboard" over the 3D world.
