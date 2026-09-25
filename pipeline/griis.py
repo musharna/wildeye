@@ -258,13 +258,16 @@ def count_list(t: dict[str, list[dict]]) -> dict:
     """Species on one checklist: `introduced` = taxa present and introduced; `invasive` = those of them flagged
     invasive, by the list's own basis — "impact" (GRIIS isInvasive: evidence of impact in the area) or
     "spread" (US-RIIS degreeOfEstablishment categories D2/E, used only when the list has no isInvasive column).
-    `excluded` counts the taxa left out and why."""
+    `excluded` counts the taxa left out and why. A list with no occurrenceStatus column (Turkey) asserts no
+    status, so its rows count as present and `presence` says "not stated"; a blank value in a list that has the
+    column is not present."""
     dist = t.get("Distribution") or []
     if not dist:
         raise ValueError("no Distribution rows")
     sp = t.get("SpeciesProfile") or []
     has_flag = bool(sp) and "isInvasive" in sp[0]
     has_degree = "degreeOfEstablishment" in dist[0]
+    has_status = "occurrenceStatus" in dist[0]
     if not has_flag and not has_degree:
         raise ValueError(
             "neither an isInvasive column nor degreeOfEstablishment: no invasive basis"
@@ -272,7 +275,7 @@ def count_list(t: dict[str, list[dict]]) -> dict:
     introduced, not_present, unknown_origin, spread = set(), set(), set(), set()
     for r in dist:
         status, means = (
-            _norm(r.get("occurrenceStatus")),
+            _norm(r.get("occurrenceStatus")) if has_status else "present",
             _norm(r.get("establishmentMeans")),
         )
         if status not in PRESENT | NOT_PRESENT:
@@ -312,6 +315,7 @@ def count_list(t: dict[str, list[dict]]) -> dict:
         invasive = spread
     return {
         "basis": "impact" if has_flag else "spread",
+        "presence": "stated" if has_status else "not stated",
         "introduced": len(introduced),
         "invasive": len(invasive),
         "excluded": {
@@ -389,6 +393,7 @@ def build(
                     "introduced": n["introduced"],
                     "invasive": n["invasive"],
                     "basis": n["basis"],
+                    "presence": n["presence"],
                     "version": c["modified"],
                 }
             )
@@ -416,6 +421,7 @@ def build(
                     "introduced": n["introduced"],
                     "invasive": n["invasive"],
                     "basis": n["basis"],
+                    "presence": n["presence"],
                     "version": c["modified"],
                     "doi": c["doi"],
                     "licence": c["licence"],

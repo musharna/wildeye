@@ -372,6 +372,19 @@ def test_count_list_griis_flag_counts_present_introduced_species_and_their_invas
         "1, 2, 9, 12; 'Invasive?' is not a flag, 4/5/6/10/14 are not present introduced species"
     )
     assert got["excluded"] == {"not present": 3, "origin unknown": 4}
+    assert got["presence"] == "stated"
+
+
+def test_count_list_a_list_without_an_occurrence_status_column_counts_its_rows_and_says_presence_is_not_stated():
+    """Turkey (2026-09-25): 968 rows, no occurrenceStatus term in meta.xml. Folding a missing column into
+    'not present' drew Turkey as 0 introduced species."""
+    t = tables([("1", "x", "Alien"), ("2", "x", "Alien"), ("3", "x", "Cryptogenic|Uncertain")],
+               {"1": "Invasive", "2": "Null", "3": "Invasive"})
+    for r in t["Distribution"]:
+        del r["occurrenceStatus"]
+    got = count_list(t)
+    assert (got["introduced"], got["invasive"], got["presence"]) == (2, 1, "not stated")
+    assert got["excluded"] == {"origin unknown": 1}
 
 
 def test_count_list_us_riis_layout_reads_the_spread_category():
@@ -496,14 +509,15 @@ def test_build_joins_lists_to_their_map_units_and_names_the_undrawn():
         lst("ch", "Chatham Islands, New Zealand", "2020-10-05"),
     ]
     counts = {
-        "uk": {"basis": "impact", "introduced": 2000, "invasive": 300, "excluded": {}},
+        "uk": {"basis": "impact", "presence": "not stated", "introduced": 2000, "invasive": 300, "excluded": {}},
         "nz": {
             "basis": "impact",
+            "presence": "stated",
             "introduced": 829,
             "invasive": 443,
             "excluded": {"origin unknown": 1},
         },
-        "ch": {"basis": "impact", "introduced": 40, "invasive": 9, "excluded": {}},
+        "ch": {"basis": "impact", "presence": "stated", "introduced": 40, "invasive": 9, "excluded": {}},
     }
     table = {
         "uk": {"area": "United Kingdom", "units": ["ENG", "SCT"]},
@@ -524,6 +538,7 @@ def test_build_joins_lists_to_their_map_units_and_names_the_undrawn():
         "introduced": 2000,
         "invasive": 300,
         "basis": "impact",
+        "presence": "not stated",
         "version": "2026-03-28",
         "doi": "10.15468/uk",
         "licence": "CC BY 4.0",
@@ -536,6 +551,7 @@ def test_build_joins_lists_to_their_map_units_and_names_the_undrawn():
             "introduced": 40,
             "invasive": 9,
             "basis": "impact",
+            "presence": "stated",
             "version": "2020-10-05",
         }
     ]
@@ -543,7 +559,7 @@ def test_build_joins_lists_to_their_map_units_and_names_the_undrawn():
 
 def test_build_refuses_an_unmapped_list_an_unknown_unit_and_two_lists_on_one_unit():
     units = {"NZL": {"type": "MultiPolygon", "coordinates": [sq(170, -40)]}}
-    c = {"basis": "impact", "introduced": 1, "invasive": 0, "excluded": {}}
+    c = {"basis": "impact", "presence": "stated", "introduced": 1, "invasive": 0, "excluded": {}}
     with pytest.raises(ValueError, match="Tokelau.*not in griis_areas.json"):
         build([lst("tk", "Tokelau")], {"tk": c}, {}, units)
     with pytest.raises(ValueError, match="New Zealand.*unit 'NZX'"):
