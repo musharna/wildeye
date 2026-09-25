@@ -3,12 +3,12 @@
   "files": [
     "/cesium/Assets/IAU2006_XYS/IAU2006_XYS_18.json",
     "/cesium/Assets/approximateTerrainHeights.json",
-    "/cesium/Cesium.js",
+    "chunk:vendor-cesium",
     "index.html",
     "src/data/egm96Grid.generated.js"
   ],
   "vendorBytes": {
-    "/cesium/Cesium.js": 5726887,
+    "chunk:vendor-cesium": 4036283,
     "/cesium/Assets/approximateTerrainHeights.json": 299471,
     "/cesium/Assets/IAU2006_XYS/IAU2006_XYS_18.json": 65310
   }

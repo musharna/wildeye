@@ -7739,7 +7739,11 @@ export default defineConfig(({ mode }) => {
   const localAllowedHosts = ['localhost', '127.0.0.1', '.local'];
   return {
     plugins: [
-      cesium(),
+      // rebuildCesium: bundle Cesium from npm so Rollup keeps only the ~100
+      // members the app uses, instead of serving the prebuilt 5.7 MB Cesium.js
+      // (1.69 MB gzip) whole. The plugin still copies Workers/Assets/ThirdParty/
+      // Widgets to /cesium/ and links widgets.css. Startup JS: 2.19 -> 1.58 MB gzip.
+      cesium({ rebuildCesium: true }),
       openSkyProxy(),
       celestrakProxy(),
       tomtomProxy(),
@@ -7796,6 +7800,17 @@ export default defineConfig(({ mode }) => {
       // dist/.vite/manifest.json maps each built file to its source module;
       // scripts/load-budget-check.mjs keys the startup gate by it.
       manifest: true,
+      rollupOptions: {
+        output: {
+          // Cesium in its own chunk: its hash changes only when Cesium or the
+          // set of Cesium members the app uses changes, so an app-only deploy
+          // does not make every visitor re-download ~1.4 MB of engine.
+          manualChunks(id) {
+            if (/[\\/]node_modules[\\/](cesium|@cesium)[\\/]/.test(id)) return 'vendor-cesium';
+            return undefined;
+          },
+        },
+      },
     },
   };
 });

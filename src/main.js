@@ -184,7 +184,13 @@ async function init() {
     loaderStatus.textContent = googleApiKey || cesiumToken
       ? 'Loading Google 3D Tiles...'
       : 'Loading the keyless globe...';
-    const photoreal = await loadPhotorealisticTileset(Cesium, {
+    // Pass only the members mapStartup uses: handing over the whole namespace
+    // object makes Rollup keep all of Cesium (rebuildCesium tree-shakes it).
+    const photoreal = await loadPhotorealisticTileset({
+      GoogleMaps: Cesium.GoogleMaps,
+      Ion: Cesium.Ion,
+      createGooglePhotorealistic3DTileset: Cesium.createGooglePhotorealistic3DTileset,
+    }, {
       googleApiKey,
       cesiumToken,
     });
