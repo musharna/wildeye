@@ -35,6 +35,7 @@ import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLaye
 import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer } from './data/gibsLayer.js';
 import { hansenLossLayer } from './data/hansenLoss.js';
 import { mangrovesLayer } from './data/mangroves.js';
+import { invasivesLayer } from './data/invasives.js';
 import { installDrapeExclusivity } from './data/drapeExclusive.js';
 import { createCompare, encodeCompareParam, decodeCompareParam } from './compare.js';
 import { installCompareUi } from './compareUi.js';
@@ -300,6 +301,7 @@ async function init() {
     dataManager.register(neonLayer);
     dataManager.register(gfwLayer);
     dataManager.register(mangrovesLayer);
+    dataManager.register(invasivesLayer);
     dataManager.register(whispersLayer);
     dataManager.register(riversLayer);
     dataManager.register(ecoregionsLayer);
@@ -383,8 +385,8 @@ async function init() {
       dismissCard: () => bioCard.element.querySelector('.bio-card-close')?.click(),
       setPanelCollapsed: (id, collapsed) => styleManager.setPanelCollapsed(id, collapsed, { persist: false, syncShare: false }),
     });
-    // Stage 3 "What's here": a WHAT LIVES HERE click also reads every enabled GIBS layer (and forest loss, mangroves) at the spot (grill A14).
-    const readGibsLayers = ({ lat, lon }) => [...gibsLayers, hansenLossLayer, mangrovesLayer]
+    // Stage 3 "What's here": a WHAT LIVES HERE click also reads every enabled GIBS layer (and forest loss, mangroves, GRIIS lists) at the spot (grill A14).
+    const readGibsLayers = ({ lat, lon }) => [...gibsLayers, hansenLossLayer, mangrovesLayer, invasivesLayer]
       .filter((l) => dataManager.isEnabled(l.id))
       .map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
