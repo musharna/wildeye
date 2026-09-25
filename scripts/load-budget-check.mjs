@@ -1,17 +1,20 @@
 #!/usr/bin/env node
 /**
- * load-budget-check — what a fresh load fetches before the app is ready.
+ * load-budget-check — what a fresh load fetches during startup.
  *
  * Serves the built `dist/` with `vite preview`, drives fresh headless loads
- * (cache disabled, new browser context each), and records every same-origin
- * script/data file whose fetch STARTED before `window.__godsEyeView.styleManager`
- * existed. Two things are gated, both exact:
+ * (cache disabled, new browser context each), waits for
+ * `window.__godsEyeView.styleManager`, then until no new same-origin
+ * script/data file has arrived for 3 s, and records every one fetched. The
+ * ready signal alone is not a cut: the HUD's first-tick geoid fetch lands on
+ * either side of it from load to load. Two things are gated, both exact:
  *
- *   1. the SET of files on the startup path (content hashes stripped), so a
+ *   1. the SET of files on the startup path, keyed by the source module each
+ *      came from (Vite's build manifest; Cesium's static tree by path), so a
  *      module pulled onto it — the way the 2.7 MB EGM96 grid is fetched on the
  *      HUD's first tick — is a red build, not a silent regression;
- *   2. the bytes of VENDOR files (`/cesium/*`, and chunks named after a
- *      package.json dependency), which change only on a dependency bump.
+ *   2. the bytes of VENDOR files (sources under `node_modules/`, and
+ *      `/cesium/*`), which change only on a dependency bump.
  *
  * The app's own chunks are printed but not byte-gated: their size moves with
  * nearly every edit, and a gate that fails on every PR teaches people to
@@ -40,21 +43,47 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const BASELINE_PATH = path.join(ROOT, 'scripts/load-budget-baseline.json');
 const LOADS = 2;
 const READY_TIMEOUT_MS = 120_000;
+const SETTLE_QUIET_MS = 3_000;
+const SETTLE_MAX_MS = 30_000;
 
-/** `/assets/index-DB4WOJsT.js` → `index.js`; `/cesium/Cesium.js` unchanged. */
-export function resourceKey(pathname) {
+/**
+ * Map each built file to the source module it came from, using Vite's build
+ * manifest (`build.manifest: true`): `/assets/index-DB4WOJsT.js` → `index.html`,
+ * `/assets/egm96-universal.esm-D6y_VLZc.js` →
+ * `node_modules/egm96-universal/dist/egm96-universal.esm.js`. Keying by source
+ * rather than by a hash-stripped file name keeps two chunks that share a name
+ * distinct, and tells vendor code from app code by where it actually lives.
+ * @param {Record<string, {file: string, src?: string}>} manifest
+ */
+export function manifestSources(manifest) {
+  const sources = {};
+  for (const [key, chunk] of Object.entries(manifest)) {
+    // A symlinked node_modules resolves to e.g. `../wildeye/node_modules/...`;
+    // key from the last node_modules/ so the baseline is checkout-independent.
+    const source = chunk.src ?? key;
+    const at = source.lastIndexOf('node_modules/');
+    sources[`/${chunk.file}`] = at >= 0 ? source.slice(at) : source;
+  }
+  return sources;
+}
+
+/**
+ * Stable key for a served file: its manifest source when it is a build output,
+ * else the served path (Cesium's static tree is copied, not bundled). A build
+ * output missing from the manifest means dist/ and its manifest disagree.
+ */
+export function startupKey(pathname, sources) {
   const clean = pathname.split(/[?#]/)[0];
+  if (sources[clean]) return sources[clean];
   if (clean.startsWith('/assets/')) {
-    return clean.slice('/assets/'.length).replace(/-[A-Za-z0-9_-]{8}(?=\.[A-Za-z0-9]+$)/, '');
+    throw new Error(`${clean} is a build output missing from dist/.vite/manifest.json: rebuild dist/`);
   }
   return clean;
 }
 
-/** Vendor = Cesium's static tree, or a chunk named after a runtime dependency. */
-export function isVendorKey(key, dependencyNames) {
-  if (key.startsWith('/cesium/')) return true;
-  const stem = key.replace(/\.[^.]+$/, '').replace(/\.esm$/, '');
-  return dependencyNames.includes(stem);
+/** Vendor = code that lives in a dependency: a node_modules source or Cesium's static tree. */
+export function isVendorKey(key) {
+  return key.startsWith('node_modules/') || key.startsWith('/cesium/');
 }
 
 /**
@@ -111,7 +140,7 @@ async function chromePath(puppeteer) {
 }
 
 /** One fresh load: same-origin files whose fetch started before app-ready. */
-async function measureLoad(browser, url, dependencyNames) {
+async function measureLoad(browser, url, sources) {
   const context = await browser.createBrowserContext();
   try {
     const page = await context.newPage();
@@ -132,12 +161,29 @@ async function measureLoad(browser, url, dependencyNames) {
       }).catch((probeError) => ({ probeError: probeError.message }));
       throw new Error(`${error.message}\n  page state: ${JSON.stringify(state)}\n  ${pageErrors.slice(0, 8).join('\n  ') || '(no page or console errors)'}`);
     }
-    const entries = await page.evaluate(() => {
-      const readyAt = performance.now();
-      return performance.getEntriesByType('resource')
-        .filter((entry) => entry.startTime < readyAt)
-        .map((entry) => ({ url: entry.name, bytes: entry.decodedBodySize || 0 }));
-    });
+    // "Before ready" is a race: the HUD requests the geoid grid on its first
+    // tick, which lands either side of the ready signal from load to load.
+    // Count every static file startup fetches instead: wait until no new one
+    // has arrived for SETTLE_QUIET_MS. Quiet that never arrives is a failure.
+    const staticCount = () => page.evaluate((origin) => performance.getEntriesByType('resource')
+      .filter((entry) => entry.name.startsWith(origin) && /\.(m?js|json|geojsonl?|wasm|bin)(\?|#|$)/i.test(new URL(entry.name).pathname))
+      .length, new URL(url).origin);
+    const settleDeadline = Date.now() + SETTLE_MAX_MS;
+    let lastCount = await staticCount();
+    let quietSince = Date.now();
+    while (Date.now() - quietSince < SETTLE_QUIET_MS) {
+      if (Date.now() > settleDeadline) {
+        throw new Error(`startup never went quiet: same-origin static files still arriving after ${SETTLE_MAX_MS} ms (${lastCount} so far)`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const count = await staticCount();
+      if (count !== lastCount) {
+        lastCount = count;
+        quietSince = Date.now();
+      }
+    }
+    const entries = await page.evaluate(() => performance.getEntriesByType('resource')
+      .map((entry) => ({ url: entry.name, bytes: entry.decodedBodySize || 0 })));
     const origin = new URL(url).origin;
     const files = [];
     const vendorBytes = {};
@@ -146,17 +192,17 @@ async function measureLoad(browser, url, dependencyNames) {
       const resource = new URL(entry.url);
       if (resource.origin !== origin) continue;
       if (!/\.(m?js|json|geojsonl?|wasm|bin)$/i.test(resource.pathname)) continue;
-      const key = resourceKey(resource.pathname);
+      const key = startupKey(resource.pathname, sources);
       if (files.includes(key)) continue;
       files.push(key);
-      if (isVendorKey(key, dependencyNames)) vendorBytes[key] = entry.bytes;
+      if (isVendorKey(key)) vendorBytes[key] = entry.bytes;
       else appBytes[key] = entry.bytes;
     }
     files.sort();
     // Harness assertion: the real app bundle loaded, not an error page that
     // happened to define nothing.
-    if (!files.includes('index.js')) {
-      throw new Error(`app entry index.js not among startup files: ${files.join(', ') || '(none)'}`);
+    if (!files.includes('index.html')) {
+      throw new Error(`app entry (manifest source index.html) not among startup files: ${files.join(', ') || '(none)'}`);
     }
     return { files, vendorBytes, appBytes };
   } finally {
@@ -179,8 +225,9 @@ async function main(argv) {
   const update = argv.includes('--update');
   const allowIncrease = argv.includes('--allow-increase');
   if (!existsSync(path.join(ROOT, 'dist/index.html'))) throw new Error('dist/ is missing: run `npm run build` first');
-  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  const dependencyNames = Object.keys(pkg.dependencies || {});
+  const manifestPath = path.join(ROOT, 'dist/.vite/manifest.json');
+  if (!existsSync(manifestPath)) throw new Error('dist/.vite/manifest.json is missing: vite.config.js must keep build.manifest on');
+  const sources = manifestSources(JSON.parse(readFileSync(manifestPath, 'utf8')));
   const { default: puppeteer } = await import('puppeteer');
 
   const port = await freePort();
@@ -192,10 +239,12 @@ async function main(argv) {
     browser = await puppeteer.launch({
       headless: 'new',
       executablePath: await chromePath(puppeteer),
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--enable-gpu', '--ignore-gpu-blocklist', '--disable-dev-shm-usage', '--window-size=1440,900'],
+      // Software WebGL everywhere: GitHub's GPU-less runner gets no context
+      // otherwise, and the gate measures fetches, not rendering.
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage', '--window-size=1440,900'],
     });
     const loads = [];
-    for (let index = 0; index < LOADS; index += 1) loads.push(await measureLoad(browser, url, dependencyNames));
+    for (let index = 0; index < LOADS; index += 1) loads.push(await measureLoad(browser, url, sources));
     const [measured, repeat] = loads;
     const agreement = compareLoad(measured, repeat);
     if (agreement.verdict !== 'equal') {
