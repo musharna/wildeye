@@ -53,7 +53,7 @@ const SETTLE_MAX_MS = 30_000;
  * file set and the settle count. Their bytes move only with the Cesium version,
  * which the gated vendor-cesium chunk already tracks.
  */
-export const STREAMING_DRIVEN = /^\/cesium\/Workers\//;
+export const STREAMING_DRIVEN_PREFIX = '/cesium/Workers/';
 
 /**
  * Map each built file to the source module it came from, using Vite's build
@@ -140,7 +140,7 @@ export function summarizeEntries(entries, origin, sources) {
     const resource = new URL(entry.url);
     if (resource.origin !== origin) continue;
     if (!/\.(m?js|json|geojsonl?|wasm|bin)$/i.test(resource.pathname)) continue;
-    if (STREAMING_DRIVEN.test(resource.pathname)) continue;
+    if (resource.pathname.startsWith(STREAMING_DRIVEN_PREFIX)) continue;
     const key = startupKey(resource.pathname, sources);
     const bucket = isVendorKey(key) ? vendorBytes : appBytes;
     bucket[key] = Math.max(bucket[key] ?? 0, entry.bytes);
@@ -218,7 +218,8 @@ async function measureLoad(browser, url, sources) {
       .filter((entry) => entry.name.startsWith(origin)
         && /\.(m?js|json|geojsonl?|wasm|bin)(\?|#|$)/i.test(new URL(entry.name).pathname)
         && !new URL(entry.name).pathname.startsWith(streamingPrefix))
-      .length, new URL(url).origin, '/cesium/Workers/');
+      // page.evaluate cannot close over module scope, so the one prefix is passed in.
+      .length, new URL(url).origin, STREAMING_DRIVEN_PREFIX);
     const settleDeadline = Date.now() + SETTLE_MAX_MS;
     let lastCount = await staticCount();
     let quietSince = Date.now();
