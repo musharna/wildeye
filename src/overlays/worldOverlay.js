@@ -16,6 +16,7 @@ import {
   placementVariants,
 } from './worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
+import { sortPooledRange } from './pooledSort.js';
 
 /**
  * @module worldOverlay
@@ -301,23 +302,6 @@ function compareProtectedCandidates(a, b) {
 
 function comparePaintItems(a, b) {
   return a.lane - b.lane || a.zIndex - b.zIndex || compareStableKeys(a.key, b.key);
-}
-
-/**
- * Stable in-place insertion sort over the live prefix of a pooled array.
- * `Array#sort` allocates a work buffer per call; the frame path only ever
- * orders a short, nearly sorted prefix.
- */
-function sortPooledRange(items, count, compare) {
-  for (let i = 1; i < count; i++) {
-    const item = items[i];
-    let j = i - 1;
-    while (j >= 0 && compare(items[j], item) > 0) {
-      items[j + 1] = items[j];
-      j--;
-    }
-    items[j + 1] = item;
-  }
 }
 
 /** Map#forEach callback that zeroes a demand tally without clearing the map. */

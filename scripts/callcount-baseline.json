@@ -2,7 +2,7 @@
   "note": "Exact src/ call counts per world-overlay workload (121 frames). Gated by scripts/callcount-check.mjs: totals must equal these. Regenerate with `npm run perf:callcount -- --update`.",
   "workloads": {
     "generic-above-cap": {
-      "total": 1969059,
+      "total": 1547620,
       "functions": {
         "src/annotations/annotationResolver.js:(anonymous)": 1,
         "src/backend.js:(anonymous)": 1,
@@ -110,6 +110,8 @@
         "src/data/trackingClickGesture.js:(anonymous)": 1,
         "src/data/vesselLabels.js:(anonymous)": 1,
         "src/locations.js:(anonymous)": 9,
+        "src/overlays/pooledSort.js:(anonymous)": 1,
+        "src/overlays/pooledSort.js:sortPooledRange": 242,
         "src/overlays/worldOverlay.js:(anonymous)": 508,
         "src/overlays/worldOverlay.js:activeCustomPaintLaneCount": 243,
         "src/overlays/worldOverlay.js:activeEntryCount": 121,
@@ -120,8 +122,8 @@
         "src/overlays/worldOverlay.js:clearCanvas": 121,
         "src/overlays/worldOverlay.js:clearCanvasSurface": 121,
         "src/overlays/worldOverlay.js:collectFrameCandidates": 121,
-        "src/overlays/worldOverlay.js:comparePaintItems": 289080,
-        "src/overlays/worldOverlay.js:compareStableKeys": 289080,
+        "src/overlays/worldOverlay.js:comparePaintItems": 78360,
+        "src/overlays/worldOverlay.js:compareStableKeys": 78360,
         "src/overlays/worldOverlay.js:createDevFacade": 1,
         "src/overlays/worldOverlay.js:destroyWorldOverlay": 1,
         "src/overlays/worldOverlay.js:drawWorldOverlay": 121,
@@ -162,7 +164,6 @@
         "src/overlays/worldOverlay.js:snapshotAndProject": 30250,
         "src/overlays/worldOverlay.js:snapshotCullPosition": 250,
         "src/overlays/worldOverlay.js:solveDomains": 121,
-        "src/overlays/worldOverlay.js:sortPooledRange": 242,
         "src/overlays/worldOverlay.js:sourceActive": 11762,
         "src/overlays/worldOverlay.js:sourceCanPaint": 11520,
         "src/overlays/worldOverlay.js:syncAccessibleActions": 121,
@@ -232,7 +233,7 @@
       }
     },
     "all-live-radio": {
-      "total": 9881963,
+      "total": 5178155,
       "functions": {
         "src/annotations/annotationResolver.js:(anonymous)": 1,
         "src/backend.js:(anonymous)": 1,
@@ -380,6 +381,8 @@
         "src/data/vesselLabels.js:applyVesselOverlayPolicy": 113,
         "src/data/vesselLabels.js:vesselOverlayCohortLimit": 9,
         "src/locations.js:(anonymous)": 9,
+        "src/overlays/pooledSort.js:(anonymous)": 1,
+        "src/overlays/pooledSort.js:sortPooledRange": 363,
         "src/overlays/worldOverlay.js:(anonymous)": 1325,
         "src/overlays/worldOverlay.js:activeCustomPaintLaneCount": 242,
         "src/overlays/worldOverlay.js:activeEntryCount": 121,
@@ -390,9 +393,9 @@
         "src/overlays/worldOverlay.js:clearCanvas": 121,
         "src/overlays/worldOverlay.js:clearCanvasSurface": 121,
         "src/overlays/worldOverlay.js:collectFrameCandidates": 121,
-        "src/overlays/worldOverlay.js:comparePaintItems": 4395480,
+        "src/overlays/worldOverlay.js:comparePaintItems": 351183,
         "src/overlays/worldOverlay.js:compareProtectedCandidates": 605,
-        "src/overlays/worldOverlay.js:compareStableKeys": 953444,
+        "src/overlays/worldOverlay.js:compareStableKeys": 293932,
         "src/overlays/worldOverlay.js:createDevFacade": 1,
         "src/overlays/worldOverlay.js:destroyWorldOverlay": 1,
         "src/overlays/worldOverlay.js:drawWorldOverlay": 121,
@@ -434,7 +437,6 @@
         "src/overlays/worldOverlay.js:snapshotAndProject": 104544,
         "src/overlays/worldOverlay.js:snapshotCullPosition": 864,
         "src/overlays/worldOverlay.js:solveDomains": 121,
-        "src/overlays/worldOverlay.js:sortPooledRange": 363,
         "src/overlays/worldOverlay.js:sourceActive": 44633,
         "src/overlays/worldOverlay.js:sourceCanPaint": 41487,
         "src/overlays/worldOverlay.js:syncAccessibleActions": 121,
@@ -530,7 +532,7 @@
       }
     },
     "phase6-detection": {
-      "total": 12885900,
+      "total": 12885901,
       "functions": {
         "src/annotations/annotationResolver.js:(anonymous)": 1,
         "src/backend.js:(anonymous)": 1,
@@ -700,6 +702,8 @@
         "src/data/trackingClickGesture.js:(anonymous)": 1,
         "src/data/vesselLabels.js:(anonymous)": 1,
         "src/locations.js:(anonymous)": 9,
+        "src/overlays/pooledSort.js:(anonymous)": 1,
+        "src/overlays/pooledSort.js:sortPooledRange": 121,
         "src/overlays/worldOverlay.js:(anonymous)": 8,
         "src/overlays/worldOverlay.js:activeCustomPaintLaneCount": 363,
         "src/overlays/worldOverlay.js:activeFadeCount": 121,
@@ -731,7 +735,6 @@
         "src/overlays/worldOverlay.js:setActive": 2,
         "src/overlays/worldOverlay.js:sizeCanvasSurface": 2,
         "src/overlays/worldOverlay.js:solveDomains": 121,
-        "src/overlays/worldOverlay.js:sortPooledRange": 121,
         "src/overlays/worldOverlay.js:syncAccessibleActions": 121,
         "src/overlays/worldOverlay.js:unregister": 2,
         "src/overlays/worldOverlay.js:updateEntryDiagnostics": 1,
