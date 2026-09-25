@@ -41,6 +41,7 @@
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "perf:callcount": "node scripts/callcount-check.mjs",
+    "perf:load": "node scripts/load-budget-check.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "qa:observed-time": "node scripts/qa-observed-time.mjs",
     "seed": "bash pipeline/seed.sh"
