@@ -186,6 +186,8 @@ const LAYER_ALIASES = new Map([
   ['bird flu', 'hpai'],
   ['small mammals', 'neon'],
   ['deforestation', 'gfw'],
+  ['forest loss', 'hansen-loss'],
+  ['tree cover loss', 'hansen-loss'],
   ['oxygen', 'cmems-o2'],
   ['die-offs', 'whispers'],
   ['die offs', 'whispers'],

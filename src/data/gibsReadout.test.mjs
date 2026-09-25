@@ -103,3 +103,21 @@ test('tile and pixel agree with Cesium\'s own web-mercator tiling, including bot
   }
   assert.equal(checked, 5 * lats.length * lons.length);
 });
+
+test('512-px tiles (GFW tree-cover loss) agree with Cesium at zoom z + 9, and a tile request carries the size', () => {
+  const scheme = new Cesium.WebMercatorTilingScheme();
+  const TRUE_LIM = (Math.atan(Math.sinh(Math.PI)) * 180) / Math.PI;
+  let checked = 0;
+  for (const z of [0, 4, 12]) for (const lat of [TRUE_LIM, -TRUE_LIM, -10.0, 41.88, 0]) for (const lon of [-180, -63.0, 0, 179.999]) {
+    const c = Cesium.Cartographic.fromDegrees(lon, lat);
+    const t = scheme.positionToTileXY(c, z);
+    const p = scheme.positionToTileXY(c, z + 9);
+    const got = tilePixel(lat, lon, z, 512);
+    assert.deepEqual([got.x, got.y, got.px, got.py], [t.x, t.y, p.x - t.x * 512, p.y - t.y * 512], `${lat},${lon} z${z}`);
+    checked += 1;
+  }
+  assert.equal(checked, 3 * 5 * 4);
+  const r = gibsTileRequest('T/{z}/{x}/{y}.png', 12, -10.0, -63.0, 512);
+  const t = tilePixel(-10.0, -63.0, 12, 512);
+  assert.deepEqual(r, { url: `T/12/${t.x}/${t.y}.png`, px: t.px, py: t.py });
+});

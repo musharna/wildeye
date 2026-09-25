@@ -2,7 +2,7 @@
   "note": "Exact src/ call counts per world-overlay workload (121 frames). Gated by scripts/callcount-check.mjs: totals must equal these. Regenerate with `npm run perf:callcount -- --update`.",
   "workloads": {
     "generic-above-cap": {
-      "total": 1547620,
+      "total": 1547624,
       "functions": {
         "src/annotations/annotationResolver.js:(anonymous)": 1,
         "src/backend.js:(anonymous)": 1,
@@ -76,7 +76,7 @@
         "src/data/labelArbiter.js:SpatialCandidateQueue": 2,
         "src/data/labelArbiter.js:SpatialHash": 2,
         "src/data/labelArbiter.js:visibilityBand": 3150,
-        "src/data/layerState.js:(anonymous)": 219,
+        "src/data/layerState.js:(anonymous)": 223,
         "src/data/layerState.js:booleanOption": 6,
         "src/data/layerState.js:enumOption": 4,
         "src/data/layerState.js:integerOption": 2,
@@ -233,7 +233,7 @@
       }
     },
     "all-live-radio": {
-      "total": 5178155,
+      "total": 5178159,
       "functions": {
         "src/annotations/annotationResolver.js:(anonymous)": 1,
         "src/backend.js:(anonymous)": 1,
@@ -316,7 +316,7 @@
         "src/data/labelArbiter.js:SpatialCandidateQueue": 3,
         "src/data/labelArbiter.js:SpatialHash": 3,
         "src/data/labelArbiter.js:visibilityBand": 2438,
-        "src/data/layerState.js:(anonymous)": 219,
+        "src/data/layerState.js:(anonymous)": 223,
         "src/data/layerState.js:booleanOption": 6,
         "src/data/layerState.js:enumOption": 4,
         "src/data/layerState.js:integerOption": 2,
@@ -532,7 +532,7 @@
       }
     },
     "phase6-detection": {
-      "total": 12885901,
+      "total": 12885905,
       "functions": {
         "src/annotations/annotationResolver.js:(anonymous)": 1,
         "src/backend.js:(anonymous)": 1,
@@ -668,7 +668,7 @@
         "src/data/labelArbiter.js:SpatialCandidateQueue": 1,
         "src/data/labelArbiter.js:SpatialHash": 1,
         "src/data/labelArbiter.js:visibilityBand": 21896,
-        "src/data/layerState.js:(anonymous)": 219,
+        "src/data/layerState.js:(anonymous)": 223,
         "src/data/layerState.js:booleanOption": 6,
         "src/data/layerState.js:enumOption": 4,
         "src/data/layerState.js:integerOption": 2,

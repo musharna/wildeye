@@ -6,11 +6,10 @@
  */
 // atan(sinh(π)), not a truncated decimal: 85.0511287798 called a sliver of the map "outside"
 const MERCATOR_LIMIT = (Math.atan(Math.sinh(Math.PI)) * 180) / Math.PI;
-const TILE = 256;
 const WIDE = 10; // a bin wider than 10× the median is shown as a bound or a range, not a midpoint
 
-/** 256-px web-mercator tile and pixel under a point; null beyond the mercator limit. */
-export function tilePixel(lat, lon, z) {
+/** Web-mercator tile and pixel under a point (`TILE`-px tiles: 256 for GIBS, 512 for GFW); null beyond the mercator limit. */
+export function tilePixel(lat, lon, z, TILE = 256) {
   if (!(Math.abs(lat) <= MERCATOR_LIMIT)) return null;
   const n = 2 ** z;
   const wrapped = ((((lon + 180) % 360) + 360) % 360) - 180;
@@ -27,8 +26,8 @@ export function tilePixel(lat, lon, z) {
 }
 
 /** The tile URL (a `{z}/{y}/{x}` template) and pixel for a point at zoom `z`. */
-export function gibsTileRequest(template, z, lat, lon) {
-  const t = tilePixel(lat, lon, z);
+export function gibsTileRequest(template, z, lat, lon, tileSize = 256) {
+  const t = tilePixel(lat, lon, z, tileSize);
   if (!t) return null;
   const url = template
     .replace("{z}", String(z))
