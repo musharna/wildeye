@@ -109,6 +109,7 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
   let _gen = 0;
   let _observed = null;   // ISO time selected by the shared observed-time selector, or null = latest
   let _shown = null;      // { time, png } currently on the globe
+  let _loading = null;    // time of the frame being fetched, until it lands (the label names both)
 
   const layer = {
     id, name, icon, source, updateInterval,
@@ -121,8 +122,14 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
     async _show(frame, entry) {
       const gen = ++_gen;
       const b = entry.bounds;
-      const provider = await providerFor(`${frame.png}?t=${frame.time || Date.now()}`,
-        Cesium.Rectangle.fromDegrees(b.west, b.south, b.east, b.north));
+      _loading = frame.time ?? null;
+      let provider;
+      try {
+        provider = await providerFor(`${frame.png}?t=${frame.time || Date.now()}`,
+          Cesium.Rectangle.fromDegrees(b.west, b.south, b.east, b.north));
+      } finally {
+        if (gen === _gen) _loading = null; // a newer fetch owns the field once it has started
+      }
       if (gen !== _gen || !_viewer) return false;
       const il = imageryLayerFor(provider, { alpha });
       il.show = _enabled;
@@ -196,7 +203,7 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
     destroy(viewer) {
       if (_layer && viewer?.imageryLayers) viewer.imageryLayers.remove(_layer, true);
       _stack.delete(id);
-      _layer = null; _entry = null; _viewer = null; _enabled = false; _shown = null; _observed = null;
+      _layer = null; _entry = null; _viewer = null; _enabled = false; _shown = null; _observed = null; _loading = null;
     },
 
     getRowControls() {
@@ -207,7 +214,7 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
 
     getStats() {
       return { count: _entry ? 1 : 0, lastUpdate: _lastUpdate, error: _lastError,
-        time: _shown?.time ?? _entry?.time ?? null, latest: _entry?.time ?? null, frames: _entry?.history?.length ?? 0,
+        time: _shown?.time ?? _entry?.time ?? null, loadingTime: _loading, latest: _entry?.time ?? null, frames: _entry?.history?.length ?? 0,
         observed: _observed, stale: Boolean(_entry?.stale) };
     },
   };

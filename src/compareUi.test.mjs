@@ -19,14 +19,24 @@ function stubDoc() {
     id: '',
     appendChild(c) {
       this.children.push(c);
+      c.parentNode = this;
+      return c;
+    },
+    removeChild(c) {
+      this.children.splice(this.children.indexOf(c), 1);
+      c.parentNode = null;
       return c;
     },
     addEventListener(ev, fn) {
       this.handlers[ev] = fn;
     },
+    removeEventListener(ev, fn) {
+      if (this.handlers[ev] === fn) delete this.handlers[ev];
+    },
     setPointerCapture() {},
   });
-  return { body: mk('body'), createElement: mk };
+  const doc = mk('document');
+  return { body: mk('body'), createElement: mk, addEventListener: doc.addEventListener, removeEventListener: doc.removeEventListener, handlers: doc.handlers };
 }
 const find = (root, pred) => {
   if (pred(root)) return root;
@@ -49,6 +59,7 @@ const time = {
   ndvi: null,
 };
 const error = { oisst: null, 'chlor-a': null, ndvi: null };
+const loading = { oisst: null, 'chlor-a': null, ndvi: null };
 function setup(extra = {}) {
   const mgr = new DataLayerManager({});
   for (const { id } of DRAPES)
@@ -65,7 +76,7 @@ function setup(extra = {}) {
         return true;
       },
       getStats() {
-        return { count: 1, lastUpdate: null, time: time[id], error: error[id] };
+        return { count: 1, lastUpdate: null, time: time[id], error: error[id], loadingTime: loading[id] };
       },
     });
   const ids = DRAPES.map((d) => d.id);
@@ -166,18 +177,17 @@ test("choosing a side in a select sets it; choosing the other side's drape swaps
 });
 
 test('dragging the divider moves the split; drag past the edge clamps', async () => {
-  const { compare, ui } = setup();
+  const { compare, ui, doc } = setup();
   await compare.set('oisst', 'chlor-a');
-  ui.divider.handlers.pointermove({ clientX: 300 }); // not dragging yet: ignored
-  assert.equal(compare.getState().position, 0.5);
+  assert.equal(doc.handlers.pointermove, undefined); // not dragging yet: nothing listens
   ui.divider.handlers.pointerdown({ pointerId: 1, preventDefault() {} });
-  ui.divider.handlers.pointermove({ clientX: 300 }); // (300-100)/800
+  doc.handlers.pointermove({ clientX: 300 }); // (300-100)/800
   assert.equal(compare.getState().position, 0.25);
   assert.equal(ui.divider.style.left, '25%');
-  ui.divider.handlers.pointermove({ clientX: 5000 });
+  doc.handlers.pointermove({ clientX: 5000 });
   assert.equal(compare.getState().position, 1);
-  ui.divider.handlers.pointerup({});
-  ui.divider.handlers.pointermove({ clientX: 300 });
+  doc.handlers.pointerup({});
+  assert.equal(doc.handlers.pointermove, undefined);
   assert.equal(compare.getState().position, 1);
   assert.match(ui.divider.style.cssText, /touch-action:none/);
 });
@@ -220,4 +230,49 @@ test('a scrub that puts a side into a gap relabels it without a restack; scrubbi
   await tick();
   assert.equal(label(), 'no date');
   error.ndvi = null;
+});
+
+test('a side label says when its next frame is still loading, not only the frame it had', async () => {
+  // A raster drape keeps drawing its old frame while the new one downloads; the label showed the old
+  // date with nothing to say a change was on its way (review minor, stage 2).
+  const { compare, doc } = setup();
+  loading.oisst = '2026-09-10T00:00:00Z';
+  try {
+    await compare.set('oisst', 'chlor-a');
+    await tick();
+    assert.equal(byClass(doc.body, 'cmp-left-date').textContent, '2026-09-20 → loading 2026-09-10');
+    assert.equal(byClass(doc.body, 'cmp-right-date').textContent, '2026-09-18');
+  } finally {
+    loading.oisst = null;
+  }
+});
+
+test('destroy() takes the pill, panel and divider off the page and stops listening', async () => {
+  const { mgr, compare, doc, container, ui } = setup();
+  const before = mgr._listeners.size;
+  ui.destroy();
+  assert.equal(find(doc.body, (e) => e.id === 'compare-toggle'), null);
+  assert.equal(find(doc.body, (e) => e.id === 'compare-panel'), null);
+  assert.equal(find(container, (e) => e.id === 'compare-divider'), null);
+  assert.equal(mgr._listeners.size, before - 1);
+  const shown = ui.toggle.style.display;
+  await compare.set('oisst', 'chlor-a');
+  await tick();
+  assert.equal(ui.toggle.style.display, shown); // no longer rendered
+});
+
+test('dragging the divider follows the pointer even where pointer capture is unavailable', async () => {
+  // setPointerCapture throws for a pointer the browser does not consider active, and without capture
+  // the 4 px divider only saw moves while the pointer stayed on it.
+  const { compare, doc, ui } = setup();
+  await compare.set('oisst', 'chlor-a');
+  ui.divider.setPointerCapture = () => {
+    throw new Error('InvalidPointerId');
+  };
+  ui.divider.handlers.pointerdown({ pointerId: 7, preventDefault() {} });
+  doc.handlers.pointermove({ clientX: 500 }); // off the divider: the document still hears it
+  assert.equal(compare.getState().position, 0.5);
+  doc.handlers.pointerup?.({});
+  assert.equal(doc.handlers.pointermove, undefined); // the drag let go of the document
+  assert.equal(compare.getState().position, 0.5);
 });
