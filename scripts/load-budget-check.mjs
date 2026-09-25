@@ -11,8 +11,8 @@
  *
  *   1. the SET of files on the startup path, keyed by the source module each
  *      came from (Vite's build manifest; Cesium's static tree by path), so a
- *      module pulled onto it — the way the 2.7 MB EGM96 grid is fetched on the
- *      HUD's first tick — is a red build, not a silent regression;
+ *      module pulled onto it — the way the 2.77 MB egm96-universal grid was
+ *      fetched on the HUD's first tick until it was replaced — is a red build, not a silent regression;
  *   2. the bytes of VENDOR files (sources under `node_modules/`, and
  *      `/cesium/*`), which change only on a dependency bump.
  *
