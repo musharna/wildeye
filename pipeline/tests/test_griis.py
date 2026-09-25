@@ -12,6 +12,8 @@ from pipeline.griis import (
     count_list,
     load_units,
     build,
+    main,
+    seed_collection,
 )
 
 DWC = "http://rs.tdwg.org/dwc/terms/"
@@ -417,6 +419,34 @@ def test_count_list_us_riis_layout_reads_the_spread_category():
     assert (got["basis"], got["introduced"], got["invasive"]) == ("spread", 3, 2)
 
 
+def test_count_list_reads_the_invasive_basis_the_list_states():
+    """Belgium (2026-09-25): isInvasive present but blank on all 3,320 rows, invasiveness in Darwin Core
+    degreeOfEstablishment words, pipe-joined, one row per region; read as the flag it drew 0 invasive.
+    Afghanistan: blank flags and no degree column states nothing, which is not 0."""
+    be = tables(
+        [
+            ("1", "present", "introduced", "invasive"),
+            ("1", "present", "introduced", "NA"),  # the same taxon in another region
+            ("2", "present", "introduced", "casual|invasive"),
+            ("3", "present", "introduced", "widespreadInvasive"),
+            ("4", "present", "introduced", "NA|established"),
+            ("5", "present", "introduced", "invasive (category D2)"),
+            ("6", "present", "introduced", "colonising"),
+        ],
+        {k: "" for k in "123456"},
+    )
+    be["Taxon"] = [r for r in be["Taxon"] if r["id"] != "6"]  # a distribution row with no taxon row
+    got = count_list(be)
+    assert (got["basis"], got["introduced"], got["invasive"]) == ("spread", 5, 4)
+    assert got["excluded"] == {"no taxon row": 1}
+
+    af = count_list(tables([("1", "present", "alien"), ("2", "present", "alien")], {"1": "", "2": ""}))
+    assert (af["basis"], af["introduced"], af["invasive"]) == ("not stated", 2, None)
+
+    chad = count_list(tables([("1", "present", "alien")], {"1": "Null"}))
+    assert (chad["basis"], chad["invasive"]) == ("impact", 0), "a stated Null flag is a statement"
+
+
 def test_count_list_refuses_values_it_has_no_rule_for():
     with pytest.raises(ValueError, match="occurrenceStatus 'Transient'"):
         count_list(tables([("1", "Transient", "Alien")], {"1": "Null"}))
@@ -424,8 +454,8 @@ def test_count_list_refuses_values_it_has_no_rule_for():
         count_list(tables([("1", "Present", "Vagrant")], {"1": "Null"}))
     with pytest.raises(ValueError, match="isInvasive 'Maybe'"):
         count_list(tables([("1", "Present", "Alien")], {"1": "Maybe"}))
-    with pytest.raises(ValueError, match="degreeOfEstablishment 'casual'"):
-        count_list(tables([("1", "present", "introduced", "casual")]))
+    with pytest.raises(ValueError, match=r"degreeOfEstablishment 'casual\|weird' has no rule"):
+        count_list(tables([("1", "present", "introduced", "casual|weird")]))
     with pytest.raises(
         ValueError, match="neither an isInvasive column nor degreeOfEstablishment"
     ):
@@ -593,3 +623,95 @@ def test_build_refuses_an_unmapped_list_an_unknown_unit_and_two_lists_on_one_uni
     assert len(feats) == 1, (
         "positive control; a table row for a withdrawn list is only logged"
     )
+
+
+def griis_zip(rows):
+    """rows = [(id, status, means, isInvasive)] → a GRIIS-layout DwC-A."""
+    files = [
+        ("core", DWC + "Taxon", "taxon.txt", [(1, DWC + "scientificName", None)], "\\t", 1),
+        ("ext", GBIF + "Distribution", "distribution.txt",
+         [(1, DWC + "occurrenceStatus", None), (2, DWC + "establishmentMeans", None)], "\\t", 1),
+        ("ext", GBIF + "SpeciesProfile", "speciesprofile.txt", [(1, GBIF + "isInvasive", None)], "\\t", 1),
+    ]
+    texts = {
+        "taxon.txt": "id\tname\n" + "".join(f"{r[0]}\tsp{r[0]}\n" for r in rows),
+        "distribution.txt": "id\ts\tm\n" + "".join(f"{r[0]}\t{r[1]}\t{r[2]}\n" for r in rows),
+        "speciesprofile.txt": "id\tf\n" + "".join(f"{r[0]}\t{r[3]}\n" for r in rows),
+    }
+    return dwca(files, texts)
+
+
+def main_world(tmp_path, *, nz_rows=None, listed=("nz", "ch")):
+    """A fake GBIF + Natural Earth for main(): New Zealand drawn on NZL, Chatham Islands not drawn, one
+    protected-area list."""
+    titles = {"nz": "Global Register of Introduced and Invasive Species - New Zealand",
+              "ch": "Global Register of Introduced and Invasive Species - Chatham Islands, New Zealand"}
+    page = {"count": 3, "endOfRecords": True, "results": [ds(k, titles[k]) for k in listed] + [
+        ds("pa", "Protected Areas - Global Register of Introduced and Invasive Species - Lake Mburo, Uganda")]}
+    zips = {
+        "nz": griis_zip(nz_rows or [("1", "Present", "Alien", "Invasive"), ("2", "Present", "Alien", "Null"),
+                                    ("3", "Absent", "Alien", "Invasive")]),
+        "ch": griis_zip([("1", "Present", "Alien", "Null")]),
+    }
+    ne = {"type": "FeatureCollection", "features": [ne_feature("NZL", "NZL", "NZ", [sq(170, -45)])]}
+
+    def fetch_bytes(url):
+        if "archive.do?r=" in url:
+            return zips[url.rsplit("=", 1)[1]]
+        if url.endswith("ne_50m_admin_0_map_units.geojson"):
+            return json.dumps(ne).encode()
+        raise AssertionError(f"unexpected fetch {url}")
+
+    areas = tmp_path / "areas.json"
+    areas.write_text(json.dumps({"nz": {"area": "New Zealand", "units": ["NZL"]},
+                                 "ch": {"area": "Chatham Islands, New Zealand", "units": []}}))
+    return (lambda url: page), fetch_bytes, areas
+
+
+def test_main_writes_the_layer_file_and_refuses_a_list_it_cannot_count(tmp_path):
+    fetch_json, fetch_bytes, areas = main_world(tmp_path)
+    out = tmp_path / "griis.geojson"
+    main(["--out", str(out), "--cache", str(tmp_path / "c")], fetch_json=fetch_json, fetch_bytes=fetch_bytes,
+         areas=areas)
+    gj = json.loads(out.read_text())
+    assert gj["type"] == "FeatureCollection" and gj["source"]["id"] == "griis"
+    assert "CC BY 4.0" in gj["source"]["licence"] and "ISSG" in gj["source"]["name"] + gj["source"]["citation"]
+    [f] = gj["features"]
+    assert (f["properties"]["area"], f["properties"]["introduced"], f["properties"]["invasive"]) == ("New Zealand", 2, 1)
+    assert [n["area"] for n in gj["not_drawn"]] == ["Chatham Islands, New Zealand"]
+    assert gj["protected_areas"] == ["Lake Mburo, Uganda"]
+
+    fetch_json, fetch_bytes, areas = main_world(tmp_path, nz_rows=[("1", "Present", "Weird", "Null")])
+    bad = tmp_path / "bad.geojson"
+    with pytest.raises(ValueError, match="New Zealand.*establishmentMeans 'Weird' has no rule"):
+        main(["--out", str(bad), "--cache", str(tmp_path / "c2")], fetch_json=fetch_json, fetch_bytes=fetch_bytes,
+             areas=areas)
+    assert not bad.exists()
+
+
+def test_main_refuses_a_listing_missing_more_than_a_tenth_of_the_reviewed_table(tmp_path):
+    fetch_json, fetch_bytes, areas = main_world(tmp_path, listed=("nz",))
+    out = tmp_path / "griis.geojson"
+    with pytest.raises(SystemExit, match="1 of 2 lists in griis_areas.json are not in GBIF's listing"):
+        main(["--out", str(out), "--cache", str(tmp_path / "c")], fetch_json=fetch_json, fetch_bytes=fetch_bytes,
+             areas=areas)
+    assert not out.exists()
+
+
+def test_seed_collection_keeps_the_lists_with_the_most_introduced_species_simplified_and_says_so():
+    def feat(key, n, x):
+        ring = [[x, 0], [x + 0.5, 0.001], [x + 1, 0], [x + 1, 1], [x, 1], [x, 0]]
+        speck = [[x + 3, 3], [x + 3.01, 3], [x + 3.01, 3.01], [x + 3, 3]]
+        return {"type": "Feature", "geometry": {"type": "MultiPolygon", "coordinates": [[ring], [speck]]},
+                "properties": {"key": key, "area": key, "introduced": n}}
+
+    gj = {"type": "FeatureCollection", "source": {"name": "GRIIS"}, "not_drawn": [{"area": "x"}],
+          "protected_areas": ["y"], "features": [feat("SML", 10, 0), feat("BIG", 3000, 10), feat("MID", 900, 20)]}
+    s = seed_collection(gj, n=2, tol=0.1, min_area=0.05)
+    assert [f["properties"]["key"] for f in s["features"]] == ["BIG", "MID"]
+    g = s["features"][0]["geometry"]
+    assert g["type"] == "Polygon" and len(g["coordinates"][0]) == 5, "speck dropped, near-collinear vertex simplified"
+    assert s["features"][0]["properties"] == gj["features"][1]["properties"], "values are never subsampled"
+    assert "seed: 2 of 3 lists" in s["source"]["subsample"] and "run pipeline/run_griis.sh" in s["source"]["subsample"]
+    assert s["not_drawn"] == [{"area": "x"}] and s["protected_areas"] == ["y"]
+    assert gj["features"][1]["geometry"]["type"] == "MultiPolygon", "input left untouched"

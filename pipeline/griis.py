@@ -3,17 +3,24 @@ public/data/griis.geojson.
 
 Item 4 of the 2026-09-25 wave (grill_wildeye_next_wave_2026-09-25, GRIIS mini-grill Q13/Q14,
 A22–A33). Source: the live GRIIS checklists the Invasive Species Specialist Group (ISSG) publishes on
-GBIF, one Darwin Core Archive per country, territory or island (383 on 2026-09-25; CC BY 4.0, three
-CC0). Not the 2022 Country Compendium (V1_0, stale: 94 lists updated in 2026) and not third-party
+GBIF, one Darwin Core Archive per country, territory or island (2026-09-25: 307 area registers, 75
+protected-area registers named but not drawn, and the Global Invasive Species Database, which is not a
+register; CC BY 4.0, three CC0). Not the 2022 Country Compendium (V1_0, stale: 94 lists updated in 2026) and not third-party
 re-bundles. Each archive is downloaded once per version and cached.
 """
 
 from __future__ import annotations
+import argparse
+import datetime as dt
 import json
 import logging
+import os
 import re
+import time
 import urllib.request
 from pathlib import Path
+
+from .atomic import write_atomic
 
 log = logging.getLogger("griis")
 ORG = "cdef28b1-db4e-4c58-aa71-3c5238c2d0b5"  # Invasive Species Specialist Group ISSG on GBIF
@@ -248,6 +255,32 @@ SPREAD_INVASIVE = {
     "D2",
     "E",
 }  # Darwin Core degreeOfEstablishment (TDWG, after Blackburn et al. 2011, doi:10.1016/j.tree.2011.03.023): D2 invasive, E widespread invasive
+# The same vocabulary as bare words, pipe-joined when a taxon has several (Belgium). "transported" (Belgium)
+# is the framework's transport stage; "NA" is Belgium's not-assessed.
+DOE_INVASIVE = {"invasive", "widespreadinvasive"}
+DOE_OTHER = {
+    "native",
+    "captive",
+    "cultivated",
+    "released",
+    "failing",
+    "casual",
+    "reproducing",
+    "established",
+    "colonising",
+    "transported",
+    "na",
+}
+
+
+def _degree_invasive(v) -> bool:
+    raw = " ".join(str(v or "").split())
+    if m := _CATEGORY.search(raw):
+        return m.group(1) in SPREAD_INVASIVE
+    words = [w.strip().lower() for w in raw.split("|")]
+    if not raw or any(w not in DOE_INVASIVE | DOE_OTHER for w in words):
+        raise ValueError(f"degreeOfEstablishment {v!r} has no rule")
+    return any(w in DOE_INVASIVE for w in words)
 
 
 def _norm(v) -> str:
@@ -257,23 +290,32 @@ def _norm(v) -> str:
 def count_list(t: dict[str, list[dict]]) -> dict:
     """Species on one checklist: `introduced` = taxa present and introduced; `invasive` = those of them flagged
     invasive, by the list's own basis — "impact" (GRIIS isInvasive: evidence of impact in the area) or
-    "spread" (US-RIIS degreeOfEstablishment categories D2/E, used only when the list has no isInvasive column).
-    `excluded` counts the taxa left out and why. A list with no occurrenceStatus column (Turkey) asserts no
+    "spread" (degreeOfEstablishment D2/E or the words invasive/widespreadInvasive, used when no isInvasive
+    value is filled in: US-RIIS, Belgium) or "not stated" (an isInvasive column left blank and no degree
+    column: `invasive` is None, not 0). `excluded` counts the taxa left out and why. A list with no occurrenceStatus column (Turkey) asserts no
     status, so its rows count as present and `presence` says "not stated"; a blank value in a list that has the
     column is not present."""
     dist = t.get("Distribution") or []
     if not dist:
         raise ValueError("no Distribution rows")
+    if "Taxon" not in t:
+        raise ValueError(f"no Taxon core: {sorted(t)}")
+    taxa = {r["id"] for r in t["Taxon"]}
     sp = t.get("SpeciesProfile") or []
-    has_flag = bool(sp) and "isInvasive" in sp[0]
+    flag_column = bool(sp) and "isInvasive" in sp[0]
+    has_flag = flag_column and any(_norm(r.get("isInvasive")) for r in sp)
     has_degree = "degreeOfEstablishment" in dist[0]
     has_status = "occurrenceStatus" in dist[0]
-    if not has_flag and not has_degree:
+    if not flag_column and not has_degree:
         raise ValueError(
             "neither an isInvasive column nor degreeOfEstablishment: no invasive basis"
         )
-    introduced, not_present, unknown_origin, spread = set(), set(), set(), set()
+    basis = "impact" if has_flag else "spread" if has_degree else "not stated"
+    introduced, not_present, unknown_origin, spread, no_taxon = set(), set(), set(), set(), set()
     for r in dist:
+        if r["id"] not in taxa:
+            no_taxon.add(r["id"])
+            continue
         status, means = (
             _norm(r.get("occurrenceStatus")) if has_status else "present",
             _norm(r.get("establishmentMeans")),
@@ -292,16 +334,8 @@ def count_list(t: dict[str, list[dict]]) -> dict:
             unknown_origin.add(r["id"])
         else:
             introduced.add(r["id"])
-            if not has_flag:
-                m = _CATEGORY.search(
-                    " ".join(str(r.get("degreeOfEstablishment") or "").split())
-                )
-                if not m:
-                    raise ValueError(
-                        f"degreeOfEstablishment {r.get('degreeOfEstablishment')!r} has no category"
-                    )
-                if m.group(1) in SPREAD_INVASIVE:
-                    spread.add(r["id"])
+            if basis == "spread" and _degree_invasive(r.get("degreeOfEstablishment")):
+                spread.add(r["id"])
     if has_flag:
         flagged = set()
         for r in sp:
@@ -310,19 +344,20 @@ def count_list(t: dict[str, list[dict]]) -> dict:
                 raise ValueError(f"isInvasive {r.get('isInvasive')!r} has no rule")
             if v in FLAG_TRUE:
                 flagged.add(r["id"])
-        invasive = flagged & introduced
+        invasive = len(flagged & introduced)
     else:
-        invasive = spread
+        invasive = len(spread) if basis == "spread" else None
     return {
-        "basis": "impact" if has_flag else "spread",
+        "basis": basis,
         "presence": "stated" if has_status else "not stated",
         "introduced": len(introduced),
-        "invasive": len(invasive),
+        "invasive": invasive,
         "excluded": {
             k: len(v)
             for k, v in (
                 ("not present", not_present - introduced),
                 ("origin unknown", unknown_origin - introduced),
+                ("no taxon row", no_taxon),
             )
             if v - introduced
         },
@@ -447,3 +482,95 @@ def _fetch_bytes(url: str) -> bytes:
 
 def _fetch_json(url: str) -> dict:
     return json.loads(_fetch_bytes(url))
+
+
+AREAS = Path(__file__).with_name("griis_areas.json")
+SEED_N, SEED_TOL, SEED_MIN_AREA = 20, 0.25, 0.1
+
+
+def seed_collection(gj: dict, n: int = SEED_N, tol: float = SEED_TOL, min_area: float = SEED_MIN_AREA) -> dict:
+    """The committed fresh-clone seed (< 100 KB): the `n` lists with the most introduced species, shapes
+    simplified (pipeline.ecoregions.simplify_geometry); every value kept as is."""
+    from .ecoregions import simplify_geometry
+
+    feats = sorted(gj["features"], key=lambda f: -f["properties"]["introduced"])
+    keep = feats[:n]
+    return {
+        **gj,
+        "source": {
+            **gj["source"],
+            "subsample": f"seed: {len(keep)} of {len(feats)} lists with the most introduced species, shapes "
+            f"simplified at {tol} deg with parts under {min_area} square degrees dropped; "
+            "run pipeline/run_griis.sh for every list",
+        },
+        "features": [{**f, "geometry": simplify_geometry(f["geometry"], tol, min_area)} for f in keep],
+    }
+
+
+def main(argv=None, *, fetch_json=_fetch_json, fetch_bytes=_fetch_bytes, areas: Path = AREAS):
+    from .gmw import NE_URL, _cached
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", type=Path, default=Path("public/data/griis.geojson"))
+    ap.add_argument(
+        "--cache",
+        type=Path,
+        default=Path(os.environ.get("WILDEYE_CACHE", Path.home() / ".cache" / "wildeye")),
+    )
+    ap.add_argument("--seed-out", type=Path, default=None, help="also write the < 100 KB fresh-clone seed here")
+    a = ap.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    t0 = time.time()
+    table = json.loads(areas.read_text())
+    lists, protected = list_checklists(fetch_json)
+    gone = set(table) - {c["key"] for c in lists}
+    if len(gone) > len(table) // 10:
+        raise SystemExit(
+            f"{len(gone)} of {len(table)} lists in griis_areas.json are not in GBIF's listing: "
+            "a truncated listing or a republished register; review before drawing"
+        )
+    counts = {}
+    for c in lists:
+        try:
+            counts[c["key"]] = count_list(read_dwca(cached_archive(c, a.cache / "griis", fetch_bytes)))
+        except ValueError as e:
+            raise ValueError(f"{c['area']} ({c['key']}, {c['modified']}): {e}") from e
+    units = load_units(_cached(a.cache / "ne_50m_admin_0_map_units.geojson", NE_URL, fetch_bytes))
+    feats, not_drawn = build(lists, counts, table, units)
+    if not feats:
+        raise SystemExit("no GRIIS list matched a map unit")
+    gj = {
+        "type": "FeatureCollection",
+        "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "source": {
+            "id": "griis",
+            "name": "Global Register of Introduced and Invasive Species (GRIIS), ISSG via GBIF",
+            "licence": "CC BY 4.0 (three lists CC0 1.0); each list's own licence, citation and DOI are in its feature",
+            "url": f"https://www.gbif.org/publisher/{ORG}",
+            "shapes": "Natural Earth 50m admin-0 map units (public domain); the US split into its three US-RIIS lists",
+            "citation": "Invasive Species Specialist Group ISSG. Global Register of Introduced and Invasive Species, "
+            "one checklist per area, published on GBIF.",
+            "note": "Introduced = taxa present in the area and introduced there. Invasive, by the list's own basis: "
+            "GRIIS isInvasive (evidence of impact) or US-RIIS degreeOfEstablishment D2/E (spreading). "
+            "The two are not comparable, so the fill is the introduced count.",
+        },
+        "protected_areas": protected,
+        "not_drawn": not_drawn,
+        "features": feats,
+    }
+    write_atomic(a.out, gj)
+    if a.seed_out:
+        write_atomic(a.seed_out, seed_collection(gj))
+        log.info("wrote seed %s: %d bytes", a.seed_out, a.seed_out.stat().st_size)
+    log.info(
+        "wrote %s: %d lists drawn, %d not drawn, %d protected-area lists named (%.0f s)",
+        a.out,
+        len(feats),
+        len(not_drawn),
+        len(protected),
+        time.time() - t0,
+    )
+
+
+if __name__ == "__main__":
+    main()
