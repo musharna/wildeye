@@ -18,7 +18,6 @@ import { ShareLinkManager } from './sharelink.js';
 import { LayerStateCoordinator } from './data/layerState.js';
 import { renderMapStackChips, syncMapStackChips } from './mapStackChips.js';
 import { OrbitController } from './orbit.js';
-import { destroyWorldOverlay, initWorldOverlay } from './overlays/worldOverlay.js';
 import {
   aggregateLayerLoading,
   createGlobalStatusNotice,
@@ -264,12 +263,6 @@ export class StyleManager {
     // preferences. Encoded panel fields are applied after all panels exist.
     this._initialShareState = this.shareLinkManager.parseInitialHash();
     this._initialCompareParam = this._initialShareState?.compare ?? null;
-
-    // The shared world-overlay host must own its one postRender lane before
-    // detection and tracked-readout initialize. It stays transparent until a
-    // production source explicitly registers entries.
-    initWorldOverlay(viewer);
-
 
     this._initStages();
     this._initSharpen();
@@ -2412,7 +2405,6 @@ export class StyleManager {
       this._leftPanelStack?.removeEventListener('transitionend', this._leftStackPanelTransitionHandler);
       this._leftStackPanelTransitionHandler = null;
     }
-    destroyWorldOverlay();
     // Clear transitions
     this.transitions.clear();
   }

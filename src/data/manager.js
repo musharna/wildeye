@@ -42,19 +42,6 @@ function paramsRejectedError(layerId) {
   return error;
 }
 
-function isExplicitLayerIntentOrigin(origin) {
-  return origin === 'user' || origin === 'voice' || origin === 'tool';
-}
-
-function cancelPendingLayerRestore(entry, origin, reason) {
-  if (!isExplicitLayerIntentOrigin(origin)) return;
-  try {
-    (entry.module?.cancelPendingRestore || entry.module?.cancelPendingTrackingRestore)?.({ origin, reason });
-  } catch (error) {
-    console.warn(`[Data] ${entry.module?.id || 'layer'} pending restore cancellation error:`, error);
-  }
-}
-
 function refreshFailureFromStats(stats, label) {
   const specific = stats?.error || stats?.lastError;
   if (specific) return specific instanceof Error ? specific : new Error(String(specific));
@@ -437,90 +424,6 @@ export class DataLayerManager {
     }
 
     return this._runPeriodicUpdate(layerId, entry, { signal });
-  }
-
-  /**
-   * Refresh one enabled tracked layer at the destination, then let that layer
-   * decide whether the requested ID was present in an authoritative snapshot.
-   * Lifecycle success alone is deliberately insufficient for this decision.
-   */
-  async resolveLayerTrackingTarget(layerId, targetId, {
-    signal = null,
-    origin = 'share-restore',
-  } = {}) {
-    const entry = this.layers.get(layerId);
-    const base = {
-      layerId,
-      targetId,
-      origin,
-      refreshSucceeded: false,
-    };
-    if (!entry || !entry.enabled || entry.destroying) {
-      return { ...base, status: 'unavailable', reason: 'layer-unavailable' };
-    }
-    if (typeof entry.module?.resolveTrackingRestoreTarget !== 'function') {
-      return { ...base, status: 'unsupported', reason: 'tracking-restore-unsupported' };
-    }
-    if (signal?.aborted) {
-      return { ...base, status: 'cancelled', reason: String(signal.reason || 'aborted') };
-    }
-
-    const refreshSucceeded = await this.refreshLayer(layerId, { signal });
-    if (signal?.aborted) {
-      return {
-        ...base,
-        refreshSucceeded,
-        status: 'cancelled',
-        reason: String(signal.reason || 'aborted'),
-      };
-    }
-    if (this.layers.get(layerId) !== entry || entry.destroying || !entry.enabled) {
-      return {
-        ...base,
-        refreshSucceeded,
-        status: 'destroyed',
-        reason: 'layer-destroyed',
-      };
-    }
-
-    try {
-      const resolution = await entry.module.resolveTrackingRestoreTarget(targetId, {
-        signal,
-        origin,
-        refreshSucceeded,
-      });
-      if (signal?.aborted) {
-        return {
-          ...base,
-          refreshSucceeded,
-          status: 'cancelled',
-          reason: String(signal.reason || 'aborted'),
-        };
-      }
-      const status = [
-        'found', 'missing', 'source-unavailable', 'cancelled', 'superseded', 'destroyed',
-      ].includes(resolution?.status)
-        ? resolution.status
-        : 'source-unavailable';
-      return { ...base, refreshSucceeded, ...resolution, status };
-    } catch (error) {
-      if (signal?.aborted || isAbortError(error)) {
-        return {
-          ...base,
-          refreshSucceeded,
-          status: 'cancelled',
-          reason: String(signal?.reason || error?.message || 'aborted'),
-          errorClass: 'AbortError',
-        };
-      }
-      return {
-        ...base,
-        refreshSucceeded,
-        status: 'source-unavailable',
-        reason: String(error?.message || error),
-        errorClass: error?.name || 'Error',
-      };
-    }
   }
 
   _armUpdateLoop(layerId, entry) {
@@ -985,7 +888,6 @@ export class DataLayerManager {
     if (entry.destroying) {
       return { intentEpoch: null, promise: Promise.resolve(desiredState === false) };
     }
-    cancelPendingLayerRestore(entry, origin, 'explicit-visibility');
     const intentEpoch = ++entry.visibilityIntentEpoch;
     entry.visibilityIntentEnabled = desiredState;
     entry.visibilityIntentOrigin = origin;
@@ -1557,7 +1459,6 @@ export class DataLayerManager {
   _reserveLayerParamsIntent(layerId, params, origin = 'programmatic') {
     const entry = this.layers.get(layerId);
     if (!entry || entry.destroying || typeof entry.module?.setParams !== 'function') return null;
-    cancelPendingLayerRestore(entry, origin, 'explicit-params');
     const paramsIntentEpoch = ++entry.paramsIntentEpoch;
     entry.paramsIntentOrigin = origin;
     this._notifyListeners({
@@ -1640,24 +1541,6 @@ export class DataLayerManager {
     return this._applyLayerParamsIntent(layerId, params, { origin, paramsIntentEpoch }).succeeded;
   }
 
-  /** Cancel a module-owned pending restore without creating a parameter intent. */
-  cancelPendingLayerRestore(layerId, {
-    origin = 'programmatic',
-    reason = 'cancelled',
-  } = {}) {
-    const entry = this.layers.get(layerId);
-    const cancel = entry?.module?.cancelPendingRestore
-      || entry?.module?.cancelPendingTrackingRestore;
-    if (typeof cancel !== 'function') return false;
-    try {
-      cancel.call(entry.module, { origin, reason });
-      return true;
-    } catch (error) {
-      console.warn(`[Data] ${layerId} pending restore cancellation error:`, error);
-      return false;
-    }
-  }
-
   /** Publish parameters already applied by a layer's direct interaction. */
   adoptLayerParams(layerId, params, { origin = 'programmatic' } = {}) {
     const requestedParams = cloneLayerParams(params || {});
@@ -1694,7 +1577,6 @@ export class DataLayerManager {
     const entry = this.layers.get(layerId);
     const desiredState = Boolean(enabled);
     if (!entry || entry.enabled !== desiredState || entry.lifecycleUncertain) return false;
-    cancelPendingLayerRestore(entry, origin, 'superseded-by-explicit-visibility-adoption');
     this._refreshTogglePanel();
     this._notifyListeners({
       type: 'visibility',

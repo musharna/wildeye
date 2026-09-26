@@ -44,7 +44,7 @@ export function classifyNodeVersion(version = process.versions.node) {
   }
   if (major === 26) return { level: 'ok', summary: 'supported runtime' };
   if (major === 25) {
-    return { level: 'warn', summary: 'usable but EOL; allocation benchmarks will be skipped' };
+    return { level: 'warn', summary: 'usable but EOL' };
   }
   if (major < 24 || (major === 24 && minor < 14)) {
     return { level: 'error', summary: 'too old; install Node 24.14 or newer' };

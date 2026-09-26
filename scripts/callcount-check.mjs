@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * callcount-check — deterministic call-count ratchet for the world-overlay frame
- * and the wildlife layers' time steps and particle frames.
+ * callcount-check — deterministic call-count ratchet for the wildlife layers'
+ * time steps and particle frames.
  *
- * The allocation gates (`worldOverlayAllocation.test.mjs`) measure bytes, and
- * bytes depend on which JIT/IC regime V8 lands in: the same workload shows two
- * stable modes, so every budget carries headroom for the slower one, and a
- * regression smaller than that headroom is invisible. This gate counts WORK
- * instead. It runs deterministic workers (fixed-seed fixtures, virtual clocks,
- * stubs for the canvas and viewer) under `NODE_V8_COVERAGE`, which records the exact
- * invocation count of every function, and sums the counts for `src/` functions.
+ * Timings and allocated bytes depend on host load and on which JIT/IC regime V8
+ * lands in, so a budget on either carries headroom, and a regression smaller
+ * than that headroom is invisible. This gate counts WORK instead. It runs
+ * deterministic workers (fixed-seed fixtures, a frozen wall clock, a virtual
+ * performance clock, a seeded Math.random, a stub viewer) under
+ * `NODE_V8_COVERAGE`, which records the exact invocation count of every
+ * function, and sums the counts for `src/` functions.
  *
  * A count is not a timing: it is identical across runs, across host load, and
- * across Node 18/24 (measured 2026-09-24: 9,881,963 calls for the since-removed all-live-radio workload on
- * both, zero per-function differences). So the budget is the baseline itself,
+ * across Node 18/24 (measured 2026-09-24 on a since-removed overlay workload,
+ * and again 2026-09-26 on the wildlife ones). So the budget is the baseline itself,
  * with no headroom, and it only moves one way:
  *
  *   total > baseline  → FAIL (regression; per-function deltas printed)
@@ -37,36 +37,16 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const OVERLAY_WORKER = path.join(ROOT, 'src/overlays/worldOverlayAllocation.worker.mjs');
 const WILDLIFE_WORKER = path.join(ROOT, 'scripts/callcount-wildlife.worker.mjs');
 export const BASELINE_PATH = path.join(ROOT, 'scripts/callcount-baseline.json');
 
 /**
- * Frame shape shared by every workload: 1 warmup + 1 stabilization chunk + 1
- * measured chunk of 60 frames = 121 frames. The worker's `|| default` parsing
- * cannot express zero, so 1 is the floor for warmup and stabilization.
- */
-const FRAME_ENV = Object.freeze({
-  GEV_ALLOC_WARMUP: '1',
-  GEV_ALLOC_STABILIZATION_CHUNKS: '1',
-  GEV_ALLOC_CHUNK: '60',
-  GEV_ALLOC_CHUNKS: '1',
-});
-
-/**
  * Each workload names its worker, the env that selects its scene, and `expect`:
  * fields asserted against the worker's own report, so the echoed profile name
- * alone never has to prove the intended scene ran. The overlay's per-source
- * workloads drove God's Eye layers removed on 2026-09-26; the wildlife ones
- * (scripts/callcount-wildlife.worker.mjs) outlive the overlay (bloat grill Q7).
+ * alone never has to prove the intended scene ran. The world-overlay workloads
+ * went with the overlay on 2026-09-26 (bloat grill Q7).
  */
 export const WORKLOADS = Object.freeze([
-  {
-    name: 'generic-above-cap',
-    worker: OVERLAY_WORKER,
-    env: { ...FRAME_ENV, GEV_ALLOC_PROFILE: 'generic', GEV_ALLOC_ENTRIES: '250' },
-    expect: { candidateCount: 250 },
-  },
   { name: 'tracks-step', worker: WILDLIFE_WORKER, env: { GEV_WILDLIFE_PROFILE: 'tracks-step' }, expect: { features: 121, steps: 104 } },
   { name: 'occurrences-step', worker: WILDLIFE_WORKER, env: { GEV_WILDLIFE_PROFILE: 'occurrences-step' }, expect: { features: 161, steps: 30 } },
   { name: 'birds-tick', worker: WILDLIFE_WORKER, env: { GEV_WILDLIFE_PROFILE: 'birds-tick' }, expect: { particles: 1500, frames: 121 } },
@@ -97,7 +77,7 @@ export function totalCalls(counts) {
 export function measureWorkload(workload) {
   const coverageDir = mkdtempSync(path.join(tmpdir(), 'gev-callcount-'));
   try {
-    const result = spawnSync(process.execPath, ['--expose-gc', workload.worker], {
+    const result = spawnSync(process.execPath, [workload.worker], {
       cwd: ROOT,
       encoding: 'utf8',
       timeout: 180_000,

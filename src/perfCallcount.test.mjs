@@ -9,8 +9,8 @@ import {
 } from '../scripts/callcount-check.mjs';
 
 /**
- * Every workload's exact src/ call counts (the world-overlay frame, the
- * wildlife time steps and particle frames) must equal the committed baseline
+ * Every workload's exact src/ call counts (the wildlife time steps and
+ * particle frames) must equal the committed baseline
  * (`scripts/callcount-baseline.json`). Counts are deterministic across
  * runs, host load and Node versions, so there is no headroom and no runtime
  * skip: any change in work is a red build until the baseline is re-committed.
@@ -43,7 +43,7 @@ test('ratchet verdicts: equal passes, and a rise, a drop or a missing row each f
 test('coverage aggregation keeps only called src/ functions, keyed by name', () => {
   const scripts = [
     {
-      url: 'file:///repo/src/overlays/worldOverlay.js',
+      url: 'file:///repo/src/data/tracks.js',
       functions: [
         { functionName: '', ranges: [{ count: 1 }] },
         { functionName: 'paint', ranges: [{ count: 7 }, { count: 2 }] },
@@ -58,8 +58,8 @@ test('coverage aggregation keeps only called src/ functions, keyed by name', () 
   // Only the function-level (first) range is an invocation count; later
   // ranges are block counts and must not be added.
   assert.deepEqual(aggregateCoverage(scripts), {
-    'src/overlays/worldOverlay.js:(anonymous)': 5,
-    'src/overlays/worldOverlay.js:paint': 10,
+    'src/data/tracks.js:(anonymous)': 5,
+    'src/data/tracks.js:paint': 10,
   });
   assert.equal(totalCalls(aggregateCoverage(scripts)), 15);
 });
@@ -72,6 +72,6 @@ test('every workload\'s call counts equal the committed baseline', () => {
     + row.deltas.map(({ key, delta }) => `\n  ${delta > 0 ? '+' : ''}${delta} ${key}`).join('')).join('\n');
   assert.equal(result.status, 0, `${summary}\n${result.stderr}`);
   // A workload that silently vanished would pass the verdict loop; pin the set by name.
-  assert.deepEqual(rows.map((row) => row.name), ['generic-above-cap', 'tracks-step', 'occurrences-step', 'birds-tick'], result.stdout);
+  assert.deepEqual(rows.map((row) => row.name), ['tracks-step', 'occurrences-step', 'birds-tick'], result.stdout);
   for (const row of rows) assert.equal(row.verdict, 'equal', summary);
 });

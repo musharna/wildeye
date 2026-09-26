@@ -40,9 +40,6 @@ function fakeLayer(id, hooks = {}) {
     async enable() { return hooks.enable ? hooks.enable() : true; },
     async update() { return hooks.update ? hooks.update() : true; },
     async disable() { return hooks.disable ? hooks.disable() : true; },
-    ...(hooks.cancelPendingRestore ? {
-      cancelPendingRestore(options) { hooks.cancelPendingRestore(options); },
-    } : {}),
     ...(params ? {
       setParams(next = {}, options = {}) {
         if (hooks.setParams && hooks.setParams(next, options) === false) return false;
@@ -303,28 +300,6 @@ test('manager forwards passive restore origin into module parameter application'
     params: { columns: true },
   }, { origin: 'share-restore' });
   assert.deepEqual(seen, [{ origin: 'share-restore', paramsIntentEpoch: 1 }]);
-});
-
-test('explicit manager params and visibility revoke module-owned pending restore', async () => {
-  const cancellations = [];
-  const manager = productionManager({
-    birds: {
-      cancelPendingRestore: (options) => { cancellations.push(options); },
-    },
-  });
-
-  await manager.restoreLayerState('birds', {
-    enabled: false,
-    params: { columns: true },
-  }, { origin: 'share-restore' });
-  assert.deepEqual(cancellations, [], 'passive restoration cannot cancel itself');
-
-  manager.setLayerParams('birds', { drape: false }, { origin: 'voice' });
-  await manager.setEnabled('birds', false, { origin: 'user' });
-  assert.deepEqual(cancellations, [
-    { origin: 'voice', reason: 'explicit-params' },
-    { origin: 'user', reason: 'explicit-visibility' },
-  ]);
 });
 
 test('share payload wins over local, passive restore writes nothing, and explicit success persists', async () => {
