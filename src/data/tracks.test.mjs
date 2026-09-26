@@ -96,3 +96,79 @@ test('tracks layer refuses a file with a track outside the five groups, loudly',
     }
   } finally { globalThis.fetch = saved; }
 });
+
+// ---- incremental time steps (2026-09-26): a step rebuilt all 1,132 entities (~50 ms on an Intel iGPU, 192 ms on
+// swiftshader) though a weekly step changes at most 44 of 1,114 segments (median 0). Only the in-span set may be touched.
+const H = (h) => new Date(Date.parse('2026-09-10T00:00:00Z') + h * 3600000).toISOString();
+function shelf() {
+  const f = (species, group, dataset, segment, hours, coords) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords },
+    properties: { species, group, dataset, segment, animal: dataset, times: hours.map(H), start: H(hours[0]), end: H(hours.at(-1)), n: coords.length, source: 'atn', source_name: 'ATN' } });
+  const features = [];
+  for (let k = 0; k < 40; k++) features.push(f('lion', 'land mammals', `old${k}`, 0, [-9000 - k, -8990 - k], [[20 + k * 0.1, -20], [20.5 + k * 0.1, -20.5]]));
+  features.push(f('ribbon seal', 'seals', 'A', 0, [0, 2, 4], [[0, 0], [2, 0], [4, 2]]));   // live at 3, complete at 5
+  features.push(f('ribbon seal', 'seals', 'B', 0, [1, 3, 6, 8], [[5, 5], [6, 5], [7, 6], [8, 8]])); // live 3..7
+  features.push(f('spotted seal', 'seals', 'C', 0, [6, 9], [[10, 10], [11, 11]]));        // enters at 6
+  features.push(f('spotted seal', 'seals', 'C', 1, [12, 14], [[12, 12], [13, 13]]));      // not before 12
+  features.push(f('lion', 'land mammals', 'L', 0, [2, 7], [[30, -1], [31, -2]]));          // group toggled below
+  return { type: 'FeatureCollection', features };
+}
+async function loaded(gj) {
+  const saved = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => gj });
+  try {
+    const l = createTracksLayer();
+    let ds; l.init({ dataSources: { add(d) { ds = d; }, remove() {} } });
+    assert.equal(await l.update(), true);
+    l.enable();
+    return { l, ds };
+  } finally { globalThis.fetch = saved; }
+}
+const NOW = Cesium.JulianDate.now();
+const deg = (c) => { const g = Cesium.Cartographic.fromCartesian(c); return [+Cesium.Math.toDegrees(g.longitude).toFixed(6), +Cesium.Math.toDegrees(g.latitude).toFixed(6)]; };
+/** What is drawn: every shown entity, keyed by the segment it belongs to (not by entity id), with geometry and style. */
+function drawn(ds) {
+  return ds.entities.values.filter((e) => e.show).map((e) => {
+    const seg = e.id.replace(/:(live|head)$/, '').replace(/:live$/, '');
+    if (e.polyline) return `line ${seg} w${e.polyline.width.getValue(NOW)} a${e.polyline.material.getValue(NOW).color.alpha.toFixed(2)} ${JSON.stringify(e.polyline.positions.getValue(NOW).map(deg))}`;
+    return `head ${seg} a${e.point.color.getValue(NOW).alpha.toFixed(2)} ${JSON.stringify(deg(e.position.getValue(NOW)))} ${e.properties.kind.getValue(NOW)}`;
+  }).sort();
+}
+
+test('tracks: a time step leaves every segment whose state did not change untouched', async () => {
+  const { l, ds } = await loaded(shelf());
+  l.setObservedTime(H(3));
+  const before = new Map(ds.entities.values.map((e) => [e.id, e]));
+  const events = [];
+  for (const e of ds.entities.values) e.definitionChanged.addEventListener((ent, prop) => events.push(`${ent.id} ${prop}`));
+  let adds = 0, removes = 0;
+  const { add, remove, removeById } = ds.entities;
+  ds.entities.add = function (...a) { adds++; return add.apply(this, a); };
+  ds.entities.remove = function (...a) { removes++; return remove.apply(this, a); };
+  ds.entities.removeById = function (...a) { removes++; return removeById.apply(this, a); };
+  ds.entities.removeAll = () => assert.fail('a time step must not clear the collection');
+  l.setObservedTime(H(5)); // A leaves its span, B moves on, the 40 old lions and C do not change
+  for (let k = 0; k < 40; k++) {
+    const e = ds.entities.values.find((x) => x.id.startsWith(`trk:old${k}:`));
+    assert.equal(e, before.get(e.id), `old${k} is the same entity`);
+  }
+  assert.deepEqual(events.filter((x) => x.startsWith('trk:old')), [], 'nothing on an unchanged segment is redefined, so its Cesium batch is not rebuilt');
+  assert.ok(adds + removes <= 6, `only the in-span set is touched (adds ${adds}, removes ${removes})`);
+  assert.ok(adds + removes > 0, 'positive control: A leaving its span and B moving did change something');
+});
+
+test('tracks: stepping through time draws exactly what a fresh load at that time draws', async () => {
+  const steps = [null, H(-1), H(1), H(3), H(3.5), H(5), H(6), H(7.5), H(9), H(13), H(20), null, H(3)];
+  const { l, ds } = await loaded(shelf());
+  l.setParams({ 'land mammals': false });
+  for (const [i, t] of steps.entries()) {
+    if (i === 6) l.setParams({ 'land mammals': true });
+    l.setObservedTime(t);
+    const fresh = await loaded(shelf());
+    if (i < 6) fresh.l.setParams({ 'land mammals': false });
+    fresh.l.setObservedTime(t);
+    assert.deepEqual(drawn(ds), drawn(fresh.ds), `step ${i} (${t})`);
+  }
+  // positive control: the snapshot sees a step (B's head moves between 3 and 3.5)
+  l.setObservedTime(H(3)); const a = drawn(ds); l.setObservedTime(H(3.5));
+  assert.notDeepEqual(a, drawn(ds));
+});
