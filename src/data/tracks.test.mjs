@@ -1,7 +1,8 @@
 // src/data/tracks.test.mjs — track contract layer: pure helpers + contract + observed-time clipping.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clipSegment, describeTrack, createTracksLayer, speciesColor } from './tracks.js';
+import * as Cesium from 'cesium';
+import { clipSegment, describeTrack, createTracksLayer, groupColor, GROUP_COLORS } from './tracks.js';
 
 const T = (h) => `2026-09-10T${String(h).padStart(2, '0')}:00:00Z`;
 
@@ -22,13 +23,20 @@ test('clipSegment: null before first fix, interpolated head inside, full segment
 test('describeTrack escapes and carries citation + licence', () => {
   const html = describeTrack({ species: 'spotted seal', sci: 'Phoca largha', animal: '<b>', start: '2018-04-20T00:00:00Z', end: '2018-06-18T00:00:00Z', n: 40, institution: 'NOAA AFSC', citation: 'London et al. 2025', license: 'free to redistribute, no warranty', url: 'https://x', source_name: 'ATN' });
   assert.match(html, /spotted seal.*&lt;b&gt;.*40 fixes.*NOAA AFSC.*London et al\. 2025.*free to redistribute/s);
-  assert.ok(speciesColor('a', ['a', 'b']).red !== speciesColor('b', ['a', 'b']).red || speciesColor('a', ['a', 'b']).green !== speciesColor('b', ['a', 'b']).green);
+  // five groups, five different colours, fixed per group (not by position in the file)
+  const css = Object.values(GROUP_COLORS);
+  assert.deepEqual(Object.keys(GROUP_COLORS), ['whales & dolphins', 'seals', 'land mammals', 'birds', 'reptiles']);
+  assert.equal(new Set(css).size, 5);
+  assert.equal(groupColor('seals').toCssHexString(), Cesium.Color.fromCssColorString(GROUP_COLORS.seals).toCssHexString());
+  assert.throws(() => groupColor('rodents'), /no colour for group/);
 });
 
 test('tracks layer: contract, chips, observed-time clipping and fading', async () => {
+  const GRP = { 'ribbon seal': 'seals', 'spotted seal': 'seals', 'lion': 'land mammals' };
   const mk = (species, dataset, times, coords) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords },
-    properties: { species, dataset, segment: 0, animal: 'A', times, start: times[0], end: times.at(-1), n: coords.length, source: 'atn', source_name: 'ATN' } });
-  const gj = { type: 'FeatureCollection', species: ['ribbon seal', 'spotted seal'], features: [
+    properties: { species, group: GRP[species], dataset, segment: 0, animal: 'A', times, start: times[0], end: times.at(-1), n: coords.length, source: 'atn', source_name: 'ATN' } });
+  const gj = { type: 'FeatureCollection', species: ['lion', 'ribbon seal', 'spotted seal'], groups: ['seals', 'land mammals'], features: [
+    mk('lion', 'd9', ['2010-03-01T00:00:00Z', '2010-03-02T00:00:00Z'], [[23, -21], [23.1, -21.1]]),
     mk('ribbon seal', 'd1', [T(0), T(2), T(4)], [[0, 0], [2, 0], [4, 2]]),
     mk('spotted seal', 'd2', ['2026-08-01T00:00:00Z', '2026-08-02T00:00:00Z'], [[10, 10], [11, 11]]),
     { ...mk('spotted seal', 'd2', ['2026-08-05T00:00:00Z', '2026-08-06T00:00:00Z'], [[12, 12], [13, 13]]), properties: { ...mk('spotted seal', 'd2', ['2026-08-05T00:00:00Z', '2026-08-06T00:00:00Z'], [[12, 12], [13, 13]]).properties, segment: 1 } },
@@ -40,20 +48,46 @@ test('tracks layer: contract, chips, observed-time clipping and fading', async (
     for (const k of ['init', 'enable', 'disable', 'update', 'destroy', 'getStats', 'getAnalystRecords', 'getRowControls', 'setParams', 'getParams', 'setObservedTime']) assert.equal(typeof l[k], 'function');
     let ds; l.init({ dataSources: { add(d) { ds = d; }, remove() {} } });
     assert.equal(await l.update(), true);
-    assert.equal(ds.entities.values.length, 5, 'three polylines + one head per deployment (last segment only)');
-    assert.deepEqual(l.getRowControls().chips.map((c) => c.label), ['RIBBON SEAL 1', 'SPOTTED SEAL 2']);
+    assert.equal(ds.entities.values.length, 7, 'four polylines + one head per deployment (last segment only)');
+    assert.deepEqual(l.getRowControls().chips.map((c) => c.label), ['SEALS 3', 'LAND MAMMALS 1'], 'one chip per group, in legend order, segment counts');
+    assert.deepEqual(l.getRowControls().legend.slice(0, 2).map((g) => [g.label, g.color]), [['seals', GROUP_COLORS.seals], ['land mammals', GROUP_COLORS['land mammals']]]);
+    const lion = ds.entities.values.find((e) => e.id.startsWith('trk:d9'));
+    const seal = ds.entities.values.find((e) => e.id.startsWith('trk:d1'));
+    assert.equal(lion.polyline.material.getValue().color.withAlpha(1).toCssHexString(), Cesium.Color.fromCssColorString(GROUP_COLORS['land mammals']).toCssHexString(), 'coloured by group');
+    assert.equal(seal.polyline.material.getValue().color.withAlpha(1).toCssHexString(), Cesium.Color.fromCssColorString(GROUP_COLORS.seals).toCssHexString());
     // observed time inside track 1, outside track 2
     assert.equal(l.setObservedTime(T(3)), true);
     const heads = ds.entities.values.filter((e) => e.id.endsWith(':head'));
     assert.equal(heads.length, 1, 'only the in-span track gets a head');
     const faded = ds.entities.values.find((e) => e.id.startsWith('trk:d2'));
     assert.ok(faded.polyline.material.getValue().color.alpha < 0.5, 'out-of-span track is faded');
-    assert.equal(l.setParams({ 'ribbon seal': false }), true);
-    assert.equal(ds.entities.values.filter((e) => e.show).length, 2);
+    assert.equal(l.setParams({ 'land mammals': false }), true);
+    assert.equal(l.setParams({ 'ribbon seal': false }), false, 'species are not toggles any more');
+    assert.equal(ds.entities.values.filter((e) => e.id.startsWith('trk:d9') && e.show).length, 0, 'the lion is hidden with its group');
+    assert.ok(ds.entities.values.filter((e) => e.id.startsWith('trk:d1') && e.show).length > 0, 'seals stay');
     assert.equal(l.setObservedTime(null), true);
-    assert.equal(ds.entities.values.filter((e) => e.id.endsWith(':head')).length, 2);
+    assert.equal(ds.entities.values.filter((e) => e.id.endsWith(':head')).length, 3);
     assert.equal(l.setObservedTime('bad'), false);
     l.enable();
-    assert.equal(l.getAnalystRecords().length, 1, 'hidden species excluded');
+    assert.equal(l.getAnalystRecords().length, 2, 'hidden group excluded');
+    assert.deepEqual(l.getAnalystRecords().map((r) => r.group), ['seals', 'seals']);
+  } finally { globalThis.fetch = saved; }
+});
+
+test('tracks layer refuses a file with a track outside the five groups, loudly', async () => {
+  const f = (group) => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] },
+    properties: { species: 'x', group, dataset: 'd', segment: 0, times: ['2020-01-01T00:00:00Z', '2020-01-02T00:00:00Z'] } });
+  const saved = globalThis.fetch;
+  try {
+    const l = createTracksLayer();
+    l.init({ dataSources: { add() {}, remove() {} } });
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ type: 'FeatureCollection', groups: ['birds'], features: [f('birds')] }) });
+    assert.equal(await l.update(), true, 'positive control: a grouped file loads');
+    for (const bad of [undefined, 'rodents']) {
+      globalThis.fetch = async () => ({ ok: true, json: async () => ({ type: 'FeatureCollection', groups: ['birds'], features: [f('birds'), f(bad)] }) });
+      assert.equal(await l.update(), false);
+      assert.match(l.getStats().error, /1 of 2 tracks have no known group/);
+      assert.equal(l.getStats().count, 1, 'the last good load stays');
+    }
   } finally { globalThis.fetch = saved; }
 });

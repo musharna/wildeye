@@ -3,30 +3,30 @@ import { extentFromTimes, pluck } from "./observedExtent.js";
 
 /**
  * Animal tracks (track contract): one polyline per segment of a tagged animal's
- * deployment, written by pipeline/tracks.py (IOOS ATN first). Colour by species;
- * species chips toggle visibility. With the shared observed time set inside a
+ * deployment, written by pipeline/tracks.py (IOOS ATN + curated Movebank studies). Colour
+ * and chips are by animal group (GROUP_COLORS, fixed per group so a colour always means the
+ * same kind of animal); the species is in the info box and the readout. A file with a track
+ * outside the five groups is refused loudly and the last good load stays. With the shared observed time set inside a
  * track's span, the track is drawn only up to that instant with a head marker
  * interpolated inside the segment; tracks that do not span the instant are shown
  * faded. Never interpolates across a gap (segments are already split there).
  */
 const DATA_URL = "data/tracks.geojson";
 
-const PALETTE = [
-  "#4fc3f7",
-  "#ffb74d",
-  "#aed581",
-  "#f06292",
-  "#ce93d8",
-  "#fff176",
-  "#80cbc4",
-  "#ff8a65",
-  "#b0bec5",
-];
+/** Legend order = pipeline/tracks.py GROUPS. */
+export const GROUP_COLORS = Object.freeze({
+  "whales & dolphins": "#4fc3f7",
+  seals: "#ce93d8",
+  "land mammals": "#ffb74d",
+  birds: "#fff176",
+  reptiles: "#aed581",
+});
 const FADED = 0.22;
 
-export function speciesColor(species, order) {
-  const i = Math.max(0, order.indexOf(species));
-  return Cesium.Color.fromCssColorString(PALETTE[i % PALETTE.length]);
+export function groupColor(group) {
+  const css = GROUP_COLORS[group];
+  if (!css) throw new Error(`tracks: no colour for group ${JSON.stringify(group)}`);
+  return Cesium.Color.fromCssColorString(css);
 }
 
 const esc = (v) =>
@@ -75,9 +75,10 @@ export function clipSegment(coords, times, tMs) {
 export function createTracksLayer() {
   let _dataSource = null;
   let _features = [];
+  let _groups = []; // groups present, legend order
   let _species = [];
-  let _visible = {}; // species → bool
-  let _counts = {}; // species → segments
+  let _visible = {}; // group → bool
+  let _counts = {}; // group → segments
   let _generatedAt = null;
   let _lastUpdate = null;
   let _lastError = null;
@@ -93,7 +94,7 @@ export function createTracksLayer() {
     for (const f of _features) { const q = f.properties || {}; lastSeg[q.dataset] = Math.max(lastSeg[q.dataset] ?? -1, q.segment ?? 0); }
     _features.forEach((f, i) => {
       const p = f.properties || {};
-      const color = speciesColor(p.species, _species);
+      const color = groupColor(p.group);
       let coords = f.geometry.coordinates,
         head = coords[coords.length - 1],
         alpha = 1,
@@ -114,7 +115,7 @@ export function createTracksLayer() {
         Cesium.Cartesian3.fromDegrees(lon, lat, 0),
       );
       const id = `trk:${p.dataset}:${p.segment}:${i}`;
-      const show = _visible[p.species] !== false;
+      const show = _visible[p.group] !== false;
       es.add({
         id,
         show,
@@ -151,16 +152,16 @@ export function createTracksLayer() {
   const applyVisibility = () => {
     if (!_dataSource) return;
     for (const e of _dataSource.entities.values) {
-      const sp = e.properties?.species?.getValue?.();
-      e.show = _visible[sp] !== false;
+      const g = e.properties?.group?.getValue?.();
+      e.show = _visible[g] !== false;
     }
   };
 
   const layer = {
     id: "tracks",
-    name: "Animal tracks (IOOS ATN)",
+    name: "Animal tracks (IOOS ATN + Movebank)",
     icon: "🦭",
-    source: "IOOS Animal Telemetry Network (per-deployment licence + citation)",
+    source: "IOOS Animal Telemetry Network + curated Movebank studies (per-track licence + citation)",
     updateInterval: 6 * 3600000,
 
     init(viewer) {
@@ -168,6 +169,7 @@ export function createTracksLayer() {
       _dataSource.show = false;
       viewer.dataSources.add(_dataSource);
       _features = [];
+      _groups = [];
       _species = [];
       _visible = {};
       _counts = {};
@@ -194,17 +196,21 @@ export function createTracksLayer() {
           _lastError = "Malformed tracks.geojson";
           return false;
         }
+        const ungrouped = gj.features.filter((f) => !(f.properties?.group in GROUP_COLORS)).length;
+        if (ungrouped) {
+          _lastError = `tracks.geojson: ${ungrouped} of ${gj.features.length} tracks have no known group`;
+          console.warn(`[Data:Tracks] ${_lastError}`);
+          return false;
+        }
         const counts = {};
         for (const f of gj.features) {
-          const sp = f.properties?.species ?? "unknown";
-          counts[sp] = (counts[sp] || 0) + 1;
-          if (!(sp in _visible)) _visible[sp] = true;
+          const g = f.properties.group;
+          counts[g] = (counts[g] || 0) + 1;
+          if (!(g in _visible)) _visible[g] = true;
         }
         _features = gj.features;
-        _species =
-          Array.isArray(gj.species) && gj.species.length
-            ? gj.species
-            : Object.keys(counts).sort();
+        _groups = Object.keys(GROUP_COLORS).filter((g) => g in counts);
+        _species = [...new Set(gj.features.map((f) => f.properties?.species ?? "unknown"))].sort();
         _counts = counts;
         _generatedAt = gj.generated_at ?? null;
         _lastUpdate = Date.now();
@@ -212,7 +218,7 @@ export function createTracksLayer() {
         rebuild();
         _rowControlsListener?.();
         console.log(
-          `[Data:Tracks] Updated: ${_features.length} segments, ${_species.length} species`,
+          `[Data:Tracks] Updated: ${_features.length} segments, ${_species.length} species in ${_groups.length} groups`,
         );
         return true;
       } catch (e) {
@@ -269,17 +275,17 @@ export function createTracksLayer() {
       return { ..._visible };
     },
     getRowControls() {
-      const chips = _species.map((sp) => ({
-        id: sp,
-        label: `${sp.toUpperCase()} ${_counts[sp] ?? 0}`,
-        active: _visible[sp] !== false,
-        state: _visible[sp] !== false ? "active" : "idle",
-        title: `${_visible[sp] !== false ? "Hide" : "Show"} ${sp}`,
-        params: { [sp]: !(_visible[sp] !== false) },
+      const chips = _groups.map((g) => ({
+        id: g,
+        label: `${g.toUpperCase()} ${_counts[g] ?? 0}`,
+        active: _visible[g] !== false,
+        state: _visible[g] !== false ? "active" : "idle",
+        title: `${_visible[g] !== false ? "Hide" : "Show"} ${g}`,
+        params: { [g]: !(_visible[g] !== false) },
       }));
-      const legend = _species.map((sp) => ({
-        label: sp,
-        color: PALETTE[_species.indexOf(sp) % PALETTE.length],
+      const legend = _groups.map((g) => ({
+        label: g,
+        color: GROUP_COLORS[g],
         count: null,
       }));
       legend.push({
@@ -307,6 +313,7 @@ export function createTracksLayer() {
           return {
             id: e.id,
             species: g("species"),
+            group: g("group"),
             sci: g("sci"),
             animal: g("animal"),
             start: g("start"),
