@@ -10,7 +10,12 @@ from pipeline.tracks import (
     to_features,
     process_dataset,
     list_erddap_datasets,
+    GROUPS,
+    carry_forward,
+    collect_movebank,
+    build_collection,
 )
+import pytest
 
 H = 3600.0
 
@@ -163,8 +168,11 @@ def test_process_dataset_end_to_end_with_stubbed_erddap():
         }
 
     feats, st = process_dataset(
-        src, "atn_1_spotted-seal_trajectory_20180420-20180501", fetch, now=2e9
+        src | {"groups": {"spotted seal": "seals"}}, "atn_1_spotted-seal_trajectory_20180420-20180501", fetch, now=2e9
     )
+    assert {f["properties"]["group"] for f in feats} == {"seals"}
+    unmapped, _ = process_dataset(src, "atn_1_spotted-seal_trajectory_20180420-20180501", fetch, now=2e9)
+    assert {f["properties"]["group"] for f in unmapped} == {None}
     assert st["raw"] == 4 and st["kept"] == 3 and st["segments"] == 2
     assert [f["geometry"]["coordinates"][-1][0] for f in feats][0] == 180.0
     assert (
@@ -227,3 +235,125 @@ def test_config_is_well_formed():
             "min_age_days",
         ):
             assert k in s, k
+
+
+DAY = 86400.0
+NOW = 1_790_000_000.0  # 2026-09-21
+
+
+def _feat(dataset, group="birds", species="white stork"):
+    return {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]},
+            "properties": {"dataset": dataset, "species": species, "group": group, "source": "movebank"}}
+
+
+def _prev(fetched_days_ago):
+    iso = __import__("datetime").datetime.fromtimestamp(NOW - fetched_days_ago * DAY, __import__("datetime").UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {"datasets": {"mb:7": {"kept": 3, "fetched_at": iso}, "mb:8": {"kept": 1, "fetched_at": iso}},
+            "features": [_feat("mb:7:a"), _feat("mb:7:b"), _feat("mb:8:a"), _feat("atn_1")]}
+
+
+def test_carry_forward_reuses_the_last_good_copy_up_to_28_days_then_drops():
+    feats, st, fail = carry_forward("mb:7", _prev(7), NOW, "URLError(timeout)")
+    assert [f["properties"]["dataset"] for f in feats] == ["mb:7:a", "mb:7:b"], "only this study's features, not mb:8 or ATN"
+    assert st["carried"] is True and st["fetched_at"] == _prev(7)["datasets"]["mb:7"]["fetched_at"], "age keeps counting from the real fetch"
+    assert fail == {"error": "URLError(timeout)", "carried_from": st["fetched_at"]}
+    stale, _, fail2 = carry_forward("mb:7", _prev(29), NOW, "E")
+    assert stale == [] and "older than 28" in fail2["dropped"] and fail2["error"] == "E"
+    none, _, fail3 = carry_forward("mb:7", None, NOW, "E")
+    assert none == [] and "no previous" in fail3["dropped"]
+    unaged, _, fail4 = carry_forward("mb:7", {"datasets": {"mb:7": {"kept": 3}}, "features": [_feat("mb:7:a")]}, NOW, "E")
+    assert unaged == [] and "no previous" in fail4["dropped"]
+
+
+def test_collect_movebank_retries_once_at_the_end_then_carries():
+    calls = []
+    def process(src, study, now=None):
+        calls.append(study["id"])
+        if study["id"] == 7 and calls.count(7) == 1:
+            raise TimeoutError("blip")          # fails once, retry succeeds
+        if study["id"] == 8:
+            raise TimeoutError("down")          # fails twice → carried
+        return [_feat(f"mb:{study['id']}:x")], {"kept": 2}
+    src = {"id": "movebank", "studies": [{"id": 7}, {"id": 8}, {"id": 9}]}
+    feats, per, fails = collect_movebank(src, src["studies"], _prev(7), NOW, process, sleep=0, retry_pause=0)
+    assert calls == [7, 8, 9, 7, 8], "one pass, then one retry each for the failures, at the end"
+    assert sorted({f["properties"]["dataset"] for f in feats}) == ["mb:7:x", "mb:8:a", "mb:9:x"]
+    assert per["mb:7"]["fetched_at"] == per["mb:9"]["fetched_at"] == "2026-09-21T14:13:20Z" and per["mb:8"]["carried"] is True
+    assert set(fails) == {"mb:8"} and fails["mb:8"]["error"] == "TimeoutError('down')" and "carried_from" in fails["mb:8"]
+
+
+def test_licence_refusal_is_not_an_error_and_is_never_carried():
+    def process(src, study, now=None):
+        return [], {"dropped": "licence CC_BY_NC not in ('CC_0', 'CC_BY')"}
+    src = {"id": "movebank", "studies": [{"id": 7}]}
+    feats, per, fails = collect_movebank(src, src["studies"], _prev(1), NOW, process, sleep=0, retry_pause=0)
+    assert feats == [] and fails == {} and "CC_BY_NC" in per["mb:7"]["dropped"]
+
+
+def test_build_collection_groups_and_byte_cap():
+    feats = [_feat("mb:7:a", "birds"), _feat("atn_1", "seals", "harbor seal")]
+    gj = build_collection([{"id": "a", "name": "A", "base": "b"}], feats, {}, {}, max_bytes=10_000)
+    assert gj["groups"] == ["seals", "birds"] and gj["groups"] == [g for g in GROUPS if g in ("seals", "birds")]
+    assert gj["species"] == ["harbor seal", "white stork"]
+    with pytest.raises(SystemExit, match="no group.*harbor seal"):
+        build_collection([], [feats[0], _feat("atn_1", None, "harbor seal")], {}, {}, max_bytes=10_000)
+    with pytest.raises(SystemExit, match="no group.*hare"):
+        build_collection([], [_feat("x", "rodents", "hare")], {}, {}, max_bytes=10_000)
+    with pytest.raises(SystemExit, match="exceeds"):
+        build_collection([], feats, {}, {}, max_bytes=200)
+    with pytest.raises(SystemExit, match="no tracks"):
+        build_collection([], [], {}, {}, max_bytes=10_000)
+
+
+def test_config_groups_windows_and_caps():
+    from pathlib import Path
+    from pipeline.movebank import study_window
+    cfg = {s["id"]: s for s in json.loads((Path(__file__).parents[1] / "tracks.json").read_text())}
+    assert set(cfg["atn"]["groups"].values()) <= set(GROUPS)
+    mb = cfg["movebank"]
+    assert "days" not in mb, "the window is per study (A38)"
+    assert mb["max_individuals"] == 12
+    ids = [st["id"] for st in mb["studies"]]
+    assert len(ids) == len(set(ids)) == 13
+    for st in mb["studies"]:
+        assert st["group"] in GROUPS, st["id"]
+        study_window(st, NOW)  # raises on a bad window
+
+
+def test_a_study_that_yields_no_tracks_is_flagged_not_silent():
+    def process(src, study, now=None):
+        if study["id"] == 7:
+            return [], {"kept": 0, "window": ["2026-07-28", None]}
+        return [_feat("mb:9:x")], {"kept": 2}
+    src = {"id": "movebank", "studies": [{"id": 7}, {"id": 9}]}
+    feats, per, fails = collect_movebank(src, src["studies"], None, NOW, process, sleep=0, retry_pause=0)
+    assert set(fails) == {"mb:7"} and "no tracks" in fails["mb:7"]["empty"] and "2026-07-28" in fails["mb:7"]["empty"]
+    assert [f["properties"]["dataset"] for f in feats] == ["mb:9:x"] and "mb:9" not in fails
+
+
+def test_movebank_phase_has_a_time_budget_so_a_hanging_outage_still_ends_in_carry():
+    # live 2026-09-25: a blackholed network made every attempt hang its full 120 s timeout, so 13 studies x 2
+    # attempts would pass run_tracks.sh's 3000 s guard and the run would die before writing anything
+    clock = [0.0]
+    calls = []
+    def hang(src, study, now=None):
+        calls.append(study["id"])
+        clock[0] += 120
+        raise TimeoutError("timed out")
+    studies = [{"id": i} for i in (7, 8, 9, 10)]
+    prev = _prev(7)
+    prev["datasets"] |= {f"mb:{i}": {"kept": 1, "fetched_at": prev["datasets"]["mb:7"]["fetched_at"]} for i in (9, 10)}
+    prev["features"] += [_feat("mb:9:a"), _feat("mb:10:a")]
+    feats, per, fails = collect_movebank({"id": "movebank"}, studies, prev, NOW, hang, sleep=0, retry_pause=0,
+                                         budget_s=250, clock=lambda: clock[0])
+    assert calls == [7, 8, 9], "attempts stop once 250 s are spent (the one in flight finishes)"
+    assert set(fails) == {"mb:7", "mb:8", "mb:9", "mb:10"} and all("carried_from" in f for f in fails.values())
+    assert "budget" in fails["mb:10"]["error"] and "TimeoutError" in fails["mb:7"]["error"]
+    assert sorted({f["properties"]["dataset"] for f in feats}) == ["mb:10:a", "mb:7:a", "mb:7:b", "mb:8:a", "mb:9:a"]
+    # positive control: a healthy phase under budget attempts every study once
+    calls.clear(); clock[0] = 0.0
+    def ok(src, study, now=None):
+        calls.append(study["id"]); clock[0] += 10
+        return [_feat(f"mb:{study['id']}:x")], {"kept": 1}
+    _, _, fails2 = collect_movebank({"id": "movebank"}, studies, None, NOW, ok, sleep=0, retry_pause=0, budget_s=250, clock=lambda: clock[0])
+    assert calls == [7, 8, 9, 10] and fails2 == {}

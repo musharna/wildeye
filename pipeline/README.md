@@ -126,13 +126,34 @@ ride into the info box. Measured 2026-09-11: ~2 s per deployment.
 **Movebank** (`kind: "movebank"` source in `tracks.json`, `pipeline/movebank.py`): curated
 public studies only. Credentials come from `MOVEBANK_USER` / `MOVEBANK_PASS`, which
 `run_tracks.sh` sources from `~/.config/wildeye/env` (mode 600, outside the repo). Per study:
-metadata, individuals → taxon, visible GPS events since `days` (60) ago; one dataset per
-individual (`mb:<study>:<individual>`) through the same clean / lag / downsample / segment
-path. The study's `license_type` is read from Movebank on every run and anything but `CC_0`
-/ `CC_BY` is refused even if listed. A licence page in place of CSV is accepted once via the
+metadata, individuals → taxon, visible GPS events inside the study's own window — exactly
+one of `days` (active studies, back from the run) or `start` + `end` (archival, ≤ 366 days,
+chosen as the 12 months with the most animal-hours) — sent to Movebank as
+`timestamp_start` / `timestamp_end`; a study with both, neither, or a longer window fails the
+build. One dataset per individual (`mb:<study>:<individual>`) through the same clean / lag /
+downsample / segment path; `min_gap_s` per study overrides the source (archival 12 h, active
+3 h, to fit the size cap). Fixes with no individual (undeployed tags) are dropped and counted,
+never pooled; Homo sapiens individuals are refused; fixes dated after the run are dropped and
+counted; at most `max_individuals` (12) per study are kept, those with the most fixes, ties by
+id. The study's `license_type` is read from Movebank on every run and anything but `CC_0` /
+`CC_BY` is refused even if listed. A licence page in place of CSV is accepted once via the
 `license-md5` re-request; a second licence page is an error. `common` maps canonical taxa to
-display names, `default_species` covers individuals with no taxon. Measured 2026-09-11:
-3 studies, 32 individuals, 78 segments, 20 s.
+display names, `default_species` covers individuals with no taxon, `group` (one of the five
+in `tracks.GROUPS`) colours the study; ATN species map to a group in the source's `groups`,
+and a track with no group fails the build.
+
+A study that errors is retried once at the end of the run; if it fails again its features
+from the previous `tracks.geojson` are carried for up to 28 days after their last good fetch
+(`failures[<key>].carried_from`), then dropped (`failures[<key>].dropped`). A study that
+returns no tracks is flagged `failures[<key>].empty`. The whole Movebank phase has a
+wall-clock budget (`--movebank-budget`, 1200 s): no attempt starts after it, and the rest are
+carried — a blackholed network makes each request hang its full 120 s, and 13 studies × 2
+attempts would otherwise pass `run_tracks.sh`'s 3000 s guard and kill the run before it writes
+(measured 2026-09-25 with HTTPS sent to a dead proxy: budget 200 s → 2 attempts, all 13 carried). The build fails above `--max-bytes`
+(6 MB). Recent data of a listed study may not be downloadable (Armenian gulls: listing says
+2026-09, direct-read ends 2026-03), so an active study can come back empty. Measured
+2026-09-25 (run_tracks.sh): 13 studies, 108 animals, 544 Movebank segments + 571 ATN, 24
+species in 5 groups, 4.8 MB, 245 s.
 
 ## Ocean oxygen and pH: Copernicus Marine (raster drapes)
 Two `cmems` rows in `rasters.json` (`cmems-o2` from `cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m`, `cmems-ph`
