@@ -235,6 +235,7 @@ def to_features(
                     "animal": seg[0]["animal"],
                     "segment": k,
                     "species": info["species"],
+                    "group": info.get("group"),
                     "sci": info["sci"],
                     "start": times[0],
                     "end": times[-1],
