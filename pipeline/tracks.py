@@ -8,6 +8,13 @@ the antimeridian, and emitted as one LineString per segment with a parallel `tim
 array whose length is validated against the coordinates. Per-deployment licence,
 citation and institution ride along into the info box. A publication lag drops fixes
 newer than `min_age_days` (sensitive-taxon protection; archival data is unaffected).
+
+Every track carries one of GROUPS (ATN: per species in tracks.json `groups`; Movebank: per
+study `group`); the build fails on a track with no group rather than inventing "other". A
+Movebank study that fails is retried once at the end of the run; if it fails again, its
+features from the previous output are carried for up to CARRY_MAX_DAYS after their last good
+fetch, flagged in `failures` with `carried_from`; older, or with no fetch on record, the study
+is dropped and `failures` says so. The build also fails if the output would exceed --max-bytes.
 """
 
 from __future__ import annotations
@@ -26,6 +33,9 @@ from .atomic import write_atomic
 log = logging.getLogger("tracks")
 HERE = Path(__file__).parent
 UA = {"User-Agent": "wildeye/0.1 (tracks sync)"}
+GROUPS = ("whales & dolphins", "seals", "land mammals", "birds", "reptiles")  # legend order
+CARRY_MAX_DAYS = 28
+MAX_BYTES = 6_000_000
 
 
 def _get_json(url: str, timeout: int = 90) -> dict:
@@ -256,6 +266,7 @@ def process_dataset(
     source: dict, dataset_id: str, fetch=_get_json, now: float | None = None
 ) -> tuple[list[dict], dict]:
     info = fetch_info(source["base"], dataset_id, fetch)
+    info["group"] = source.get("groups", {}).get(info["species"])  # unmapped → None → build fails
     raw = fetch_fixes(source["base"], dataset_id, fetch)
     fixes = clean(
         raw,
@@ -275,6 +286,103 @@ def process_dataset(
     return to_features(dataset_id, source, info, segs), stats | {"segments": len(segs)}
 
 
+def load_previous(path: Path) -> dict | None:
+    """The last written output, the source of carried-forward Movebank studies (None if absent)."""
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        log.error("previous %s unreadable, nothing can be carried: %r", path, e)
+        return None
+
+
+def carry_forward(
+    key: str, prev: dict | None, now: float, error: str
+) -> tuple[list[dict], dict, dict]:
+    """A study that failed twice: its features from `prev` if its last good fetch is at most
+    CARRY_MAX_DAYS old → (features, stats, failure). The age keeps counting from the real
+    fetch (`fetched_at` is copied, not renewed), so a long outage still ends in a drop."""
+    st = (prev or {}).get("datasets", {}).get(key) or {}
+    fetched = st.get("fetched_at")
+    if not fetched:
+        return [], {}, {"error": error, "dropped": "no previous good fetch on record"}
+    age_d = (now - _parse_time(fetched)) / 86400
+    if age_d > CARRY_MAX_DAYS:
+        return [], {}, {"error": error, "dropped": f"last good fetch {fetched} is older than {CARRY_MAX_DAYS} days"}
+    feats = [f for f in prev.get("features", []) if str(f["properties"].get("dataset", "")).startswith(key + ":")]
+    return feats, st | {"carried": True}, {"error": error, "carried_from": fetched}
+
+
+def collect_movebank(
+    src: dict, studies: list[dict], prev: dict | None, now: float, process=None,
+    sleep: float = 0.5, retry_pause: float = 60,
+) -> tuple[list[dict], dict, dict]:
+    """One pass over the studies, then one retry each for the failures at the end, then
+    carry_forward for any that failed twice. A licence refusal is a result, not an error."""
+    if process is None:
+        from .movebank import process_study as process
+    features, per, failures, failed = [], {}, {}, []
+
+    def attempt(study):
+        feats, st = process(src, study, now=now)
+        key = f"mb:{study['id']}"
+        per[key] = st | {"fetched_at": _iso(now)}
+        features.extend(feats)
+        log.info("%s %s", key, st)
+
+    for study in studies:
+        try:
+            attempt(study)
+        except Exception as e:  # noqa: BLE001
+            log.error("mb:%s FAILED (one retry at the end of the run): %r", study["id"], e)
+            failed.append(study)
+        time.sleep(sleep)
+    if failed:
+        time.sleep(retry_pause)
+    for study in failed:
+        key = f"mb:{study['id']}"
+        try:
+            attempt(study)
+            log.info("%s succeeded on retry", key)
+        except Exception as e:  # noqa: BLE001
+            feats, st, failure = carry_forward(key, prev, now, repr(e))
+            failures[key] = failure
+            if feats:
+                features.extend(feats)
+                per[key] = st
+            log.error("%s FAILED twice: %s", key, failure)
+        time.sleep(sleep)
+    return features, per, failures
+
+
+def build_collection(
+    sources: list[dict], features: list[dict], per_dataset: dict, failures: dict, max_bytes: int
+) -> dict:
+    """The output document; fails the build on no tracks, a track without a known group, or a
+    document larger than max_bytes (measured as written: compact separators)."""
+    if not features:
+        raise SystemExit("no tracks fetched")
+    bad = sorted({(str(f["properties"].get("group")), f["properties"].get("species")) for f in features if f["properties"].get("group") not in GROUPS})
+    if bad:
+        raise SystemExit(f"no group in {GROUPS} for (group, species): {bad} — map them in pipeline/tracks.json")
+    present = {f["properties"]["group"] for f in features}
+    gj = {
+        "type": "FeatureCollection",
+        "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "sources": [{k: s[k] for k in ("id", "name", "base")} for s in sources],
+        "species": sorted({f["properties"]["species"] for f in features}),
+        "groups": [g for g in GROUPS if g in present],
+        "datasets": per_dataset,
+        "failures": failures,
+        "features": features,
+    }
+    size = len(json.dumps(gj, separators=(",", ":")))
+    if size > max_bytes:
+        raise SystemExit(f"tracks output {size:,} bytes exceeds the {max_bytes:,}-byte cap; thin or drop studies in pipeline/tracks.json")
+    return gj
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path("public/data/tracks.geojson"))
@@ -288,6 +396,9 @@ def main(argv=None):
         default=0.5,
         help="seconds between requests (serial, polite)",
     )
+    ap.add_argument(
+        "--max-bytes", type=int, default=MAX_BYTES, help="fail rather than write a larger file"
+    )
     a = ap.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
@@ -297,22 +408,15 @@ def main(argv=None):
         keep = set(a.sources.split(","))
         sources = [s for s in sources if s["id"] in keep]
     t0 = time.time()
+    now = time.time()
     features, per_dataset, failures = [], {}, {}
     for src in sources:
         if src.get("kind") == "movebank":
-            from .movebank import process_study
-
-            for study in src["studies"][: a.limit] if a.limit else src["studies"]:
-                key = f"mb:{study['id']}"
-                try:
-                    feats, st = process_study(src, study)
-                    features += feats
-                    per_dataset[key] = st
-                    log.info("%s %s", key, st)
-                except Exception as e:  # noqa: BLE001
-                    failures[key] = repr(e)
-                    log.error("%s FAILED: %r", key, e)
-                time.sleep(a.sleep)
+            studies = src["studies"][: a.limit] if a.limit else src["studies"]
+            feats, per, fails = collect_movebank(src, studies, load_previous(a.out), now, sleep=a.sleep)
+            features += feats
+            per_dataset |= per
+            failures |= fails
             continue
         ids = select_datasets(
             list_erddap_datasets(src["base"], src["match"]),
@@ -338,26 +442,14 @@ def main(argv=None):
                 failures[d] = repr(e)
                 log.error("%s FAILED: %r", d, e)
             time.sleep(a.sleep)
-    if not features:
-        raise SystemExit("no tracks fetched")
-    species = sorted({f["properties"]["species"] for f in features})
-    write_atomic(
-        a.out,
-        {
-            "type": "FeatureCollection",
-            "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "sources": [{k: s[k] for k in ("id", "name", "base")} for s in sources],
-            "species": species,
-            "datasets": per_dataset,
-            "failures": failures,
-            "features": features,
-        },
-    )
+    gj = build_collection(sources, features, per_dataset, failures, a.max_bytes)
+    write_atomic(a.out, gj)
     log.info(
-        "wrote %d segments from %d deployments (%d species) in %.0fs, %d failures",
+        "wrote %d segments from %d deployments (%d species, %d groups) in %.0fs, %d failures",
         len(features),
         len(per_dataset),
-        len(species),
+        len(gj["species"]),
+        len(gj["groups"]),
         time.time() - t0,
         len(failures),
     )

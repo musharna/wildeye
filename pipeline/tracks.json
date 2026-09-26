@@ -14,7 +14,16 @@
       "Z"
     ],
     "exclude_species": [],
-    "min_age_days": 7
+    "min_age_days": 7,
+    "groups": {
+      "Blainville's beaked whale": "whales & dolphins",
+      "false killer whale": "whales & dolphins",
+      "short-finned pilot whale": "whales & dolphins",
+      "bearded seal": "seals",
+      "harbor seal": "seals",
+      "ribbon seal": "seals",
+      "spotted seal": "seals"
+    }
   },
   {
     "id": "movebank",
@@ -24,11 +33,10 @@
     "match": "",
     "max_per_species": 0,
     "min_fixes": 5,
-    "min_gap_s": 3600,
+    "min_gap_s": 10800,
     "segment_gap_h": 24,
     "max_speed_ms": 50,
     "min_age_days": 7,
-    "days": 60,
     "studies": [
       {
         "id": 481458,
@@ -36,7 +44,9 @@
         "common": {
           "Cathartes aura": "turkey vulture",
           "Coragyps atratus": "black vulture"
-        }
+        },
+        "days": 60,
+        "group": "birds"
       },
       {
         "id": 21231406,
@@ -44,7 +54,9 @@
         "common": {
           "Ciconia ciconia": "white stork"
         },
-        "default_species": "white stork"
+        "default_species": "white stork",
+        "days": 60,
+        "group": "birds"
       },
       {
         "id": 2928116,
@@ -57,8 +69,121 @@
           "Chelonoidis darwini": "Santiago giant tortoise",
           "Chelonoidis": "Galápagos giant tortoise"
         },
-        "default_species": "Galápagos giant tortoise"
+        "default_species": "Galápagos giant tortoise",
+        "days": 60,
+        "group": "reptiles"
+      },
+      {
+        "id": 4124813,
+        "note": "Black-necked cranes, Bhutan (CC BY); densest 12 months",
+        "start": "2011-03-01",
+        "end": "2012-03-01",
+        "min_gap_s": 43200,
+        "group": "birds",
+        "common": {
+          "Grus nigricollis": "black-necked crane"
+        }
+      },
+      {
+        "id": 8531131637,
+        "note": "Water buffalo, Djelk IPA, Arnhem Land, Australia (CC BY); densest 12 months",
+        "start": "2018-08-01",
+        "end": "2019-08-01",
+        "min_gap_s": 43200,
+        "group": "land mammals",
+        "common": {
+          "Bubalus bubalis": "water buffalo"
+        }
+      },
+      {
+        "id": 1241071371,
+        "note": "Arctic foxes, Bylot Island, Nunavut (CC0); densest 12 months",
+        "start": "2019-06-01",
+        "end": "2020-06-01",
+        "min_gap_s": 43200,
+        "group": "land mammals",
+        "common": {
+          "Vulpes lagopus": "Arctic fox"
+        }
+      },
+      {
+        "id": 208413731,
+        "note": "White-bearded wildebeest, Kenya (CC BY); densest 12 months",
+        "start": "2011-04-01",
+        "end": "2012-04-01",
+        "min_gap_s": 43200,
+        "group": "land mammals",
+        "common": {
+          "Connochaetes taurinus": "white-bearded wildebeest"
+        },
+        "default_species": "white-bearded wildebeest"
+      },
+      {
+        "id": 3791354435,
+        "note": "African lions, Central Kalahari, Botswana (CC0; the CC BY copy 3809257699 is the same data); densest 12 months",
+        "start": "2010-03-01",
+        "end": "2011-03-01",
+        "min_gap_s": 43200,
+        "group": "land mammals",
+        "common": {
+          "Panthera leo": "lion"
+        }
+      },
+      {
+        "id": 19411459,
+        "note": "Jaguars, Pantanal, Brazil (CC0); densest 12 months",
+        "start": "2014-12-01",
+        "end": "2015-12-01",
+        "min_gap_s": 43200,
+        "group": "land mammals",
+        "common": {
+          "Panthera onca": "jaguar"
+        }
+      },
+      {
+        "id": 1120749252,
+        "note": "Frugivores, Barro Colorado Island, Panama (CC BY); densest 12 months",
+        "start": "2017-12-01",
+        "end": "2018-12-01",
+        "min_gap_s": 43200,
+        "group": "land mammals",
+        "common": {
+          "Nasua narica": "white-nosed coati",
+          "Pecari tajacu": "collared peccary",
+          "Ateles geoffroyi": "Geoffroy's spider monkey",
+          "Cebus capucinus": "white-faced capuchin",
+          "Potos flavus": "kinkajou"
+        }
+      },
+      {
+        "id": 1088836380,
+        "note": "Bobcats and fishers, Black Rock Forest, New York (CC BY)",
+        "days": 60,
+        "group": "land mammals",
+        "common": {
+          "Lynx rufus": "bobcat",
+          "Pekania pennanti": "fisher"
+        }
+      },
+      {
+        "id": 14671003,
+        "note": "Hooded vultures, Africa (CC BY; no citation on Movebank → name + PI shown)",
+        "days": 60,
+        "group": "birds",
+        "common": {
+          "Necrosyrtes monachus": "hooded vulture"
+        }
+      },
+      {
+        "id": 4194049025,
+        "note": "Armenian gulls, Armenia (CC0)",
+        "days": 60,
+        "group": "birds",
+        "common": {
+          "Larus armenicus": "Armenian gull"
+        }
       }
-    ]
+    ],
+    "max_individuals": 12
   }
 ]
