@@ -1,7 +1,6 @@
 # Changelog
 
-This changelog records public product changes. For the authoritative description
-of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
+This changelog records public product changes.
 
 ## [Unreleased]
 
