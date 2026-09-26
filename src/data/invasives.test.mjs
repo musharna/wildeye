@@ -66,6 +66,12 @@ test('layer: contract without the time bar, parts, bins, legend names what is no
     assert.match(urls[0], /^data\/griis\.geojson\?t=\d+$/);
     assert.equal(ds.entities.values.length, 4, 'MultiPolygon → one entity per part');
     assert.ok(ds.entities.getById('griis:us:1'));
+    // No height = Cesium drapes the polygon over terrain (a ground primitive: the most expensive polygon path, ~6 fps
+    // on an Intel iGPU with 1,480 parts) and silently drops the outline ("outlines are unsupported on terrain").
+    for (const e of ds.entities.values) {
+      assert.equal(e.polygon.height?.getValue(), 0, `${e.id}: flat on the ellipsoid, not clamped to terrain`);
+      assert.equal(e.polygon.outline.getValue(), true, 'the outline is drawn now that the polygon is not on terrain');
+    }
     assert.deepEqual(l.getStats().bins, { lt300: 0, lt100: 1, lt1k: 1, lt3k: 0, ge3k: 1 });
     assert.equal(l.getStats().notDrawn, 1);
     assert.equal(l.getStats().protectedAreas, 2);
