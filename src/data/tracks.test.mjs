@@ -49,6 +49,11 @@ test('tracks layer: contract, chips, observed-time clipping and fading', async (
     let ds; l.init({ dataSources: { add(d) { ds = d; }, remove() {} } });
     assert.equal(await l.update(), true);
     assert.equal(ds.entities.values.length, 7, 'four polylines + one head per deployment (last segment only)');
+    // a head dot must not show through the Earth: with depth testing off at any distance, Alaska's seal
+    // heads drew over the Balkans and Hawaii's whales over the Sahara from an Africa view (2026-09-25)
+    const heads0 = ds.entities.values.filter((e) => e.id.endsWith(':head'));
+    assert.ok(heads0.length > 0);
+    for (const h of heads0) assert.equal(h.point.disableDepthTestDistance.getValue(), 50_000, 'same as the other bio point layers');
     assert.deepEqual(l.getRowControls().chips.map((c) => c.label), ['SEALS 3', 'LAND MAMMALS 1'], 'one chip per group, in legend order, segment counts');
     assert.deepEqual(l.getRowControls().legend.slice(0, 2).map((g) => [g.label, g.color]), [['seals', GROUP_COLORS.seals], ['land mammals', GROUP_COLORS['land mammals']]]);
     const lion = ds.entities.values.find((e) => e.id.startsWith('trk:d9'));

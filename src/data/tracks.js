@@ -139,7 +139,7 @@ export function createTracksLayer() {
             color: color.withAlpha(alpha),
             outlineColor: Cesium.Color.BLACK.withAlpha(0.7 * alpha),
             outlineWidth: 1,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            disableDepthTestDistance: 50_000, // as neon/otn/occurrences: never through the Earth
           },
           description: describeTrack(p),
           properties: { ...p, kind: "head" },
