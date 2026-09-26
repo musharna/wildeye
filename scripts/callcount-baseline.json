@@ -1,5 +1,5 @@
 {
-  "note": "Exact src/ call counts per world-overlay workload (121 frames). Gated by scripts/callcount-check.mjs: totals must equal these. Regenerate with `npm run perf:callcount -- --update`.",
+  "note": "Exact src/ call counts per workload: the world-overlay frame (121 frames) and the wildlife time steps and particle frames (scripts/callcount-wildlife.worker.mjs). Gated by scripts/callcount-check.mjs: totals must equal these. Regenerate with `npm run perf:callcount -- --update`.",
   "workloads": {
     "generic-above-cap": {
       "total": 1546885,
@@ -165,6 +165,87 @@
         "src/overlays/worldOverlayDraw.js:roundedRectPath": 11520,
         "src/overlays/worldOverlayDraw.js:writePlacement": 121000,
         "src/overlays/worldOverlayTokens.js:(anonymous)": 1
+      }
+    },
+    "tracks-step": {
+      "total": 83458,
+      "functions": {
+        "src/data/observedExtent.js:(anonymous)": 1,
+        "src/data/observedExtent.js:extentFromTimes": 1,
+        "src/data/observedExtent.js:pluck": 2,
+        "src/data/observedExtent.js:span": 1,
+        "src/data/tracks.js:(anonymous)": 72694,
+        "src/data/tracks.js:clipSegmentMs": 617,
+        "src/data/tracks.js:createTracksLayer": 2,
+        "src/data/tracks.js:describeTrack": 725,
+        "src/data/tracks.js:enable": 1,
+        "src/data/tracks.js:esc": 7250,
+        "src/data/tracks.js:getObservedExtent": 1,
+        "src/data/tracks.js:groupColor": 484,
+        "src/data/tracks.js:init": 1,
+        "src/data/tracks.js:isShown": 242,
+        "src/data/tracks.js:pointGraphics": 241,
+        "src/data/tracks.js:rebuild": 3,
+        "src/data/tracks.js:setObservedTime": 105,
+        "src/data/tracks.js:step": 106,
+        "src/data/tracks.js:toCartesians": 980,
+        "src/data/tracks.js:update": 1
+      }
+    },
+    "occurrences-step": {
+      "total": 94606,
+      "functions": {
+        "src/data/iucn.js:(anonymous)": 1,
+        "src/data/iucn.js:iucnBadge": 5152,
+        "src/data/iucn.js:iucnEntry": 5152,
+        "src/data/iucn.js:loadIucn": 1,
+        "src/data/observedExtent.js:(anonymous)": 1,
+        "src/data/observedExtent.js:extentFromDays": 1,
+        "src/data/observedExtent.js:pluck": 1,
+        "src/data/observedExtent.js:span": 1,
+        "src/data/occurrences.js:(anonymous)": 5314,
+        "src/data/occurrences.js:ageAlpha": 5152,
+        "src/data/occurrences.js:applyVisibility": 32,
+        "src/data/occurrences.js:basisText": 5152,
+        "src/data/occurrences.js:createOccurrencesLayer": 2,
+        "src/data/occurrences.js:describeOccurrence": 5152,
+        "src/data/occurrences.js:enable": 1,
+        "src/data/occurrences.js:esc": 53120,
+        "src/data/occurrences.js:getObservedExtent": 1,
+        "src/data/occurrences.js:getStats": 1,
+        "src/data/occurrences.js:groupColor": 5152,
+        "src/data/occurrences.js:init": 1,
+        "src/data/occurrences.js:pointEntity": 5152,
+        "src/data/occurrences.js:rebuild": 32,
+        "src/data/occurrences.js:setObservedTime": 31,
+        "src/data/occurrences.js:update": 1
+      }
+    },
+    "birds-tick": {
+      "total": 289757,
+      "functions": {
+        "src/data/birds.js:_applyField": 1,
+        "src/data/birds.js:(anonymous)": 1,
+        "src/data/birds.js:applyVisibility": 3,
+        "src/data/birds.js:createBirdsLayer": 2,
+        "src/data/birds.js:disable": 1,
+        "src/data/birds.js:enable": 1,
+        "src/data/birds.js:getStats": 2,
+        "src/data/birds.js:headingColor": 3315,
+        "src/data/birds.js:init": 1,
+        "src/data/birds.js:onTick": 121,
+        "src/data/birds.js:reseed": 1,
+        "src/data/birds.js:setParams": 1,
+        "src/data/birds.js:spawn": 3315,
+        "src/data/birdsField.js:(anonymous)": 96356,
+        "src/data/birdsField.js:buildSpawnCdf": 1,
+        "src/data/birdsField.js:idwVelocity": 3315,
+        "src/data/birdsField.js:sampleCell": 3315,
+        "src/data/birdsField.js:stepParticle": 180000,
+        "src/renderGovernor.js:(anonymous)": 1,
+        "src/renderGovernor.js:applyMode": 2,
+        "src/renderGovernor.js:holdContinuousRender": 1,
+        "src/renderGovernor.js:releaseContinuousRender": 1
       }
     }
   }

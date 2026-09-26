@@ -6,16 +6,17 @@ import {
   aggregateCoverage,
   compareToBaseline,
   totalCalls,
-} from '../../scripts/callcount-check.mjs';
+} from '../scripts/callcount-check.mjs';
 
 /**
- * The world-overlay frame's exact src/ call counts must equal the committed
- * baseline (`scripts/callcount-baseline.json`). Counts are deterministic across
+ * Every workload's exact src/ call counts (the world-overlay frame, the
+ * wildlife time steps and particle frames) must equal the committed baseline
+ * (`scripts/callcount-baseline.json`). Counts are deterministic across
  * runs, host load and Node versions, so there is no headroom and no runtime
  * skip: any change in work is a red build until the baseline is re-committed.
  */
 
-const SCRIPT_PATH = fileURLToPath(new URL('../../scripts/callcount-check.mjs', import.meta.url));
+const SCRIPT_PATH = fileURLToPath(new URL('../scripts/callcount-check.mjs', import.meta.url));
 
 function baselineOf(total, functions) {
   return { workloads: { frame: { total, functions } } };
@@ -63,7 +64,7 @@ test('coverage aggregation keeps only called src/ functions, keyed by name', () 
   assert.equal(totalCalls(aggregateCoverage(scripts)), 15);
 });
 
-test('world-overlay frame call counts equal the committed baseline', () => {
+test('every workload\'s call counts equal the committed baseline', () => {
   const result = spawnSync(process.execPath, [SCRIPT_PATH, '--json'], { encoding: 'utf8', timeout: 600_000 });
   if (result.error) throw new Error(`callcount-check failed to spawn: ${result.error.message}`);
   const rows = result.stdout.trim() ? JSON.parse(result.stdout.trim().split('\n').pop()) : [];
@@ -71,6 +72,6 @@ test('world-overlay frame call counts equal the committed baseline', () => {
     + row.deltas.map(({ key, delta }) => `\n  ${delta > 0 ? '+' : ''}${delta} ${key}`).join('')).join('\n');
   assert.equal(result.status, 0, `${summary}\n${result.stderr}`);
   // A workload that silently vanished would pass the verdict loop; pin the set by name.
-  assert.deepEqual(rows.map((row) => row.name), ['generic-above-cap'], result.stdout);
+  assert.deepEqual(rows.map((row) => row.name), ['generic-above-cap', 'tracks-step', 'occurrences-step', 'birds-tick'], result.stdout);
   for (const row of rows) assert.equal(row.verdict, 'equal', summary);
 });

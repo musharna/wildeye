@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
- * callcount-check — deterministic call-count ratchet for the world-overlay frame.
+ * callcount-check — deterministic call-count ratchet for the world-overlay frame
+ * and the wildlife layers' time steps and particle frames.
  *
  * The allocation gates (`worldOverlayAllocation.test.mjs`) measure bytes, and
  * bytes depend on which JIT/IC regime V8 lands in: the same workload shows two
  * stable modes, so every budget carries headroom for the slower one, and a
  * regression smaller than that headroom is invisible. This gate counts WORK
- * instead. It runs the same deterministic worker (fixed-seed workload, virtual
- * clock, Canvas2D stub) under `NODE_V8_COVERAGE`, which records the exact
+ * instead. It runs deterministic workers (fixed-seed fixtures, virtual clocks,
+ * stubs for the canvas and viewer) under `NODE_V8_COVERAGE`, which records the exact
  * invocation count of every function, and sums the counts for `src/` functions.
  *
  * A count is not a timing: it is identical across runs, across host load, and
@@ -36,7 +37,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const WORKER_PATH = path.join(ROOT, 'src/overlays/worldOverlayAllocation.worker.mjs');
+const OVERLAY_WORKER = path.join(ROOT, 'src/overlays/worldOverlayAllocation.worker.mjs');
+const WILDLIFE_WORKER = path.join(ROOT, 'scripts/callcount-wildlife.worker.mjs');
 export const BASELINE_PATH = path.join(ROOT, 'scripts/callcount-baseline.json');
 
 /**
@@ -52,14 +54,22 @@ const FRAME_ENV = Object.freeze({
 });
 
 /**
- * `candidates` is asserted against the worker's own report, so the echoed
- * profile name alone never has to prove the intended scene ran. Only the
- * generic workload remains; the per-source workloads drove God's Eye layers
- * removed on 2026-09-26, and wildlife workloads replace them before the world
- * overlay itself goes (bloat grill Q7).
+ * Each workload names its worker, the env that selects its scene, and `expect`:
+ * fields asserted against the worker's own report, so the echoed profile name
+ * alone never has to prove the intended scene ran. The overlay's per-source
+ * workloads drove God's Eye layers removed on 2026-09-26; the wildlife ones
+ * (scripts/callcount-wildlife.worker.mjs) outlive the overlay (bloat grill Q7).
  */
 export const WORKLOADS = Object.freeze([
-  { name: 'generic-above-cap', profile: 'generic', entries: 250, candidates: 250 },
+  {
+    name: 'generic-above-cap',
+    worker: OVERLAY_WORKER,
+    env: { ...FRAME_ENV, GEV_ALLOC_PROFILE: 'generic', GEV_ALLOC_ENTRIES: '250' },
+    expect: { candidateCount: 250 },
+  },
+  { name: 'tracks-step', worker: WILDLIFE_WORKER, env: { GEV_WILDLIFE_PROFILE: 'tracks-step' }, expect: { features: 121, steps: 104 } },
+  { name: 'occurrences-step', worker: WILDLIFE_WORKER, env: { GEV_WILDLIFE_PROFILE: 'occurrences-step' }, expect: { features: 161, steps: 30 } },
+  { name: 'birds-tick', worker: WILDLIFE_WORKER, env: { GEV_WILDLIFE_PROFILE: 'birds-tick' }, expect: { particles: 1500, frames: 121 } },
 ]);
 
 /** Sum V8 precise-coverage call counts per `src/` file:function. */
@@ -87,17 +97,11 @@ export function totalCalls(counts) {
 export function measureWorkload(workload) {
   const coverageDir = mkdtempSync(path.join(tmpdir(), 'gev-callcount-'));
   try {
-    const result = spawnSync(process.execPath, ['--expose-gc', WORKER_PATH], {
+    const result = spawnSync(process.execPath, ['--expose-gc', workload.worker], {
       cwd: ROOT,
       encoding: 'utf8',
       timeout: 180_000,
-      env: {
-        ...process.env,
-        ...FRAME_ENV,
-        GEV_ALLOC_PROFILE: workload.profile,
-        GEV_ALLOC_ENTRIES: String(workload.entries),
-        NODE_V8_COVERAGE: coverageDir,
-      },
+      env: { ...process.env, ...workload.env, NODE_V8_COVERAGE: coverageDir },
     });
     if (result.error) throw new Error(`${workload.name}: worker failed to spawn: ${result.error.message}`);
     if (result.status !== 0) {
@@ -105,9 +109,11 @@ export function measureWorkload(workload) {
     }
     const report = JSON.parse(result.stdout.trim().split('\n').pop());
     if (!report.ok) throw new Error(`${workload.name}: worker reported ${JSON.stringify(report)}`);
-    if (report.candidateCount !== workload.candidates) {
-      throw new Error(`${workload.name}: expected ${workload.candidates} candidates, worker ran ${report.candidateCount} `
-        + `(profile ${JSON.stringify(workload.profile)} not recognised?)`);
+    for (const [key, value] of Object.entries(workload.expect)) {
+      if (report[key] !== value) {
+        throw new Error(`${workload.name}: expected ${key} ${value}, worker reported ${JSON.stringify(report[key])} `
+          + `(env ${JSON.stringify(workload.env)} not recognised?)`);
+      }
     }
     const scripts = readdirSync(coverageDir)
       .filter((file) => file.endsWith('.json'))
