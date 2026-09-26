@@ -33,8 +33,17 @@ from .atomic import write_atomic
 log = logging.getLogger("tracks")
 HERE = Path(__file__).parent
 UA = {"User-Agent": "wildeye/0.1 (tracks sync)"}
-GROUPS = ("whales & dolphins", "seals", "land mammals", "birds", "reptiles")  # legend order
+GROUPS = (
+    "whales & dolphins",
+    "seals",
+    "land mammals",
+    "birds",
+    "reptiles",
+)  # legend order
 CARRY_MAX_DAYS = 28
+# Wall-clock budget for the whole Movebank phase: per-request timeouts alone let a hanging outage
+# cost studies x 2 attempts x timeout (13 x 2 x 120 s > run_tracks.sh's 3000 s guard, measured).
+MOVEBANK_BUDGET_S = 1200
 MAX_BYTES = 6_000_000
 
 
@@ -266,7 +275,9 @@ def process_dataset(
     source: dict, dataset_id: str, fetch=_get_json, now: float | None = None
 ) -> tuple[list[dict], dict]:
     info = fetch_info(source["base"], dataset_id, fetch)
-    info["group"] = source.get("groups", {}).get(info["species"])  # unmapped → None → build fails
+    info["group"] = source.get("groups", {}).get(
+        info["species"]
+    )  # unmapped → None → build fails
     raw = fetch_fixes(source["base"], dataset_id, fetch)
     fixes = clean(
         raw,
@@ -309,20 +320,43 @@ def carry_forward(
         return [], {}, {"error": error, "dropped": "no previous good fetch on record"}
     age_d = (now - _parse_time(fetched)) / 86400
     if age_d > CARRY_MAX_DAYS:
-        return [], {}, {"error": error, "dropped": f"last good fetch {fetched} is older than {CARRY_MAX_DAYS} days"}
-    feats = [f for f in prev.get("features", []) if str(f["properties"].get("dataset", "")).startswith(key + ":")]
+        return (
+            [],
+            {},
+            {
+                "error": error,
+                "dropped": f"last good fetch {fetched} is older than {CARRY_MAX_DAYS} days",
+            },
+        )
+    feats = [
+        f
+        for f in (prev or {}).get("features", [])
+        if str(f["properties"].get("dataset", "")).startswith(key + ":")
+    ]
     return feats, st | {"carried": True}, {"error": error, "carried_from": fetched}
 
 
 def collect_movebank(
-    src: dict, studies: list[dict], prev: dict | None, now: float, process=None,
-    sleep: float = 0.5, retry_pause: float = 60,
+    src: dict,
+    studies: list[dict],
+    prev: dict | None,
+    now: float,
+    process=None,
+    sleep: float = 0.5,
+    retry_pause: float = 60,
+    budget_s: float = MOVEBANK_BUDGET_S,
+    clock=time.monotonic,
 ) -> tuple[list[dict], dict, dict]:
     """One pass over the studies, then one retry each for the failures at the end, then
-    carry_forward for any that failed twice. A licence refusal is a result, not an error."""
+    carry_forward for any that failed twice. A licence refusal is a result, not an error.
+    No attempt starts once `budget_s` of wall clock is spent; those studies go straight to
+    carry_forward, so an outage costs at most the budget plus the attempt in flight."""
     if process is None:
         from .movebank import process_study as process
-    features, per, failures, failed = [], {}, {}, []
+    features, per, failures, failed, errors = [], {}, {}, [], {}
+    t0 = clock()
+    spent = lambda: clock() - t0 >= budget_s  # noqa: E731
+    over = f"not attempted: Movebank time budget {budget_s:.0f} s spent"
 
     def attempt(study):
         feats, st = process(src, study, now=now)
@@ -330,45 +364,72 @@ def collect_movebank(
         per[key] = st | {"fetched_at": _iso(now)}
         features.extend(feats)
         log.info("%s %s", key, st)
-        if not feats and "dropped" not in st:  # a curated study that yields nothing is news, not an error to retry
+        if (
+            not feats and "dropped" not in st
+        ):  # a curated study that yields nothing is news, not an error to retry
             failures[key] = {"empty": f"no tracks in window {st.get('window')}"}
             log.warning("%s: %s", key, failures[key]["empty"])
 
     for study in studies:
+        if spent():
+            errors[study["id"]] = over
+            failed.append(study)
+            continue
         try:
             attempt(study)
         except Exception as e:  # noqa: BLE001
-            log.error("mb:%s FAILED (one retry at the end of the run): %r", study["id"], e)
+            log.error(
+                "mb:%s FAILED (one retry at the end of the run): %r", study["id"], e
+            )
+            errors[study["id"]] = repr(e)
             failed.append(study)
         time.sleep(sleep)
-    if failed:
+    if failed and not spent():
         time.sleep(retry_pause)
     for study in failed:
-        key = f"mb:{study['id']}"
-        try:
-            attempt(study)
-            log.info("%s succeeded on retry", key)
-        except Exception as e:  # noqa: BLE001
-            feats, st, failure = carry_forward(key, prev, now, repr(e))
-            failures[key] = failure
-            if feats:
-                features.extend(feats)
-                per[key] = st
-            log.error("%s FAILED twice: %s", key, failure)
-        time.sleep(sleep)
+        key, first = f"mb:{study['id']}", errors[study["id"]]
+        if spent():
+            error = first if first == over else f"{first}; retry {over}"
+        else:
+            try:
+                attempt(study)
+                log.info("%s succeeded on retry", key)
+                time.sleep(sleep)
+                continue
+            except Exception as e:  # noqa: BLE001
+                error = repr(e)
+            time.sleep(sleep)
+        feats, st, failure = carry_forward(key, prev, now, error)
+        failures[key] = failure
+        if feats:
+            features.extend(feats)
+            per[key] = st
+        log.error("%s not fetched: %s", key, failure)
     return features, per, failures
 
 
 def build_collection(
-    sources: list[dict], features: list[dict], per_dataset: dict, failures: dict, max_bytes: int
+    sources: list[dict],
+    features: list[dict],
+    per_dataset: dict,
+    failures: dict,
+    max_bytes: int,
 ) -> dict:
     """The output document; fails the build on no tracks, a track without a known group, or a
     document larger than max_bytes (measured as written: compact separators)."""
     if not features:
         raise SystemExit("no tracks fetched")
-    bad = sorted({(str(f["properties"].get("group")), f["properties"].get("species")) for f in features if f["properties"].get("group") not in GROUPS})
+    bad = sorted(
+        {
+            (str(f["properties"].get("group")), f["properties"].get("species"))
+            for f in features
+            if f["properties"].get("group") not in GROUPS
+        }
+    )
     if bad:
-        raise SystemExit(f"no group in {GROUPS} for (group, species): {bad} — map them in pipeline/tracks.json")
+        raise SystemExit(
+            f"no group in {GROUPS} for (group, species): {bad} — map them in pipeline/tracks.json"
+        )
     present = {f["properties"]["group"] for f in features}
     gj = {
         "type": "FeatureCollection",
@@ -382,7 +443,9 @@ def build_collection(
     }
     size = len(json.dumps(gj, separators=(",", ":")))
     if size > max_bytes:
-        raise SystemExit(f"tracks output {size:,} bytes exceeds the {max_bytes:,}-byte cap; thin or drop studies in pipeline/tracks.json")
+        raise SystemExit(
+            f"tracks output {size:,} bytes exceeds the {max_bytes:,}-byte cap; thin or drop studies in pipeline/tracks.json"
+        )
     return gj
 
 
@@ -400,7 +463,16 @@ def main(argv=None):
         help="seconds between requests (serial, polite)",
     )
     ap.add_argument(
-        "--max-bytes", type=int, default=MAX_BYTES, help="fail rather than write a larger file"
+        "--max-bytes",
+        type=int,
+        default=MAX_BYTES,
+        help="fail rather than write a larger file",
+    )
+    ap.add_argument(
+        "--movebank-budget",
+        type=float,
+        default=MOVEBANK_BUDGET_S,
+        help="wall-clock seconds for the whole Movebank phase; later studies are carried",
     )
     a = ap.parse_args(argv)
     logging.basicConfig(
@@ -416,7 +488,10 @@ def main(argv=None):
     for src in sources:
         if src.get("kind") == "movebank":
             studies = src["studies"][: a.limit] if a.limit else src["studies"]
-            feats, per, fails = collect_movebank(src, studies, load_previous(a.out), now, sleep=a.sleep)
+            feats, per, fails = collect_movebank(
+                src, studies, load_previous(a.out), now, sleep=a.sleep,
+                budget_s=a.movebank_budget,
+            )
             features += feats
             per_dataset |= per
             failures |= fails

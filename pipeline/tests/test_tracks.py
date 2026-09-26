@@ -329,3 +329,31 @@ def test_a_study_that_yields_no_tracks_is_flagged_not_silent():
     feats, per, fails = collect_movebank(src, src["studies"], None, NOW, process, sleep=0, retry_pause=0)
     assert set(fails) == {"mb:7"} and "no tracks" in fails["mb:7"]["empty"] and "2026-07-28" in fails["mb:7"]["empty"]
     assert [f["properties"]["dataset"] for f in feats] == ["mb:9:x"] and "mb:9" not in fails
+
+
+def test_movebank_phase_has_a_time_budget_so_a_hanging_outage_still_ends_in_carry():
+    # live 2026-09-25: a blackholed network made every attempt hang its full 120 s timeout, so 13 studies x 2
+    # attempts would pass run_tracks.sh's 3000 s guard and the run would die before writing anything
+    clock = [0.0]
+    calls = []
+    def hang(src, study, now=None):
+        calls.append(study["id"])
+        clock[0] += 120
+        raise TimeoutError("timed out")
+    studies = [{"id": i} for i in (7, 8, 9, 10)]
+    prev = _prev(7)
+    prev["datasets"] |= {f"mb:{i}": {"kept": 1, "fetched_at": prev["datasets"]["mb:7"]["fetched_at"]} for i in (9, 10)}
+    prev["features"] += [_feat("mb:9:a"), _feat("mb:10:a")]
+    feats, per, fails = collect_movebank({"id": "movebank"}, studies, prev, NOW, hang, sleep=0, retry_pause=0,
+                                         budget_s=250, clock=lambda: clock[0])
+    assert calls == [7, 8, 9], "attempts stop once 250 s are spent (the one in flight finishes)"
+    assert set(fails) == {"mb:7", "mb:8", "mb:9", "mb:10"} and all("carried_from" in f for f in fails.values())
+    assert "budget" in fails["mb:10"]["error"] and "TimeoutError" in fails["mb:7"]["error"]
+    assert sorted({f["properties"]["dataset"] for f in feats}) == ["mb:10:a", "mb:7:a", "mb:7:b", "mb:8:a", "mb:9:a"]
+    # positive control: a healthy phase under budget attempts every study once
+    calls.clear(); clock[0] = 0.0
+    def ok(src, study, now=None):
+        calls.append(study["id"]); clock[0] += 10
+        return [_feat(f"mb:{study['id']}:x")], {"kept": 1}
+    _, _, fails2 = collect_movebank({"id": "movebank"}, studies, None, NOW, ok, sleep=0, retry_pause=0, budget_s=250, clock=lambda: clock[0])
+    assert calls == [7, 8, 9, 10] and fails2 == {}

@@ -145,7 +145,11 @@ and a track with no group fails the build.
 A study that errors is retried once at the end of the run; if it fails again its features
 from the previous `tracks.geojson` are carried for up to 28 days after their last good fetch
 (`failures[<key>].carried_from`), then dropped (`failures[<key>].dropped`). A study that
-returns no tracks is flagged `failures[<key>].empty`. The build fails above `--max-bytes`
+returns no tracks is flagged `failures[<key>].empty`. The whole Movebank phase has a
+wall-clock budget (`--movebank-budget`, 1200 s): no attempt starts after it, and the rest are
+carried — a blackholed network makes each request hang its full 120 s, and 13 studies × 2
+attempts would otherwise pass `run_tracks.sh`'s 3000 s guard and kill the run before it writes
+(measured 2026-09-25 with HTTPS sent to a dead proxy: budget 200 s → 2 attempts, all 13 carried). The build fails above `--max-bytes`
 (6 MB). Recent data of a listed study may not be downloadable (Armenian gulls: listing says
 2026-09, direct-read ends 2026-03), so an active study can come back empty. Measured
 2026-09-25 (run_tracks.sh): 13 studies, 108 animals, 544 Movebank segments + 571 ATN, 24
