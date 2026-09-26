@@ -11,7 +11,7 @@
  * invocation count of every function, and sums the counts for `src/` functions.
  *
  * A count is not a timing: it is identical across runs, across host load, and
- * across Node 18/24 (measured 2026-09-24: 9,881,963 calls for all-live-radio on
+ * across Node 18/24 (measured 2026-09-24: 9,881,963 calls for the since-removed all-live-radio workload on
  * both, zero per-function differences). So the budget is the baseline itself,
  * with no headroom, and it only moves one way:
  *
@@ -52,14 +52,14 @@ const FRAME_ENV = Object.freeze({
 });
 
 /**
- * `candidates` is asserted against the worker's own report: the worker falls
- * back to the generic workload for an unknown profile name and still echoes
- * that name, so the echo alone cannot prove the intended scene ran.
+ * `candidates` is asserted against the worker's own report, so the echoed
+ * profile name alone never has to prove the intended scene ran. Only the
+ * generic workload remains; the per-source workloads drove God's Eye layers
+ * removed on 2026-09-26, and wildlife workloads replace them before the world
+ * overlay itself goes (bloat grill Q7).
  */
 export const WORKLOADS = Object.freeze([
   { name: 'generic-above-cap', profile: 'generic', entries: 250, candidates: 250 },
-  { name: 'all-live-radio', profile: 'all-live-radio', entries: 864, candidates: 864 },
-  { name: 'phase6-detection', profile: 'phase6-detection', entries: 5000, candidates: 5000 },
 ]);
 
 /** Sum V8 precise-coverage call counts per `src/` file:function. */

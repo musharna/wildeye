@@ -17,7 +17,6 @@ import * as Cesium from 'cesium';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
-import { getBasemapLabelContext } from './voice/gevActions.js';
 import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
@@ -163,7 +162,6 @@ export class IntelHUD {
       <div class="hud-corner hud-bottom-right">
         <div class="hud-content" style="text-align:right">
           <div id="hud-alt">ALT: --m   SUN: --° EL</div>
-          <div id="hud-ais-vessel" class="hud-ais-vessel">AIS: --</div>
         </div>
         <div class="hud-bracket">┘</div>
       </div>
@@ -606,15 +604,16 @@ export class IntelHUD {
     if (el) el.textContent = text;
   }
 
+  // The basemap place/street labels came from the God's Eye voice module, removed
+  // 2026-09-26; the summary request still carries the fields, empty.
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(this.viewer);
     const enabledLayers = this._dataManager?.getAll?.()
       ?.filter((layer) => layer.enabled)
       .map((layer) => layer.name) || [];
     return {
-      placeLabels: labels.placeLabels,
-      streetLabels: labels.streetLabels,
-      nearbyPlaceLabels: labels.nearbyPlaceLabels,
+      placeLabels: [],
+      streetLabels: [],
+      nearbyPlaceLabels: [],
       enabledLayerLabels: enabledLayers,
     };
   }

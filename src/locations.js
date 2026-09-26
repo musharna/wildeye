@@ -120,10 +120,8 @@ export const CITY_POIS = {
 };
 
 /**
- * Absolute full-earth camera preset for the zoom_to_globe voice tool. The height
- * must stay inside the app's 'global' view-scale band (>12,000 km — classifyViewScale
- * in gevActions.js) so downstream context/screenshot policy treats it as a globe view,
- * and under the fly_to_location rangeM ceiling (20,000 km).
+ * Absolute full-earth camera preset: the reset-globe button and the fresh-session
+ * start view (camera.js).
  */
 export const GLOBE_VIEW = Object.freeze({
   heightM: 18000000,

@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import {
   AIRCRAFT_BRACKET_ALPHA_FLOOR,
   AIRCRAFT_BRACKET_FLOOR_ANCHOR,
@@ -17,8 +16,6 @@ import {
   viewScaleForAltitude,
 } from './detectionPolicy.js';
 import { KEYHOLE_OUTSIDE_OPACITY_DEFAULT } from '../celestialRing.js';
-
-const indexHtml = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
 
 test('side aircraft brackets stay readable without changing zero-opacity intent', () => {
   assert.equal(detectionBracketAlpha('AIR', 0), 0);
@@ -76,37 +73,6 @@ test('the OUTSIDE slider genuinely dims aircraft brackets below the default', ()
   // The old behaviour, stated as the thing that must NOT come back.
   assert.notEqual(aircraftBracketAlphaFloor(0.005), AIRCRAFT_BRACKET_ALPHA_FLOOR);
   assert.notEqual(aircraftBracketAlphaFloor(0.2), AIRCRAFT_BRACKET_ALPHA_FLOOR);
-});
-
-test('the range around the default is REACHABLE from the handle', () => {
-  // The mapping above is continuous from 0, but the operator can only ask for
-  // values the slider will stop on. At the shipped step of 5 the whole
-  // sub-default range was one stop wide — 0 or 5, nothing between — so the low
-  // stops were not settings anyone could choose. The control has to be able to
-  // express what the policy can render, and the default itself now lives at 1 %.
-  assert.match(
-    indexHtml,
-    /id="detection-opacity-slider"[^>]*\smin="0"[^>]*\smax="100"[^>]*\sstep="1"/,
-    'index.html: the OUTSIDE slider steps by 1 so every integer percent is reachable',
-  );
-
-  // Each newly reachable stop is a distinct, ordered picture — otherwise
-  // widening the control would just add handle positions that paint the same
-  // thing.
-  const reachable = [1, 2, 3, 4, 5].map((pct) => aircraftBracketAlphaFloor(pct / 100));
-  for (let i = 1; i < reachable.length; i += 1) {
-    assert.ok(
-      reachable[i] > reachable[i - 1],
-      `${i}% -> ${i + 1}%: each newly reachable stop must paint brighter than the last`,
-    );
-  }
-  // The default lands on the approved floor exactly, wherever the default is.
-  assert.equal(
-    aircraftBracketAlphaFloor(AIRCRAFT_BRACKET_FLOOR_ANCHOR),
-    AIRCRAFT_BRACKET_ALPHA_FLOOR,
-    'the first-run setting still paints the approved bracket floor',
-  );
-  assert.equal(AIRCRAFT_BRACKET_FLOOR_ANCHOR, 0.01, 'and that setting is 1% (owner, 2026-08-24)');
 });
 
 test('the bracket floor is strictly increasing and stops overriding at full opacity', () => {

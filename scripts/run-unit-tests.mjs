@@ -4,7 +4,6 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const ALLOCATION_TEST_FILES = Object.freeze([
-  'src/data/focusAllocations.test.mjs',
   'src/overlays/worldOverlayAllocation.test.mjs',
 ]);
 

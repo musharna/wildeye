@@ -23,7 +23,6 @@ import {
   placementVariants,
   roundedRectPath,
 } from './worldOverlayDraw.js';
-import { createCctvThumbnailOverlayEntry, createFrameSlot } from '../data/cctvCards.js';
 import {
   CARD_PLATE_ALPHA,
   DETECTION_PLATE_BAND,
@@ -373,51 +372,6 @@ test('variant measurement and all six painters remain renderer-local', () => {
   assert.ok(ctx.calls.filter(([name]) => name === 'fillText').length >= variants.length);
   const trackLayout = measureOverlayEntry(ctx, { ...entry, variant: 'track' }, {});
   assert.ok(trackLayout.w >= 'CAMERA 12 · LIVE'.length * 6);
-});
-
-test('thumbnail painter preserves the shipped CCTV 104x77 geometry and drawing coordinates', () => {
-  const ctx = mockContext();
-  const frameSlot = createFrameSlot();
-  frameSlot.frame = { width: 192, height: 108 };
-  frameSlot.stamp = 123;
-  const entry = createCctvThumbnailOverlayEntry({
-    id: 'cam-a',
-    position: { x: 1, y: 2, z: 3 },
-    title: 'Main & Fifth Avenue',
-    frameSlot,
-  });
-  entry._overlayLayout = measureOverlayEntry(ctx, entry, {});
-  assert.deepEqual(
-    { w: entry._overlayLayout.w, h: entry._overlayLayout.h },
-    { w: 104, h: 77 },
-  );
-  const placement = placementVariants({
-    anchorX: 200,
-    anchorY: 200,
-    width: 104,
-    height: 77,
-    viewportWidth: 500,
-    viewportHeight: 400,
-    gap: entry.gapPx,
-    leaderOffset: entry.leaderOffsetPx,
-    verticalOnly: true,
-  })[0];
-  assert.deepEqual(placement.rect, { x: 148, y: 101, w: 104, h: 77 });
-  paintThumbnail(ctx, entry, placement, 0.75);
-  assert.deepEqual(
-    ctx.calls.find(([name]) => name === 'strokeStyle'),
-    ['strokeStyle', 'rgba(107, 232, 255, 0.6)'],
-    'CCTV leader uses the source cyan token rather than the generic leader fallback',
-  );
-  assert.deepEqual(ctx.calls.find(([name]) => name === 'moveTo'), ['moveTo', 200, 184]);
-  assert.deepEqual(
-    ctx.calls.find(([name]) => name === 'drawImage'),
-    ['drawImage', frameSlot.frame, 152, 105, 96, 54],
-  );
-  assert.deepEqual(
-    ctx.calls.find(([name]) => name === 'fillText'),
-    ['fillText', 'MAIN & FIFTH AV', 152, 169],
-  );
 });
 
 test('tracked painter preserves centered multi-line readout metrics', () => {

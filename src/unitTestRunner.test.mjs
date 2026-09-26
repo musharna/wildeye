@@ -12,14 +12,13 @@ import {
 test('unit runner serializes only GC-bracketed allocation microbenchmarks', () => {
   const ordinary = [
     'src/data/manager.test.mjs',
-    'src/data/radio.test.mjs',
+    'src/data/rivers.test.mjs',
     'src/unitTestRunner.test.mjs',
   ];
   const plan = buildUnitTestPlan([
     ordinary[1],
-    ALLOCATION_TEST_FILES[1],
-    ordinary[0],
     ALLOCATION_TEST_FILES[0],
+    ordinary[0],
     ordinary[2],
   ]);
 
@@ -32,7 +31,7 @@ test('unit runner serializes only GC-bracketed allocation microbenchmarks', () =
     ]);
   }
   assert.throws(
-    () => allocationTestArgs('src/data/radio.test.mjs'),
+    () => allocationTestArgs('src/data/rivers.test.mjs'),
     /Not an allocation microbenchmark/,
   );
 });

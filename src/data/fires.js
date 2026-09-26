@@ -8,8 +8,7 @@ import * as Cesium from "cesium";
  * (MW) in scope: with the shared observed time set, the 6-hour bin containing the instant; live,
  * the bins starting within LIVE_HOURS of the newest bin's end. Detections are thermal anomalies
  * at overpass time (volcanoes, gas flares and hot rooftops included), not fire perimeters, and
- * the info box says so. Distinct from the browser-side `local-firms` heatmap, which streams the
- * live area API through a keyed proxy.
+ * the info box says so.
  */
 const DATA_URL = "data/fires.geojson";
 const HOUR_MS = 3_600_000;

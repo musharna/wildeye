@@ -1,11 +1,8 @@
 import * as Cesium from 'cesium';
 import { HAS_BACKEND } from './backend.js';
 import { StyleManager } from './ui.js';
-import { flyToAustin } from './camera.js';
+import { showWholeGlobe } from './camera.js';
 import { DataLayerManager } from './data/manager.js';
-import flightsLayer from './data/flights.js';
-import militaryFlightsLayer from './data/militaryFlights.js';
-import earthquakesLayer from './data/earthquakes.js';
 import birdsLayer from './data/birds.js';
 import aloftLayer from './data/aloft.js';
 import occurrencesLayer from './data/occurrences.js';
@@ -41,21 +38,9 @@ import { createCompare, encodeCompareParam, decodeCompareParam } from './compare
 import { installCompareUi } from './compareUi.js';
 import { stackAboveChrome } from './bottomStack.js';
 import { createObservedTime, attachObservedTime, installObservedTimeUi } from './observedTime.js';
-import satellitesLayer from './data/satellites.js';
-import rocketLaunchesLayer from './data/rocketLaunches.js';
-import trafficLayer from './data/traffic.js';
-import cctvLayer from './data/cctv.js';
-import radioLayer from './data/radio.js';
-import bikeshareLayer from './data/bikeshare.js';
-import aisLiveVesselsLayer from './data/aisLiveVessels.js';
-import militaryInstallationsLayer from './data/militaryInstallations.js';
-import militaryAwarenessLayer from './data/militaryAwareness.js';
-import localDataLayers from './data/localLayers.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
-import { initGevVoiceCommands } from './voice/gevRealtime.js';
 import { MapStackController } from './mapStackController.js';
-import { initAnnotations } from './annotations/index.js';
 import { initLogoGaze } from './logoGaze.js';
 import { initCockpitCloudEffects } from './cockpitCloudEffects.js';
 import {
@@ -66,8 +51,6 @@ import {
   releaseContinuousRender,
 } from './renderGovernor.js';
 import { installScopeMask } from './scopeMask.js';
-import { initFirstRunExperience } from './firstRunExperience.js';
-import { initKeySetup } from './keySetup.js';
 import { loadPhotorealisticTileset } from './mapStartup.js';
 
 initLogoGaze();
@@ -238,10 +221,9 @@ async function init() {
     const weatherEffects = null;
     const cockpitCloudEffects = initCockpitCloudEffects(viewer);
 
-    // If no share link state, do default fly-to Austin
+    // Without a share link, open on the whole globe.
     if (!styleManager.hasShareState) {
-      loaderStatus.textContent = 'Flying to Austin, TX...';
-      flyToAustin(viewer);
+      showWholeGlobe(viewer);
     } else {
       loaderStatus.textContent = 'Restoring shared view...';
     }
@@ -250,9 +232,6 @@ async function init() {
     const dataManager = new DataLayerManager(viewer, {
       allowQaRegistration: import.meta.env.DEV,
     });
-    dataManager.register(flightsLayer);
-    dataManager.register(militaryFlightsLayer);
-    dataManager.register(earthquakesLayer);
     dataManager.register(birdsLayer);
     dataManager.register(aloftLayer);
     dataManager.register(crwBleachingLayer);
@@ -338,20 +317,6 @@ async function init() {
         [compareUi.toggle, compareUi.panel],
       ],
     });
-    dataManager.register(satellitesLayer);
-    dataManager.register(rocketLaunchesLayer);
-    rocketLaunchesLayer.attachDataManager(dataManager);
-    dataManager.register(trafficLayer);
-    dataManager.register(cctvLayer);
-    dataManager.register(radioLayer);
-    dataManager.register(bikeshareLayer);
-    dataManager.register(aisLiveVesselsLayer);
-    dataManager.register(militaryInstallationsLayer);
-    dataManager.register(militaryAwarenessLayer);
-    militaryAwarenessLayer.attachDataManager(dataManager);
-    for (const layer of localDataLayers) {
-      dataManager.register(layer);
-    }
     // Restoration starts only after the complete production registry is sealed.
     dataManager.finalizeRegistrations(LAYER_STATE_REGISTRY);
     if (import.meta.env.DEV) {
@@ -401,9 +366,6 @@ async function init() {
     });
     speciesPanel = createSpeciesPanel({ dataManager, speciesLayer, client: bioClient, whatLivesHere });
 
-    // Initialize the voice "whiteboard" annotation engine (world-space renderer)
-    const annotations = initAnnotations({ viewer, tileset });
-
     // Keep startup chrome truthful: a share is not restored until camera,
     // visual/map/panel lanes, and every requested layer have terminated.
     void Promise.all([
@@ -411,25 +373,7 @@ async function init() {
       new Promise((resolve) => setTimeout(resolve, 1000)),
     ]).finally(() => {
       loadingScreen.classList.add('hidden');
-      // Reveal only after the loading cover has yielded. transitionend can be
-      // absent under reduced motion, so a bounded fallback makes this reliable.
-      let firstRunRevealed = false;
-      const revealFirstRun = () => {
-        if (firstRunRevealed) return;
-        firstRunRevealed = true;
-        // dataManager is passed explicitly: the globe missions enable bundled
-        // keyless layers through it, and reaching for styleManager._dataManager
-        // would make a private field part of this feature's contract.
-        initFirstRunExperience({ styleManager, dataManager });
-      };
-      loadingScreen.addEventListener('transitionend', revealFirstRun, { once: true });
-      setTimeout(revealFirstRun, 900);
     });
-
-    // Provider Settings (the POWER UP chip + dialog). Fire-and-forget: the
-    // module removes its own surface when the dev-server endpoint is absent
-    // (prod builds, non-local visitors), so this costs prod exactly nothing.
-    if (HAS_BACKEND) void initKeySetup();
 
     // Expose for debugging
     // Idle render governor: flips the scene into requestRenderMode whenever
@@ -485,14 +429,11 @@ async function init() {
       compare,
       drapeStack: () => drapeStackState(viewer.imageryLayers),
       mapStackController,
-      annotations,
       weatherEffects,
       cockpitCloudEffects,
       getRenderGovernorDiagnostics,
       requestRender: governorRequestRender,
     };
-    // The voice agent needs the server's OpenAI Realtime session proxy; a static host has none.
-    if (HAS_BACKEND) window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, annotations });
 
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);

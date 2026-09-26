@@ -1,9 +1,5 @@
 import * as Cesium from 'cesium';
 import { BLOOM_INTENSITY_DEFAULT, BLOOM_SCALE_VERSION } from './bloom.js';
-import {
-  migrateDetectionState,
-  normalizeAllocationStrategy,
-} from './data/detectionPolicy.js';
 import { clampScopeTerminusPct } from './scopeMask.js';
 import { decodeLayerStateParams, encodeLayerStateParams } from './data/layerState.js';
 
@@ -104,16 +100,6 @@ export class ShareLinkManager {
     this._sharpenIntensity = 49;
     this._hudVariant = 'tactical';
     this._hudVisible = false;
-    this._detectionMode = 'OFF';
-    this._detectionDensity = 50;
-    this._detectionAllocation = 'ELASTIC';
-    this._detectionFadePct = 7;
-    // Mirrors KEYHOLE_OUTSIDE_OPACITY_DEFAULT in celestialRing.js and the
-    // slider's markup value (owner final lock 2026-08-24: 5 -> 3 -> 1). This is the
-    // state the link THIS session generates starts from, so it must match what
-    // the session actually renders; the `ko` PARSE fallback below is a separate
-    // question and deliberately stays at 5.
-    this._detectionOutsideOpacityPct = 1;
     this._celestialRingEnabled = false;
     this._scopeEnabled = true;
     // Feather opens on a soft 11% scope-mask edge (owner final lock 2026-08-24,
@@ -170,11 +156,6 @@ export class ShareLinkManager {
       return Number.isFinite(num) ? num : fallback;
     };
 
-    const restoredDetection = migrateDetectionState(
-      params.get('dm') || 'OFF',
-      parseOr(params.get('dd'), 50),
-      50,
-    );
     const style = URL_TO_STYLE[params.get('style')] || 'normal';
     const decodedLayerState = decodeLayerStateParams(params);
     const state = {
@@ -193,18 +174,6 @@ export class ShareLinkManager {
       sharpenIntensity: parseOr(params.get('si'), 49),
       hudVariant: params.get('hud') || 'tactical',
       hudVisible: params.get('hv') === '1',
-      detectionMode: restoredDetection.enabled ? restoredDetection.profile : 'OFF',
-      detectionDensity: restoredDetection.densityPct,
-      detectionAllocation: normalizeAllocationStrategy(params.get('da')),
-      detectionFadePct: Math.max(0, Math.min(40, Math.round(parseOr(params.get('kf'), 16)))),
-      // Deliberately still 5 after the 2026-08-23 default moved to 3. Same rule
-      // as `scf` below: this is the PARSE fallback for a link that predates
-      // `ko`, and such a link was authored when 5 was what its author saw. Every
-      // link since carries `ko` explicitly, because the generator always writes
-      // the field — so nothing from the 5 % era depends on this number either
-      // way. The first-run default is a different question, answered in
-      // celestialRing.js.
-      detectionOutsideOpacityPct: Math.max(0, Math.min(100, Math.round(parseOr(params.get('ko'), 5)))),
       celestialRing: params.has('cr') ? params.get('cr') === '1' : false,
       scopeEnabled: params.has('sc') ? params.get('sc') === '1' : true,
       // Deliberately still 35 through both later default moves (0 on
@@ -317,11 +286,6 @@ export class ShareLinkManager {
         sharpenIntensity: visualCurrent ? state.sharpenIntensity : undefined,
         hudVariant: visualCurrent ? state.hudVariant : undefined,
         hudVisible: visualCurrent ? state.hudVisible : undefined,
-        detectionMode: visualCurrent ? state.detectionMode : undefined,
-        detectionDensity: visualCurrent ? state.detectionDensity : undefined,
-        detectionAllocation: visualCurrent ? state.detectionAllocation : undefined,
-        detectionFadePct: visualCurrent ? state.detectionFadePct : undefined,
-        detectionOutsideOpacityPct: visualCurrent ? state.detectionOutsideOpacityPct : undefined,
         celestialRing: visualCurrent ? state.celestialRing : undefined,
         scopeEnabled: visualCurrent ? state.scopeEnabled : undefined,
         scopeFeatherPct: visualCurrent ? state.scopeFeatherPct : undefined,
@@ -427,20 +391,6 @@ export class ShareLinkManager {
     if (typeof extras.sharpenIntensity === 'number') this._sharpenIntensity = extras.sharpenIntensity;
     if (typeof extras.hudVariant === 'string') this._hudVariant = extras.hudVariant;
     if (typeof extras.hudVisible === 'boolean') this._hudVisible = extras.hudVisible;
-    if (typeof extras.detectionMode === 'string') this._detectionMode = extras.detectionMode.toUpperCase();
-    if (typeof extras.detectionDensity === 'number') this._detectionDensity = extras.detectionDensity;
-    if (typeof extras.detectionAllocation === 'string') {
-      this._detectionAllocation = normalizeAllocationStrategy(extras.detectionAllocation);
-    }
-    if (typeof extras.detectionFadePct === 'number') {
-      this._detectionFadePct = Math.max(0, Math.min(40, Math.round(extras.detectionFadePct)));
-    }
-    if (typeof extras.detectionOutsideOpacityPct === 'number') {
-      this._detectionOutsideOpacityPct = Math.max(
-        0,
-        Math.min(100, Math.round(extras.detectionOutsideOpacityPct)),
-      );
-    }
     if (typeof extras.celestialRingEnabled === 'boolean') this._celestialRingEnabled = extras.celestialRingEnabled;
     if (typeof extras.scopeEnabled === 'boolean') this._scopeEnabled = extras.scopeEnabled;
     if (typeof extras.scopeFeatherPct === 'number') {
@@ -505,11 +455,6 @@ export class ShareLinkManager {
     params.set('si', Math.round(this._sharpenIntensity).toString());
     params.set('hud', this._hudVariant);
     params.set('hv', this._hudVisible ? '1' : '0');
-    params.set('dm', this._detectionMode);
-    params.set('dd', Math.round(this._detectionDensity).toString());
-    params.set('da', this._detectionAllocation.toLowerCase());
-    params.set('kf', Math.round(this._detectionFadePct).toString());
-    params.set('ko', Math.round(this._detectionOutsideOpacityPct).toString());
     params.set('cr', this._celestialRingEnabled ? '1' : '0');
     params.set('sc', this._scopeEnabled ? '1' : '0');
     params.set('scf', Math.round(this._scopeFeatherPct).toString());

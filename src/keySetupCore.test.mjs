@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import {
   KEY_SETUP_APPEND_HEADER,
   KEY_SETUP_KEYS,
@@ -21,18 +20,6 @@ test('provider requirements name the registry env vars and next step', () => {
     'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
   );
   assert.equal(keySetupRequirement('unknown'), '');
-});
-
-test('the boot provenance snapshot survives in-process Vite config re-evaluation', () => {
-  // server.restart() re-evaluates vite.config.js in the SAME process after a
-  // panel save has already set its values live on process.env. A recomputed
-  // snapshot would classify the panel's own keys as external (read-only) until
-  // a full process relaunch, so the first evaluation's snapshot must win.
-  const source = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
-  assert.match(
-    source,
-    /const PROVIDER_ENV_AT_BOOT = globalThis\.__GEV_PROVIDER_ENV_AT_BOOT \?\?= Object\.freeze\(/,
-  );
 });
 
 test('external ownership uses boot provenance even when store and shell values match', () => {

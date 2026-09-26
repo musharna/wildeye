@@ -1,6 +1,5 @@
 import { HAS_BACKEND } from '../backend.js';
 import { governorRequestRender } from '../renderGovernor.js';
-import { markDetectionSourcesChanged } from './detection.js';
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
   if (value && typeof value === 'object') {
@@ -324,12 +323,6 @@ export class DataLayerManager {
       // mutated scene state. (perf wave 2; moved into _runPeriodicUpdate
       // when main normalized the update loop behind _armUpdateLoop)
       governorRequestRender(`layer-tick:${layerId}`);
-      // A poll tick can REPLACE what a layer exposes as detectable. Detection
-      // pulls that set per paint but re-solves on a private throttle, so the one
-      // frame requested above could be spent on a paint that declines to
-      // re-solve — leaving the previous contact labelled and the new one not,
-      // with nothing left to ask for another frame. (perf wave 2 follow-up)
-      markDetectionSourcesChanged(`layer-tick:${layerId}`);
       if (result === false) failure = lifecycleRejectedError(layerId, 'refresh');
       if (!failure) failure = refreshFailureFromStats(this._moduleStats(entry), entry.module.name || layerId);
     } catch (error) {
@@ -948,9 +941,6 @@ export class DataLayerManager {
 
     this._refreshTogglePanel();
     governorRequestRender('layer-visibility');
-    // Same reason as the poll tick: a layer appearing or disappearing changes
-    // the detectable set wholesale, and the solve behind it has to be re-run.
-    markDetectionSourcesChanged('layer-visibility');
     this._notifyListeners({
       type: 'visibility',
       layerId,

@@ -473,19 +473,6 @@ test('the inputs behind the measured constants are unchanged', () => {
   }
 });
 
-test('the full-width rail cannot inherit a height that overrides its floor', () => {
-  // `#right-context-rail.layout-focus { height: … }` is a base rule with more
-  // specificity than the <=720px floor, and height + top + bottom is
-  // over-constrained. It is safe only because the rail's layout pass switches
-  // to a mobile mode at the SAME breakpoint and removes both the class and the
-  // custom property. Pin that, or the exemption above is unearned.
-  const gate = ui.indexOf("window.matchMedia('(max-width: 720px)')");
-  assert.ok(gate > 0, 'the rail layout pass no longer keys off (max-width: 720px)');
-  const mobileBranch = ui.slice(gate, ui.indexOf("layoutMode = 'mobile'", gate) + 40);
-  assert.match(mobileBranch, /stack\.classList\.remove\('layout-focus'\)/);
-  assert.match(mobileBranch, /stack\.style\.removeProperty\('--right-stack-max-height'\)/);
-});
-
 // ── Clearance ───────────────────────────────────────────────────────────────
 
 test('every open dock tray clears the required credit at every modelled viewport', () => {

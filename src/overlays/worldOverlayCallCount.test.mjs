@@ -70,6 +70,7 @@ test('world-overlay frame call counts equal the committed baseline', () => {
   const summary = rows.map((row) => `${row.name}: ${row.verdict} ${row.current} vs ${row.baseline}`
     + row.deltas.map(({ key, delta }) => `\n  ${delta > 0 ? '+' : ''}${delta} ${key}`).join('')).join('\n');
   assert.equal(result.status, 0, `${summary}\n${result.stderr}`);
-  assert.ok(rows.length >= 3, result.stdout);
+  // A workload that silently vanished would pass the verdict loop; pin the set by name.
+  assert.deepEqual(rows.map((row) => row.name), ['generic-above-cap'], result.stdout);
   for (const row of rows) assert.equal(row.verdict, 'equal', summary);
 });

@@ -141,10 +141,6 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   assert.match(ui, /reconsiderAutoCollapse/);
   assert.match(
     ui,
-    /_rightPanelStack\?\.contains\(panelEl\)[\s\S]*?_scheduleRightPanelLayout\(\{ reconsiderAutoCollapse: true \}\)/,
-  );
-  assert.match(
-    ui,
     /_scheduleLeftPanelLayout\(\{[\s\S]*?reconsiderAutoCollapse: this\._leftPanelStack\?\.contains\(panelEl\) === true/,
   );
   assert.match(ui, /collapseLaterPanels: shouldFocus && this\.hud\.getVariant\(\) === 'tactical'/);
@@ -154,17 +150,8 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     /preferredExpandedPanel[\s\S]*?\[preferredExpandedPanel, \.\.\.expandedPanelsInDomOrder/,
     'the latest explicitly opened left panel must receive primary allocation',
   );
-  assert.match(ui, /this\._rightStackPreferredPanelId = rightOwnerPanel\.id;/);
-  assert.match(
-    ui,
-    /panel\.id === this\._rightStackPreferredPanelId[\s\S]*?\[preferredExpandedPanel, \.\.\.expandedPanelsInDomOrder/,
-    'the latest explicitly opened right panel must receive primary allocation',
-  );
-  assert.match(ui, /panelId === 'radio-panel'[\s\S]*?document\.getElementById\('global-context-panel'\)/);
-  assert.match(ui, /focusedExpandedPanel = expandedPanelsInDomOrder\.find\(\(panel\) => panel\.contains\(document\.activeElement\)\)/);
   assert.match(ui, /setAttribute\('aria-expanded', String\(!collapsed\)\)/);
   assert.match(ui, /--left-panel-allocated-height/);
-  assert.match(ui, /--right-panel-allocated-height/);
   assert.match(
     ui,
     /expandedPanels[\s\S]*?removeProperty\('--left-panel-allocated-height'\)[\s\S]*?_measureLeftPanelNaturalHeight/,
@@ -182,13 +169,7 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     /this\._leftStackPanelTransitionHandler = \(event\) => \{\s*if \(event\.propertyName === 'visibility' && event\.target\.parentElement === stack\) this\._scheduleLeftPanelLayout\(\);\s*\};\s*stack\.addEventListener\('transitionend', this\._leftStackPanelTransitionHandler\);/,
     'the end of a stack panel\'s visibility transition schedules a lane pass',
   );
-  assert.match(
-    ui,
-    /panel !== this\._ppToggles[\s\S]*?removeProperty\('--right-panel-allocated-height'\)[\s\S]*?const naturalHeight/,
-    'right intrinsic measurement must retain Display allocation while clearing other panel allocations',
-  );
   assert.match(css, /var\(--left-panel-allocated-height/);
-  assert.match(css, /var\(--right-panel-allocated-height/);
   assert.match(
     css,
     /#left-panel-stack\.layout-focus > \[data-panel-id\]\.collapsed\s*\{\s*display:\s*none;/,
@@ -219,28 +200,6 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
   );
   assert.match(ui, /\{ id: 'param-slider-panel' \}/);
   assert.match(sharelink, /\{ id: 'param-slider-panel', token: 'm', pinnable: false \}/);
-});
-
-test('parameterized Display presets keep one stable scroll owner', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-
-  assert.match(css, /#pp-toggles:not\(\.collapsed\) > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
-  assert.match(ui, /const displayScrollTop = this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?this\._ppToggles\?\.scrollTop \|\| 0/);
-  assert.match(ui, /this\._ppToggles\.scrollTop = Math\.min\(displayScrollTop, maxScrollTop\);/);
-  assert.match(
-    ui,
-    /this\._sliderPanel\.classList\.remove\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
-  );
-  assert.match(
-    ui,
-    /this\._sliderPanel\.classList\.add\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
-  );
-  assert.match(
-    css,
-    /\.param-slider\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-width:\s*0;/,
-    'parameter sliders must shrink before their value column can overflow',
-  );
 });
 
 test('expanded Display uses its container shell instead of a nested header card', () => {

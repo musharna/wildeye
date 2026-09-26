@@ -96,25 +96,18 @@ test('does not hide real provider and HTTP failures', () => {
   assert.equal(isHudSummaryUnconfigured(200, { error: 'provider failed' }), false);
 });
 
-test('the installed keyless HUD route stays successful after the voice quota is exhausted', async () => {
+test('the installed keyless HUD route stays successful past the OpenAI rate limit', async () => {
   const previousKey = process.env.OPENAI_API_KEY;
   const previousLimit = process.env.GEV_RATELIMIT_OPENAI_PER_MIN;
   process.env.OPENAI_API_KEY = '';
   process.env.GEV_RATELIMIT_OPENAI_PER_MIN = '1';
   try {
     const routes = installOpenAiRoutes();
-    const token = routes.get('/api/realtime/token');
     const hud = routes.get('/api/openai/hud-summary');
-    assert.equal(typeof token, 'function');
     assert.equal(typeof hud, 'function');
 
-    const firstToken = await invokeRoute(token);
-    const secondToken = await invokeRoute(token);
-    assert.equal(firstToken.statusCode, 503);
-    assert.deepEqual(firstToken.body, { error: 'OPENAI_API_KEY is not set' });
-    assert.equal(secondToken.statusCode, 429);
-
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    // A limit of 1 per minute: the keyless answer costs no provider call, so it must never be throttled.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       const response = await invokeRoute(hud, { method: 'POST' });
       assert.equal(response.statusCode, 200);
       assert.equal(response.headers['content-type'], 'application/json; charset=utf-8');
