@@ -3,7 +3,7 @@ import {
   getKeyholeFadeTuning,
   getKeyholeGeometry,
   keyholeLabelAlphaFromGeometry,
-} from '../celestialRing.js';
+} from './keyhole.js';
 import { BoundedCohort, stableIdentityHash } from '../data/detectionCohort.js';
 import { LabelArbiter, LABEL_ARBITER_TIMING } from '../data/labelArbiter.js';
 import {

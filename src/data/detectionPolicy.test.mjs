@@ -15,7 +15,7 @@ import {
   profileForDensity,
   viewScaleForAltitude,
 } from './detectionPolicy.js';
-import { KEYHOLE_OUTSIDE_OPACITY_DEFAULT } from '../celestialRing.js';
+import { KEYHOLE_OUTSIDE_OPACITY_DEFAULT } from '../overlays/keyhole.js';
 
 test('side aircraft brackets stay readable without changing zero-opacity intent', () => {
   assert.equal(detectionBracketAlpha('AIR', 0), 0);

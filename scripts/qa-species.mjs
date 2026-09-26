@@ -600,7 +600,7 @@ if (CHECKS.has('left-stack')) {
 }
 
 // I1 (final review): WCAG contrast of every text in the SPECIES panel and the details card, in forced error states, over the lightest basemap the
-// app shows: the OSM street map from low altitude with the scope mask off (both are user settings), at 1400x900 and 375x667.
+// app shows: the OSM street map from low altitude (a user setting), at 1400x900 and 375x667.
 // - Failures are forced in the page's fetch, which answers HTTP 503 itself, so nothing reaches the network or no-failed-requests: the name
 //   search and the Top datasets search in the panel; the what-lives-here search in a status card; and the name and dataset lookups in a list
 //   card across the antimeridian, whose foot also carries its "can't show this area as a circle" note. The panel's species is chosen through a
@@ -726,7 +726,7 @@ if (CHECKS.has('contrast')) {
     const view = window.__godsEyeView;
     const c = view.viewer.camera;
     window.__qaContrastCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll };
-    return { stack: view.mapStackController.getState().activeId, scope: document.getElementById('scope-toggle')?.getAttribute('aria-pressed') ?? null, speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed'), speciesEnabled: view.dataManager.isEnabled('species'), params: view.dataManager.getLayerParams('species') };
+    return { stack: view.mapStackController.getState().activeId, speciesCollapsed: document.getElementById('species-panel').classList.contains('collapsed'), speciesEnabled: view.dataManager.isEnabled('species'), params: view.dataManager.getLayerParams('species') };
   });
   const surfaces = [];
   const settings = {};
@@ -735,8 +735,6 @@ if (CHECKS.has('contrast')) {
   try {
     settings.stack = await page.evaluate(async () => (await window.__godsEyeView.mapStackController.setStack('osm')).activeId);
     if (settings.stack !== 'osm') throw new Error(`contrast: the OSM stack did not become active (${settings.stack})`);
-    settings.scope = await page.evaluate(() => { const button = document.getElementById('scope-toggle'); if (!button) throw new Error('contrast: #scope-toggle is missing'); if (button.getAttribute('aria-pressed') === 'true') button.click(); return button.getAttribute('aria-pressed'); });
-    if (settings.scope !== 'false') throw new Error(`contrast: the scope mask did not turn off (aria-pressed ${settings.scope})`);
     for (const [width, height] of VIEWPORTS) {
       const size = `${width}x${height}`;
       await page.setViewport({ width, height });
@@ -809,19 +807,17 @@ if (CHECKS.has('contrast')) {
       const input = document.getElementById('species-search');
       input.value = '';
       input.dispatchEvent(new Event('input'));
-      const scope = document.getElementById('scope-toggle');
-      if (scope && initial.scope !== null && scope.getAttribute('aria-pressed') !== initial.scope) scope.click();
       const stack = (await view.mapStackController.setStack(initial.stack)).activeId;
       const saved = window.__qaContrastCamera;
       view.viewer.camera.setView({ destination: saved.position, orientation: { heading: saved.heading, pitch: saved.pitch, roll: saved.roll } });
       const panel = document.getElementById('species-panel');
       if (panel.classList.contains('collapsed') !== initial.speciesCollapsed) panel.querySelector('[data-collapse-target="species-panel"]').click();
-      return { stack, scope: scope?.getAttribute('aria-pressed') ?? null, speciesEnabled: dm.isEnabled('species'), params: dm.getLayerParams('species'), fetchRestored: !window.__qaFetchOriginal };
+      return { stack, speciesEnabled: dm.isEnabled('species'), params: dm.getLayerParams('species'), fetchRestored: !window.__qaFetchOriginal };
     }, initial).catch((caught) => ({ error: String(caught?.stack || caught).slice(0, 300) }));
     await page.setViewport({ width: 1400, height: 900 });
     await sleep(2000);
   }
-  const restoredOk = restored?.stack === initial.stack && restored.scope === initial.scope && restored.fetchRestored === true && restored.speciesEnabled === initial.speciesEnabled;
+  const restoredOk = restored?.stack === initial.stack && restored.fetchRestored === true && restored.speciesEnabled === initial.speciesEnabled;
   report('contrast', error === null && restoredOk && surfaces.length === VIEWPORTS.length * 3 && surfaces.every((s) => s.ok), { settings, surfaces, restored, ...(error ? { error } : {}) });
 }
 
@@ -1135,8 +1131,8 @@ if (CHECKS.has('card-foot-rest')) {
   report('card-foot-rest', error === null && results.length === STATES.length && results.every((r) => r.ok) && restored?.fetchRestored === true, { results, armedAt, restored, ...(error ? { error } : {}) });
 }
 
-// Critic 10 S1: the collapsed SPECIES pill is the material of the collapsed DATA LAYERS and SCENES pills. With all three collapsed, the scope mask
-// off, over the OSM street map (central Austin from 3 km) and over open ocean (the Pacific from 800 km, OSM), at 1400x900 and 375x667: the three
+// Critic 10 S1: the collapsed SPECIES pill is the material of the collapsed DATA LAYERS and SCENES pills. With all three collapsed,
+// over the OSM street map (central Austin from 3 km) and over open ocean (the Pacific from 800 km, OSM), at 1400x900 and 375x667: the three
 // pills' computed backgrounds and backdrop filters are equal, and the SPECIES pill's fill (the median pixel of the pill 10 px in from its edges,
 // with every header's contents hidden) is within 15 levels per channel of the mean of the other two pills' fills. Positive control in the same
 // check: the open SPECIES panel's computed background is the 0.86 floor, not the pills' glass.
@@ -1172,7 +1168,7 @@ if (CHECKS.has('collapsed-pills')) {
     const view = window.__godsEyeView;
     const c = view.viewer.camera;
     window.__qaPillCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll };
-    return { stack: view.mapStackController.getState().activeId, scope: document.getElementById('scope-toggle')?.getAttribute('aria-pressed') ?? null, collapsed: Object.fromEntries(['data-panel', 'species-panel'].map((id) => [id, document.getElementById(id).classList.contains('collapsed')])) };
+    return { stack: view.mapStackController.getState().activeId, collapsed: Object.fromEntries(['data-panel', 'species-panel'].map((id) => [id, document.getElementById(id).classList.contains('collapsed')])) };
   });
   const samples = [];
   let control = null;
@@ -1181,8 +1177,6 @@ if (CHECKS.has('collapsed-pills')) {
   try {
     const stack = await page.evaluate(async () => (await window.__godsEyeView.mapStackController.setStack('osm')).activeId);
     if (stack !== 'osm') throw new Error(`collapsed-pills: the OSM stack did not become active (${stack})`);
-    const scope = await page.evaluate(() => { const button = document.getElementById('scope-toggle'); if (button.getAttribute('aria-pressed') === 'true') button.click(); return button.getAttribute('aria-pressed'); });
-    if (scope !== 'false') throw new Error(`collapsed-pills: the scope mask did not turn off (aria-pressed ${scope})`);
     for (const [, id] of PILLS) await setCollapsed(id, true);
     await sleep(1000);
     for (const [width, height] of [[1400, 900], [375, 667]]) {
@@ -1241,19 +1235,17 @@ if (CHECKS.has('collapsed-pills')) {
   } finally {
     restored = await page.evaluate(async (initial) => {
         for (const id of Object.keys(initial.collapsed)) { const panel = document.getElementById(id); if (panel.classList.contains('collapsed') !== initial.collapsed[id]) panel.querySelector(`[data-collapse-target="${id}"]`).click(); }
-        const scope = document.getElementById('scope-toggle');
-        if (scope && initial.scope !== null && scope.getAttribute('aria-pressed') !== initial.scope) scope.click();
         const view = window.__godsEyeView;
         const stack = (await view.mapStackController.setStack(initial.stack)).activeId;
         const s = window.__qaPillCamera;
         view.viewer.camera.setView({ destination: s.position, orientation: { heading: s.heading, pitch: s.pitch, roll: s.roll } });
-        return { stack, scope: scope?.getAttribute('aria-pressed') ?? null };
+        return { stack };
       }, initial).catch((caught) => ({ error: String(caught?.stack || caught).slice(0, 300) }));
     await page.setViewport({ width: 1400, height: 900 });
     await sleep(2000);
   }
   const controlOk = Boolean(control?.open) && control.background === 'rgba(12, 12, 20, 0.86)' && samples.length > 0 && control.background !== samples[0].pills[0].background;
-  report('collapsed-pills', error === null && samples.length === 4 && samples.every((s) => s.ok) && controlOk && restored?.stack === initial.stack && restored.scope === initial.scope, {
+  report('collapsed-pills', error === null && samples.length === 4 && samples.every((s) => s.ok) && controlOk && restored?.stack === initial.stack, {
     samples: samples.map((s) => ({ viewport: s.viewport, place: s.place, tiles: s.tiles, ok: s.ok, maxLevels: s.maxLevels, pills: s.pills.map((p) => ({ name: p.name, rgb: p.rgb, background: p.background, box: p.box })), contrast: s.contrast })),
     initial, control, controlOk, restored, ...(error ? { error } : {}),
   });

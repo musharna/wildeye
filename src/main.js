@@ -42,7 +42,6 @@ import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
 import { MapStackController } from './mapStackController.js';
 import { initLogoGaze } from './logoGaze.js';
-import { initCockpitCloudEffects } from './cockpitCloudEffects.js';
 import {
   installRenderGovernor,
   getRenderGovernorDiagnostics,
@@ -50,7 +49,6 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from './renderGovernor.js';
-import { installScopeMask } from './scopeMask.js';
 import { loadPhotorealisticTileset } from './mapStartup.js';
 
 initLogoGaze();
@@ -215,11 +213,6 @@ async function init() {
 
     // Initialize the style manager (post-processing, HUD, locations, share links)
     const styleManager = new StyleManager(viewer, { mapStackController });
-    // The previous multi-canvas weather compositor remains disabled. Cockpit
-    // clouds use a separate, capped low-resolution GPU pass that never attaches
-    // Cesium fog or post-process stages and is fully stopped in map mode.
-    const weatherEffects = null;
-    const cockpitCloudEffects = initCockpitCloudEffects(viewer);
 
     // Without a share link, open on the whole globe.
     if (!styleManager.hasShareState) {
@@ -381,11 +374,6 @@ async function init() {
     // its chance to register pre-install holds. (perf wave 2)
     installRenderGovernor(viewer);
 
-    // The explicit scope mask replaces the emergent six-pass artifact —
-    // see src/scopeMask.js. Installed before the UI so the DISPLAY-rail
-    // toggle finds it live.
-    installScopeMask(viewer);
-
     // The follow camera recomputes the tracked target's dead-reckon position
     // every frame — tracking anything is a per-frame animation. (perf wave 2)
     viewer.trackedEntityChanged.addEventListener(() => {
@@ -401,7 +389,6 @@ async function init() {
     const syncVisibilitySuspension = () => {
       const hidden = document.hidden;
       viewer.useDefaultRenderLoop = !hidden;
-      cockpitCloudEffects?.setSuspended?.(hidden);
       if (!hidden) {
         if (dataManager._panelRefreshPendingOnVisible) {
           dataManager._panelRefreshPendingOnVisible = false;
@@ -429,8 +416,6 @@ async function init() {
       compare,
       drapeStack: () => drapeStackState(viewer.imageryLayers),
       mapStackController,
-      weatherEffects,
-      cockpitCloudEffects,
       getRenderGovernorDiagnostics,
       requestRender: governorRequestRender,
     };

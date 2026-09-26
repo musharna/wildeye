@@ -2,7 +2,7 @@
 /**
  * qa-hud-plain.mjs — real-browser check that the camera HUD speaks plainly (grill_wildeye_next_wave_2026-09-25, item 6).
  * Run: node scripts/qa-hud-plain.mjs [--url http://127.0.0.1:8781/] [--shots <dir>]
- * One JSON line per check; exits 1 when any check fails. Switches to NVG (a style that shows the HUD), then reads the
+ * One JSON line per check; exits 1 when any check fails. Switches to CRT (the style that shows the HUD), then reads the
  * HUD's rendered text: lat/lon, ALT/SUN, the UTC clock and the summary must be there (positive control), and none of
  * the removed spy-satellite readouts. The page title and the loading screen must say wildeye.
  * Software WebGL only (swiftshader): hardware-GPU headless Chrome crashed the laptop twice (2026-09-25).
@@ -46,7 +46,7 @@ try {
   report('page is titled wildeye, no tagline', title.doc === 'wildeye' && title.bar === 'wildeye' && !title.tagline, title);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/hud-plain-normal.png` });
 
-  await page.evaluate(() => window.__godsEyeView.styleManager.setStyle('surveillance'));
+  await page.evaluate(() => window.__godsEyeView.styleManager.setStyle('retro'));
   // The telemetry tick is 250 ms and the clock 1 s; swiftshader frames are slow, so poll for a filled readout.
   const hud = await page.waitForFunction(() => {
     const el = document.getElementById('intel-hud');
@@ -62,8 +62,8 @@ try {
       text: el?.innerText ?? '',
     };
   });
-  if (SHOTS) await page.screenshot({ path: `${SHOTS}/hud-plain-nvg.png` });
-  report('HUD shows under NVG', hud && read.visible, { visible: read.visible });
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/hud-plain-crt.png` });
+  report('HUD shows under CRT', hud && read.visible, { visible: read.visible });
   report('lat/lon, ALT/SUN, clock and summary are filled', /^\d\d°\d\d'\d\d\.\d\d"[NS] \d{3}°\d\d'\d\d\.\d\d"[EW]$/.test(read.latlon ?? '')
     && /ALT: -?\d+m .*SUN: -?\d+\.\d° EL/.test(read.alt ?? '') && /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\dZ$/.test(read.clock ?? '')
     && !!read.summary && read.summary !== 'Awaiting telemetry...', { latlon: read.latlon, alt: read.alt, clock: read.clock, mode: read.mode, summary: read.summary });

@@ -21,14 +21,12 @@ import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
-  surveillance: { main: 'rgba(51, 255, 51, 0.8)',  glow: 'rgba(51, 255, 51, 0.5)',  border: 'rgba(51, 255, 51, 0.2)' },
-  thermal:      { main: 'rgba(255, 255, 255, 0.7)', glow: 'rgba(255, 255, 255, 0.4)', border: 'rgba(255, 255, 255, 0.15)' },
   retro:        { main: 'rgba(255, 170, 0, 0.8)',   glow: 'rgba(255, 170, 0, 0.5)',   border: 'rgba(255, 170, 0, 0.2)' },
   _default:     { main: 'rgba(0, 255, 255, 0.6)',   glow: 'rgba(0, 255, 255, 0.4)',   border: 'rgba(0, 255, 255, 0.15)' },
 };
 
 /** Shader modes that automatically show the HUD overlay. */
-const MILITARY_STYLES = new Set(['retro', 'surveillance', 'thermal']);
+const MILITARY_STYLES = new Set(['retro']);
 
 /** Allowed HUD layout variants. */
 const HUD_VARIANTS = new Set(['tactical', 'operator', 'minimal']);
@@ -629,8 +627,7 @@ export class IntelHUD {
    * React to a shader-style change. Updates the mode label, HUD color
    * scheme (via CSS custom properties), and auto-shows/hides the overlay
    * when in auto mode.
-   * @param {string} styleName - Active style key (e.g. `'surveillance'`,
-   *   `'thermal'`, `'retro'`, `'normal'`).
+   * @param {string} styleName - Active style key (e.g. `'retro'`, `'normal'`).
    */
   onStyleChange(styleName) {
     this._currentStyle = styleName;
@@ -638,7 +635,7 @@ export class IntelHUD {
     // Update mode label
     const modeEl = document.getElementById('hud-mode');
     if (modeEl) {
-      const modeNames = { surveillance: 'NVG', thermal: 'FLIR', retro: 'CRT' };
+      const modeNames = { retro: 'CRT' };
       modeEl.textContent = modeNames[styleName] || styleName.toUpperCase();
     }
     // Update color scheme

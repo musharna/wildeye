@@ -2,11 +2,8 @@
   "note": "Exact src/ call counts per world-overlay workload (121 frames). Gated by scripts/callcount-check.mjs: totals must equal these. Regenerate with `npm run perf:callcount -- --update`.",
   "workloads": {
     "generic-above-cap": {
-      "total": 1546886,
+      "total": 1546885,
       "functions": {
-        "src/celestialRing.js:(anonymous)": 1,
-        "src/celestialRing.js:getKeyholeFadeTuning": 121,
-        "src/celestialRing.js:getKeyholeGeometry": 1,
         "src/data/detectionCohort.js:_bubbleUp": 250,
         "src/data/detectionCohort.js:(anonymous)": 1,
         "src/data/detectionCohort.js:BoundedCohort": 1,
@@ -47,6 +44,9 @@
         "src/data/labelArbiter.js:SpatialCandidateQueue": 1,
         "src/data/labelArbiter.js:SpatialHash": 1,
         "src/data/labelArbiter.js:visibilityBand": 3150,
+        "src/overlays/keyhole.js:(anonymous)": 1,
+        "src/overlays/keyhole.js:getKeyholeFadeTuning": 121,
+        "src/overlays/keyhole.js:getKeyholeGeometry": 1,
         "src/overlays/pooledSort.js:(anonymous)": 1,
         "src/overlays/pooledSort.js:sortPooledRange": 242,
         "src/overlays/worldOverlay.js:(anonymous)": 508,
@@ -164,8 +164,7 @@
         "src/overlays/worldOverlayDraw.js:placementVariants": 30250,
         "src/overlays/worldOverlayDraw.js:roundedRectPath": 11520,
         "src/overlays/worldOverlayDraw.js:writePlacement": 121000,
-        "src/overlays/worldOverlayTokens.js:(anonymous)": 1,
-        "src/renderGovernor.js:(anonymous)": 1
+        "src/overlays/worldOverlayTokens.js:(anonymous)": 1
       }
     }
   }

@@ -58,86 +58,9 @@
     <div id="safe-frame-box"></div>
   </div>
 
-  <!-- Post-processing toggles (top-right) -->
-  <div id="pp-toggles" class="panel-collapsible collapsed" data-panel-id="pp-toggles">
-    <div class="compact pp-header-row">
-      <span class="pp-header-label">DISPLAY</span>
-      <span class="panel-divider" aria-hidden="true"></span>
-      <button class="panel-collapse-btn pp-collapse-btn" data-collapse-target="pp-toggles" title="Collapse panel">&#x25C0;</button>
-    </div>
-    <div class="pp-toggle-group">
-      <button class="pp-toggle-btn" id="hud-toggle" title="Intelligence HUD (H)">
-        <span class="pp-icon">&#x25CE;</span>
-        <span class="pp-label">HUD</span>
-      </button>
-      <div class="pp-slider-row" id="hud-layout-row">
-        <span class="pp-slider-mini-label">Layout</span>
-        <select id="hud-layout-select" class="pp-select" aria-label="HUD layout">
-          <option value="tactical">Tactical</option>
-          <option value="operator">Operator</option>
-          <option value="minimal">Minimal</option>
-        </select>
-      </div>
-    </div>
-    <!-- The one shared preset-parameter surface is inserted here at runtime. -->
-    <div id="param-slider-panel">
-      <div class="param-panel-header">
-        <span class="param-panel-title">PARAMETERS</span>
-        <span class="param-panel-divider"></span>
-        <button class="panel-collapse-btn" id="param-panel-collapse-btn" data-collapse-target="param-slider-panel" title="Collapse panel">−</button>
-      </div>
-      <div id="param-sliders"></div>
-    </div>
-    <div class="pp-toggle-group">
-      <button class="pp-toggle-btn active" id="scope-toggle" title="Scope — the circular viewport mask" aria-pressed="true">
-        <span class="pp-icon material-symbols-outlined" aria-hidden="true">adjust</span>
-        <span class="pp-label">Scope</span>
-      </button>
-      <div class="pp-slider-row visible" id="scope-slider-row">
-        <span class="pp-slider-mini-label">Feather</span>
-        <!-- Feather starts at an 11% soft scope-mask edge (owner final lock
-             2026-08-24, superseding the 08-22 hard-crop and 08-23 8% rulings);
-             mirrors SCOPE_FEATHER_RATIO_DEFAULT in src/scopeMask.js. Feather
-             softens the black mask edge; label fading is the separate Fade
-             slider. -->
-        <input type="range" class="pp-slider" id="scope-feather-slider" min="0" max="100" value="11" title="Scope edge feather as a percentage of the keyhole radius" />
-        <span class="pp-slider-value" id="scope-feather-value">11%</span>
-      </div>
-    </div>
-    <div class="pp-toggle-group">
-      <button class="pp-toggle-btn" id="celestial-toggle" title="Celestial ring — reveal the full globe" aria-pressed="false">
-        <span class="pp-icon material-symbols-outlined" aria-hidden="true">flare</span>
-        <span class="pp-label">Celestial</span>
-      </button>
-    </div>
-    <button class="pp-toggle-btn" id="clean-view-toggle" title="Hide UI chrome">
-      <span class="pp-icon">&#x25A1;</span>
-      <span class="pp-label">Clean UI</span>
-    </button>
-    <div class="pp-toggle-group">
-      <button class="pp-toggle-btn" id="bloom-toggle" title="Bloom / Glow">
-        <span class="pp-icon">&#x2728;</span>
-        <span class="pp-label">Bloom</span>
-      </button>
-      <div class="pp-slider-row" id="bloom-slider-row">
-        <input type="range" class="pp-slider" id="bloom-intensity-slider" min="0" max="200" value="0" />
-        <span class="pp-slider-value" id="bloom-intensity-value">0%</span>
-      </div>
-    </div>
-    <div class="pp-toggle-group">
-      <button class="pp-toggle-btn" id="sharpen-toggle" title="Sharpening">
-        <span class="pp-icon">&#x1F50D;</span>
-        <span class="pp-label">Sharpen</span>
-      </button>
-      <div class="pp-slider-row" id="sharpen-slider-row">
-        <input type="range" class="pp-slider" id="sharpen-intensity-slider" min="0" max="100" value="49" />
-        <span class="pp-slider-value" id="sharpen-intensity-value">49%</span>
-      </div>
-    </div>
-  </div>
   <button id="clean-view-exit" title="Return UI controls">EXIT CLEAN VIEW</button>
 
-  <!-- Unified bottom command dock: locations, voice (injected at runtime), visual presets -->
+  <!-- Unified bottom command dock: locations, visual presets -->
   <div id="command-dock" aria-label="Navigation, voice, and visual preset controls">
   <!-- Control panel -->
   <div id="control-panel" class="panel-collapsible collapsed">
@@ -162,30 +85,20 @@
           <span class="btn-label">CRT</span>
           <span class="btn-key">2</span>
         </button>
-        <button class="style-btn" data-style="surveillance" title="Simulate night-vision goggles with green intensification and a tube vignette.">
-          <span class="btn-icon">🌙</span>
-          <span class="btn-label">NVG</span>
-          <span class="btn-key">3</span>
-        </button>
-        <button class="style-btn" data-style="thermal" title="Simulate FLIR-style thermal contrast. Turn up Ironbow for color.">
-          <span class="btn-icon">🌡️</span>
-          <span class="btn-label">FLIR</span>
-          <span class="btn-key">4</span>
-        </button>
         <button class="style-btn" data-style="anime" title="Apply bright cel-shaded color and illustrated outlines.">
           <span class="btn-icon">✦</span>
           <span class="btn-label">Anime</span>
-          <span class="btn-key">5</span>
+          <span class="btn-key">3</span>
         </button>
         <button class="style-btn" data-style="noir" title="Apply high-contrast monochrome film-noir grading.">
           <span class="btn-icon">◐</span>
           <span class="btn-label">Noir</span>
-          <span class="btn-key">6</span>
+          <span class="btn-key">4</span>
         </button>
         <button class="style-btn" data-style="snow" title="Add a cold, snowy whiteout treatment to the scene.">
           <span class="btn-icon">❄</span>
           <span class="btn-label">Snow</span>
-          <span class="btn-key">7</span>
+          <span class="btn-key">5</span>
         </button>
       </div>
       <section class="map-source-section" aria-labelledby="map-source-label">

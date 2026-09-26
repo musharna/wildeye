@@ -198,22 +198,8 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
     /_setCommandDockPanelPinState[\s\S]*?if \(syncShare\) this\.shareLinkManager\?\.onPanelStateChange\?\.\(\);/,
     'pin and unpin must update the share hash even when collapse state is unchanged',
   );
-  assert.match(ui, /\{ id: 'param-slider-panel' \}/);
-  assert.match(sharelink, /\{ id: 'param-slider-panel', token: 'm', pinnable: false \}/);
-});
-
-test('expanded Display uses its container shell instead of a nested header card', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-
-  assert.match(
-    css,
-    /#pp-toggles:not\(\.collapsed\) > \.pp-header-row\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/,
-  );
-  assert.match(
-    css,
-    /#pp-toggles\.collapsed \.pp-header-row\s*\{[\s\S]*?width:\s*var\(--right-collapsed-width, 132px\);/,
-    'collapsed Display must retain its standalone launcher sizing',
-  );
+  assert.match(ui, /\{ id: 'species-panel' \}/);
+  assert.match(sharelink, /\{ id: 'species-panel', token: 'b', pinnable: false \}/);
 });
 
 test('expanded left panels integrate their headers with the container shell', () => {
@@ -239,24 +225,6 @@ test('Map Source uses five compact tiles in the bottom Visual Presets tray', () 
     css,
     /\.map-stack-chip-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\);/,
     'the desktop source selector keeps all five tiles on one row',
-  );
-});
-
-test('expanded right panels highlight the title divider without changing collapsed launchers', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-
-  assert.match(
-    html,
-    /class="compact pp-header-row"[\s\S]*?class="pp-header-label">DISPLAY<\/span>[\s\S]*?class="panel-divider"/,
-  );
-  assert.match(
-    css,
-    /#right-context-rail \[data-panel-id\]:not\(\.collapsed\) \.panel-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(0, 212, 255, 0\.22\);/,
-  );
-  assert.match(
-    css,
-    /#param-slider-panel:not\(\.collapsed\) \.param-panel-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\);/,
   );
 });
 

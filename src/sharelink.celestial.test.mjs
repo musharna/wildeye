@@ -48,14 +48,19 @@ function installClipboard(writeText) {
   });
 }
 
-test('share links without cr default the celestial ring off', () => {
-  const manager = makeManager('#lat=10&lon=20&style=normal');
-  assert.equal(manager.parseInitialHash().celestialRing, false);
-});
-
-test('share links parse explicit celestial on and off states', () => {
-  assert.equal(makeManager('#lat=10&lon=20&cr=1').parseInitialHash().celestialRing, true);
-  assert.equal(makeManager('#lat=10&lon=20&cr=0').parseInitialHash().celestialRing, false);
+// The DISPLAY panel went on 2026-09-26 (bloat step 1, cluster 3): its fields are ignored on parse, and the
+// NVG/FLIR styles an old link names restore as normal. `crt` in the same kind of link is the positive control.
+test('retired visual fields in an old link are ignored, and nvg/flir restore as normal', () => {
+  const retired = 'cr=1&sc=0&scf=5&sce=97&bloom=1&bi=80&bv=2&sharpen=0&si=10&hud=minimal&sp=g.50';
+  for (const style of ['nvg', 'flir']) {
+    const parsed = makeManager(`#v=2&lat=10&lon=20&style=${style}&hv=1&${retired}`).parseInitialHash();
+    assert.equal(parsed.style, 'normal', `${style} restores as normal`);
+    assert.equal(parsed.hudVisible, true, 'a kept field in the same link still restores');
+    for (const key of ['celestialRing', 'scopeEnabled', 'scopeFeatherPct', 'scopeTerminusPct', 'bloom', 'sharpen', 'hudVariant', 'styleParams']) {
+      assert.equal(key in parsed, false, `${key} is not parsed`);
+    }
+  }
+  assert.equal(makeManager(`#v=2&lat=10&lon=20&style=crt&${retired}`).parseInitialHash().style, 'retro');
 });
 
 test('unknown-only v2 layer tokens are invalid, while historical l fields stay inert', () => {
@@ -69,55 +74,50 @@ test('unknown-only v2 layer tokens are invalid, while historical l fields stay i
   }
 });
 
-test('share-link serialization emits the current celestial state', () => {
+test('share-link serialization writes HUD visibility and map, and none of the retired visual fields', () => {
   const manager = makeManager();
-  manager.onToggleChange(false, false, { celestialRingEnabled: false });
+  manager.onVisualChange({ hudVisible: true, mapStack: 'osm' });
   clearTimeout(manager._debounceTimer);
   manager._updateHash();
-  assert.equal(new URLSearchParams(window.location.hash.slice(1)).get('cr'), '0');
-
-  manager.onToggleChange(false, false, { celestialRingEnabled: true });
-  clearTimeout(manager._debounceTimer);
-  manager._updateHash();
-  assert.equal(new URLSearchParams(window.location.hash.slice(1)).get('cr'), '1');
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  assert.equal(params.get('hv'), '1');
+  assert.equal(params.get('map'), 'osm');
+  for (const key of ['cr', 'sc', 'scf', 'sce', 'bloom', 'bi', 'bv', 'sharpen', 'si', 'hud', 'sp']) {
+    assert.equal(params.has(key), false, `${key} is not written`);
+  }
 });
 
-test('generated links are v2 and include deterministic layers, options, style params, and panels', () => {
+test('generated links are v2 and include deterministic layers, options, and panels', () => {
   const manager = makeManager();
   const layers = createDefaultLayerState();
   layers.enabledLayerIds = ['occurrences', 'birds'];
   manager.setLayerStateProvider(() => layers);
   manager.setPanelStateProvider(() => ({ specs: [
     { id: 'control-panel', collapsed: false, pinned: true },
-    { id: 'param-slider-panel', collapsed: true },
+    { id: 'species-panel', collapsed: true },
   ] }));
-  manager.setStyleParamStateProvider(() => ({
-    sensitivity: 0.82, bloom: 0.37, mode: 1, pixelation: 2.6, palette: 1,
-  }));
-  manager.onStyleChange('thermal');
+  manager.onStyleChange('retro');
   clearTimeout(manager._debounceTimer);
   manager._updateHash();
   const params = new URLSearchParams(window.location.hash.slice(1));
   assert.equal(params.get('v'), '2');
   assert.equal(params.get('l'), 'n.o', 'registry order, not enable order');
-  assert.equal(params.get('sp'), 's.82_b.37_m.100_p.260_a.100');
-  assert.equal(params.get('ui'), 'c.c.0_c.p.1_m.c.1');
+  assert.equal(params.get('style'), 'crt');
+  assert.equal(params.get('ui'), 'c.c.0_c.p.1_b.c.1');
 });
 
-test('visual parameters, explicit empty layers, and panel state are v2-only', () => {
+test('explicit empty layers and panel state are v2-only', () => {
   const parsed = makeManager(
-    '#v=2&lat=10&lon=20&style=flir&l=&sp=s.82_b.37_p.260&ui=c.c.0_c.p.1_d.c.1_d.p.1',
+    '#v=2&lat=10&lon=20&style=crt&l=&ui=c.c.0_c.p.1_d.c.1_d.p.1',
   ).parseInitialHash();
   assert.deepEqual(parsed.layerState.enabledLayerIds, []);
-  assert.deepEqual(parsed.styleParams, { sensitivity: 0.82, bloom: 0.37, pixelation: 2.6 });
   assert.deepEqual(parsed.panelState, { specs: [
     { id: 'control-panel', collapsed: false, pinned: true },
     { id: 'data-panel', collapsed: true, pinned: null },
   ] });
-  const legacy = makeManager('#v=1&lat=10&lon=20&style=flir&l=&sp=s.82&ui=c.c.0')
+  const legacy = makeManager('#v=1&lat=10&lon=20&style=crt&l=&ui=c.c.0')
     .parseInitialHash();
   assert.equal(legacy.layerState, null);
-  assert.equal(legacy.styleParams, null);
   assert.equal(legacy.panelState, null);
 });
 
@@ -163,7 +163,7 @@ test('a share link round-trips the SPECIES panel open, and ui.js and sharelink.j
   };
   const uiIds = ids(uiSource, 'const SHARE_PANEL_STATE_SPECS = Object.freeze([');
   const registryIds = ids(fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8'), 'const SHARE_PANEL_STATE_REGISTRY = Object.freeze([');
-  assert.ok(registryIds.length >= 9, `positive control: the registry's panels are read (${registryIds})`);
+  assert.ok(registryIds.length >= 4, `positive control: the registry's panels are read (${registryIds})`);
   assert.ok(uiIds.includes('species-panel'), `ui.js shares species-panel: ${uiIds}`);
   assert.deepEqual(uiIds, registryIds, 'ui.js and sharelink.js list the same panels in the same order');
 });
@@ -260,46 +260,6 @@ test('clipboard rejection leaves both live URL and restore suppression untouched
 // 0..100, so `sce=0` produced an unsupported sub-94 terminus — a hole in the
 // mask, not a scope — and the next hash write serialized it straight back out.
 
-test('sce is clamped into the supported 94..100 band on the way in', () => {
-  assert.equal(makeManager('#lat=10&lon=20&sce=97').parseInitialHash().scopeTerminusPct, 97);
-  assert.equal(makeManager('#lat=10&lon=20&sce=94').parseInitialHash().scopeTerminusPct, 94);
-  assert.equal(makeManager('#lat=10&lon=20&sce=100').parseInitialHash().scopeTerminusPct, 100);
-  assert.equal(makeManager('#lat=10&lon=20&sce=0').parseInitialHash().scopeTerminusPct, 94,
-    'sce=0 must not create a sub-94 terminus');
-  assert.equal(makeManager('#lat=10&lon=20&sce=93').parseInitialHash().scopeTerminusPct, 94);
-  assert.equal(makeManager('#lat=10&lon=20&sce=-40').parseInitialHash().scopeTerminusPct, 94);
-  assert.equal(makeManager('#lat=10&lon=20&sce=500').parseInitialHash().scopeTerminusPct, 100);
-  assert.equal(makeManager('#lat=10&lon=20&sce=96.6').parseInitialHash().scopeTerminusPct, 97,
-    'fractional percents round into the band');
-});
-
-test('an absent or non-numeric sce stays adaptive, never a pinned value', () => {
-  assert.equal(makeManager('#lat=10&lon=20').parseInitialHash().scopeTerminusPct, null);
-  assert.equal(makeManager('#lat=10&lon=20&sce=abc').parseInitialHash().scopeTerminusPct, null,
-    'junk is not a pin — absent semantics win');
-  assert.equal(makeManager('#lat=10&lon=20&sce=').parseInitialHash().scopeTerminusPct, null);
-});
-
-test('serialization writes only in-band sce values, and omits an adaptive one', () => {
-  const manager = makeManager();
-  manager.onToggleChange(false, false, { scopeTerminusPct: 0 });
-  clearTimeout(manager._debounceTimer);
-  manager._updateHash();
-  assert.equal(new URLSearchParams(window.location.hash.slice(1)).get('sce'), '94',
-    'an out-of-band value must be floored on write, not round-tripped');
-
-  manager.onToggleChange(false, false, { scopeTerminusPct: 500 });
-  clearTimeout(manager._debounceTimer);
-  manager._updateHash();
-  assert.equal(new URLSearchParams(window.location.hash.slice(1)).get('sce'), '100');
-
-  manager.onToggleChange(false, false, { scopeTerminusPct: null });
-  clearTimeout(manager._debounceTimer);
-  manager._updateHash();
-  assert.equal(new URLSearchParams(window.location.hash.slice(1)).has('sce'), false,
-    'adaptive stays ABSENT so a shared link never freezes the ramp');
-});
-
 test('share-link restore forces a final stationary render for Google 3D Tiles', () => {
   const calls = { flyTo: null, setView: null, renders: 0 };
   const viewer = {
@@ -383,89 +343,15 @@ test('newer visual, map, and individual panel actions suppress only their owned 
   assert.equal(manager._initialRestorePending, false);
 });
 
-test('every explicit visual UI gesture claims restore authority before it mutates state', () => {
+test('every explicit visual gesture claims restore authority before it mutates state', () => {
   const initUi = sourceBlock('  _initUI() {', '  _initMapStackControl() {');
-  const gestureRoutes = [
-    ["if (e.key.toLowerCase() === 'h')", "if (e.key.toLowerCase() === 'o')", 'this.hud.toggle()', 'HUD hotkey'],
-    ['// Bloom toggle', '// Bloom intensity slider', 'this._setBloomEnabled(', 'bloom button'],
-    ['// Bloom intensity slider', '// Sharpen toggle', 'this._setBloomIntensity(', 'bloom slider'],
-    ['// Sharpen toggle', '// Scope mask', 'this._setSharpenEnabled(', 'sharpen button'],
-    ["this._scopeBtn?.addEventListener('click'", "this._scopeFeatherSlider?.addEventListener('input'", 'setScopeMaskEnabled(', 'scope button'],
-    ["this._scopeFeatherSlider?.addEventListener('input'", 'if (this._sharpenSlider)', 'setScopeMaskFeather(', 'scope feather slider'],
-    ["this._sharpenSlider.addEventListener('input'", 'if (this._hudLayoutSelect)', 'this._applySharpenIntensity(', 'sharpen slider'],
-    ["this._hudLayoutSelect.addEventListener('change'", 'if (this._cleanViewBtn)', 'this._setHudVariant(', 'HUD layout select'],
-  ];
-  for (const [start, end, mutation, label] of gestureRoutes) {
-    const startIndex = initUi.indexOf(start);
-    const endIndex = initUi.indexOf(end, startIndex + start.length);
-    assert.ok(startIndex >= 0 && endIndex > startIndex, `${label} route is missing`);
-    assertClaimsBefore(initUi.slice(startIndex, endIndex), mutation, label);
-  }
-
-  const hudToggle = sourceBlock('  _initHUDToggle() {', '  _updateHudButtonState() {');
-  assertClaimsBefore(
-    hudToggle.slice(
-      hudToggle.indexOf("this._hudBtn.addEventListener('click'"),
-      hudToggle.indexOf('if (this._hudLayoutSelect)'),
-    ),
-    'this.hud.toggle()',
-    'HUD button',
+  const hotkey = initUi.slice(
+    initUi.indexOf("if (e.key.toLowerCase() === 'h')"),
+    initUi.indexOf("if (e.key.toLowerCase() === 'o')"),
   );
-});
-
-test('every explicit visual control facade claims restore authority before mutation', () => {
-  const facadeRoutes = [
-    ['  setHudVisible(mode) {', '  setHudLayout(variantName) {', 'this.hud.setMode(', 'setHudVisible'],
-    ['  setHudLayout(variantName) {', '  async setMapStack(stackId) {', 'this._setHudVariant(', 'setHudLayout'],
-    ['  setBloom({ enabled, intensityPct } = {}) {', '  setSharpen({ enabled, intensityPct } = {}) {', 'this._setBloomIntensity(', 'setBloom'],
-    ['  setSharpen({ enabled, intensityPct } = {}) {', '  get celestialRingEnabled() {', 'this._applySharpenIntensity(', 'setSharpen'],
-    ['  setCelestialRingEnabled(enabled, { syncShare = true, focus = false } = {}) {', '  setOrbit(enabled) {', 'this.celestialRing?.setEnabled(', 'setCelestialRingEnabled'],
-  ];
-  for (const [start, end, mutation, label] of facadeRoutes) {
-    assertClaimsBefore(sourceBlock(start, end), mutation, label);
-  }
-
+  assertClaimsBefore(hotkey, 'this.hud.toggle()', 'HUD hotkey');
   const style = sourceBlock('  setStyle(styleName, {', '  _startTransition(styleName, fromValue, toValue) {');
   assertClaimsBefore(style, 'this.activeStyle = styleName', 'setStyle');
-  const sliders = sourceBlock('  _updateSliderPanel(styleName, { reveal = false } = {}) {', '  _revealStyleParameters() {');
-  assertClaimsBefore(sliders, 'this.stages[styleName].uniforms[uName] = val', 'style parameter slider');
-});
-
-test('public visual facades reject the complete invalid request before authority or mutation', () => {
-  const cases = [
-    {
-      label: 'setBloom',
-      block: sourceBlock('  setBloom({ enabled, intensityPct } = {}) {', '  setSharpen({ enabled, intensityPct } = {}) {'),
-      validations: ['Invalid bloom enabled value', 'Invalid bloom intensity'],
-    },
-    {
-      label: 'setSharpen',
-      block: sourceBlock('  setSharpen({ enabled, intensityPct } = {}) {', '  get celestialRingEnabled() {'),
-      validations: ['Invalid sharpen enabled value', 'Invalid sharpen intensity'],
-    },
-    {
-      label: 'setCelestialRingEnabled',
-      block: sourceBlock(
-        '  setCelestialRingEnabled(enabled, { syncShare = true, focus = false } = {}) {',
-        '  setOrbit(enabled) {',
-      ),
-      validations: [
-        'Invalid celestial ring enabled value',
-        'Celestial ring options must be boolean',
-        'Celestial ring is available only in Normal style',
-      ],
-    },
-  ];
-  for (const { label, block, validations } of cases) {
-    const claimIndex = block.indexOf("claimRestoreLane?.('visual')");
-    assert.ok(claimIndex >= 0, `${label} claim is missing`);
-    for (const validation of validations) {
-      const validationIndex = block.indexOf(validation);
-      assert.ok(validationIndex >= 0, `${label} validation is missing: ${validation}`);
-      assert.ok(validationIndex < claimIndex, `${label} must validate ${validation} before claiming`);
-    }
-  }
-  assert.doesNotMatch(cases.at(-1).block, /!!enabled/);
 });
 
 test('share apply completion waits for both callback work and camera settlement', async () => {

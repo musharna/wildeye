@@ -6,7 +6,7 @@ import {
   getKeyholeGeometry,
   keyholeLabelAlphaFromGeometry,
   setKeyholeFadeTuning,
-} from '../celestialRing.js';
+} from './keyhole.js';
 import { combinedOverlayAlpha } from './worldOverlayDraw.js';
 import {
   AMBIENT_CARD_COLLISION_CAPACITY,

@@ -24,7 +24,7 @@ export const ALLOCATION_STRATEGIES = Object.freeze([ALLOCATION_ELASTIC, ALLOCATI
 export const AIRCRAFT_BRACKET_ALPHA_FLOOR = 0.35;
 
 /**
- * Mirror of celestialRing's KEYHOLE_OUTSIDE_OPACITY_DEFAULT — the OUTSIDE
+ * Mirror of overlays/keyhole.js's KEYHOLE_OUTSIDE_OPACITY_DEFAULT — the OUTSIDE
  * setting the bracket look is calibrated at, so `AIRCRAFT_BRACKET_ALPHA_FLOOR`
  * lands EXACTLY at the shipped default. Mirrored rather than imported so this
  * stays a pure policy module with no Cesium dependency; detectionPolicy.test.mjs
