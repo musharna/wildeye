@@ -318,3 +318,14 @@ def test_config_groups_windows_and_caps():
     for st in mb["studies"]:
         assert st["group"] in GROUPS, st["id"]
         study_window(st, NOW)  # raises on a bad window
+
+
+def test_a_study_that_yields_no_tracks_is_flagged_not_silent():
+    def process(src, study, now=None):
+        if study["id"] == 7:
+            return [], {"kept": 0, "window": ["2026-07-28", None]}
+        return [_feat("mb:9:x")], {"kept": 2}
+    src = {"id": "movebank", "studies": [{"id": 7}, {"id": 9}]}
+    feats, per, fails = collect_movebank(src, src["studies"], None, NOW, process, sleep=0, retry_pause=0)
+    assert set(fails) == {"mb:7"} and "no tracks" in fails["mb:7"]["empty"] and "2026-07-28" in fails["mb:7"]["empty"]
+    assert [f["properties"]["dataset"] for f in feats] == ["mb:9:x"] and "mb:9" not in fails

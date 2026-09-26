@@ -330,6 +330,9 @@ def collect_movebank(
         per[key] = st | {"fetched_at": _iso(now)}
         features.extend(feats)
         log.info("%s %s", key, st)
+        if not feats and "dropped" not in st:  # a curated study that yields nothing is news, not an error to retry
+            failures[key] = {"empty": f"no tracks in window {st.get('window')}"}
+            log.warning("%s: %s", key, failures[key]["empty"])
 
     for study in studies:
         try:

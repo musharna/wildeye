@@ -176,12 +176,14 @@
       },
       {
         "id": 4194049025,
-        "note": "Armenian gulls, Armenia (CC0)",
-        "days": 60,
+        "note": "Armenian gulls, Sevan / Arpi, Armenia (CC0); downloadable fixes end 2026-03 (listing says 2026-09: recent data not released), so densest 12 months",
         "group": "birds",
         "common": {
           "Larus armenicus": "Armenian gull"
-        }
+        },
+        "start": "2025-04-01",
+        "end": "2026-04-01",
+        "min_gap_s": 43200
       }
     ],
     "max_individuals": 12

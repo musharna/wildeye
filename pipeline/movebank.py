@@ -129,7 +129,7 @@ def fetch_events(study_id: int, since: dt.datetime, fetch_text=_get_text, end: d
             continue
         if abs(lat) > 90 or abs(lon) > 180:
             continue
-        out.append({"t": ts, "lat": lat, "lon": lon, "cls": "", "animal": r.get("individual_local_identifier") or "?"})
+        out.append({"t": ts, "lat": lat, "lon": lon, "cls": "", "animal": r.get("individual_local_identifier") or None})
     return out
 
 
@@ -147,13 +147,17 @@ def process_study(source: dict, study: dict, fetch_text=_get_text, now: float | 
     taxa = fetch_individuals(sid, fetch_text)
     raw = fetch_events(sid, since, fetch_text, end=until)
     by_animal: dict[str, list[dict]] = {}
+    no_individual = 0
     for f in raw:
+        if f["animal"] is None:  # never pool unidentified fixes: they may be several animals
+            no_individual += 1
+            continue
         by_animal.setdefault(f["animal"], []).append(f)
     common = study.get("common", {})
     min_gap = float(study.get("min_gap_s", source.get("min_gap_s", 3600)))
     cap = int(source.get("max_individuals", 12))
     stats = {"study": meta["name"], "licence": meta["license_type"], "individuals": len(by_animal), "raw": len(raw),
-             "kept": 0, "segments": 0, "dropped_individuals": 0, "refused_human": 0, "future_dropped": 0, "capped_individuals": 0,
+             "kept": 0, "segments": 0, "dropped_individuals": 0, "no_individual": no_individual, "refused_human": 0, "future_dropped": 0, "capped_individuals": 0,
              "window": [since.strftime("%Y-%m-%d"), until.strftime("%Y-%m-%d") if until else None]}
     candidates = []
     for animal, fixes in sorted(by_animal.items()):

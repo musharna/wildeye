@@ -160,3 +160,15 @@ def test_archival_window_bounds_the_request():
 
 def test_read_timeout_is_120_s():
     assert inspect.signature(_get_text).parameters["timeout"].default == 120
+
+
+def test_fixes_without_an_individual_are_dropped_and_counted_never_merged_into_one_animal():
+    # rows with no individual id from two different places: merged, they would draw one animal jumping between them
+    orphans = []
+    for i in range(10):
+        t = dt.datetime.fromtimestamp(NOW - 20 * 86400 + i * 2 * H, dt.UTC)
+        orphans.append(f",{t:%Y-%m-%d %H:%M:%S}.000,{10 + (i % 2) * 0.3},20,true")
+    fetch = _study_fetch({"Bo": "Ciconia ciconia"}, {"Bo": 10}, orphans)
+    feats, st = process_study(SRC, {"id": 9, "days": 60, "group": "birds"}, fetch, now=NOW)
+    assert {f["properties"]["animal"] for f in feats} == {"Bo"}, "no merged '?' animal; positive control: the identified animal is kept"
+    assert st["no_individual"] == 10
