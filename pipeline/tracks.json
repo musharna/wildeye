@@ -82,7 +82,8 @@
         "group": "birds",
         "common": {
           "Grus nigricollis": "black-necked crane"
-        }
+        },
+        "default_species": "black-necked crane"
       },
       {
         "id": 8531131637,
@@ -93,7 +94,8 @@
         "group": "land mammals",
         "common": {
           "Bubalus bubalis": "water buffalo"
-        }
+        },
+        "default_species": "water buffalo"
       },
       {
         "id": 1241071371,
@@ -104,7 +106,8 @@
         "group": "land mammals",
         "common": {
           "Vulpes lagopus": "Arctic fox"
-        }
+        },
+        "default_species": "Arctic fox"
       },
       {
         "id": 208413731,
@@ -127,7 +130,8 @@
         "group": "land mammals",
         "common": {
           "Panthera leo": "lion"
-        }
+        },
+        "default_species": "lion"
       },
       {
         "id": 19411459,
@@ -138,7 +142,8 @@
         "group": "land mammals",
         "common": {
           "Panthera onca": "jaguar"
-        }
+        },
+        "default_species": "jaguar"
       },
       {
         "id": 1120749252,
@@ -172,7 +177,8 @@
         "group": "birds",
         "common": {
           "Necrosyrtes monachus": "hooded vulture"
-        }
+        },
+        "default_species": "hooded vulture"
       },
       {
         "id": 4194049025,
@@ -183,7 +189,8 @@
         },
         "start": "2025-04-01",
         "end": "2026-04-01",
-        "min_gap_s": 43200
+        "min_gap_s": 43200,
+        "default_species": "Armenian gull"
       }
     ],
     "max_individuals": 12
