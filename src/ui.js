@@ -210,7 +210,6 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'data-panel' },
   { id: 'cctv-panel' },
   { id: 'radio-panel' },
-  { id: 'scene-panel' },
   { id: 'global-context-panel' },
   { id: 'pp-toggles' },
   { id: 'param-slider-panel' },
@@ -2258,7 +2257,6 @@ export class StyleManager {
     this._cleanViewBtn = document.getElementById('clean-view-toggle');
     this._cleanViewExitBtn = document.getElementById('clean-view-exit');
     this._dataPanel = document.getElementById('data-panel');
-    this._scenePanel = document.getElementById('scene-panel');
     this._cctvPanel = document.getElementById('cctv-panel');
     this._radioPanel = document.getElementById('radio-panel');
     this._contextRadioDock = document.getElementById('context-radio-dock');

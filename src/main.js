@@ -53,7 +53,6 @@ import militaryAwarenessLayer from './data/militaryAwareness.js';
 import localDataLayers from './data/localLayers.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
-import { SceneDirector } from './scenes/director.js';
 import { initGevVoiceCommands } from './voice/gevRealtime.js';
 import { MapStackController } from './mapStackController.js';
 import { initAnnotations } from './annotations/index.js';
@@ -402,9 +401,6 @@ async function init() {
     });
     speciesPanel = createSpeciesPanel({ dataManager, speciesLayer, client: bioClient, whatLivesHere });
 
-    // Initialize deterministic scene playback for social clip capture
-    const sceneDirector = new SceneDirector(viewer, styleManager, dataManager);
-
     // Initialize the voice "whiteboard" annotation engine (world-space renderer)
     const annotations = initAnnotations({ viewer, tileset });
 
@@ -488,7 +484,6 @@ async function init() {
       // swipe compare + what each stacked drape is drawing: qa-compare asserts the split on the live layers
       compare,
       drapeStack: () => drapeStackState(viewer.imageryLayers),
-      sceneDirector,
       mapStackController,
       annotations,
       weatherEffects,
@@ -497,7 +492,7 @@ async function init() {
       requestRender: governorRequestRender,
     };
     // The voice agent needs the server's OpenAI Realtime session proxy; a static host has none.
-    if (HAS_BACKEND) window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, sceneDirector, annotations });
+    if (HAS_BACKEND) window.__godsEyeView.voiceCommands = initGevVoiceCommands({ viewer, styleManager, dataManager, annotations });
 
   } catch (error) {
     console.error("God's Eye View initialization failed:", error);

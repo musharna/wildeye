@@ -38,11 +38,10 @@ const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
   { id: 'data-panel', token: 'd', pinnable: false },
   { id: 'cctv-panel', token: 'v', pinnable: false },
   { id: 'radio-panel', token: 'r', pinnable: false },
-  { id: 'scene-panel', token: 's', pinnable: false },
   { id: 'global-context-panel', token: 'g', pinnable: false },
   { id: 'pp-toggles', token: 'p', pinnable: false },
   { id: 'param-slider-panel', token: 'm', pinnable: false },
-  // 'b', not the retired 'k' (the old Map Stack panel), which old links may still carry and must stay unknown.
+  // 'b', not the retired 'k' (the old Map Stack panel) or 's' (the old Scenes panel), which old links may still carry and must stay unknown.
   { id: 'species-panel', token: 'b', pinnable: false },
 ]);
 

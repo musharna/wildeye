@@ -6656,11 +6656,6 @@ body.recording-mode #scene-runtime.active {
   visibility: visible;
 }
 
-/* Scene playback owns layer and camera sequencing until Stop or completion. */
-body.scene-playback-mode :is(#clear-selected-layers, #reset-globe-view) {
-  display: none !important;
-}
-
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 720px) {
   #pp-toggles {
@@ -8973,8 +8968,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
    EXCLUSIVE_SURFACE_CLASSES pins them together. */
 body.ui-clean-view #first-run-launcher,
 body.recording-mode #first-run-launcher,
-body.cockpit-mode #first-run-launcher,
-body.scene-playback-mode #first-run-launcher {
+body.cockpit-mode #first-run-launcher {
   display: none;
 }
 

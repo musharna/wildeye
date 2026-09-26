@@ -18,9 +18,9 @@ function world({ short = true } = {}) {
     return node;
   };
   const stack = el('left-panel-stack');
-  const panels = ['data-panel', 'scene-panel', 'species-panel'].map((id) => { const p = el(id, stack); p.classes.add('collapsed'); p.dataset = { panelId: id }; return p; });
+  const panels = ['data-panel', 'species-panel'].map((id) => { const p = el(id, stack); p.classes.add('collapsed'); p.dataset = { panelId: id }; return p; });
   stack.querySelectorAll = () => panels;
-  const action = el('species-what-lives-here', panels[2]);
+  const action = el('species-what-lives-here', panels[1]);
   const card = el('bio-card');
   card.hidden = true;
   const close = el('bio-card-close', card);
@@ -81,7 +81,7 @@ test('short viewport: opening a panel while the card shows closes the card (one 
   w.calls.length = 0;
   w.open('species-panel'); // the SPECIES + tapped while the results show
   assert.deepEqual(w.calls, [['species-panel', false], ['dismiss']]);
-  assert.equal(w.panels[2].classes.has('collapsed'), false, 'SPECIES stays open');
+  assert.equal(w.panels[1].classes.has('collapsed'), false, 'SPECIES stays open');
   assert.equal(w.card.hidden, true);
 });
 
@@ -123,7 +123,7 @@ test('panel and card stay side by side where they fit and the centre is clear, a
   const rect = (left, top, right, bottom) => ({ left, top, right, bottom, width: right - left, height: bottom - top });
   const make = (viewport) => {
     const w = world();
-    w.panels[2].getBoundingClientRect = () => rect(16, 97, 476, 440);
+    w.panels[1].getBoundingClientRect = () => rect(16, 97, 476, 440);
     w.card.style = { props: {}, setProperty(k, v) { this.props[k] = v; }, removeProperty(k) { delete this.props[k]; } };
     return w.withViewport(viewport);
   };

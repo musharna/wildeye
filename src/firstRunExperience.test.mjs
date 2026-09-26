@@ -186,7 +186,7 @@ test('the JS and CSS lists of screen-claiming surfaces stay in step', () => {
 
   assert.deepEqual(
     [...EXCLUSIVE_SURFACE_CLASSES].sort(),
-    ['cockpit-mode', 'recording-mode', 'scene-playback-mode', 'ui-clean-view'],
+    ['cockpit-mode', 'recording-mode', 'ui-clean-view'],
   );
   // A surface that hides the card in CSS but is missing from the JS list would
   // leave an invisible launcher holding the ESC handler — blocker 2 exactly.

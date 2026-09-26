@@ -642,43 +642,6 @@
     </div>
   </div>
 
-  <!-- Scene Director Panel -->
-  <div id="scene-panel" class="panel-collapsible collapsed" data-panel-id="scene-panel">
-    <div class="panel-glow"></div>
-    <div class="scene-panel-inner">
-      <div class="panel-header">
-        <span class="panel-title">SCENES</span>
-        <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="scene-panel" title="Collapse panel">+</button>
-      </div>
-      <div class="scene-controls">
-        <select id="scene-select" aria-label="Scene recipe"></select>
-        <button id="scene-new-btn" class="scene-btn">NEW</button>
-        <button id="scene-delete-btn" class="scene-btn scene-btn-danger">DEL</button>
-      </div>
-      <div class="scene-controls">
-        <button id="scene-capture-btn" class="scene-btn">CAPTURE SHOT</button>
-        <button id="scene-update-shot-btn" class="scene-btn">UPDATE SHOT</button>
-      </div>
-      <div id="scene-shot-list" class="scene-shot-list"></div>
-      <div class="scene-controls">
-        <button id="scene-start-btn" class="scene-btn">START</button>
-        <button id="scene-stop-btn" class="scene-btn scene-btn-danger">STOP</button>
-        <button id="scene-next-btn" class="scene-btn">NEXT</button>
-      </div>
-      <div class="scene-controls">
-        <button id="scene-export-btn" class="scene-btn">EXPORT PRESETS</button>
-        <button id="scene-import-btn" class="scene-btn">IMPORT</button>
-        <button id="scene-download-btn" class="scene-btn">RUN LOG</button>
-        <input type="file" id="scene-import-file" accept="application/json,.json" hidden />
-      </div>
-      <div class="scene-progress">
-        <div id="scene-progress-fill">0%</div>
-      </div>
-      <div id="scene-status">Ready</div>
-    </div>
-  </div>
-
   <!-- Species search: any GBIF species on the map, and what has been recorded around a clicked point -->
   <div id="species-panel" class="panel-collapsible collapsed" data-panel-id="species-panel">
     <div class="panel-glow"></div>
@@ -873,7 +836,6 @@
     </div>
   </aside>
 
-  <div id="scene-runtime"></div>
 
   <!-- Explicit mission choice on a fresh session. Live feeds are not auto-enabled
        until the visitor asks; shared links skip this surface entirely. It returns

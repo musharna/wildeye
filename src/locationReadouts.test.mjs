@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
-const director = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');
 
 /** Source of the free-text LOCATION search handler (Enter on #location-search). */
 function locationSearchHandler() {
@@ -102,14 +101,4 @@ test('a deferred lookup that never flies leaves the readout standing', () => {
   const policy = fs.readFileSync(path.join(ROOT, 'src', 'navigationPolicy.js'), 'utf8');
   const fn = policy.slice(policy.indexOf('export function reassertNavigationHandoff'));
   assert.match(fn, /if \(disposed \|\| generation !== currentGeneration\) return false;[\s\S]*?release\?\.\(\);/);
-});
-
-test('scene playback invalidates the search label on every shot', () => {
-  // The director drives viewer.camera itself and never reaches _stampNavigation.
-  const start = director.indexOf('  async _flyCamera(cameraState, durationSec, token) {');
-  assert.ok(start > 0, 'scene camera flight is missing');
-  assert.match(
-    director.slice(start, start + 700),
-    /this\.styleManager\?\.clearSearchedLocation\?\.\(\);/,
-  );
 });

@@ -355,14 +355,14 @@ test('a hidden child of a visible panel still counts', () => {
 test('phone accordion: opening a left-stack panel collapses the others, and a two-panel share link ends with one open', async () => {
   const { phoneAccordionSiblingsToCollapse } = await import('./panelStackLayout.js');
   assert.equal(typeof phoneAccordionSiblingsToCollapse, 'function');
-  const panels = [{ id: 'data-panel', collapsed: false }, { id: 'scene-panel', collapsed: true }, { id: 'species-panel', collapsed: true }];
+  const panels = [{ id: 'data-panel', collapsed: false }, { id: 'species-panel', collapsed: true }];
   assert.deepEqual(phoneAccordionSiblingsToCollapse({ panels, openedId: 'species-panel' }), ['data-panel']);
   assert.deepEqual(phoneAccordionSiblingsToCollapse({ panels, openedId: 'data-panel' }), [], 'positive control: reopening the open one collapses nothing');
   // The share-link restore path: ui=d.c.0_b.c.0 decodes to data and species open, applied in SHARE_PANEL_STATE order.
   const { decodePanelStateParams } = await import('./sharelink.js');
   const restored = decodePanelStateParams(new URLSearchParams('v=2&ui=d.c.0_b.c.0'));
   assert.deepEqual(restored.specs.map((s) => [s.id, s.collapsed]), [['data-panel', false], ['species-panel', false]]);
-  const stack = [{ id: 'data-panel', collapsed: true }, { id: 'scene-panel', collapsed: true }, { id: 'species-panel', collapsed: true }];
+  const stack = [{ id: 'data-panel', collapsed: true }, { id: 'species-panel', collapsed: true }];
   for (const spec of restored.specs) {
     for (const id of phoneAccordionSiblingsToCollapse({ panels: stack, openedId: spec.id })) stack.find((p) => p.id === id).collapsed = true;
     stack.find((p) => p.id === spec.id).collapsed = spec.collapsed;

@@ -241,11 +241,11 @@ if (CHECKS.has('panel-layout')) {
       const r = el.getBoundingClientRect();
       return { collapsed: el.classList.contains('collapsed'), width: r.width, left: r.left, right: r.right, expandedVar: getComputedStyle(el).getPropertyValue('--panel-expanded-width').trim() };
     };
-    return { viewport: window.innerWidth, species: info('species-panel'), scene: info('scene-panel') };
+    return { viewport: window.innerWidth, species: info('species-panel'), data: info('data-panel') };
   });
-  const initial = await page.evaluate(() => ({ species: document.getElementById('species-panel').classList.contains('collapsed'), scene: document.getElementById('scene-panel').classList.contains('collapsed') }));
+  const initial = await page.evaluate(() => ({ species: document.getElementById('species-panel').classList.contains('collapsed'), data: document.getElementById('data-panel').classList.contains('collapsed') }));
   await setOpen('species-panel', false);
-  await setOpen('scene-panel', false);
+  await setOpen('data-panel', false);
   await sleep(1000);
   const collapsed = await measure();
   await setOpen('species-panel', true);
@@ -260,14 +260,14 @@ if (CHECKS.has('panel-layout')) {
   await page.setViewport({ width: 1400, height: 900 });
   await sleep(2000);
   await setOpen('species-panel', !initial.species);
-  await setOpen('scene-panel', !initial.scene);
+  await setOpen('data-panel', !initial.data);
   await sleep(800);
   const restored = await measure();
   const near = (a, b) => Math.abs(a - b) < 0.5;
-  const collapsedOk = collapsed.species.collapsed && collapsed.scene.collapsed && collapsed.species.width > 0 && collapsed.scene.width > 0 && near(collapsed.species.width, collapsed.scene.width);
+  const collapsedOk = collapsed.species.collapsed && collapsed.data.collapsed && collapsed.species.width > 0 && collapsed.data.width > 0 && near(collapsed.species.width, collapsed.data.width);
   const expandedOk = !expanded.species.collapsed && near(expanded.species.width, Number.parseFloat(expanded.species.expandedVar));
   const phoneOk = !phone.species.collapsed && phone.species.right <= phone.viewport && phone.species.width >= 300;
-  const restoredOk = restored.viewport === 1400 && restored.species.collapsed === initial.species && restored.scene.collapsed === initial.scene;
+  const restoredOk = restored.viewport === 1400 && restored.species.collapsed === initial.species && restored.data.collapsed === initial.data;
   // With a species mapped (legend and Top datasets showing), at the desktop default and on a 400x800 phone, WHAT LIVES HERE and both chip rows
   // are whole inside the body's scroll view without scrolling and are what the page hits at their corners, and no chip, action or legend
   // caption text is cut. B1: the scroll cue is a row of its own below the scroll container, inside the panel: laid out with its own height,
@@ -417,10 +417,10 @@ if (CHECKS.has('panel-layout')) {
   await sleep(800);
   const fitOk = desktopFit.ok && phoneFit.ok && smallPhoneFit.ok && tallDesktopFit.ok;
   report('panel-layout', collapsedOk && expandedOk && phoneOk && restoredOk && fitOk, {
-    collapsed: { species: collapsed.species.width, scene: collapsed.scene.width },
+    collapsed: { species: collapsed.species.width, data: collapsed.data.width },
     expanded: { species: expanded.species.width, speciesExpandedVar: expanded.species.expandedVar },
     phone: { viewport: phone.viewport, speciesWidth: phone.species.width, speciesLeft: phone.species.left, speciesRight: phone.species.right },
-    restored: { viewport: restored.viewport, speciesCollapsed: restored.species.collapsed, sceneCollapsed: restored.scene.collapsed },
+    restored: { viewport: restored.viewport, speciesCollapsed: restored.species.collapsed, dataCollapsed: restored.data.collapsed },
     desktopFit, phoneFit, smallPhoneFit, tallDesktopFit,
     collapsedOk, expandedOk, phoneOk, restoredOk, fitOk,
   });
@@ -441,7 +441,7 @@ if (CHECKS.has('left-stack')) {
   await sleep(2000);
   const initial = await page.evaluate(() => {
     const data = document.getElementById('data-panel');
-    const open = ['scene-panel', 'species-panel', 'cctv-panel'].filter((id) => { const panel = document.getElementById(id); return panel && !panel.classList.contains('collapsed'); });
+    const open = ['species-panel'].filter((id) => { const panel = document.getElementById(id); return panel && !panel.classList.contains('collapsed'); });
     return { collapsed: data.classList.contains('collapsed'), active: data.classList.contains('active'), cleanView: document.body.classList.contains('ui-clean-view'), recording: document.body.classList.contains('recording-mode'), open };
   });
   await page.evaluate(() => {
@@ -459,7 +459,7 @@ if (CHECKS.has('left-stack')) {
       const pill = (id) => { const el = document.getElementById(id); return { display: getComputedStyle(el).display, height: +el.getBoundingClientRect().height.toFixed(1) }; };
       const tick = () => {
         const cs = getComputedStyle(data);
-        frames.push({ t: Math.round(performance.now() - started), visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: stack.dataset.layoutMode, scene: pill('scene-panel'), species: pill('species-panel') });
+        frames.push({ t: Math.round(performance.now() - started), visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: stack.dataset.layoutMode, species: pill('species-panel') });
         if (ended !== null) framesAfterEnd += 1;
         const elapsed = performance.now() - started;
         if ((ended !== null && framesAfterEnd > 10) || (!expectTransition && elapsed > 1200) || elapsed > 3000) {
@@ -479,7 +479,7 @@ if (CHECKS.has('left-stack')) {
       const cs = getComputedStyle(el);
       return { collapsed: el.classList.contains('collapsed'), active: el.classList.contains('active'), display: cs.display, visibility: cs.visibility, opacity: Number(cs.opacity), height: +el.getBoundingClientRect().height.toFixed(1), ariaHidden: el.getAttribute('aria-hidden'), allocated: el.style.getPropertyValue('--left-panel-allocated-height') || null };
     };
-    return { mode: stack.dataset.layoutMode, focusClass: stack.classList.contains('layout-focus'), cleanView: document.body.classList.contains('ui-clean-view'), recording: document.body.classList.contains('recording-mode'), data: panel('data-panel'), scene: panel('scene-panel'), species: panel('species-panel') };
+    return { mode: stack.dataset.layoutMode, focusClass: stack.classList.contains('layout-focus'), cleanView: document.body.classList.contains('ui-clean-view'), recording: document.body.classList.contains('recording-mode'), data: panel('data-panel'), species: panel('species-panel') };
   });
   const pressKey = (key) => () => page.keyboard.press(key);
   const setRecording = (on) => () => page.evaluate((on) => window.__godsEyeView.styleManager.setRecordingMode(on), on);
@@ -500,7 +500,7 @@ if (CHECKS.has('left-stack')) {
     const sm = window.__godsEyeView.styleManager;
     if (document.body.classList.contains('recording-mode')) sm.setRecordingMode(false);
     if (document.body.classList.contains('ui-clean-view')) sm.toggleCleanView(false);
-    for (const id of ['scene-panel', 'species-panel', 'cctv-panel']) {
+    for (const id of ['species-panel']) {
       const panel = document.getElementById(id);
       if (panel && !panel.classList.contains('collapsed')) panel.querySelector(`[data-collapse-target="${id}"]`)?.click();
     }
@@ -543,7 +543,7 @@ if (CHECKS.has('left-stack')) {
     const data = document.getElementById('data-panel');
     const cs = getComputedStyle(data);
     const pill = (id) => { const el = document.getElementById(id); return { display: getComputedStyle(el).display, height: +el.getBoundingClientRect().height.toFixed(1) }; };
-    return { visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: document.getElementById('left-panel-stack').dataset.layoutMode, scene: pill('scene-panel'), species: pill('species-panel') };
+    return { visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: document.getElementById('left-panel-stack').dataset.layoutMode, species: pill('species-panel') };
   });
   await page.keyboard.press('f');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -569,18 +569,18 @@ if (CHECKS.has('left-stack')) {
   const pillShown = (panel) => laidOut(panel) && panel.visibility === 'visible';
   const shownOk = shown.data.active && !shown.data.collapsed && shown.data.visibility === 'visible' && shown.mode === 'focus';
   // A hiding step: the panel stays at its height while it can be seen, and the lane settles out of focus mode with the pills laid out.
-  const hideOk = (result) => result.visibleFrames.every((frame) => frame.height >= 100) && result.settled.data.visibility === 'hidden' && result.settled.mode !== 'focus' && !result.settled.focusClass && laidOut(result.settled.scene) && laidOut(result.settled.species);
+  const hideOk = (result) => result.visibleFrames.every((frame) => frame.height >= 100) && result.settled.data.visibility === 'hidden' && result.settled.mode !== 'focus' && !result.settled.focusClass && laidOut(result.settled.species);
   // A showing step: every frame where the panel can be seen is already in the shown mode, at 100 px or more, with both pills out of layout.
-  const showOk = (result) => result.firstVisible !== null && result.visibleFrames.every((frame) => frame.mode === shown.mode && frame.height >= 100 && frame.scene.display === 'none' && frame.species.display === 'none') && result.settled.data.visibility === 'visible' && result.settled.mode === shown.mode;
+  const showOk = (result) => result.firstVisible !== null && result.visibleFrames.every((frame) => frame.mode === shown.mode && frame.height >= 100 && frame.species.display === 'none') && result.settled.data.visibility === 'visible' && result.settled.mode === shown.mode;
   // R11-M1 (final review M7): the sampled show steps need a visible frame but not one mid-fade, and swiftshader can draw a 300 ms fade in no frame
   // at all. The frame held at 150 ms of the F show is mid-fade by construction, so it is gated: visible, 0 < opacity < 1, at least 100 px tall,
   // in the shown state's mode, and both pills out of layout, on the reads just before and just after its capture.
-  const heldFrameOk = (frame) => frame.visibility === 'visible' && frame.opacity > 0 && frame.opacity < 1 && frame.height >= 100 && frame.mode === shown.mode && frame.scene.display === 'none' && frame.species.display === 'none';
+  const heldFrameOk = (frame) => frame.visibility === 'visible' && frame.opacity > 0 && frame.opacity < 1 && frame.height >= 100 && frame.mode === shown.mode && frame.species.display === 'none';
   const checks = {
     shownOk,
     midFadeOk: heldFrameOk(midFadeBefore) && heldFrameOk(midFadeAfter),
-    hideFOk: hideOk(hideF) && pillShown(hideF.settled.scene) && pillShown(hideF.settled.species),
-    cleanFromHiddenOk: cleanOnHidden.settled.cleanView && !cleanOffHidden.settled.cleanView && cleanOnHidden.settled.mode === hideF.settled.mode && cleanOffHidden.settled.mode === hideF.settled.mode && pillShown(cleanOffHidden.settled.scene) && pillShown(cleanOffHidden.settled.species),
+    hideFOk: hideOk(hideF) && pillShown(hideF.settled.species),
+    cleanFromHiddenOk: cleanOnHidden.settled.cleanView && !cleanOffHidden.settled.cleanView && cleanOnHidden.settled.mode === hideF.settled.mode && cleanOffHidden.settled.mode === hideF.settled.mode && pillShown(cleanOffHidden.settled.species),
     showFOk: showOk(showF),
     cleanOnVisibleOk: cleanOnVisible.settled.cleanView && hideOk(cleanOnVisible),
     cleanOffVisibleOk: !cleanOffVisible.settled.cleanView && showOk(cleanOffVisible),
@@ -588,8 +588,8 @@ if (CHECKS.has('left-stack')) {
     recordingOffOk: !recordingOff.settled.recording && showOk(recordingOff),
   };
   // The report keeps each step's first visible frame and every frame that breaks its rule, not the whole timeline.
-  const summarize = (result, rule) => ({ label: result.label, ended: result.ended, frames: result.frames, firstVisible: result.firstVisible, broken: result.visibleFrames.filter((frame) => !rule(frame)).slice(0, 5), settled: { mode: result.settled.mode, data: result.settled.data, scene: result.settled.scene, species: result.settled.species } });
-  const showRule = (frame) => frame.mode === shown.mode && frame.height >= 100 && frame.scene.display === 'none' && frame.species.display === 'none';
+  const summarize = (result, rule) => ({ label: result.label, ended: result.ended, frames: result.frames, firstVisible: result.firstVisible, broken: result.visibleFrames.filter((frame) => !rule(frame)).slice(0, 5), settled: { mode: result.settled.mode, data: result.settled.data, species: result.settled.species } });
+  const showRule = (frame) => frame.mode === shown.mode && frame.height >= 100 && frame.species.display === 'none';
   const hideRule = (frame) => frame.height >= 100;
   report('left-stack', Object.values(checks).every(Boolean), {
     initial, setup: setup && setup.label, shown,
@@ -1165,14 +1165,14 @@ if (CHECKS.has('collapsed-pills')) {
     return { ok, labels, dim };
   };
   const PLACES = [['light', -97.74, 30.27, 3000], ['ocean', -140, -10, 800000]];
-  const PILLS = [['data', 'data-panel', '.data-panel-inner'], ['scene', 'scene-panel', '.scene-panel-inner'], ['species', 'species-panel', '.species-panel-inner']];
+  const PILLS = [['data', 'data-panel', '.data-panel-inner'], ['species', 'species-panel', '.species-panel-inner']];
   const MAX_LEVELS = 15;
   const setCollapsed = (id, collapsed) => page.evaluate((id, collapsed) => { const panel = document.getElementById(id); if (panel.classList.contains('collapsed') !== collapsed) panel.querySelector(`[data-collapse-target="${id}"]`).click(); }, id, collapsed);
   const initial = await page.evaluate(() => {
     const view = window.__godsEyeView;
     const c = view.viewer.camera;
     window.__qaPillCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll };
-    return { stack: view.mapStackController.getState().activeId, scope: document.getElementById('scope-toggle')?.getAttribute('aria-pressed') ?? null, collapsed: Object.fromEntries(['data-panel', 'scene-panel', 'species-panel'].map((id) => [id, document.getElementById(id).classList.contains('collapsed')])) };
+    return { stack: view.mapStackController.getState().activeId, scope: document.getElementById('scope-toggle')?.getAttribute('aria-pressed') ?? null, collapsed: Object.fromEntries(['data-panel', 'species-panel'].map((id) => [id, document.getElementById(id).classList.contains('collapsed')])) };
   });
   const samples = [];
   let control = null;
@@ -1223,8 +1223,8 @@ if (CHECKS.has('collapsed-pills')) {
             return { name, rgb, box: { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }, background: cs.backgroundColor, backdrop: cs.backdropFilter, collapsed: document.getElementById(id).classList.contains('collapsed') };
           });
         }, png, PILLS);
-        const [data, scene, species] = pills;
-        const mean = [0, 1, 2].map((k) => (data.rgb[k] + scene.rgb[k]) / 2);
+        const [data, species] = pills;
+        const mean = data.rgb;
         const maxLevels = Math.max(...species.rgb.map((value, k) => Math.abs(value - mean[k])));
         const contrast = await pillContrast(PILLS.map(([, id, inner]) => `#${id} ${inner}`));
         const ok = pills.every((p) => p.collapsed && p.box.width > 40 && p.box.height > 20 && p.background === data.background && p.backdrop === data.backdrop) && maxLevels <= MAX_LEVELS && contrast.ok;
@@ -2143,7 +2143,7 @@ if (CHECKS.has('landscape-regions')) {
   // and its stack box is a centred lane the pills may overflow by design (10-70 px of scroll range measured), so the two stack-box checks
   // (no spare scroll range, pills inside the box) belong to the short model only; the pills must still be hit at their +.
   const DESKTOP_LANE = new Set(['1280x610', '1366x640', '1440x700']);
-  const pillIds = ['data-panel', 'scene-panel', 'species-panel'];
+  const pillIds = ['data-panel', 'species-panel'];
   const hitAt = (sel) => page.evaluate((sel) => {
     const el = document.querySelector(sel);
     const r = el.getBoundingClientRect();
@@ -2364,7 +2364,7 @@ if (CHECKS.has('phone-accordion')) {
         stack.scrollTop = 0;
         const canvas = window.__godsEyeView.viewer.scene.canvas;
         const c = canvas.getBoundingClientRect();
-        const pills = ['data-panel', 'scene-panel', 'species-panel'].map((id) => {
+        const pills = ['data-panel', 'species-panel'].map((id) => {
           const button = document.querySelector(`#${id} [data-collapse-target="${id}"]`);
           const r = button.getBoundingClientRect();
           const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
