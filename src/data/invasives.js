@@ -70,7 +70,9 @@ function listEntities(f) {
   const description = describeList(p);
   return polys.map((poly, k) => ({
     id: `griis:${p.key}:${k}`,
-    polygon: { hierarchy: hierarchy(poly), material: color, outline: true, outlineColor: color.withAlpha(0.8), outlineWidth: 1 },
+    // height 0: flat on the ellipsoid. Without it Cesium drapes each of the ~1,480 parts over terrain (ground
+    // primitive, ~6 fps on an Intel iGPU) and drops the outline. Globe depth testing is off, so nothing hides it.
+    polygon: { hierarchy: hierarchy(poly), height: 0, material: color, outline: true, outlineColor: color.withAlpha(0.8), outlineWidth: 1 },
     description,
     properties: { key: p.key, area: p.area, bin: bin.key, part: k },
   }));
