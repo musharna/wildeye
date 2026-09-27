@@ -5,7 +5,8 @@
   "description": "A biodiversity globe: species occurrences, animal tracks, birds and environmental layers on a 3D Earth. Runs in a browser.",
   "type": "module",
   "license": "MIT",
-  "author": "Bilawal Sidhu",
+  "author": "Jaret Arnold",
+  "contributors": ["Bilawal Sidhu"],
   "homepage": "https://github.com/musharna/wildeye#readme",
   "repository": {
     "type": "git",
