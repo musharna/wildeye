@@ -4,7 +4,6 @@ import { animeShader } from './styles/anime.js';
 import { noirShader } from './styles/noir.js';
 import { snowShader } from './styles/snow.js';
 import { GLOBE_VIEW, flyToGlobeView } from './camera.js';
-import { interruptCameraMotion } from './cameraVerbs.js';
 import { IntelHUD } from './hud.js';
 import { ShareLinkManager } from './sharelink.js';
 import { LayerStateCoordinator } from './data/layerState.js';
@@ -327,7 +326,6 @@ export class StyleManager {
   /** Release the camera from any follow or flight before a new destination. */
   _releaseFollowCamera() {
     this.viewer.trackedEntity = undefined;
-    interruptCameraMotion('explicit-navigation');
     this.viewer.camera.cancelFlight();
     try {
       this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
@@ -1772,7 +1770,6 @@ export class StyleManager {
   resetToGlobeView() {
     if (this._globeResetPromise) return this._globeResetPromise;
     this._stampNavigation();
-    interruptCameraMotion('reset-globe');
     this.viewer.trackedEntity = undefined;
     this.viewer.camera.cancelFlight();
     this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
