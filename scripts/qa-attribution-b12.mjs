@@ -28,7 +28,6 @@ function getOpt(flag, def) {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : def;
 }
 const APP_URL = getOpt('--url', 'http://localhost:4300');
-const APP_ORIGIN = new URL(APP_URL).origin;
 const SHOT_DIR = resolve(__dirname, '..', 'qa-shots', 'b12');
 mkdirSync(SHOT_DIR, { recursive: true });
 
@@ -78,27 +77,6 @@ async function main() {
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
-  await page.setRequestInterception(true);
-  page.on('request', (request) => {
-    const url = new URL(request.url());
-    if (url.origin === APP_ORIGIN && url.pathname === '/api/openai/hud-summary') {
-      request.respond({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ summary: 'QA globe ready' }),
-      });
-      return;
-    }
-    if (url.origin === APP_ORIGIN && url.pathname === '/api/google/nearby-places') {
-      request.respond({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ places: [] }),
-      });
-      return;
-    }
-    request.continue();
-  });
 
   const consoleErrors = [];
   const failedResponses = [];

@@ -63,7 +63,7 @@ A source is included only if its terms allow the data to be redisplayed. `DATA_S
 
 ## The hosted site
 
-GitHub Pages serves a static build of the same app, and every layer works there. Only the AI summary in the HUD needs the local server.
+GitHub Pages serves a static build of the same app, and every layer works there. Only place search needs the local server and a Google key.
 
 ## Run it locally
 

@@ -971,7 +971,6 @@ export class StyleManager {
    */
   attachDataManager(dataManager) {
     this._dataManager = dataManager || null;
-    this.hud.attachDataManager(this._dataManager);
     if (this._dataManagerUnsubscribe) {
       this._dataManagerUnsubscribe();
       this._dataManagerUnsubscribe = null;

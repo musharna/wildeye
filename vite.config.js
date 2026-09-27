@@ -4,8 +4,7 @@
  * Registers the dev-server proxy middlewares that bypass CORS and add
  * caching/auth for upstream APIs (none of them exist on the static Pages build):
  *   1. Overpass — OpenStreetMap queries behind location search
- *   2. OpenAI   — the optional five-word HUD summary
- *   3. Google Places — optional place context for location search
+ *   2. Google Places — optional place context for location search
  *
  * Also exposes the Google key used by local place search to the client via an
  * `import.meta.env.*` define.
@@ -19,7 +18,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import cesium from 'vite-plugin-cesium';
-import { keylessHudSummaryResponse } from './src/hudSummaryResponse.js';
 
 /** Resolve __dirname for ESM context. */
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -311,7 +309,7 @@ function makeRateLimiter({ windowMs, max, globalMax }) {
 const _overpassRateLimiter = makeRateLimiter({ windowMs: 60_000, max: 90, globalMax: 300 });
 
 /**
- * Opt-in per-IP rate limiter for the cost-bearing API proxies (OpenAI / Google).
+ * Opt-in per-IP rate limiter for the cost-bearing Google proxy.
  * DEFAULT IS UNLIMITED: when the env var is unset, `0`, or non-numeric, this
  * returns `null` and the caller skips the check entirely — a runtime no-op that
  * preserves the original behavior. Only a positive integer N enables a fixed
@@ -330,39 +328,13 @@ function makeOptInRateLimiter(envValue) {
 // Built LAZILY on first request, NOT at module load: `.env` values are applied to process.env later
 // (the plugin config hook calls loadEnv → process.env, AFTER this module is imported), so reading
 // process.env here at import time would always see them unset and silently stay unlimited even when
-// configured via .env. Building on first request (like the OPENAI_API_KEY reads) sees the loaded env;
+// configured via .env. Building on first request (like the GOOGLE_MAPS_API_KEY reads) sees the loaded env;
 // the result is cached so the limiter's per-IP window state persists. `null` = unlimited (default).
-let _openAiRateLimiter; // undefined = not built yet; null = unlimited; fn = active limiter
-let _googleRateLimiter;
-/** OpenAI cost endpoints (realtime/token + hud-summary). Null = unlimited (default). */
-function openAiRateLimiter() {
-  if (_openAiRateLimiter === undefined) _openAiRateLimiter = makeOptInRateLimiter(process.env.GEV_RATELIMIT_OPENAI_PER_MIN);
-  return _openAiRateLimiter;
-}
+let _googleRateLimiter; // undefined = not built yet; null = unlimited; fn = active limiter
 /** Google cost endpoint (nearby-places). Null = unlimited (default). */
 function googleRateLimiter() {
   if (_googleRateLimiter === undefined) _googleRateLimiter = makeOptInRateLimiter(process.env.GEV_RATELIMIT_GOOGLE_PER_MIN);
   return _googleRateLimiter;
-}
-
-/**
- * Apply an opt-in limiter to a request, writing a 429 when over the cap.
- * When `limiter` is null (unlimited, the default) this is a no-op returning
- * `true`, so the handler proceeds exactly as before.
- *
- * @param {((key:string)=>boolean)|null} limiter
- * @param {import('http').IncomingMessage} req
- * @param {import('http').ServerResponse} res
- * @returns {boolean} True if the request may proceed; false if a 429 was sent.
- */
-function enforceOptInRateLimit(limiter, req, res) {
-  if (!limiter) return true; // unlimited (default) — no behavior change
-  if (limiter(clientKey(req))) return true;
-  res.statusCode = 429;
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Retry-After', '5');
-  res.end(JSON.stringify({ error: 'Rate limit exceeded' }));
-  return false;
 }
 
 /**
@@ -599,8 +571,6 @@ async function readResponseTextCapped(response, maxBytes) {
   return out;
 }
 
-
-const OPENAI_HUD_SUMMARY_MODEL_DEFAULT = 'gpt-5-nano';
 
 
 /**
@@ -911,126 +881,6 @@ function overpassProxy() {
 }
 
 
-
-/**
- * Vite plugin: the HUD's one-line AI summary. Keeps OPENAI_API_KEY server-side.
- * (The Realtime voice routes it also served were removed with voice, 2026-09-26.)
- */
-export function openAiRealtimeProxy() {
-  function install(middlewares) {
-    middlewares.use('/api/openai/hud-summary', async (req, res) => {
-      if (req.method !== 'POST') {
-        res.statusCode = 405;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Method not allowed' }));
-        return;
-      }
-
-      const apiKey = process.env.OPENAI_API_KEY;
-      const keyless = keylessHudSummaryResponse(apiKey);
-      if (keyless) {
-        res.statusCode = keyless.statusCode;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-store');
-        res.end(JSON.stringify(keyless.payload));
-        return;
-      }
-
-      // Opt-in per-IP throttle (GEV_RATELIMIT_OPENAI_PER_MIN). Keyless HUD
-      // fallback has no provider cost and resolves above without consuming a
-      // paid-endpoint quota slot.
-      if (!enforceOptInRateLimit(openAiRateLimiter(), req, res)) return;
-
-      try {
-        const body = await readRequestBody(req, 64 * 1024);
-        const context = JSON.parse(body || '{}');
-        const response = await fetch('https://api.openai.com/v1/responses', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: process.env.OPENAI_HUD_SUMMARY_MODEL || OPENAI_HUD_SUMMARY_MODEL_DEFAULT,
-            instructions: [
-              "Write one concise place summary for the wildeye globe.",
-              'Use only the supplied place, street, nearby-place, and enabled-layer text labels.',
-              'Prefer the clearest named place and include a relevant enabled layer only when useful.',
-              'Do not infer from coordinates or invent a place.',
-              'Output exactly five words with no title, punctuation, markdown, or introductory phrase.',
-            ].join(' '),
-            input: JSON.stringify(context),
-            reasoning: { effort: 'minimal' },
-            max_output_tokens: 100,
-          }),
-        });
-        const data = await response.json().catch(() => ({}));
-        const summary = toFiveWordHudSummary(extractOpenAiResponseText(data));
-        res.statusCode = response.ok && summary ? 200 : response.status || 502;
-        res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-store');
-        res.end(JSON.stringify({
-          summary: summary || null,
-          error: response.ok ? null : data.error?.message || 'OpenAI HUD summary request failed',
-        }));
-      } catch (error) {
-        res.statusCode = 502;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: error?.message || 'OpenAI HUD summary request failed' }));
-      }
-    });
-  }
-
-  return {
-    name: 'openai-realtime-proxy',
-    configureServer(server) {
-      install(server.middlewares);
-    },
-    configurePreviewServer(server) {
-      install(server.middlewares);
-    },
-  };
-}
-
-function extractOpenAiResponseText(data) {
-  if (typeof data?.output_text === 'string' && data.output_text.trim()) {
-    return data.output_text.trim();
-  }
-  if (!Array.isArray(data?.output)) return '';
-  return data.output
-    .flatMap((item) => Array.isArray(item?.content) ? item.content : [])
-    .map((part) => part?.text || part?.output_text || '')
-    .join(' ')
-    .trim();
-}
-
-function toFiveWordHudSummary(value) {
-  return String(value || '')
-    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 5)
-    .join(' ');
-}
-
-function readRequestBody(req, maxBytes = 1024 * 1024) {
-  return new Promise((resolve, reject) => {
-    let total = 0;
-    const chunks = [];
-    req.on('data', (chunk) => {
-      total += chunk.length;
-      if (total > maxBytes) {
-        reject(new Error(`Request body exceeds ${maxBytes} bytes`));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
-}
 
 /**
  * Optional Google place context is an empty capability when no key is present,
@@ -1349,7 +1199,6 @@ export default defineConfig(({ mode }) => {
       // Widgets to /cesium/ and links widgets.css. Startup JS: 2.19 -> 1.58 MB gzip.
       cesium({ rebuildCesium: true }),
       overpassProxy(),
-      openAiRealtimeProxy(),
       googlePlacesContextProxy(),
     ],
     server: {

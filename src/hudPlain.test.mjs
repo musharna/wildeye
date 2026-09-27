@@ -70,10 +70,3 @@ test('the page is titled wildeye, with no tagline', () => {
   assert.equal((html.match(/>wildeye</g) || []).length >= 2, true, 'the title bar and the loading screen both say wildeye');
 });
 
-test('the dev-server summary prompt asks for a place summary, not an intelligence one', () => {
-  const cfg = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
-  // Boolean probes: a failed match on the whole config would print all of it.
-  assert.equal(/intelligence-HUD|summary for God's Eye View/.test(cfg), false, 'the prompt still asks for an intelligence-HUD summary');
-  assert.equal(/Output exactly five words/.test(cfg), true, 'positive control: the rest of the prompt is untouched');
-});
-
