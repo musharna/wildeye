@@ -141,10 +141,6 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
   assert.match(ui, /reconsiderAutoCollapse/);
   assert.match(
     ui,
-    /_rightPanelStack\?\.contains\(panelEl\)[\s\S]*?_scheduleRightPanelLayout\(\{ reconsiderAutoCollapse: true \}\)/,
-  );
-  assert.match(
-    ui,
     /_scheduleLeftPanelLayout\(\{[\s\S]*?reconsiderAutoCollapse: this\._leftPanelStack\?\.contains\(panelEl\) === true/,
   );
   assert.match(ui, /collapseLaterPanels: shouldFocus && this\.hud\.getVariant\(\) === 'tactical'/);
@@ -154,17 +150,8 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     /preferredExpandedPanel[\s\S]*?\[preferredExpandedPanel, \.\.\.expandedPanelsInDomOrder/,
     'the latest explicitly opened left panel must receive primary allocation',
   );
-  assert.match(ui, /this\._rightStackPreferredPanelId = rightOwnerPanel\.id;/);
-  assert.match(
-    ui,
-    /panel\.id === this\._rightStackPreferredPanelId[\s\S]*?\[preferredExpandedPanel, \.\.\.expandedPanelsInDomOrder/,
-    'the latest explicitly opened right panel must receive primary allocation',
-  );
-  assert.match(ui, /panelId === 'radio-panel'[\s\S]*?document\.getElementById\('global-context-panel'\)/);
-  assert.match(ui, /focusedExpandedPanel = expandedPanelsInDomOrder\.find\(\(panel\) => panel\.contains\(document\.activeElement\)\)/);
   assert.match(ui, /setAttribute\('aria-expanded', String\(!collapsed\)\)/);
   assert.match(ui, /--left-panel-allocated-height/);
-  assert.match(ui, /--right-panel-allocated-height/);
   assert.match(
     ui,
     /expandedPanels[\s\S]*?removeProperty\('--left-panel-allocated-height'\)[\s\S]*?_measureLeftPanelNaturalHeight/,
@@ -182,13 +169,7 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     /this\._leftStackPanelTransitionHandler = \(event\) => \{\s*if \(event\.propertyName === 'visibility' && event\.target\.parentElement === stack\) this\._scheduleLeftPanelLayout\(\);\s*\};\s*stack\.addEventListener\('transitionend', this\._leftStackPanelTransitionHandler\);/,
     'the end of a stack panel\'s visibility transition schedules a lane pass',
   );
-  assert.match(
-    ui,
-    /panel !== this\._ppToggles[\s\S]*?removeProperty\('--right-panel-allocated-height'\)[\s\S]*?const naturalHeight/,
-    'right intrinsic measurement must retain Display allocation while clearing other panel allocations',
-  );
   assert.match(css, /var\(--left-panel-allocated-height/);
-  assert.match(css, /var\(--right-panel-allocated-height/);
   assert.match(
     css,
     /#left-panel-stack\.layout-focus > \[data-panel-id\]\.collapsed\s*\{\s*display:\s*none;/,
@@ -217,44 +198,8 @@ test('share-panel state excludes responsive collapse and preserves recipient pre
     /_setCommandDockPanelPinState[\s\S]*?if \(syncShare\) this\.shareLinkManager\?\.onPanelStateChange\?\.\(\);/,
     'pin and unpin must update the share hash even when collapse state is unchanged',
   );
-  assert.match(ui, /\{ id: 'param-slider-panel' \}/);
-  assert.match(sharelink, /\{ id: 'param-slider-panel', token: 'm', pinnable: false \}/);
-});
-
-test('parameterized Display presets keep one stable scroll owner', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-
-  assert.match(css, /#pp-toggles:not\(\.collapsed\) > #param-slider-panel\.active\s*\{[\s\S]*?flex:\s*0 0 auto;[\s\S]*?max-height:\s*none;[\s\S]*?overflow-y:\s*visible;/);
-  assert.match(ui, /const displayScrollTop = this\._displayPortalScrollRestoreOwner === 'standard'[\s\S]*?this\._standardDisplayScrollTop[\s\S]*?this\._ppToggles\?\.scrollTop \|\| 0/);
-  assert.match(ui, /this\._ppToggles\.scrollTop = Math\.min\(displayScrollTop, maxScrollTop\);/);
-  assert.match(
-    ui,
-    /this\._sliderPanel\.classList\.remove\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
-  );
-  assert.match(
-    ui,
-    /this\._sliderPanel\.classList\.add\('active'\);\s*this\._scheduleRightPanelLayout\(\);/,
-  );
-  assert.match(
-    css,
-    /\.param-slider\s*\{[\s\S]*?flex:\s*1;[\s\S]*?min-width:\s*0;/,
-    'parameter sliders must shrink before their value column can overflow',
-  );
-});
-
-test('expanded Display uses its container shell instead of a nested header card', () => {
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-
-  assert.match(
-    css,
-    /#pp-toggles:not\(\.collapsed\) > \.pp-header-row\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent;[\s\S]*?box-shadow:\s*none;/,
-  );
-  assert.match(
-    css,
-    /#pp-toggles\.collapsed \.pp-header-row\s*\{[\s\S]*?width:\s*var\(--right-collapsed-width, 132px\);/,
-    'collapsed Display must retain its standalone launcher sizing',
-  );
+  assert.match(ui, /\{ id: 'species-panel' \}/);
+  assert.match(sharelink, /\{ id: 'species-panel', token: 'b', pinnable: false \}/);
 });
 
 test('expanded left panels integrate their headers with the container shell', () => {
@@ -280,24 +225,6 @@ test('Map Source uses five compact tiles in the bottom Visual Presets tray', () 
     css,
     /\.map-stack-chip-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\);/,
     'the desktop source selector keeps all five tiles on one row',
-  );
-});
-
-test('expanded right panels highlight the title divider without changing collapsed launchers', () => {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-
-  assert.match(
-    html,
-    /class="compact pp-header-row"[\s\S]*?class="pp-header-label">DISPLAY<\/span>[\s\S]*?class="panel-divider"/,
-  );
-  assert.match(
-    css,
-    /#right-context-rail \[data-panel-id\]:not\(\.collapsed\) \.panel-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(0, 212, 255, 0\.22\);/,
-  );
-  assert.match(
-    css,
-    /#param-slider-panel:not\(\.collapsed\) \.param-panel-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\);/,
   );
 });
 
@@ -355,14 +282,14 @@ test('a hidden child of a visible panel still counts', () => {
 test('phone accordion: opening a left-stack panel collapses the others, and a two-panel share link ends with one open', async () => {
   const { phoneAccordionSiblingsToCollapse } = await import('./panelStackLayout.js');
   assert.equal(typeof phoneAccordionSiblingsToCollapse, 'function');
-  const panels = [{ id: 'data-panel', collapsed: false }, { id: 'scene-panel', collapsed: true }, { id: 'species-panel', collapsed: true }];
+  const panels = [{ id: 'data-panel', collapsed: false }, { id: 'species-panel', collapsed: true }];
   assert.deepEqual(phoneAccordionSiblingsToCollapse({ panels, openedId: 'species-panel' }), ['data-panel']);
   assert.deepEqual(phoneAccordionSiblingsToCollapse({ panels, openedId: 'data-panel' }), [], 'positive control: reopening the open one collapses nothing');
   // The share-link restore path: ui=d.c.0_b.c.0 decodes to data and species open, applied in SHARE_PANEL_STATE order.
   const { decodePanelStateParams } = await import('./sharelink.js');
   const restored = decodePanelStateParams(new URLSearchParams('v=2&ui=d.c.0_b.c.0'));
   assert.deepEqual(restored.specs.map((s) => [s.id, s.collapsed]), [['data-panel', false], ['species-panel', false]]);
-  const stack = [{ id: 'data-panel', collapsed: true }, { id: 'scene-panel', collapsed: true }, { id: 'species-panel', collapsed: true }];
+  const stack = [{ id: 'data-panel', collapsed: true }, { id: 'species-panel', collapsed: true }];
   for (const spec of restored.specs) {
     for (const id of phoneAccordionSiblingsToCollapse({ panels: stack, openedId: spec.id })) stack.find((p) => p.id === id).collapsed = true;
     stack.find((p) => p.id === spec.id).collapsed = spec.collapsed;

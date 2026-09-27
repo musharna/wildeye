@@ -17,19 +17,16 @@ import * as Cesium from 'cesium';
 import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
-import { getBasemapLabelContext } from './voice/gevActions.js';
 import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
-  surveillance: { main: 'rgba(51, 255, 51, 0.8)',  glow: 'rgba(51, 255, 51, 0.5)',  border: 'rgba(51, 255, 51, 0.2)' },
-  thermal:      { main: 'rgba(255, 255, 255, 0.7)', glow: 'rgba(255, 255, 255, 0.4)', border: 'rgba(255, 255, 255, 0.15)' },
   retro:        { main: 'rgba(255, 170, 0, 0.8)',   glow: 'rgba(255, 170, 0, 0.5)',   border: 'rgba(255, 170, 0, 0.2)' },
   _default:     { main: 'rgba(0, 255, 255, 0.6)',   glow: 'rgba(0, 255, 255, 0.4)',   border: 'rgba(0, 255, 255, 0.15)' },
 };
 
 /** Shader modes that automatically show the HUD overlay. */
-const MILITARY_STYLES = new Set(['retro', 'surveillance', 'thermal']);
+const MILITARY_STYLES = new Set(['retro']);
 
 /** Allowed HUD layout variants. */
 const HUD_VARIANTS = new Set(['tactical', 'operator', 'minimal']);
@@ -163,7 +160,6 @@ export class IntelHUD {
       <div class="hud-corner hud-bottom-right">
         <div class="hud-content" style="text-align:right">
           <div id="hud-alt">ALT: --m   SUN: --° EL</div>
-          <div id="hud-ais-vessel" class="hud-ais-vessel">AIS: --</div>
         </div>
         <div class="hud-bracket">┘</div>
       </div>
@@ -606,15 +602,16 @@ export class IntelHUD {
     if (el) el.textContent = text;
   }
 
+  // The basemap place/street labels came from the God's Eye voice module, removed
+  // 2026-09-26; the summary request still carries the fields, empty.
   async _summaryContext() {
-    const labels = await getBasemapLabelContext(this.viewer);
     const enabledLayers = this._dataManager?.getAll?.()
       ?.filter((layer) => layer.enabled)
       .map((layer) => layer.name) || [];
     return {
-      placeLabels: labels.placeLabels,
-      streetLabels: labels.streetLabels,
-      nearbyPlaceLabels: labels.nearbyPlaceLabels,
+      placeLabels: [],
+      streetLabels: [],
+      nearbyPlaceLabels: [],
       enabledLayerLabels: enabledLayers,
     };
   }
@@ -630,8 +627,7 @@ export class IntelHUD {
    * React to a shader-style change. Updates the mode label, HUD color
    * scheme (via CSS custom properties), and auto-shows/hides the overlay
    * when in auto mode.
-   * @param {string} styleName - Active style key (e.g. `'surveillance'`,
-   *   `'thermal'`, `'retro'`, `'normal'`).
+   * @param {string} styleName - Active style key (e.g. `'retro'`, `'normal'`).
    */
   onStyleChange(styleName) {
     this._currentStyle = styleName;
@@ -639,7 +635,7 @@ export class IntelHUD {
     // Update mode label
     const modeEl = document.getElementById('hud-mode');
     if (modeEl) {
-      const modeNames = { surveillance: 'NVG', thermal: 'FLIR', retro: 'CRT' };
+      const modeNames = { retro: 'CRT' };
       modeEl.textContent = modeNames[styleName] || styleName.toUpperCase();
     }
     // Update color scheme

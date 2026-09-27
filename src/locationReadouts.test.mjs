@@ -6,13 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
-const director = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');
 
 /** Source of the free-text LOCATION search handler (Enter on #location-search). */
 function locationSearchHandler() {
   const start = ui.indexOf('searchAndFlyTo(this.viewer, query, {');
   assert.ok(start > 0, 'free-text location search handler is missing');
-  const end = ui.indexOf('_beginWorldJumpTransition() {', start);
+  const end = ui.indexOf('  _onCityPillClick(cityId) {', start);
   assert.ok(end > start, 'could not bound the location search handler');
   return ui.slice(start, end);
 }
@@ -61,15 +60,14 @@ test('selecting a preset location clears the superseded search label', () => {
 });
 
 test('any other camera destination clears the search label too', () => {
-  // Voice navigation, the globe reset, camera takeover and entity selection
-  // all funnel through _stampNavigation; without a clear there, a searched
+  // The globe reset, preset destinations and entity tracking all funnel through _stampNavigation; without a clear there, a searched
   // label outlives the place it named.
-  const start = ui.indexOf('  _stampNavigation({ cancelPendingSelection = true, clearSearchedLocation = true } = {}) {');
+  const start = ui.indexOf('  _stampNavigation({ clearSearchedLocation = true } = {}) {');
   assert.ok(start > 0, '_stampNavigation is missing');
   assert.match(ui.slice(start, start + 700), /if \(clearSearchedLocation\) this\.clearSearchedLocation\(\);/);
 
-  // The shared funnel is what the reset and voice seams actually reach.
-  for (const seam of ['resetToGlobeView() {', 'beginLocationNavigation() {', '_runExplicitNavigation(noun, navigate']) {
+  // The shared funnel is what the reset and explicit-navigation seams actually reach.
+  for (const seam of ['resetToGlobeView() {', '_runExplicitNavigation(navigate']) {
     const at = ui.indexOf(seam);
     assert.ok(at > 0, `missing navigation seam "${seam}"`);
     assert.match(ui.slice(at, at + 900), /_stampNavigation\(/, `"${seam}" must stamp navigation`);
@@ -84,11 +82,11 @@ test('a deferred lookup that never flies leaves the readout standing', () => {
   // the stamp blanked a still-true readout whenever the lookup failed, was
   // superseded, or was refused — no camera ever moved. The deferred begin opts
   // out; the reassert seam, reached only once the flight is granted, clears.
-  const begin = ui.indexOf('  _beginDeferredNavigation(noun = ');
+  const begin = ui.indexOf('  _beginDeferredNavigation() {');
   assert.ok(begin > 0, '_beginDeferredNavigation is missing');
   assert.match(
     ui.slice(begin, begin + 700),
-    /stamp: \(\) => this\._stampNavigation\(\{ cancelPendingSelection, clearSearchedLocation: false \}\)/,
+    /stamp: \(\) => this\._stampNavigation\(\{ clearSearchedLocation: false \}\)/,
   );
 
   const reassert = ui.indexOf('  _reassertNavigationHandoff(generation) {');
@@ -102,14 +100,4 @@ test('a deferred lookup that never flies leaves the readout standing', () => {
   const policy = fs.readFileSync(path.join(ROOT, 'src', 'navigationPolicy.js'), 'utf8');
   const fn = policy.slice(policy.indexOf('export function reassertNavigationHandoff'));
   assert.match(fn, /if \(disposed \|\| generation !== currentGeneration\) return false;[\s\S]*?release\?\.\(\);/);
-});
-
-test('scene playback invalidates the search label on every shot', () => {
-  // The director drives viewer.camera itself and never reaches _stampNavigation.
-  const start = director.indexOf('  async _flyCamera(cameraState, durationSec, token) {');
-  assert.ok(start > 0, 'scene camera flight is missing');
-  assert.match(
-    director.slice(start, start + 700),
-    /this\.styleManager\?\.clearSearchedLocation\?\.\(\);/,
-  );
 });

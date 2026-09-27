@@ -1,56 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-const retrySite = (stats = {}) => ({ id: 'military-installations', name: 'Mapped Installations', enabled: true,
-  stats: { status: 'unavailable', error: 'Unavailable', retryAt: Date.now() + 30000, ...stats } });
 
-test('installation retry remains visible after failure dwell without a false spinner', () => {
-  const summary = aggregateLayerLoading([retrySite()]);
-  const view = presentLoadingFeedback(createLoadingFeedbackState(), summary, 100);
-  assert.equal(view.state, 'retry');
-  assert.equal(view.label, 'OVERPASS TEMPORARILY UNAVAILABLE');
-  assert.match(view.detail, /retrying in 30s/);
-  assert.equal(presentLoadingFeedback(createLoadingFeedbackState(), aggregateLayerLoading([{ ...retrySite(), enabled: false }]), 100), null);
-});
-test('an installation retry never conceals another participant failure', () => {
-  const state = { visible: true, phase: 'terminal', terminal: 'error', activeIds: ['military-installations', 'flights'] };
-  const summary = aggregateLayerLoading([retrySite(), { id: 'flights', enabled: true, stats: { error: 'Failed' } }]);
-  assert.equal(presentLoadingFeedback(state, summary, 100).label, 'LOAD FAILED');
-  const healthyNow = aggregateLayerLoading([retrySite()]);
-  assert.equal(presentLoadingFeedback({ ...state, failedEventIds: ['flights'] }, healthyNow, 100).label, 'LOAD FAILED');
-});
-test('a fresh installation retry can finish successfully without inheriting the old error', () => {
-  let state = { ...createLoadingFeedbackState(), phase: 'terminal', terminal: 'error', visible: true, activeIds: ['military-installations'] };
-  const loading = aggregateLayerLoading([retrySite({ status: 'loading', error: null, loading: true, retryAt: 0, retrying: true })]);
-  state = reduceLoadingFeedback(state, loading, 1000);
-  state = reduceLoadingFeedback(state, loading, 1200);
-  assert.equal(presentLoadingFeedback(state, loading, 1200).label, 'RETRYING MAPPED SITES');
-  const done = aggregateLayerLoading([retrySite({ status: 'ready', error: null, loading: false, retryAt: 0, retrying: false, count: 3 })]);
-  state = reduceLoadingFeedback(state, done, 1500);
-  assert.equal(presentLoadingFeedback(state, done, 1500).label, 'MAPPED SITES LOADED');
-});
-test('turning off a retrying installation layer does not report the old fetch failure as a disable failure', () => {
-  const stopping = aggregateLayerLoading([{ ...retrySite(), lifecycleState: 'disabling' }]);
-  let state = reduceLoadingFeedback(createLoadingFeedbackState(), stopping, 1000);
-  state = reduceLoadingFeedback(state, stopping, 1200);
-  const off = aggregateLayerLoading([{ ...retrySite({ status: 'idle', error: null, retryAt: 0 }), enabled: false }]);
-  state = reduceLoadingFeedback(state, off, 1400);
-  assert.equal(presentLoadingFeedback(state, off, 1400).label, 'LIVE DATA OFF');
-});
 import {
   aggregateLayerLoading,
-  canPresentDeferredStatusNotice,
   createGlobalStatusNotice,
   createLoadingFeedbackState,
-  createTrafficSyncFeedbackState,
   LOADING_FAILURE_DWELL_MS,
   normalizeLayerLoading,
   presentGlobalLoadingStatus,
   presentGlobalStatusNotice,
   presentLoadingFeedback,
   reduceLoadingFeedback,
-  reduceTrafficSyncFeedback,
-  TRAFFIC_SYNC_CONFIRM_MS,
 } from './loadingFeedback.js';
 
 test('universal status notices reuse the standard failure dwell', () => {
@@ -78,35 +39,6 @@ test('acquiring notices persist without a dwell until explicitly cleared', () =>
     label: 'ACQUIRING',
     detail: 'SHARED FLIGHT',
   });
-});
-
-test('deferred terminal notices lose ownership to newer acquisition epochs and disposal', () => {
-  assert.equal(canPresentDeferredStatusNotice(4, 4, false), true);
-  assert.equal(canPresentDeferredStatusNotice(4, 5, false), false,
-    'a newer ACQUIRING epoch blocks the older deferred failure');
-  assert.equal(canPresentDeferredStatusNotice(5, 5, true), false,
-    'disposal blocks even the current deferred notice');
-});
-
-test('share-follow failures use the universal top-center status instead of the bottom toast', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const start = ui.indexOf('  _handleShareTrackingRestoreStatus(result) {');
-  const end = ui.indexOf('\n  _initGlobalContextPanel() {', start);
-  const handler = ui.slice(start, end);
-  assert.match(handler, /this\._showGlobalStatusNotice\(message\)/);
-  assert.match(handler, /this\.initialRestorePromise\.then\(showAfterStartupCover\)/);
-  assert.match(handler, /requestAnimationFrame\(\(\) => \{/);
-  assert.match(handler, /startupCover\.addEventListener\('transitionend', showOnce, \{ once: true \}\)/);
-  assert.match(handler, /fallbackTimer = setTimeout\(showOnce, 1000\)/);
-  assert.doesNotMatch(handler, /this\._showToast\(message\)/);
-  assert.doesNotMatch(handler, /pushCockpitSignal/);
-  assert.match(handler, /result\.classification === 'pending'/);
-  assert.match(handler, /state: 'acquiring'/);
-  assert.match(handler, /persistent: true/);
-  assert.match(handler, /this\._shareTrackingNoticeGeneration \+= 1/);
-  assert.match(handler, /canPresentDeferredStatusNotice\(/);
-  assert.match(handler, /if \(this\._shareTrackingAcquiringKey\) return/);
-  assert.match(handler, /result\.classification === 'followed' \|\| result\.classification === 'cancelled'/);
 });
 
 test('universal notice masks active loading only for its own fixed dwell', () => {
@@ -202,7 +134,6 @@ test('universal notice lifecycle clears on dispose and uses the one top-center l
   const dispose = ui.slice(disposeStart, disposeEnd);
 
   assert.match(dispose, /this\._globalStatusNotice = null;/);
-  assert.match(dispose, /this\._shareTrackingNoticeGeneration \+= 1;/);
   assert.match(html, /<div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>/);
 });
 
@@ -472,125 +403,6 @@ test('a flow failure landing after the roads settle still ends the batch as LOAD
     'LOAD FAILED',
     'a late flow failure must not be announced as LOAD COMPLETE',
   );
-});
-
-test('keeps cold idle traffic hidden even with a truthful zero-coverage label', () => {
-  let state = createTrafficSyncFeedbackState();
-  const sample = {
-    enabled: true,
-    stats: { loading: false, loadingLabel: 'LIVE · TomTom flow · 0% cov', flowCoveragePct: 0 },
-  };
-  for (const now of [0, 220, 440, 2200]) state = reduceTrafficSyncFeedback(state, sample, now);
-  assert.equal(state.visible, false);
-  assert.equal(state.busy, false);
-});
-
-test('shows traffic busy work and one fixed busy-to-idle confirmation', () => {
-  const busySample = {
-    enabled: true,
-    stats: { loading: true, loadingLabel: 'syncing LIVE traffic flow' },
-  };
-  const idleSample = {
-    enabled: true,
-    stats: { loading: false, loadingLabel: 'LIVE · TomTom flow · 0% cov' },
-  };
-  let state = reduceTrafficSyncFeedback(createTrafficSyncFeedbackState(), busySample, 100);
-  assert.deepEqual({ visible: state.visible, progress: state.progressText }, { visible: true, progress: '...' });
-  state = reduceTrafficSyncFeedback(state, busySample, 320);
-  state = reduceTrafficSyncFeedback(state, idleSample, 500);
-  const fixedDeadline = state.confirmationUntil;
-  assert.equal(fixedDeadline, 500 + TRAFFIC_SYNC_CONFIRM_MS);
-  assert.equal(state.progressText, '');
-  state = reduceTrafficSyncFeedback(state, idleSample, 900);
-  assert.equal(state.confirmationUntil, fixedDeadline);
-  state = reduceTrafficSyncFeedback(state, idleSample, fixedDeadline + 1);
-  assert.equal(state.visible, false);
-});
-
-test('the settled traffic chip shows exactly one percentage — the coverage it measured', () => {
-  // "LIVE · TomTom flow · 0% cov" beside a hard-coded "100%" read as a chip
-  // arguing with itself. The 100% was never a measurement: a settled chip is
-  // complete by definition, so the progress slot goes quiet and the label's
-  // coverage figure is the only number left.
-  const idleSample = {
-    enabled: true,
-    stats: { loading: false, loadingLabel: 'LIVE · TomTom flow · 0% cov' },
-  };
-  let state = reduceTrafficSyncFeedback(
-    createTrafficSyncFeedbackState(),
-    { enabled: true, stats: { loading: true, loadingLabel: 'syncing LIVE traffic flow' } },
-    0,
-  );
-  state = reduceTrafficSyncFeedback(state, idleSample, 100);
-  assert.equal(state.visible, true);
-  assert.equal(state.label, 'LIVE · TomTom flow · 0% cov');
-  assert.equal(state.progressText, '');
-  const rendered = `${state.label} ${state.progressText}`.trim();
-  assert.equal(rendered.match(/\d+%/g).length, 1, 'the settled chip must carry one percentage');
-  assert.doesNotMatch(rendered, /100%/);
-});
-
-test('the chip renderer clears the progress slot instead of stranding the last value', () => {
-  const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-  const start = ui.indexOf('  _updateTrafficSyncChip(');
-  assert.ok(start > 0, '_updateTrafficSyncChip is missing');
-  const body = ui.slice(start, ui.indexOf('\n  }', start));
-  // A truthiness guard here would leave the busy "..." sitting beside the
-  // settled label, which is the contradiction wearing a different hat.
-  assert.doesNotMatch(body, /if \(presentation\.progressText\s*\n?\s*&&/);
-  assert.match(
-    body,
-    /if \(this\._trafficSyncProgress\.textContent !== presentation\.progressText\) \{/,
-  );
-  // …and the emptied slot must collapse rather than leave a min-width stub.
-  assert.match(css, /#traffic-sync-progress:empty \{\s*display: none;\s*\}/);
-});
-
-test('work still in flight keeps its progress number beside a label that has none', () => {
-  const state = reduceTrafficSyncFeedback(
-    createTrafficSyncFeedbackState(),
-    { enabled: true, stats: { phaseLabel: 'warming roads', phaseProgressPct: 42 } },
-    0,
-  );
-  assert.deepEqual(
-    { busy: state.busy, label: state.label, progress: state.progressText },
-    { busy: true, label: 'warming roads', progress: '42%' },
-  );
-  assert.doesNotMatch(state.label, /%/, 'a busy label must not carry its own percentage');
-});
-
-test('resets traffic feedback on disable and permits a later fresh cycle', () => {
-  const busy = { enabled: true, stats: { loading: true } };
-  const idle = { enabled: true, stats: { loading: false, loadingLabel: 'simulated traffic' } };
-  let state = reduceTrafficSyncFeedback(createTrafficSyncFeedbackState(), busy, 0);
-  state = reduceTrafficSyncFeedback(state, idle, 100);
-  state = reduceTrafficSyncFeedback(state, { enabled: false, stats: {}, forceShow: true }, 200);
-  assert.deepEqual(state, createTrafficSyncFeedbackState());
-  state = reduceTrafficSyncFeedback(state, idle, 300);
-  assert.equal(state.visible, false);
-  state = reduceTrafficSyncFeedback(state, busy, 400);
-  state = reduceTrafficSyncFeedback(state, idle, 500);
-  assert.equal(state.visible, true);
-});
-
-test('new busy work replaces confirmation and force-show remains bounded', () => {
-  const idle = { enabled: true, stats: { loadingLabel: 'simulated traffic' } };
-  const busy = {
-    enabled: true,
-    stats: { phaseProgressPct: -20, prewarmQueueDepth: 1, phaseLabel: 'warming roads' },
-  };
-  let state = reduceTrafficSyncFeedback(createTrafficSyncFeedbackState(), idle, 0);
-  state = reduceTrafficSyncFeedback(state, { ...idle, forceShow: true }, 100);
-  const forcedDeadline = state.confirmationUntil;
-  state = reduceTrafficSyncFeedback(state, { ...idle, forceShow: true }, 300);
-  assert.equal(state.confirmationUntil, forcedDeadline);
-  state = reduceTrafficSyncFeedback(state, busy, 400);
-  assert.deepEqual({ busy: state.busy, progress: state.progressText }, { busy: true, progress: '0%' });
-  state = reduceTrafficSyncFeedback(state, idle, 500);
-  assert.equal(state.confirmationUntil, 500 + TRAFFIC_SYNC_CONFIRM_MS);
-  state = reduceTrafficSyncFeedback(state, idle, 500 + TRAFFIC_SYNC_CONFIRM_MS + 1);
-  assert.equal(state.visible, false);
 });
 
 test('aggregates Mapped Installations refresh beside CCTV without changing either owner', () => {

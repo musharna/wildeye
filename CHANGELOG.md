@@ -1,7 +1,6 @@
 # Changelog
 
-This changelog records public product changes. For the authoritative description
-of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md).
+This changelog records public product changes.
 
 ## [Unreleased]
 
@@ -67,6 +66,18 @@ of current runtime behavior, see [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md
 - Existing cached refusals are now ignored immediately, including during
   stale-data fallback. Concurrent identical requests share the same last-good
   fallback when all mirrors refuse, without duplicating upstream requests.
+
+### Removed
+
+- wildeye: the God's Eye View features a wildlife globe does not use: flights,
+  military, satellites, rocket launches, traffic, CCTV, radio, bikeshare, ship
+  tracking, earthquakes, submarine cables and the other non-wildlife layers;
+  object detection, cockpit and Context mode, voice, annotations, the key setup
+  and first-run chooser, scenes, and the DISPLAY panel with the scope, celestial,
+  night-vision, thermal and bloom effects. Visitors land on the whole globe.
+  Old share links still open, with their wildlife layers.
+- wildeye: the inherited God's Eye docs and media, and unused styles. The page's
+  CSS is about a third of its previous size.
 
 ## [0.1.1] — 2026-09-01 — Installation and live-data fixes
 

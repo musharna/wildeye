@@ -10,7 +10,7 @@
  * This script drives the REAL app headless and proves:
  *   (i)   per-layer credits are registered in viewer.creditDisplay (H11),
  *         and appear in the "Data attribution" lightbox when opened;
- *   (ii)  enabling datacenters + submarine cables keeps their credits present;
+ *   (ii)  enabling occurrences + animal tracks keeps their credits present;
  *   (iii) toggling clean-view keeps #cesium-credits visible (screenshot);
  *   (iv)  toggling recording-mode keeps #cesium-credits visible (screenshot).
  *
@@ -57,16 +57,16 @@ function check(name, ok, detail) {
 
 // Substrings that MUST be present across the registered per-layer credits.
 const REQUIRED_CREDIT_SUBSTRINGS = [
-  'OpenStreetMap contributors', // ODbL — datacenters/dams/roads
-  'adsb.lol',                    // ODbL — military traces
-  'TeleGeography',               // CC BY-NC-SA — cables
-  'NASA FIRMS',                  // fires
-  'CelesTrak',                   // satellites
-  'U.S. Geological Survey',      // earthquakes
-  'OpenSky Network',             // flights
-  'AISStream',                   // vessels
-  'City of Austin',              // CCTV
-  'Radio Browser',               // internet-radio directory
+  'GBIF.org',                             // occurrences
+  'OBIS',                                 // marine occurrences
+  'IOOS Animal Telemetry Network',        // tracks
+  'Movebank',                             // tracks
+  'Ocean Tracking Network',               // acoustic detections
+  'Aloft / BALTRAD_VPTS',                 // European bird migration
+  'vol2bird',                             // radar birds
+  'NASA FIRMS',                           // fires
+  'Global Imagery Browse Services (GIBS)', // satellite imagery layers
+  'NOAA Coral Reef Watch',                // coral bleaching
 ];
 
 async function main() {
@@ -74,7 +74,7 @@ async function main() {
   const browser = await puppeteer.launch({
     headless: 'new',
     ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--use-gl=angle', '--use-angle=swiftshader'],
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
@@ -159,27 +159,6 @@ async function main() {
     const close = box?.querySelector('.cesium-credit-lightbox-close');
     const boxRect = box?.getBoundingClientRect();
     const listRect = list?.getBoundingClientRect();
-    const overlay = document.querySelector('.cesium-credit-lightbox-overlay');
-    const worldOverlay = document.getElementById('world-overlay-root');
-    document.querySelector('[data-qa-attribution-stack-probe]')?.remove();
-    const stackProbe = document.createElement('div');
-    stackProbe.dataset.qaAttributionStackProbe = 'true';
-    stackProbe.textContent = 'QA WORLD LABEL — STACK PROBE';
-    Object.assign(stackProbe.style, {
-      position: 'absolute',
-      left: `${Math.max(8, (boxRect?.left || 0) - 90)}px`,
-      top: `${Math.max(8, (boxRect?.top || 0) + 150)}px`,
-      width: '180px',
-      padding: '5px 8px',
-      color: '#8ffcff',
-      background: 'rgba(4, 18, 28, 0.94)',
-      borderLeft: '3px solid #19d9e8',
-      font: '11px monospace',
-      whiteSpace: 'nowrap',
-      pointerEvents: 'none',
-    });
-    worldOverlay?.appendChild(stackProbe);
-    const stackProbeRect = stackProbe.getBoundingClientRect();
     const lastItem = list?.lastElementChild;
     if (list) list.scrollTop = list.scrollHeight;
     const lastRect = lastItem?.getBoundingClientRect();
@@ -198,14 +177,6 @@ async function main() {
       listOverflowY: list ? getComputedStyle(list).overflowY : '',
       titleVisible: Boolean(title?.getBoundingClientRect().height),
       closeVisible: Boolean(close?.getBoundingClientRect().height),
-      overlayZIndex: Number(getComputedStyle(overlay).zIndex),
-      worldOverlayZIndex: Number(getComputedStyle(worldOverlay).zIndex),
-      stackProbeIntersectsModal: Boolean(boxRect
-        && stackProbeRect.left < boxRect.left
-        && stackProbeRect.right > boxRect.left
-        && stackProbeRect.top < boxRect.bottom
-        && stackProbeRect.bottom > boxRect.top),
-      stackProbeExtendsOutsideModal: Boolean(boxRect && stackProbeRect.left < boxRect.left),
       lastItemReachable: Boolean(lastRect && listRect
         && lastRect.bottom <= listRect.bottom + 1
         && lastRect.top >= listRect.top - 1),
@@ -237,15 +208,6 @@ async function main() {
       && lightboxState.lastItemReachable,
     `${lightboxState.itemCount} items, ${lightboxState.linkCount} links, list=${lightboxState.listClientHeight}/${lightboxState.listScrollHeight}px`,
   );
-  check(
-    'attribution modal stacks above shared world labels',
-    Number.isFinite(lightboxState.overlayZIndex)
-      && Number.isFinite(lightboxState.worldOverlayZIndex)
-      && lightboxState.overlayZIndex > lightboxState.worldOverlayZIndex
-      && lightboxState.stackProbeIntersectsModal
-      && lightboxState.stackProbeExtendsOutsideModal,
-    `modal z=${lightboxState.overlayZIndex}, world labels z=${lightboxState.worldOverlayZIndex}, overlap=${lightboxState.stackProbeIntersectsModal}`,
-  );
   await page.evaluate(() => window.__godsEyeView.viewer.creditDisplay.hideLightbox());
   await page.screenshot({ path: resolve(SHOT_DIR, 'attribution-stacking-before-desktop.png') });
   await page.evaluate(() => {
@@ -256,7 +218,6 @@ async function main() {
   await page.screenshot({ path: resolve(SHOT_DIR, 'attribution-lightbox-desktop.png') });
   await page.evaluate(() => {
     window.__godsEyeView.viewer.creditDisplay.hideLightbox();
-    document.querySelector('[data-qa-attribution-stack-probe]')?.remove();
   });
 
   await page.setViewport({ width: 560, height: 760, deviceScaleFactor: 1 });
@@ -299,30 +260,27 @@ async function main() {
   await page.evaluate(() => window.__godsEyeView.viewer.creditDisplay.hideLightbox());
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
 
-  // ── (ii) enable datacenters + cables; credits still present ────────
-  console.log('\nH11 — enabling datacenters + submarine cables');
-  const layerIds = await page.evaluate(() => {
+  // ── (ii) enable occurrences + tracks; credits still present ────────
+  console.log('\nH11 — enabling occurrences + animal tracks');
+  const layerIds = await page.evaluate(() => [...window.__godsEyeView.dataManager.layers.keys()]);
+  check('found occurrences + tracks layer ids', layerIds.includes('occurrences') && layerIds.includes('tracks'), layerIds.join(','));
+  const enabled = await page.evaluate(async () => {
     const dm = window.__godsEyeView.dataManager;
-    return [...dm.layers.keys()];
+    return [await dm.setEnabled('occurrences', true), await dm.setEnabled('tracks', true)];
   });
-  // Find the datacenter + cable layer ids by fuzzy match on the id string.
-  const dcId = layerIds.find((id) => /datacenter/i.test(id));
-  const cableId = layerIds.find((id) => /cable|submarine|telegeo/i.test(id));
-  check('found datacenter + cable layer ids', !!dcId && !!cableId, `dc=${dcId} cable=${cableId}`);
-  if (dcId) await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, true), dcId);
-  if (cableId) await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, true), cableId);
+  check('occurrences + tracks enabled', enabled.every((ok) => ok !== false), JSON.stringify(enabled));
   await new Promise((r) => setTimeout(r, 800));
   const afterEnableHtml = await page.evaluate(() =>
     (window.__godsEyeView.viewer.creditDisplay._staticCredits || []).map((c) => c.html),
   );
   check(
-    'datacenter credit (OSM/ODbL) still present after enable',
-    afterEnableHtml.some((h) => h.includes('OpenStreetMap contributors')),
+    'occurrences credit (GBIF) still present after enable',
+    afterEnableHtml.some((h) => h.includes('GBIF.org')),
     '',
   );
   check(
-    'cable credit (TeleGeography) still present after enable',
-    afterEnableHtml.some((h) => h.includes('TeleGeography')),
+    'tracks credit (Movebank) still present after enable',
+    afterEnableHtml.some((h) => h.includes('Movebank')),
     '',
   );
 

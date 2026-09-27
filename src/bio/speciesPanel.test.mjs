@@ -862,12 +862,13 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   }
 });
 
-test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits are in place', () => {
+test('SPECIES panel markup, CSS, startup wiring and credits are in place', () => {
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
   const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
-  const ui = readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
-  const stack = html.slice(html.indexOf('<div id="left-panel-stack">'), html.indexOf('<!-- Global Context is deliberately'));
+  const stackEnd = html.indexOf('<!-- Intelligence HUD Overlay -->');
+  assert.ok(stackEnd > 0, 'the HUD comment closes the left stack slice');
+  const stack = html.slice(html.indexOf('<div id="left-panel-stack">'), stackEnd);
   assert.match(stack, /<div id="species-panel" class="panel-collapsible collapsed" data-panel-id="species-panel">/);
   for (const id of PANEL_IDS) assert.match(stack, new RegExp(`id="${id}"`), id);
   assert.match(stack, /data-collapse-target="species-panel"/);
@@ -925,7 +926,6 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(css, /#species-search::placeholder \{ color: rgba\(232, 234, 237, 0\.65\); \}/);
   assert.match(css, /#species-search::-webkit-search-cancel-button \{[^}]*-webkit-appearance: none;[^}]*background: url\("data:image\/svg\+xml,[^"]*stroke='%23e8eaed'[^"]*"\)/);
   assert.match(css, /#left-panel-stack > #species-panel \{[^}]*order: 5;/);
-  assert.match(css, /body\.cockpit-mode #left-panel-stack > #species-panel \{ display: none !important; \}/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);
   // B1/S1: the body scrolls under a fixed header, with the scroll cue in a row of its own below it; the legend has an opaque ground, so a
   // swatch cut by the panel's edge can never sit on the globe; on narrow screens the controls tighten so the action and both chip rows fit.
@@ -957,8 +957,6 @@ test('SPECIES panel markup, CSS, Cockpit collapse, startup wiring and credits ar
   assert.match(main, /createDetailsCard\(\{[^\n]*onDismiss: \(\) => whatLivesHere\?\.cancel\(\), onListEnd: \(\) => whatLivesHere\?\.listEnded\(\) \}\)/, 'the card ends the what-lives-here outline');
   assert.match(main, /createWhatLivesHere\(\{/);
   assert.match(main, /createSpeciesPanel\(\{/);
-  const cockpit = ui.match(/const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object\.freeze\(\[([\s\S]*?)\]\);/);
-  assert.match(cockpit[1], /'species-panel'/);
   const credit = DATA_CREDITS.find((entry) => entry.key === 'species');
   assert.ok(credit && /GBIF\.org/.test(credit.html) && /iNaturalist/.test(credit.html) && /CC0 and CC BY/.test(credit.html));
   // M4: a dataset links its DOI where GBIF has one and its gbif.org page otherwise, and the credits say exactly that, in the attribution

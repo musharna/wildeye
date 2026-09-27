@@ -126,7 +126,6 @@ export function createBirdsLayer() {
   let _particles = [];        // {lon,lat,u,v,age,dead,cell}
   let _field = null;          // {cdf,total,w,h,bounds,sites,cellDeg}
   let _tickRemover = null;
-  let _lastTick = null;
   let _clickHandler = null;
   let _enabled = false;
   let _params = { ...DEFAULT_PARAMS };
