@@ -28,7 +28,7 @@ const TABS = { presets: '#control-panel' };
 
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-dev-shm-usage'], protocolTimeout: 300000 });
 try {
-  for (const [w, h] of [[390, 844], [480, 900], [844, 390], [1400, 900]]) {
+  for (const [w, h] of [[360, 780], [390, 844], [480, 900], [844, 390], [1400, 900]]) {
     const m = await browser.newPage();
     const touch = w < 1000;
     await m.setViewport({ width: w, height: h, isMobile: touch, hasTouch: touch, deviceScaleFactor: 1 });
@@ -66,6 +66,30 @@ try {
     const closedOk = closed.dockInside && Object.values(closed.tabs).every((t) => !t.cut);
     report(`dock-closed-${w}x${h}`, closedOk, closed);
     if (SHOTS) await m.screenshot({ path: `${SHOTS}/dock-${w}x${h}-closed.png` });
+
+    // Top bar: the title, the globe actions and the style indicator must not overlap, whatever is shown must lie on screen, and each
+    // action must take a real tap at its centre. At 360-414 px the centred actions sat over "wildeye" and "ACTIVE STYLE" (2026-09-26).
+    // Positive control: from 480 px up the style indicator is still shown, so hiding it everywhere cannot pass.
+    const topBar = await m.evaluate(() => {
+      const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+      const shown = (e) => { if (!e) return false; const cs = getComputedStyle(e); return cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity) > 0; };
+      const R = (e) => { const b = e.getBoundingClientRect(); return { x: Math.round(b.left), r: Math.round(b.right), y: Math.round(b.top), b: Math.round(b.bottom) }; };
+      const blocks = { title: document.querySelector('h1'), actions: document.getElementById('top-center-actions'), style: document.getElementById('style-indicator') };
+      const out = {};
+      for (const [k, e] of Object.entries(blocks)) out[k] = shown(e) ? R(e) : null;
+      const names = Object.keys(out).filter((k) => out[k]);
+      const overlaps = [];
+      for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+        const p = out[names[i]], q = out[names[j]];
+        if (p.x < q.r && q.x < p.r && p.y < q.b && q.y < p.b) overlaps.push(`${names[i]}x${names[j]}`);
+      }
+      const offScreen = names.filter((k) => out[k].x < 0 || out[k].r > vw || out[k].y < 0 || out[k].b > vh);
+      const taps = [...blocks.actions.querySelectorAll('button')].map((btn) => { const f = btn.getBoundingClientRect(); const t = document.elementFromPoint(f.left + f.width / 2, f.top + f.height / 2); return t === btn || btn.contains(t) ? 'ok' : (t?.id || String(t?.className || t?.tagName).slice(0, 30)); });
+      return { vw, ...out, overlaps, offScreen, taps };
+    });
+    const topBarOk = Boolean(topBar.title && topBar.actions) && topBar.overlaps.length === 0 && topBar.offScreen.length === 0
+      && topBar.taps.length === 3 && topBar.taps.every((t) => t === 'ok') && (w < 480 || Boolean(topBar.style));
+    report(`top-bar-${w}x${h}`, topBarOk, topBar);
 
     // Each tray, opened by a real tap/click on its tab: wholly on screen, first control takes a real pointer.
     for (const [k, sel] of Object.entries(TABS)) {

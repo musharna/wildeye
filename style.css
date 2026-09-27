@@ -708,6 +708,21 @@ body.ui-clean-view #data-panel {
   font-size: 18px;
 }
 
+/* Below 480 px the title (139 px), the centred actions (124 px) and the style indicator (108 px) need more width than the top bar has,
+   and the actions sat over "wildeye" and "ACTIVE STYLE". The style name stays on screen in the HUD line and the presets tray, so the
+   indicator gives way and the actions take its corner, inset like the title. */
+@media (max-width: 479px) {
+  #style-indicator {
+    display: none;
+  }
+
+  #top-center-actions {
+    left: auto;
+    right: 20px;
+    transform: none;
+  }
+}
+
 #global-loading-status {
   position: fixed;
   top: 74px;
