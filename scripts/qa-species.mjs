@@ -17,6 +17,9 @@ const TALL_DESKTOP_HEIGHT = 1100;
 const CHECKS = new Set(arg('--checks', 'panel-layout,left-stack,contrast,card-foot-rest,panel-fold,phone-accordion,landscape-regions,collapsed-pills,fuzzy-match,card,suggestion-fade,escape,search,panel-datasets,here,portal-link,card-a11y').split(','));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
+// Puppeteer's wait wrappers fill V8's default 10 frames, so a timeout's stack never reached this script's own line.
+Error.stackTraceLimit = 50;
+const SELF = new URL(import.meta.url).pathname.split('/').pop();
 
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-dev-shm-usage'], defaultViewport: { width: 1400, height: 900 } });
 const page = await browser.newPage();
@@ -102,6 +105,27 @@ const openSpeciesPanel = async () => {
   });
   await sleep(800);
 };
+
+// suggestion-fade and escape failed together for a stretch on 2026-09-26 (~22:05-23:00 EDT; the clear after "hump" timed out, then "mona"
+// never listed) and passed before and after on the same code; the error cut dropped the line, so the cause was never read. On a failure both
+// checks now record the search box's state and what sits at its centre (a click lands there), and keep their own stack frames.
+const searchSnapshot = () => page.evaluate(() => {
+  const input = document.getElementById('species-search');
+  const list = document.getElementById('species-suggestions');
+  const r = input.getBoundingClientRect();
+  const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+  const describe = (el) => (el ? `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${el.classList.length ? `.${[...el.classList].join('.')}` : ''}` : null);
+  return {
+    value: input.value,
+    focused: describe(document.activeElement),
+    atBoxCentre: describe(at),
+    box: { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) },
+    listHidden: list.hidden,
+    listRows: list.querySelectorAll('li').length,
+    status: document.getElementById('species-status')?.textContent ?? null,
+  };
+}).catch((caught) => ({ snapshotError: String(caught).slice(0, 200) }));
+const ownFrames = (caught) => String(caught?.stack || '').split('\n').filter((line) => line.includes(SELF)).slice(0, 4).map((line) => line.trim());
 
 // The contrast method (qa contrast, and the collapsed pills in qa collapsed-pills): see the contrast check's comment.
 const frames = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -538,8 +562,11 @@ if (CHECKS.has('left-stack')) {
   const recordingOn = await step('recording mode on from shown', setRecording(true), { transition: true });
   const recordingOff = await step('recording mode off to shown', setRecording(false), { transition: true });
   // A frame part-way through the F show fade, for the critic: F hides, then F shows. Two frames later, after the lane's passes at the start of
-  // the show, the data panel's transitions are held at 150 ms, half their duration, because a capture under swiftshader takes longer than the
-  // whole fade; its opacity and height are read just before and after the capture, and the transitions then play on.
+  // the show, the data panel's transitions are paused; once the lane is in the shown layout and the stack's own 150 ms top/bottom slide has ended
+  // they are set to 150 ms, half
+  // their duration, because a capture under swiftshader takes longer than the whole fade. Its opacity and height are read just before and
+  // after the capture, and the transitions then play on. The slide is waited out because it squeezes the panel below 100 px while it runs
+  // (see showRule): held two frames in, the read landed mid-slide on a fast host (97.7 px, 2026-09-26) and past it on a slow one.
   await step('F hide before the mid-fade shot', pressKey('f'), { transition: true });
   const midFadeRead = () => page.evaluate(() => {
     const data = document.getElementById('data-panel');
@@ -549,7 +576,24 @@ if (CHECKS.has('left-stack')) {
   });
   await page.keyboard.press('f');
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  const held = await page.evaluate(() => { const animations = document.getElementById('data-panel').getAnimations(); for (const animation of animations) { animation.pause(); animation.currentTime = 150; } return animations.map((animation) => animation.transitionProperty); });
+  const held = await page.evaluate(() => { const animations = document.getElementById('data-panel').getAnimations(); for (const animation of animations) animation.pause(); return animations.map((animation) => animation.transitionProperty); });
+  if (!held.includes('opacity')) throw new Error(`left-stack: no opacity transition to hold two frames into the mid-fade F show (held: ${held})`);
+  // Arrived = the lane is in the shown state's mode and allocation, and the slide is not running (before it starts, nothing is sliding either).
+  const slideEndedMs = await page.evaluate(({ mode, allocated }) => new Promise((resolve) => {
+    const stack = document.getElementById('left-panel-stack');
+    const data = document.getElementById('data-panel');
+    const started = performance.now();
+    const poll = () => {
+      const sliding = stack.getAnimations().some((animation) => ['top', 'bottom'].includes(animation.transitionProperty) && animation.playState === 'running');
+      const arrived = stack.dataset.layoutMode === mode && (data.style.getPropertyValue('--left-panel-allocated-height') || null) === allocated;
+      if (arrived && !sliding) resolve(Math.round(performance.now() - started));
+      else if (performance.now() - started > 3000) resolve(null);
+      else requestAnimationFrame(poll);
+    };
+    poll();
+  }), { mode: shown.mode, allocated: shown.data.allocated });
+  if (slideEndedMs === null) throw new Error('left-stack: the lane had not reached the shown layout with its slide ended 3 s into the mid-fade F show');
+  await page.evaluate(() => { for (const animation of document.getElementById('data-panel').getAnimations()) animation.currentTime = 150; });
   const midFadeBefore = await midFadeRead();
   await shot('left-stack-f-show-midfade');
   const midFadeAfter = await midFadeRead();
@@ -598,7 +642,7 @@ if (CHECKS.has('left-stack')) {
   report('left-stack', Object.values(checks).every(Boolean), {
     initial, setup: setup && setup.label, shown,
     steps: [summarize(hideF, hideRule), summarize(cleanOnHidden, hideRule), summarize(cleanOffHidden, hideRule), summarize(showF, showRule), summarize(cleanOnVisible, hideRule), summarize(cleanOffVisible, showRule), summarize(recordingOn, hideRule), summarize(recordingOff, showRule)],
-    midFade: { held, before: midFadeBefore, after: midFadeAfter }, final: { mode: final.mode, data: final.data },
+    midFade: { held, slideEndedMs, before: midFadeBefore, after: midFadeAfter }, final: { mode: final.mode, data: final.data },
     ...checks,
   });
 }
@@ -1620,18 +1664,22 @@ if (CHECKS.has('suggestion-fade')) {
   let control = null;
   let short = null;
   let error = null;
+  let where = null;
+  let atError = null;
   await openSpeciesPanel();
   try {
     control = await listFor('hump');
     short = await listFor("sialia currucoides");
   } catch (caught) {
     error = String(caught?.stack || caught).slice(0, 500);
+    where = ownFrames(caught);
+    atError = await searchSnapshot();
   } finally {
     await clearSearch().catch((caught) => { error = `${error ?? ''} clearing the search box: ${caught}`; });
   }
   const controlOk = Boolean(control?.overflows) && control.fade !== '0px' && control.bottomToFirst < 0.85;
   const shortOk = short !== null && short.rows >= 2 && short.rows < 5 && !short.overflows && short.fade === '0px' && short.visibleRows === short.rows && short.bottomToFirst >= 0.95;
-  report('suggestion-fade', error === null && controlOk && shortOk, { control, short, controlOk, shortOk, ...(error ? { error } : {}) });
+  report('suggestion-fade', error === null && controlOk && shortOk, { control, short, controlOk, shortOk, ...(error ? { error, where, atError } : {}) });
 }
 
 // M2 (final review), R12-M1 and R12-M2 (re-review): Escape in the real page, where the search box's keydown listener runs before the document's.
@@ -1655,6 +1703,8 @@ if (CHECKS.has('escape')) {
   const listShowing = () => page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
   const states = {};
   let error = null;
+  let where = null;
+  let atError = null;
   try {
     await openSpeciesPanel();
     await page.click('#species-what-lives-here');
@@ -1683,6 +1733,8 @@ if (CHECKS.has('escape')) {
     states.third = await read();
   } catch (caught) {
     error = String(caught?.stack || caught).slice(0, 500);
+    where = ownFrames(caught);
+    atError = await searchSnapshot();
   } finally {
     await page.evaluate(() => {
       const input = document.getElementById('species-search');
@@ -1699,7 +1751,7 @@ if (CHECKS.has('escape')) {
   const firstOk = Boolean(states.first) && states.before.listHidden === false && states.before.cardHidden === false && states.before.armed && states.first.listHidden === true && states.first.value === 'monarchs' && states.first.cardHidden === false && states.first.armed;
   const secondOk = Boolean(states.second) && states.second.value === '' && states.second.listHidden === true && states.second.cardHidden === false && states.second.armed;
   const thirdOk = Boolean(states.third) && states.third.cardHidden === true && states.third.armed === false;
-  report('escape', error === null && suggestionOk && firstOk && secondOk && thirdOk, { ...states, suggestionOk, firstOk, secondOk, thirdOk, ...(error ? { error } : {}) });
+  report('escape', error === null && suggestionOk && firstOk && secondOk && thirdOk, { ...states, suggestionOk, firstOk, secondOk, thirdOk, ...(error ? { error, where, atError } : {}) });
 }
 
 // Fix round 1, I-1: the card is a landmark named by its title in the browser's accessibility tree (not only an aria-labelledby string), and it is
