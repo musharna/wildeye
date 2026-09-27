@@ -24,6 +24,12 @@ This changelog records public product changes.
 - wildeye: scheduled pipelines under `pipeline/`, a licence ledger in
   `DATA_SOURCES.md`, and a GitHub Pages deploy script.
 
+### Changed
+
+- wildeye: fonts are served from the site instead of Google Fonts, and the two
+  top-bar icons are drawn inline instead of coming from an icon font. A first
+  visit makes no requests to Google, and the text looks the same.
+
 ### Fixed
 
 - wildeye: on phones narrower than 480 px the clear, share and reset buttons no
