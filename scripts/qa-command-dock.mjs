@@ -112,6 +112,9 @@ try {
         // two frames so the settled tray is painted; bounded, since a stalled software renderer once hung this
         await Promise.race([new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))), new Promise((res) => setTimeout(res, 1000))]);
         const b = pop.getBoundingClientRect();
+        // a tray centres on the dock at every width (the desktop formula once counted a second tab and a voice control: 155 px off)
+        const d = document.getElementById('command-dock').getBoundingClientRect();
+        const offCentre = Math.round((b.left + b.right) / 2 - (d.left + d.right) / 2);
         // first real control in the tray (not the pin): a style button
         // a control counts only if its whole box is on screen and a pointer at its centre reaches it
         const hitTest = (e) => {
@@ -122,12 +125,12 @@ try {
         };
         // the pin floats past the tray's top-right corner, so the tray being on screen does not cover it
         const pin = pop.querySelector('.dock-pin-btn'); const pr = pin?.getBoundingClientRect();
-        return { open: !panel.classList.contains('collapsed'), vw, tray: { x: Math.round(b.left), r: Math.round(b.right), y: Math.round(b.top), w: Math.round(b.width) },
+        return { open: !panel.classList.contains('collapsed'), vw, offCentre, tray: { x: Math.round(b.left), r: Math.round(b.right), y: Math.round(b.top), w: Math.round(b.width) },
           inside: b.left >= 0 && b.right <= vw && b.top >= 0 && b.bottom <= vh,
           firstControl: hitTest(pop.querySelector('.style-btn')),
           pin: hitTest(pin), pinBox: pr && { x: Math.round(pr.left), r: Math.round(pr.right), y: Math.round(pr.top) } };
       }, sel);
-      report(`dock-tray-${k}-${w}x${h}`, tray.open && tray.inside && tray.firstControl === 'ok' && tray.pin === 'ok', tray);
+      report(`dock-tray-${k}-${w}x${h}`, tray.open && tray.inside && Math.abs(tray.offCentre) <= 2 && tray.firstControl === 'ok' && tray.pin === 'ok', tray);
       if (SHOTS) await m.screenshot({ path: `${SHOTS}/dock-${w}x${h}-${k}.png` });
       // close it again through the same tab so the next tray opens alone
       if (tray.open) {

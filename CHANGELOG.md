@@ -30,6 +30,9 @@ This changelog records public product changes.
   longer sit on top of the title and the style label. They move to the top-right
   corner and the style label is hidden there; the style name is still in the HUD
   line and the presets tray.
+- wildeye: on desktop the visual-presets tray now opens centred over its tab
+  instead of 155 px to the left. The dock's width still counted a second tab and
+  a voice control that are gone.
 - wildeye: opening the map-source tray with Enter or Space now always moves focus
   to a map tile. On a busy page (for example just after the globe switched map
   source) focus used to stay on the tray button.

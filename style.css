@@ -1864,7 +1864,6 @@ body.recording-mode #cesium-credits {
   --dock-side-compact: clamp(9.5rem, 12vw, 10.5rem);
   --dock-tray-open: clamp(28rem, 40vw, 33rem);
   --dock-presets-open: clamp(25rem, 36vw, 29rem);
-  --dock-voice-width: clamp(13.5rem, 17vw, 15rem);
   display: flex;
   align-items: center;
   width: fit-content;
@@ -2012,7 +2011,6 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
     --dock-side-compact: 4.25rem;
     --dock-tray-open: calc(100vw - 7rem);
     --dock-presets-open: calc(100vw - 7rem);
-    --dock-voice-width: 11.5rem;
     max-width: calc(100vw - 1rem);
   }
 
@@ -2023,8 +2021,9 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
 
 /* ── Command dock refinement ── */
 #command-dock {
-  --dock-voice-width: 8.75rem;
-  --dock-unified-width: calc(var(--dock-side-compact) * 2 + var(--dock-voice-width));
+  /* the dock is one tab (VISUAL PRESETS); this once summed two tabs and a voice control, which put the
+     desktop presets tray 155 px left of the dock (2026-09-27) */
+  --dock-unified-width: var(--dock-side-compact);
   --dock-tray-open: max(34rem, calc(var(--dock-unified-width) + 0.75rem));
   --dock-presets-open: max(34rem, calc(var(--dock-unified-width) + 0.75rem));
 }
@@ -2212,7 +2211,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 @media (max-width: 620px) {
   #command-dock {
     --dock-side-compact: 3.25rem;
-    --dock-voice-width: 8.75rem;
   }
 
   #command-dock .panel-title {
@@ -2372,7 +2370,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
        left edge — pinned by the 480 px bounds assert in
        `scripts/qa-map-source-tray.mjs`. */
     width: var(--dock-popover-mobile-width);
-    right: calc((var(--dock-side-compact) + var(--dock-side-compact) + var(--dock-voice-width) - var(--dock-popover-mobile-width)) / 2);
   }
 
   /* ── Required-attribution clearance ─────────────────────────────────
@@ -2479,12 +2476,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   right: calc((var(--dock-unified-width) - var(--dock-presets-open)) / 2);
 }
 
-@media (max-width: 900px) {
-
-  #command-dock #control-panel .dock-popover-content {
-    right: calc((var(--dock-unified-width) - var(--dock-popover-mobile-width)) / 2);
-  }
-}
 
 /* Final joined-dock geometry: only the three controls own visible surfaces. */
 #command-dock {
@@ -2992,8 +2983,8 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
 }
 
 /* ── Command dock at 900 px and below: trays centred on the dock, tabs sized to their label ──
-   The narrow rules above centre each tray from its own tab with
-   (side + side + voice − tray) / 2, i.e. they assume the dock is two tabs plus the voice control.
+   Narrow rules once centred each tray from its own tab with
+   (side + side + voice − tray) / 2, i.e. they assumed the dock is two tabs plus the voice control.
    This fork has no voice control, so every tray sat half a voice width (70 px) off centre: at 390 px
    presets began off the left edge and location ran off the right (2026-09-24). The tabs were also
    fixed at 52-68 px, narrower than "VISUAL PRESETS", so labels were cut to "ESETS" and "L".
