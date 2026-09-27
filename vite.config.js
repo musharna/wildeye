@@ -7,8 +7,8 @@
  *   2. OpenAI   — the optional five-word HUD summary
  *   3. Google Places — optional place context for location search
  *
- * Also exposes Cesium and Google 3D Tiles API keys to the
- * client via `import.meta.env.*` defines.
+ * Also exposes the Google key used by local place search to the client via an
+ * `import.meta.env.*` define.
  *
  * @module vite.config
  */
@@ -1360,16 +1360,10 @@ export default defineConfig(({ mode }) => {
         ? true
         : localAllowedHosts,
       fs: {
-        // Pinokio keeps optional credentials in this ignored local file.
-        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT'],
+        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**'],
       },
-      // Framing protection belongs on the APP DOCUMENT, not on API responses:
-      // a browser evaluates frame-ancestors against the framed page's own
-      // navigation response. Without this, a hostile page could frame
-      // `/?setup=1`, align a lure over Provider Settings, and have the framed
-      // app issue a perfectly same-origin credential write that passes every
-      // Host/Origin check. These headers apply to everything this dev server
-      // serves, which is what makes that attack impossible rather than unlikely.
+      // Framing protection on everything this dev server serves: a hostile page
+      // cannot frame the app and lure clicks onto it.
       headers: {
         'X-Frame-Options': 'DENY',
         'Content-Security-Policy': "frame-ancestors 'none'",
@@ -1378,7 +1372,6 @@ export default defineConfig(({ mode }) => {
     // Expose selected API keys to the browser via import.meta.env.*
     define: {
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(env.GOOGLE_MAPS_API_KEY),
-      'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(env.CESIUM_ION_TOKEN),
     },
     build: {
       // The Cesium engine bundle is inherently large; raise the warning ceiling

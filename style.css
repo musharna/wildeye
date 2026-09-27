@@ -609,7 +609,7 @@ html, body {
 
 .map-stack-chip-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
 }
 
@@ -646,17 +646,10 @@ html, body {
   display: none;
 }
 
-@media (max-width: 620px) {
-  .map-stack-chip-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* Order matters, and matches `.data-toggle-btn`: hover/focus, then active, then
-   disabled — all at the same specificity, so the later rule wins. Hovering the
-   active chip must not wash the cyan out, and a disabled chip must not light up
-   under the cursor. Do not add `:not(...)` here: it would raise specificity and
-   let hover beat `.active` again. */
+/* Order matters, and matches `.data-toggle-btn`: hover/focus, then active — at
+   the same specificity, so the later rule wins and hovering the active chip does
+   not wash the cyan out. Do not add `:not(...)` here: it would raise specificity
+   and let hover beat `.active` again. */
 .map-stack-chip:hover,
 .map-stack-chip:focus-visible {
   border-color: var(--glass-border-hover);
@@ -678,20 +671,6 @@ html, body {
   border-color: var(--accent);
   background: var(--accent-dim);
   box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
-}
-
-.map-stack-chip.unavailable,
-.map-stack-chip[aria-disabled='true'] {
-  color: rgba(232, 234, 237, 0.28);
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  cursor: not-allowed;
-}
-
-.map-stack-chip-req {
-  font-size: 7px;
-  letter-spacing: 0.3px;
-  color: rgba(232, 234, 237, 0.28);
 }
 
 .pp-stack-status {
@@ -3419,93 +3398,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 #command-dock #control-panel .panel-header::after {
   background: linear-gradient(90deg, rgba(232, 234, 237, 0), rgba(232, 234, 237, 0.24));
 }
-
-/* ------------------------------------------------------------------ *
- * Voice cost control — model-tier toggle + running session estimate.
- * Appended (not woven into the dock passes above) so the three existing
- * #gev-voice-control cascades stay untouched; these rules only add the
- * new .gev-voice-cost cluster inside the existing .gev-voice-heading row.
- * ------------------------------------------------------------------ */
-
-/* MINI engaged — amber, distinct from the cyan default so the cheaper tier
-   is legible at a glance without reading the label. */
-
-/* The dock heading row is 0.8rem tall; keep the cluster inside it. */
-
-/* The dock collapses the kicker/readout when a tray is open — the cost
-   cluster follows the same rule so the row never overflows. */
-
-/* ── First-run mission launcher ───────────────────────────────────
-   Compact and non-modal: it gives a new visitor a meaningful starting
-   choice without blocking manual map interaction or spending API quota. */
-
-/* An AUTHOR `display` on this id beats the UA's `[hidden] { display: none }` in
-   the cascade, so the flex above would otherwise leave the card in the
-   accessibility tree from page parse until it is revealed — or, on a share
-   link, until it is removed. Restore the attribute's meaning explicitly. */
-
-/* aria-disabled, not :disabled — the JS keeps the buttons focusable while a
-   mission runs so the keyboard is never dumped out of the launcher mid-flight. */
-
-/* Ordered after the shared button rule rather than shouting !important at it. */
-
-/* The live region carries mission progress and failures, so it owns a full row
-   and reserves its height — otherwise the card resizes as it speaks. */
-
-/* Every surface that claims the screen hides the launcher. This list is the CSS
-   half of the ESC arbitration: src/firstRunExperience.js watches these same
-   classes and makes the launcher step aside, so a hidden card is never left
-   holding a keyboard handler. Keep the two lists in step —
-   EXCLUSIVE_SURFACE_CLASSES pins them together. */
-
-@media (max-width: 620px) {
-  /* Five tiles have to clear the dock on a 375 x 812 phone, so the rows tighten
-     and the redundant "ESC to dismiss" hint (no ESC key on a phone) drops. */
-}
-
-/* Short viewports — landscape phones, small laptop windows. The chrome tightens
-   so the mission list keeps a usable share of the height. The intro line STAYS:
-   it is the only copy that says what this thing is, and with four tiles it
-   fits. (It was dropped here while there were five; the tile that went is
-   exactly why it can come back.) */
-
-/* A soft edge on the list, so a tile cut by the fold reads as "more below"
-   rather than as a rendering seam. Gated on `data-scrollable`, which the JS sets
-   only when the list ACTUALLY overflows — a fade on a list that fits would
-   promise content that is not there, which is the opposite of the affordance
-   it is meant to be. Decorative only: the list scrolls under it. */
-
-/* Scrolled to the end, there is nothing left to promise, so the fade lifts.
-   Browsers without scroll-driven animations keep the static fade, which is
-   still honest — there IS more list, it is just above rather than below. */
-
-@keyframes first-run-scroll-fade {
-  to {
-    -webkit-mask-image: linear-gradient(to bottom, #000 100%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 100%, transparent 100%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Scrolling a tile into view must not animate either. */
-}
-
-/* ============================================================
-   POWER UP — in-app key setup (dev server only, src/keySetup.js)
-   Same voice as the first-run launcher: glass card, cyan trim,
-   mono kickers. The chip retires once every key is configured.
-   ============================================================ */
-
-/* Same cascade note as the launcher: an author display beats [hidden]. */
-
-/* The same exclusive surfaces that hide the launcher hide this surface —
-   nothing about key setup belongs in a recording, a cockpit, or a scene. */
-
-@media (max-width: 620px) {
-  /* Clear the dock. Desktop-first app; this is a courtesy, not a layout. */
-}
-
-/* Provider Settings additions: externally-managed badge + per-row remove. */
 
 /* ── Biology details card (src/bio/detailsCard.js) ── */
 /* I1 (final review): the card and the SPECIES panel have a background floor of 0.86 rather than the shared 0.72 glass, so their text holds 4.5:1

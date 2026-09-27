@@ -2,7 +2,7 @@
 //
 // The owner's complaint was two clicks (open panel → open dropdown) to change
 // basemap. These tests pin the three things that make the row a faithful swap:
-// it projects the owner-approved four-source allowlist from the controller's
+// it projects the two-source allowlist from the controller's
 // stack data, a click dispatches the same selection the `change` handler used
 // to, and the lit chip tracks controller state rather than the click. Run with:
 // npm test
@@ -17,6 +17,7 @@ import {
   renderMapStackChips,
   syncMapStackChips,
 } from './mapStackChips.js';
+import { DEFAULT_MAP_STACK, MAP_STACKS, MapStackController } from './mapStackController.js';
 
 /** Minimal element stand-in — the row only needs create/append/attr/class. */
 function makeElement(tagName = 'div') {
@@ -58,47 +59,38 @@ function makeElement(tagName = 'div') {
 
 const doc = { createElement: (tagName) => makeElement(tagName) };
 
-/** Text a chip renders, label + optional requirement badge. */
+/** Text a chip renders. */
 const chipText = (chip) => chip.children.map((child) => child.textContent).join(' ');
 
 // Shaped exactly like MapStackController.getStacks() output.
-const CONTROLLER_STACKS = [
-  { id: 'photoreal', label: 'Google 3D', requiresIon: false, available: true, unavailableReason: null },
-  { id: 'bing-aerial', label: 'Bing Aerial', requiresIon: true, available: true, unavailableReason: null },
-  { id: 'bing-labels', label: 'Bing Labels', requiresIon: true, available: true, unavailableReason: null },
-  { id: 'esri-imagery', label: 'Esri Satellite', requiresIon: false, available: true, unavailableReason: null },
-  { id: 'osm', label: 'OSM', requiresIon: false, available: true, unavailableReason: null },
-];
+const CONTROLLER_STACKS = MAP_STACKS.map((stack) => ({ ...stack }));
 
-test('the row renders exactly the five owner-approved sources', () => {
+test('the row renders exactly the two keyless sources', () => {
   const container = makeElement();
-  renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'photoreal', doc });
+  renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'esri-imagery', doc });
 
-  assert.deepEqual(container.children.map((chip) => chip.dataset.stackId), [
-    'photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm',
-  ]);
-  assert.deepEqual(container.children.map(chipText), [
-    'Google 3D', 'Bing Aerial', 'Bing Labels', 'Esri Satellite', 'OSM',
-  ]);
-  assert.deepEqual(PRESENTED_MAP_STACK_IDS, ['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm']);
+  assert.deepEqual(container.children.map((chip) => chip.dataset.stackId), ['esri-imagery', 'osm']);
+  assert.deepEqual(container.children.map(chipText), ['Esri Satellite', 'OSM']);
+  assert.deepEqual(PRESENTED_MAP_STACK_IDS, ['esri-imagery', 'osm']);
   assert.ok(container.children.every((chip) => chip.tagName === 'button' && chip.type === 'button'));
   assert.ok(container.children.every((chip) => chip.classList.contains(MAP_STACK_CHIP_CLASS)));
+  assert.deepEqual(container.children.map((chip) => chip.title), ['Esri Satellite', 'OSM']);
 });
 
 test('internal and future stacks stay outside the approved presentation set', () => {
   const container = makeElement();
-  // A future Hybrid stack may land in the controller, but it must not appear
-  // until the owner-approved presentation allowlist explicitly includes it.
-  const withHybrid = [...CONTROLLER_STACKS, { id: 'hybrid', label: 'Hybrid', available: true }];
-  renderMapStackChips(container, withHybrid, { activeId: 'photoreal', doc });
+  // A stack may land in the controller, but it must not appear until the
+  // presentation allowlist explicitly includes it.
+  const withHybrid = [...CONTROLLER_STACKS, { id: 'hybrid', label: 'Hybrid' }];
+  renderMapStackChips(container, withHybrid, { activeId: 'esri-imagery', doc });
 
-  assert.equal(container.children.length, 5);
+  assert.equal(container.children.length, 2);
   assert.doesNotMatch(container.children.map(chipText).join(' '), /Hybrid/);
 });
 
 test('re-rendering replaces the previous chips instead of stacking a second row', () => {
   const container = makeElement();
-  renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'photoreal', doc });
+  renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'esri-imagery', doc });
   renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'osm', doc });
 
   assert.equal(container.children.length, PRESENTED_MAP_STACK_IDS.length);
@@ -108,151 +100,60 @@ test('clicking a chip dispatches that stack id — the same selection the dropdo
   const container = makeElement();
   const selected = [];
   renderMapStackChips(container, CONTROLLER_STACKS, {
-    activeId: 'photoreal',
+    activeId: 'esri-imagery',
     onSelect: (stackId) => selected.push(stackId),
     doc,
   });
 
-  container.children[4].click();
-  container.children[3].click();
   container.children[1].click();
-  assert.deepEqual(selected, ['osm', 'esri-imagery', 'bing-aerial']);
+  container.children[0].click();
+  assert.deepEqual(selected, ['osm', 'esri-imagery']);
 });
 
 test('the active chip is the pressed chip, and exactly one is pressed', () => {
   const container = makeElement();
-  renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'bing-labels', doc });
+  renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'osm', doc });
 
   const pressed = container.children.filter((chip) => chip.getAttribute('aria-pressed') === 'true');
-  assert.deepEqual(pressed.map((chip) => chip.dataset.stackId), ['bing-labels']);
+  assert.deepEqual(pressed.map((chip) => chip.dataset.stackId), ['osm']);
   assert.ok(pressed[0].classList.contains('active'));
-  assert.ok(container.children
-    .filter((chip) => chip.dataset.stackId !== 'bing-labels')
-    .every((chip) => !chip.classList.contains('active')));
+  assert.ok(!container.children[0].classList.contains('active'));
 });
 
 test('the lit chip tracks controller state, not the click', () => {
   const container = makeElement();
-  renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'photoreal', doc });
+  renderMapStackChips(container, CONTROLLER_STACKS, { activeId: 'esri-imagery', doc });
 
   // A rejected/superseded switch reports the stack that is genuinely active.
-  syncMapStackChips(container, 'photoreal');
+  syncMapStackChips(container, 'esri-imagery');
   assert.ok(container.children[0].classList.contains('active'));
-  assert.equal(container.children[4].getAttribute('aria-pressed'), 'false');
+  assert.equal(container.children[1].getAttribute('aria-pressed'), 'false');
 
   // A landed switch moves both the class and the pressed state.
   syncMapStackChips(container, 'osm');
-  assert.ok(container.children[4].classList.contains('active'));
-  assert.equal(container.children[4].getAttribute('aria-pressed'), 'true');
+  assert.ok(container.children[1].classList.contains('active'));
+  assert.equal(container.children[1].getAttribute('aria-pressed'), 'true');
   assert.ok(!container.children[0].classList.contains('active'));
   assert.equal(container.children[0].getAttribute('aria-pressed'), 'false');
 });
 
-test('keyless ion stacks stay focusable, aria-disabled, and say why', () => {
-  const container = makeElement();
-  const keyless = CONTROLLER_STACKS.map((stack) => (stack.requiresIon ? {
-    ...stack,
-    available: false,
-    unavailableReason: 'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
-  } : stack));
-  const selected = [];
-  renderMapStackChips(container, keyless, {
-    activeId: 'photoreal',
-    onSelect: (stackId) => selected.push(stackId),
-    doc,
-  });
-
-  const bingAerial = container.children[1];
-  assert.equal(bingAerial.disabled, false, 'unavailable sources remain keyboard-reachable');
-  assert.equal(bingAerial.getAttribute('aria-disabled'), 'true');
-  assert.equal(
-    bingAerial.getAttribute('aria-label'),
-    'Bing Aerial unavailable: Needs CESIUM_ION_TOKEN — add it in Provider Settings',
-  );
-  assert.ok(bingAerial.classList.contains('unavailable'));
-  assert.equal(bingAerial.title, 'Needs CESIUM_ION_TOKEN — add it in Provider Settings');
-  assert.equal(chipText(bingAerial), 'Bing Aerial ION');
-
-  bingAerial.click();
-  assert.deepEqual(selected, [], 'an unavailable stack must not reach the switch path');
-
-  assert.equal(container.children[3].getAttribute('aria-disabled'), 'false', 'OSM stays selectable');
-});
-
-test('a non-ion stack that fails never claims an ion token is required', () => {
-  // The startup fallback-to-OSM case: Google 3D tiles failed to load, so
-  // photoreal is unavailable for a reason that has nothing to do with ion.
-  const container = makeElement();
-  const tilesFailed = CONTROLLER_STACKS.map((stack) => (stack.id === 'photoreal' ? {
-    ...stack,
-    available: false,
-    unavailableReason: 'Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings',
-  } : stack));
-  renderMapStackChips(container, tilesFailed, { activeId: 'osm', doc });
-
-  const google = container.children[0];
-  assert.equal(google.getAttribute('aria-disabled'), 'true');
-  assert.equal(google.getAttribute('aria-label'), 'Google 3D unavailable: Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings');
-  assert.equal(chipText(google), 'Google 3D', 'no ION badge on a stack that does not need ion');
-  assert.equal(google.title, 'Needs GOOGLE_MAPS_API_KEY — add it in Provider Settings');
-  assert.equal(chipText(container.children[1]), 'Bing Aerial', 'available ion stacks stay unbadged');
-});
-
-test('models carry the stack\'s own reason and never invent an active chip', () => {
-  assert.deepEqual(mapStackChipModels([{ id: 'osm', label: 'OSM' }], null), [{
-    id: 'osm',
-    label: 'OSM',
-    available: true,
-    active: false,
-    requiresIon: false,
-    requirement: '',
-    unavailableHint: '',
-    title: 'OSM',
-  }]);
-
-  // A stack list without a controller-supplied reason still explains itself.
-  assert.deepEqual(
-    [
-      mapStackChipModel({ id: 'bing-aerial', label: 'Bing Aerial', requiresIon: true, available: false }, null),
-      mapStackChipModel({ id: 'hybrid', label: 'Hybrid', available: false }, null),
-    ].map(({ requirement, unavailableHint, title }) => ({ requirement, unavailableHint, title })),
-    [
-      {
-        requirement: 'ION',
-        unavailableHint: 'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
-        title: 'Needs CESIUM_ION_TOKEN — add it in Provider Settings',
-      },
-      {
-        requirement: '',
-        unavailableHint: 'Hybrid is unavailable',
-        title: 'Hybrid is unavailable',
-      },
-    ],
-  );
-
+test('models never invent an active chip', () => {
+  assert.deepEqual(mapStackChipModels([{ id: 'osm', label: 'OSM' }], null), [{ id: 'osm', label: 'OSM', active: false }]);
+  assert.deepEqual(mapStackChipModel({ id: 'osm', label: 'OSM' }, 'osm'), { id: 'osm', label: 'OSM', active: true });
   assert.deepEqual(mapStackChipModels(undefined, 'osm'), []);
 });
 
-test('the controller is the single source of the unavailability reason', () => {
-  const controller = readFileSync(new URL('./mapStackController.js', import.meta.url), 'utf8');
-
-  assert.doesNotMatch(
-    controller,
-    /bing-road/,
-    'Bing Road is retired: an old map=bing-road link must take the unknown-id photoreal fallback',
-  );
-
-  assert.match(
-    controller,
-    /getStacks\(\) \{[\s\S]*?unavailableReason: available \? null : this\._unavailableReason\(stack\)/,
-    'getStacks() must expose why a stack is unavailable, not just that it is',
-  );
-  assert.match(
-    controller,
-    /if \(!this\.isStackAvailable\(stack\.id\)\) \{\s*const message = this\._unavailableReason\(stack\);/,
-    'the toast and the chip tooltip must read the same reason',
-  );
-  assert.match(controller, /_unavailableReason\(stack\) \{[\s\S]*?stack\?\.requiresIon/);
+test('a share link naming a retired or unknown stack switches to Esri; a known one switches to itself', async () => {
+  // Google 3D, Bing Aerial/Labels and Bing Road were retired; old links still carry their ids.
+  const controller = new MapStackController({ imageryLayers: {}, scene: {} });
+  const switched = [];
+  controller._activateGlobeStack = async (stack) => { switched.push(stack.id); return { effectiveStackId: stack.id }; };
+  for (const id of ['photoreal', 'bing-aerial', 'bing-labels', 'bing-road', 'garbage', 'osm']) {
+    const state = await controller.setStack(id, { silent: true });
+    assert.equal(state.activeId, id === 'osm' ? 'osm' : DEFAULT_MAP_STACK, id);
+  }
+  assert.deepEqual(switched, ['esri-imagery', 'esri-imagery', 'esri-imagery', 'esri-imagery', 'esri-imagery', 'osm']);
+  assert.equal(DEFAULT_MAP_STACK, 'esri-imagery');
 });
 
 test('a missing row or document is inert rather than throwing during boot', () => {
@@ -265,10 +166,8 @@ test('the active cyan survives hover', () => {
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   const hover = css.indexOf('.map-stack-chip:hover');
   const active = css.indexOf('.map-stack-chip.active {');
-  const unavailable = css.indexOf('.map-stack-chip.unavailable');
 
   assert.ok(hover > 0 && active > hover, 'active must follow hover so it wins at equal specificity');
-  assert.ok(unavailable > active, 'unavailable must follow both so a keyless chip never lights up');
   assert.doesNotMatch(
     css.slice(hover, active),
     /:not\(/,
@@ -290,7 +189,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
       body: stripComments(body),
       order,
     }));
-  assert.ok(chipRules.length >= 5, 'expected the chip state rules to be found');
+  assert.ok(chipRules.length >= 4, 'expected the chip state rules to be found');
 
   const ringIndex = chipRules.findIndex(({ selector, body }) => selector.includes(':focus-visible')
     && /outline:\s*(?!none)\S/.test(body)
@@ -298,7 +197,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
   assert.ok(ringIndex >= 0, 'a :focus-visible rule must draw a real outline ring');
 
   // Nothing after it may touch outline again, so the ring cannot be erased by
-  // .active, :disabled, or anything added later.
+  // .active or anything added later.
   for (const rule of chipRules.slice(ringIndex + 1)) {
     assert.doesNotMatch(
       rule.body,
@@ -306,12 +205,10 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
       `"${rule.selector}" must not touch outline — it would erase the focus ring`,
     );
   }
-  for (const selector of ['.map-stack-chip.active', '.map-stack-chip.unavailable']) {
-    assert.ok(
-      chipRules.some((rule) => rule.selector.includes(selector)),
-      `expected a ${selector} rule to exist for this check to mean anything`,
-    );
-  }
+  assert.ok(
+    chipRules.slice(ringIndex + 1).some((rule) => rule.selector.includes('.map-stack-chip.active')),
+    'expected the .map-stack-chip.active rule after the ring for this check to mean anything',
+  );
 
   // `transition: all` animates outline-width off the `outline: none` base, and
   // Chrome parks that transition at 0px for chips on a wrapped line — the ring

@@ -550,9 +550,7 @@ export class StyleManager {
   }
 
   /**
-   * Renders the owner-approved map stack chip row from the matching controller
-   * entries. Cesium ion/Bing chips remain keyboard-focusable but unavailable,
-   * with an accessible explanation, until a CESIUM_ION_TOKEN is configured.
+   * Renders the map stack chip row from the matching controller entries.
    * @returns {void}
    */
   _initMapStackControl() {
@@ -640,7 +638,7 @@ export class StyleManager {
   _syncShareState() {
     this.shareLinkManager.onVisualChange({
       hudVisible: this.hud.visible,
-      mapStack: this.mapStackController?.getActiveId?.() || 'photoreal',
+      mapStack: this.mapStackController?.getActiveId?.() || 'esri-imagery',
     });
   }
 

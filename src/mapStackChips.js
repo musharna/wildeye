@@ -1,7 +1,7 @@
 // MAP STACK source chips — the always-visible replacement for the `<select>`
 // that used to sit in the Map Stack panel. One button per stack, rendered from
-// `MapStackController.getStacks()`. The four owner-approved sources below are
-// the whole shipped set; keeping the allowlist explicit means a stack added to
+// `MapStackController.getStacks()`. The sources below are the whole shipped
+// set; keeping the allowlist explicit means a stack added to
 // `MAP_STACKS` for internal use cannot reach the tray until someone names it
 // here.
 //
@@ -10,49 +10,23 @@
 // state is re-synced from controller state (never optimistically), so a failed
 // or superseded switch still leaves the truly-active stack lit.
 
-import { keySetupRequirement } from './keySetupCore.mjs';
-
 export const MAP_STACK_CHIP_CLASS = 'map-stack-chip';
 export const PRESENTED_MAP_STACK_IDS = Object.freeze([
-  'photoreal',
-  'bing-aerial',
-  'bing-labels',
   'esri-imagery',
   'osm',
 ]);
 
 /**
  * Presentation model for one map-stack chip.
- *
- * Unavailable is NOT the same as needs-an-ion-token: `photoreal` is unavailable
- * whenever the Google tileset failed to load (the startup fallback-to-OSM
- * case), and a future stack may have its own reason. The ION badge is therefore
- * gated on the stack's own `requiresIon` flag, and the tooltip quotes the
- * controller's `unavailableReason` rather than assuming one.
- * @param {{id: string, label: string, available?: boolean, requiresIon?: boolean, unavailableReason?: string|null}} stack - Stack descriptor from `getStacks()`.
+ * @param {{id: string, label: string}} stack - Stack descriptor from `getStacks()`.
  * @param {string|null} activeId - Currently active stack id.
- * @returns {{id: string, label: string, available: boolean, active: boolean, requiresIon: boolean, requirement: string, unavailableHint: string, title: string}}
+ * @returns {{id: string, label: string, active: boolean}}
  */
 export function mapStackChipModel(stack, activeId) {
-  const available = stack?.available !== false;
-  const label = String(stack?.label ?? stack?.id ?? '');
-  const requiresIon = stack?.requiresIon === true;
-  const fallbackReason = requiresIon
-    ? keySetupRequirement('cesium-ion')
-    : `${label || 'This map stack'} is unavailable`;
-  const unavailableHint = available ? '' : String(stack?.unavailableReason || fallbackReason);
   return {
     id: String(stack?.id ?? ''),
-    label,
-    available,
+    label: String(stack?.label ?? stack?.id ?? ''),
     active: !!stack?.id && stack.id === activeId,
-    requiresIon,
-    // Dropdown parity: unavailable options read "<label> · ion key". A chip has
-    // no room for that, so an ion-backed stack gets a compact badge; every
-    // unavailable chip carries the real reason in its tooltip.
-    requirement: !available && requiresIon ? 'ION' : '',
-    unavailableHint,
-    title: available ? label : unavailableHint,
   };
 }
 
@@ -92,35 +66,17 @@ export function renderMapStackChips(container, stacks, { activeId = null, onSele
   for (const model of models) {
     const chip = ownerDoc.createElement('button');
     chip.type = 'button';
-    chip.className = [
-      MAP_STACK_CHIP_CLASS,
-      model.active ? 'active' : '',
-      model.available ? '' : 'unavailable',
-    ].filter(Boolean).join(' ');
+    chip.className = [MAP_STACK_CHIP_CLASS, model.active ? 'active' : ''].filter(Boolean).join(' ');
     chip.dataset.stackId = model.id;
-    chip.title = model.title;
+    chip.title = model.label;
     chip.setAttribute('aria-pressed', String(model.active));
-    chip.setAttribute('aria-disabled', String(!model.available));
-    if (!model.available) {
-      chip.setAttribute('aria-label', `${model.label} unavailable: ${model.unavailableHint}`);
-    }
 
     const label = ownerDoc.createElement('span');
     label.className = 'map-stack-chip-label';
     label.textContent = model.label;
     chip.appendChild(label);
 
-    if (model.requirement) {
-      const requirement = ownerDoc.createElement('span');
-      requirement.className = 'map-stack-chip-req';
-      requirement.textContent = model.requirement;
-      chip.appendChild(requirement);
-    }
-
-    chip.addEventListener('click', () => {
-      if (!model.available) return;
-      onSelect?.(model.id);
-    });
+    chip.addEventListener('click', () => { onSelect?.(model.id); });
     container.appendChild(chip);
   }
 
@@ -128,8 +84,7 @@ export function renderMapStackChips(container, stacks, { activeId = null, onSele
 }
 
 /**
- * Re-points the active chip at controller state. Availability never changes at
- * runtime (it tracks the ion token), so only the active/pressed pair is synced.
+ * Re-points the active chip at controller state: only the active/pressed pair changes.
  * @param {HTMLElement} container - Row element.
  * @param {string|null} activeId - Currently active stack id.
  * @returns {void}

@@ -115,8 +115,10 @@ try {
   report('bundle-strings', bundleLeft.length === 0 && scripts.some((s) => s.text.includes('api.gbif.org')),
     { godsEyeLeft: bundleLeft, scanned: scripts.length });
   const cutRequests = [...new Set(requests.filter((u) => CUT_REQUEST.test(u)).map((u) => u.slice(0, 120)))];
-  report('requests', cutRequests.length === 0 && requests.some((u) => /\/data\/[^?]+\.(geo)?json/.test(u)),
-    { godsEyeLeft: cutRequests.slice(0, 8), total: requests.length });
+  // Positive control: the keyless basemap loaded (no layer is on at first load, so no data file is fetched).
+  const basemap = ['services.arcgisonline.com', 'terrain.reearth.land'].filter((host) => requests.some((u) => new URL(u).host === host));
+  report('requests', cutRequests.length === 0 && basemap.length === 2,
+    { godsEyeLeft: cutRequests.slice(0, 8), basemap, total: requests.length });
   // The HUD keeps its plain line (A19): after the load wait it shows a composed readout, not its placeholder.
   report('hud-line', /UTC/.test(inv.hudSummary) && !/Awaiting/.test(inv.hudSummary), { hudSummary: inv.hudSummary.slice(0, 160) });
   const leftLogs = CUT_LOGS.filter((p) => logPrefixes.has(p));
