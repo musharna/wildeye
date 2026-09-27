@@ -164,6 +164,34 @@ try {
     JSON.stringify(esriTileFailureFallback),
   );
 
+  // A tile must take focus in the same task that opens the tray, with no frame drawn in between. The open fade's first frame is what used to
+  // flip the popover to visibility: visible, so on a busy page (just after the OSM fallback above) the tray's 240 ms focus timer fired on a
+  // still-hidden tile, focus() did nothing, and Enter left focus on the toggle. Negative control in the same check: while the tray is closed
+  // the tile must not take focus.
+  const sameTaskFocus = await page.evaluate(() => {
+    const toggle = document.getElementById('control-panel-toggle');
+    const panel = document.getElementById('control-panel');
+    const chip = panel.querySelector('.map-stack-chip.active, .map-stack-chip');
+    const collapsedBefore = panel.classList.contains('collapsed');
+    chip.focus();
+    const closedLanded = document.activeElement === chip;
+    toggle.focus();
+    toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    const expanded = toggle.getAttribute('aria-expanded');
+    const openVisibility = getComputedStyle(chip).visibility;
+    chip.focus();
+    const openLanded = document.activeElement === chip;
+    panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    return { collapsedBefore, closedLanded, expanded, openVisibility, openLanded, collapsedAfter: panel.classList.contains('collapsed') };
+  });
+  check(
+    'a Map Source tile takes focus in the same task that opens the tray, and not while it is closed',
+    sameTaskFocus.collapsedBefore && !sameTaskFocus.closedLanded && sameTaskFocus.expanded === 'true'
+      && sameTaskFocus.openVisibility === 'visible' && sameTaskFocus.openLanded && sameTaskFocus.collapsedAfter,
+    JSON.stringify(sameTaskFocus),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
   await page.focus('#control-panel-toggle');
   await page.keyboard.press('Enter');
   // Focus moves to a tile after the tray's open transition; poll for it (3 s ceiling) instead of a fixed wait.
@@ -347,9 +375,15 @@ try {
     ._setMapStack('esri-imagery', { syncShare: false }));
   // Hand the tray back OPEN and unpinned — the responsive block below starts by
   // clicking the pin control, which is only hittable while the tray is showing.
-  await page.evaluate(() => window.__godsEyeView.styleManager
-    .setPanelCollapsed('control-panel', false, { explicit: true }));
-  await new Promise((resolve) => setTimeout(resolve, 240));
+  // Open it the way a pointer reaches the pin: hovering the wing cancels the
+  // mouse-away close the leave above scheduled (420 ms) and opens the tray. A
+  // direct setPanelCollapsed(false) left that close pending, and it fired after
+  // the old fixed 240 ms wait, collapsing the tray under the pin click.
+  await page.hover('#control-panel-toggle');
+  await page.waitForFunction(
+    () => !document.getElementById('control-panel').classList.contains('collapsed'),
+    { timeout: 3000 },
+  );
   check(
     'a tile click does not exempt the unpinned tray from mouse-away auto-dismiss',
     dismissAfterTileClick.afterClick.collapsed === false
