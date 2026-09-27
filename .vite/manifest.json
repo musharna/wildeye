@@ -1,41 +1,27 @@
 {
-  "_vendor-cesium-B_0GIsZ3.js": {
-    "file": "assets/vendor-cesium-B_0GIsZ3.js",
+  "_vendor-cesium-eRKAzoPc.js": {
+    "file": "assets/vendor-cesium-eRKAzoPc.js",
     "name": "vendor-cesium"
   },
   "index.html": {
-    "file": "assets/index-Cbckdjn8.js",
+    "file": "assets/index-DR_K7EH0.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_vendor-cesium-B_0GIsZ3.js"
+      "_vendor-cesium-eRKAzoPc.js"
     ],
     "dynamicImports": [
-      "src/data/local_data/natural_earth/regions.json",
-      "src/data/local_data/natural_earth/marine.json",
       "src/data/egm96Grid.generated.js"
     ],
     "css": [
-      "assets/index-SYGn5X-N.css"
+      "assets/index-B4nK98KM.css"
     ]
   },
   "src/data/egm96Grid.generated.js": {
     "file": "assets/egm96Grid.generated-BvAJVAbN.js",
     "name": "egm96Grid.generated",
     "src": "src/data/egm96Grid.generated.js",
-    "isDynamicEntry": true
-  },
-  "src/data/local_data/natural_earth/marine.json": {
-    "file": "assets/marine-BOD1SOq9.js",
-    "name": "marine",
-    "src": "src/data/local_data/natural_earth/marine.json",
-    "isDynamicEntry": true
-  },
-  "src/data/local_data/natural_earth/regions.json": {
-    "file": "assets/regions-iO9fN03W.js",
-    "name": "regions",
-    "src": "src/data/local_data/natural_earth/regions.json",
     "isDynamicEntry": true
   }
 }
