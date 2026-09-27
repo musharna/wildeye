@@ -22,33 +22,12 @@ SOFTWARE.
 
 ---
 
-NOTE ON THIRD-PARTY DATA AND ASSETS — THE MIT LICENSE ABOVE COVERS THE SOURCE
-CODE ONLY.
+NOTE ON THIRD-PARTY DATA — THE MIT LICENSE ABOVE COVERS THE SOURCE CODE ONLY.
 
-The datasets bundled under src/data/local_data/, and all data fetched from
-third-party providers at runtime, are owned by their respective sources and
-are NOT licensed under MIT. They are included/visualized for convenience and
-remain subject to their own licenses and terms. Notably:
+The data files this project builds and serves (public/data/, written by the
+scripts in pipeline/) and the map tiles and terrain fetched at runtime (Esri,
+OpenStreetMap, Re:Earth) belong to their sources and are NOT licensed under
+MIT. Each keeps its own licence and terms, including any required credit.
 
-  - TeleGeography Submarine Cable Map (src/data/local_data/
-    telegeography_submarine_cables/): CC BY-NC-SA 3.0 — NonCommercial +
-    ShareAlike. NOT for commercial use. If you use this project commercially,
-    remove these files or obtain a commercial license from TeleGeography.
-  - Datacenters and Dams (OpenStreetMap / Open Infrastructure Map extracts):
-    Open Database License (ODbL) 1.0 — attribution + share-alike on the data.
-  - NASA FIRMS active-fire snapshot: CC0 / U.S. public domain (citation
-    requested).
-
-Live sources (Google Maps, OpenSky, adsb.lol, AISStream, CelesTrak, USGS,
-OSM Overpass, City of Austin, GBFS) are fetched at runtime under each
-provider's terms; some (e.g. Google Maps, OpenSky) restrict commercial use
-and require you to supply your own credentials.
-
-In short: the MIT grant does not extend to any third-party data. See
-DATA_SOURCES.md for the full per-source license + attribution summary, and
-remove any dataset whose terms don't fit your use.
-
-The 3D models under public/models/ are also third-party works and are NOT
-licensed under MIT. They remain under their individual licenses. See
-public/models/README.md for the author, source, license, modification notice,
-and attribution covering each model file.
+DATA_SOURCES.md lists each source's licence and required attribution, and the
+sources that were left out because their terms do not allow redisplay.

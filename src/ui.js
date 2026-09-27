@@ -3,21 +3,11 @@ import { retroShader } from './styles/retro.js';
 import { animeShader } from './styles/anime.js';
 import { noirShader } from './styles/noir.js';
 import { snowShader } from './styles/snow.js';
-import {
-  CITY_POIS,
-  GLOBE_VIEW,
-  flyToGlobeView,
-  flyToPresetLocation,
-  flyToPOI,
-  searchAndFlyTo,
-} from './locations.js';
-import { locationMiniStatus } from './locationStatus.js';
-import { interruptCameraMotion } from './cameraVerbs.js';
+import { GLOBE_VIEW, flyToGlobeView } from './camera.js';
 import { IntelHUD } from './hud.js';
 import { ShareLinkManager } from './sharelink.js';
 import { LayerStateCoordinator } from './data/layerState.js';
 import { renderMapStackChips, syncMapStackChips } from './mapStackChips.js';
-import { OrbitController } from './orbit.js';
 import {
   aggregateLayerLoading,
   createGlobalStatusNotice,
@@ -35,7 +25,7 @@ import {
   phoneAccordionSiblingsToCollapse,
 } from './panelStackLayout.js';
 import { SHORT_HEADER_SELECTOR, SHORT_VIEWPORT_QUERY, topBelowHeader } from './bio/shortViewport.js';
-import { beginDeferredNavigation, reassertNavigationHandoff, runExplicitNavigation } from './navigationPolicy.js';
+import { beginDeferredNavigation, reassertNavigationHandoff } from './navigationPolicy.js';
 import { holdContinuousRender, releaseContinuousRender, governorRequestRender } from './renderGovernor.js';
 
 /** Duration (ms) for shader intensity crossfade between style presets. */
@@ -46,7 +36,6 @@ const STYLES = { retro: retroShader, anime: animeShader, noir: noirShader, snow:
 const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
 const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'control-panel', pinnable: true },
-  { id: 'location-bar', pinnable: true },
   { id: 'data-panel' },
   { id: 'species-panel' },
 ]);
@@ -75,7 +64,6 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#intel-hud .hud-bottom-bar',
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
-  '#location-bar',
   '#control-panel',
 ].join(', ');
 /** Display labels shown in the mini-status readout for each active style. */
@@ -131,8 +119,6 @@ const SHARPEN_SHADER = /* glsl */ `
  *   (CRT, anime, noir, snow) and manages intensity crossfades, plus a fixed
  *   sharpen pass.
  * - Collapsible panel system with localStorage persistence.
- * - Location bar with city/POI preset pills and geocoding search.
- * - Orbit controller integration for POI fly-around.
  * - Recording mode with safe-frame overlay and HUD mode switching.
  * - Share link encoding/decoding (delegates to ShareLinkManager).
  * - Toast notification system and Intel HUD lifecycle.
@@ -181,7 +167,6 @@ export class StyleManager {
     this._loadingVisibilityHandler = null;
     this._navigationOwnerChangedRemover = null;
     this._navigationGeneration = 0;
-    this._activeLocationSearchGeneration = null;
     this._initialShareState = null;
     this._initialShareNavigationGeneration = null;
     this._initialShareRestoreTimeout = null;
@@ -203,29 +188,9 @@ export class StyleManager {
     this._globalLoadingDetail = document.getElementById('global-loading-detail');
     this._resetGlobeBtn = document.getElementById('reset-globe-view');
     this._toast = document.getElementById('toast');
-    this._locationSearch = document.getElementById('location-search');
-    this._searchToggle = document.getElementById('search-toggle');
-    this._locationPills = document.getElementById('location-pills');
-    this._poiRow = document.getElementById('poi-row');
-    this._locationBarDivider = document.getElementById('location-bar-divider');
     this._styleMiniValue = document.getElementById('style-mini-value');
-    this._locationMiniCity = document.getElementById('location-mini-city');
-    this._locationMiniPoi = document.getElementById('location-mini-poi');
     this._safeFrameOverlay = document.getElementById('safe-frame-overlay');
     this._safeFrameBox = document.getElementById('safe-frame-box');
-    this._activeLocationId = null;
-    this._expandedCityId = null;
-    this._activePoiIndex = null;
-    this._currentTarget = null; // Cesium.Cartesian3 of current POI target
-    this._currentPoi = null;    // Current POI data object
-    // Formatted address of the last free-text geocode search. Preset pills set
-    // _activeLocationId instead; a search has no preset record, so this is the
-    // only thing the mini-status can report for it.
-    this._searchedLocationLabel = null;
-
-    // Orbit controller
-    this.orbitController = new OrbitController(viewer);
-    this._orbitIndicator = null;
 
     // Intel HUD
     this.hud = new IntelHUD(viewer);
@@ -270,16 +235,13 @@ export class StyleManager {
     this._initMapStackControl();
     this._initPanelChrome();
     this._initLeftPanelAdaptiveLayout();
-    this._initLocationBar();
     this._initShareButton();
     this._initClearSelectedLayersButton();
     this._initResetGlobeButton();
     this.hud.setMode('on');
-    this._initOrbit();
     this._initRecordingOverlay();
     this._startAnimationLoop();
     this._updateStyleMiniStatus();
-    this._updateLocationMiniStatus();
 
     // Restore from URL hash if present
     const savedState = this._initialShareState;
@@ -355,57 +317,26 @@ export class StyleManager {
     });
   }
 
-  /** Advance camera authority and settle any older search UI immediately. */
-  _stampNavigation({ clearSearchedLocation = true } = {}) {
+  /** Advance camera authority: any older deferred flight is now stale. */
+  _stampNavigation() {
     this._navigationGeneration += 1;
-    // A newer destination owns the camera, so the last free-text search is no
-    // longer where we are. DEFERRED navigation opts out here and clears at the
-    // reassert seam instead: a geocode that never resolves moves no camera, and
-    // a lookup that fails must not blank a readout that is still true.
-    if (clearSearchedLocation) this.clearSearchedLocation();
-    if (this._activeLocationSearchGeneration !== null) {
-      this._settleLocationSearchUi(this._activeLocationSearchGeneration);
-    }
     return this._navigationGeneration;
   }
 
-  /** Settle only the search generation that still owns the shared input UI. */
-  _settleLocationSearchUi(generation) {
-    if (this._activeLocationSearchGeneration !== generation) return;
-    this._activeLocationSearchGeneration = null;
-    this._locationSearch?.classList.remove('searching', 'expanded');
-    if (this._locationSearch) this._locationSearch.value = '';
-    this._locationSearch?.blur();
-  }
-
-  /** Release the camera from any follow, orbit or flight before a new destination. */
-  _releaseFollowCamera({ preserveCameraFlight = false } = {}) {
+  /** Release the camera from any follow or flight before a new destination. */
+  _releaseFollowCamera() {
     this.viewer.trackedEntity = undefined;
-    interruptCameraMotion('explicit-navigation');
-    this._stopOrbit();
-    if (!preserveCameraFlight) this.viewer.camera.cancelFlight();
+    this.viewer.camera.cancelFlight();
     try {
       this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
     } catch { /* teardown race */ }
-  }
-
-  /** Run one immediate destination through the shared ownership policy. */
-  _runExplicitNavigation(navigate, releaseOptions = undefined) {
-    return runExplicitNavigation({
-      disposed: this._disposed,
-      stamp: () => this._stampNavigation(),
-      release: () => this._releaseFollowCamera(releaseOptions),
-      navigate,
-    });
   }
 
   /** Accept a delayed lookup without releasing its current camera owner. */
   _beginDeferredNavigation() {
     return beginDeferredNavigation({
       disposed: this._disposed,
-      // The searched-location readout survives the STAMP; only a flight that
-      // actually starts invalidates it (see the release hook below).
-      stamp: () => this._stampNavigation({ clearSearchedLocation: false }),
+      stamp: () => this._stampNavigation(),
     });
   }
 
@@ -415,13 +346,7 @@ export class StyleManager {
       generation,
       currentGeneration: this._navigationGeneration,
       disposed: this._disposed,
-      // Reached only once the handoff is granted, immediately before the
-      // deferred flight starts — so a lookup that failed or was superseded
-      // leaves the old readout standing.
-      release: () => {
-        this.clearSearchedLocation();
-        return this._releaseFollowCamera();
-      },
+      release: () => this._releaseFollowCamera(),
     });
   }
 
@@ -508,34 +433,24 @@ export class StyleManager {
       btn.addEventListener('click', () => this.setStyle(btn.dataset.style));
     });
 
-    // Keyboard shortcuts: 1-5, H, O, V, F, Escape
+    // Keyboard shortcuts: 1-5, H, V, F
     this._globalKeydownHandler = (e) => {
-      // Ignore when interacting with a form control (except Escape). Global
-      // hotkeys ('1'-'5', 'h', 'o', 'v', 'f') otherwise fire while a
-      // <select> dropdown is focused and its native
-      // type-ahead is in use, or while typing in a text field (M9).
-      const isFormControl = e.target?.matches?.('select, input, textarea')
-        || e.target === this._locationSearch;
-      if (isFormControl && e.key !== 'Escape') return;
+      // Ignore when interacting with a form control. Global hotkeys
+      // ('1'-'5', 'h', 'v', 'f') otherwise fire while a <select> dropdown is
+      // focused and its native type-ahead is in use, or while typing in a
+      // text field (M9).
+      if (e.target?.matches?.('select, input, textarea')) return;
 
       const keyMap = {
         '1': 'normal', '2': 'retro', '3': 'anime', '4': 'noir', '5': 'snow',
       };
       if (keyMap[e.key]) this.setStyle(keyMap[e.key]);
-      if (e.key === 'Escape') {
-        if (this._locationSearch.classList.contains('expanded')) {
-          this._locationSearch.classList.remove('expanded');
-          this._locationSearch.value = '';
-          this._locationSearch.blur();
-        }
-      }
       if (e.key.toLowerCase() === 'h') {
         this.shareLinkManager?.claimRestoreLane?.('visual');
         this.hud.toggle();
         this._scheduleAdaptivePanelLayout({ settle: true });
         this._syncShareState();
       }
-      if (e.key.toLowerCase() === 'o') this._toggleOrbit();
       if (e.key.toLowerCase() === 'v') this.toggleCleanView();
       if (e.key.toLowerCase() === 'f') {
         document.getElementById('data-panel').classList.toggle('active');
@@ -550,9 +465,7 @@ export class StyleManager {
   }
 
   /**
-   * Renders the owner-approved map stack chip row from the matching controller
-   * entries. Cesium ion/Bing chips remain keyboard-focusable but unavailable,
-   * with an accessible explanation, until a CESIUM_ION_TOKEN is configured.
+   * Renders the map stack chip row from the matching controller entries.
    * @returns {void}
    */
   _initMapStackControl() {
@@ -640,13 +553,13 @@ export class StyleManager {
   _syncShareState() {
     this.shareLinkManager.onVisualChange({
       hudVisible: this.hud.visible,
-      mapStack: this.mapStackController?.getActiveId?.() || 'photoreal',
+      mapStack: this.mapStackController?.getActiveId?.() || 'esri-imagery',
     });
   }
 
   /**
    * Initializes panel collapse buttons and restores persisted collapsed state.
-   * Also sets up hover-expand behavior for the style presets and location bar panels.
+   * Also sets up hover-expand behavior for the style presets panel.
    * @returns {void}
    */
   _initPanelChrome() {
@@ -667,20 +580,16 @@ export class StyleManager {
         allowStored: !this._initialShareState,
       });
     }
-    // The command dock always starts compact; either wing reveals on hover,
+    // The command dock always starts compact; the tray reveals on hover,
     // focus, or click and collapses again after the interaction moves away.
     this.setPanelCollapsed('control-panel', true, { syncShare: false, persist: false });
-    this.setPanelCollapsed('location-bar', true, { syncShare: false, persist: false });
     this._initAutoHoverPanel('control-panel', { openDelayMs: 140, closeDelayMs: 420 });
-    this._initAutoHoverPanel('location-bar', { openDelayMs: 140, closeDelayMs: 420 });
     this._initCommandDockPins();
-    this._initCommandDockTrayMetrics();
     this._maybeNotifyLayoutReset();
   }
 
   /**
-   * Allows either command-dock tray to remain open until explicitly unpinned.
-   * Both trays may be pinned; transient and error trays stack above them.
+   * Allows the command-dock tray to remain open until explicitly unpinned.
    * @returns {void}
    */
   _initCommandDockPins() {
@@ -706,11 +615,7 @@ export class StyleManager {
       : !panelEl.classList.contains('dock-pinned');
     panelEl.classList.toggle('dock-pinned', shouldPin);
     button.setAttribute('aria-pressed', String(shouldPin));
-    document.querySelectorAll('#command-dock .dock-pinned-top').forEach((pinnedPanel) => {
-      pinnedPanel.classList.remove('dock-pinned-top');
-    });
     if (shouldPin) {
-      panelEl.classList.add('dock-pinned-top');
       this.setPanelCollapsed(panelId, false, {
         explicit: !restore,
         restore,
@@ -718,8 +623,6 @@ export class StyleManager {
         syncShare: false,
       });
     } else {
-      const remainingPinnedPanel = document.querySelector('#command-dock .dock-pinned');
-      remainingPinnedPanel?.classList.add('dock-pinned-top');
       if (!restore && !panelEl.matches(':hover')) {
         this.setPanelCollapsed(panelId, true, {
           explicit: true,
@@ -728,61 +631,11 @@ export class StyleManager {
         });
       }
     }
-    this._updateCommandDockTrayStack();
     if (syncShare) {
       if (!restore) this.shareLinkManager?.claimRestoreLane?.('panel', panelId);
       this.shareLinkManager?.onPanelStateChange?.();
     }
     return shouldPin;
-  }
-
-  /**
-   * Tracks the live pinned-tray height so a hovered sibling can stack above it
-   * without hardcoded content dimensions.
-   * @returns {void}
-   */
-  _initCommandDockTrayMetrics() {
-    const dock = document.getElementById('command-dock');
-    if (!dock) return;
-    this._commandDockTrayObserver?.disconnect?.();
-    if (typeof ResizeObserver === 'function') {
-      this._commandDockTrayObserver = new ResizeObserver(() => this._updateCommandDockTrayStack());
-      dock.querySelectorAll('.dock-popover-content').forEach((tray) => {
-        this._commandDockTrayObserver.observe(tray);
-      });
-    }
-    this._updateCommandDockTrayStack();
-  }
-
-  /**
-   * Writes each pinned tray height and their combined stack height as CSS
-   * variables. The most recently pinned tray forms the upper level.
-   * @returns {void}
-   */
-  _updateCommandDockTrayStack() {
-    const dock = document.getElementById('command-dock');
-    if (!dock) return;
-    const locationPanel = dock.querySelector('#location-bar.dock-pinned:not(.collapsed)');
-    const presetsPanel = dock.querySelector('#control-panel.dock-pinned:not(.collapsed)');
-    const locationHeight = locationPanel?.querySelector('.dock-popover-content')?.getBoundingClientRect().height || 0;
-    const presetsHeight = presetsPanel?.querySelector('.dock-popover-content')?.getBoundingClientRect().height || 0;
-    const pinnedCount = Number(locationHeight > 0) + Number(presetsHeight > 0);
-    const locationHeightPx = Math.ceil(locationHeight);
-    const presetsHeightPx = Math.ceil(presetsHeight);
-    const topPinnedPanel = dock.querySelector('.dock-pinned-top.dock-pinned:not(.collapsed)');
-    const lowerPinnedPanel = topPinnedPanel?.id === 'location-bar' ? presetsPanel : locationPanel;
-    const lowerPinnedHeight = lowerPinnedPanel
-      ?.querySelector('.dock-popover-content')
-      ?.getBoundingClientRect().height || 0;
-    const stackHeight = pinnedCount > 1
-      ? `calc(${locationHeightPx}px + ${presetsHeightPx}px + 1.2rem)`
-      : `${locationHeightPx + presetsHeightPx}px`;
-    dock.style.setProperty('--dock-location-pinned-height', `${locationHeightPx}px`);
-    dock.style.setProperty('--dock-presets-pinned-height', `${presetsHeightPx}px`);
-    dock.style.setProperty('--dock-lower-pinned-height', `${Math.ceil(lowerPinnedHeight)}px`);
-    dock.style.setProperty('--dock-pinned-stack-height', stackHeight);
-    dock.classList.toggle('dock-has-pinned-tray', pinnedCount > 0);
-    dock.classList.toggle('dock-has-two-pinned-trays', pinnedCount > 1);
   }
 
   /**
@@ -854,11 +707,10 @@ export class StyleManager {
     // Plain `document.activeElement` is the wrong test — Chromium focuses a
     // <button> on mouse press, so once Map Source moved into this tray a tile
     // CLICK left focus parked inside and the popover never dismissed on
-    // mouse-away (owner field report; Location, whose input is genuinely
-    // keyboard-focused when clicked, still dismissed). `:focus-visible` is the
-    // platform's own pointer-vs-keyboard focus signal, so a typed-into field
-    // still holds the tray open while a clicked tile does not. A browser
-    // without `:focus-visible` keeps the conservative hold.
+    // mouse-away (owner field report). `:focus-visible` is the platform's own
+    // pointer-vs-keyboard focus signal, so keyboard focus still holds the tray
+    // open while a clicked tile does not. A browser without `:focus-visible`
+    // keeps the conservative hold.
     const keyboardFocusInside = () => {
       const active = document.activeElement;
       if (!active || !panelEl.contains(active)) return false;
@@ -973,7 +825,6 @@ export class StyleManager {
    */
   attachDataManager(dataManager) {
     this._dataManager = dataManager || null;
-    this.hud.attachDataManager(this._dataManager);
     if (this._dataManagerUnsubscribe) {
       this._dataManagerUnsubscribe();
       this._dataManagerUnsubscribe = null;
@@ -1519,21 +1370,9 @@ export class StyleManager {
         this.setPanelCollapsed(siblingId, true, { restore, persist, syncShare });
       }
     }
-    if (!nextCollapsed && !restore && panelId === 'location-bar') {
-      const otherPanel = document.getElementById('control-panel');
-      if (otherPanel && !otherPanel.classList.contains('dock-pinned')) {
-        this.setPanelCollapsed('control-panel', true, { restore, persist, syncShare });
-      }
-    } else if (!nextCollapsed && !restore && panelId === 'control-panel') {
-      const otherPanel = document.getElementById('location-bar');
-      if (otherPanel && !otherPanel.classList.contains('dock-pinned')) {
-        this.setPanelCollapsed('location-bar', true, { restore, persist, syncShare });
-      }
-    }
     panelEl.classList.toggle('collapsed', nextCollapsed);
     this._syncPanelCollapseButton(panelEl);
     if (persist !== false) this._savePanelCollapsedState(panelId, nextCollapsed);
-    requestAnimationFrame(() => this._updateCommandDockTrayStack());
     this._scheduleLeftPanelLayout({
       reconsiderAutoCollapse: this._leftPanelStack?.contains(panelEl) === true,
     });
@@ -1851,250 +1690,6 @@ export class StyleManager {
     this._loadingFeedbackTicker = null;
   }
 
-  // ── Location Bar ─────────────────────────────
-
-  /**
-   * Initializes the location bar: renders city pills from CITY_POIS, sets up
-   * QWERTY keyboard navigation for POI selection, wires the search toggle
-   * and geocoding search input.
-   * @returns {void}
-   */
-  _initLocationBar() {
-    const QWERTY_KEYS = ['Q', 'W', 'E', 'R', 'T'];
-
-    // Render city pills (no submenu wrappers — POI row is separate)
-    for (const [cityId, city] of Object.entries(CITY_POIS)) {
-      const pill = document.createElement('button');
-      pill.className = 'location-pill';
-      pill.dataset.locationId = cityId;
-      pill.textContent = city.name;
-      pill.addEventListener('click', () => this._onCityPillClick(cityId));
-      this._locationPills.appendChild(pill);
-    }
-
-    // QWERTY keyboard navigation for POIs
-    this._poiKeydownHandler = (e) => {
-      if (!this._expandedCityId) return;
-      // Bail while a form control is focused so POI hotkeys don't fire from a
-      // <select> dropdown's type-ahead or while typing in a field (M9).
-      const isFormControl = e.target?.matches?.('select, input, textarea')
-        || e.target === this._locationSearch;
-      if (isFormControl) return;
-
-      const keyIndex = QWERTY_KEYS.indexOf(e.key.toUpperCase());
-      if (keyIndex === -1) return;
-
-      const city = CITY_POIS[this._expandedCityId];
-      if (city && keyIndex < city.pois.length) {
-        this._onPoiClick(this._expandedCityId, keyIndex);
-      }
-    };
-    document.addEventListener('keydown', this._poiKeydownHandler);
-
-    // Search toggle (expand/collapse)
-    this._searchToggle.addEventListener('click', () => {
-      this._locationSearch.classList.toggle('expanded');
-      if (this._locationSearch.classList.contains('expanded')) {
-        this._locationSearch.focus();
-      }
-    });
-
-    // Search submit on Enter
-    this._locationSearch.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        const query = this._locationSearch.value.trim();
-        if (!query) return;
-        const generation = this._beginDeferredNavigation();
-        if (generation === false) {
-          this._locationSearch.classList.remove('searching');
-          this._locationSearch.blur();
-          return;
-        }
-        this._activeLocationSearchGeneration = generation;
-        this._locationSearch.classList.add('searching');
-        try {
-          const destination = await searchAndFlyTo(this.viewer, query, {
-            beforeFly: () => this._reassertNavigationHandoff(generation),
-          });
-          if (this._disposed || generation !== this._navigationGeneration) return;
-          if (destination?.cancelled) {
-            // Authority changed while the lookup was resolving; remain inert.
-          } else if (destination) {
-            // The ACTIVE STYLE indicator reports the STYLE and nothing else.
-            // Writing the searched city here made the top-right corner read
-            // "ACTIVE STYLE / TOKYO"; where the camera is belongs to the
-            // LOCATION panel's own readout, which is updated below.
-            //
-            // Set before _setActiveLocation(null) so its own mini-status
-            // refresh already sees the destination — the readout never blinks
-            // through "Location: --" on the way to the searched place.
-            this._searchedLocationLabel = destination.label || query;
-            this._setActiveLocation(null);
-            this._currentPoi = null;
-            this._collapsePOIRow();
-            this._updateLocationMiniStatus();
-          } else {
-            this._showToast('Location not found');
-          }
-        } catch (err) {
-          console.error('[Search] Geocoding failed:', err);
-          if (this._disposed || generation !== this._navigationGeneration) return;
-          this._showToast('Search failed');
-        } finally {
-          this._settleLocationSearchUi(generation);
-        }
-      }
-    });
-  }
-
-  /**
-   * Handles a city pill click: toggles POI row collapse if same city,
-   * otherwise expands the POI row, flies to the city's first POI, and
-   * tracks the target position for orbit mode.
-   * @param {string} cityId - Identifier of the clicked city.
-   * @returns {void}
-   */
-  _onCityPillClick(cityId) {
-    if (this._expandedCityId === cityId) {
-      // Same city clicked again — toggle collapse
-      this._collapsePOIRow();
-      return;
-    }
-
-    const result = this._runExplicitNavigation(() => flyToPresetLocation(this.viewer, cityId));
-    if (result === false) return;
-    this._expandPOIRow(cityId);
-    this._setActiveLocation(cityId);
-    this._activePoiIndex = 0;
-    this._updatePoiHighlight();
-
-    // Track current target + POI for orbit
-    if (result) {
-      this._currentTarget = result.targetPosition;
-      this._currentPoi = CITY_POIS[cityId].pois[0];
-    }
-    this._updateLocationMiniStatus();
-  }
-
-  /**
-   * Handles a POI pill click: stops orbit, flies to the POI, highlights it,
-   * and saves the target position for future orbit activation.
-   * @param {string} cityId - Parent city identifier.
-   * @param {number} poiIndex - Index of the POI within the city's pois array.
-   * @returns {void}
-   */
-  _onPoiClick(cityId, poiIndex) {
-    const result = this._runExplicitNavigation(() => flyToPOI(this.viewer, cityId, poiIndex));
-    if (result === false) return;
-    this._setActiveLocation(cityId);
-    this._activePoiIndex = poiIndex;
-    this._updatePoiHighlight();
-
-    // Track current target + POI for orbit
-    if (result) {
-      this._currentTarget = result.targetPosition;
-      this._currentPoi = CITY_POIS[cityId].pois[poiIndex];
-    }
-    this._updateLocationMiniStatus();
-  }
-
-  /**
-   * Builds and shows the POI pill row for a city. Each pill displays a
-   * QWERTY keyboard shortcut key and the POI name.
-   * @param {string} cityId - City whose POIs to render.
-   * @returns {void}
-   */
-  _expandPOIRow(cityId) {
-    const QWERTY_KEYS = ['Q', 'W', 'E', 'R', 'T'];
-    const city = CITY_POIS[cityId];
-    if (!city) return;
-
-    this._expandedCityId = cityId;
-
-    // Build POI pill buttons
-    this._poiRow.innerHTML = '';
-    city.pois.forEach((poi, idx) => {
-      const pill = document.createElement('button');
-      pill.className = 'poi-pill';
-      pill.dataset.poiIndex = idx;
-      pill.innerHTML = `<span class="poi-pill-key">${QWERTY_KEYS[idx] || idx + 1}</span><span class="poi-pill-name">${poi.name}</span>`;
-      pill.addEventListener('click', () => this._onPoiClick(cityId, idx));
-      this._poiRow.appendChild(pill);
-    });
-
-    // Animate expansion
-    requestAnimationFrame(() => {
-      this._poiRow.classList.add('expanded');
-      this._locationBarDivider.classList.add('visible');
-    });
-  }
-
-  /**
-   * Hides the POI pill row and clears the expanded city state.
-   * @returns {void}
-   */
-  _collapsePOIRow() {
-    this._expandedCityId = null;
-    this._activePoiIndex = null;
-    this._poiRow.classList.remove('expanded');
-    this._locationBarDivider.classList.remove('visible');
-  }
-
-  /**
-   * Highlights the active POI pill and removes highlight from all others.
-   * @returns {void}
-   */
-  _updatePoiHighlight() {
-    this._poiRow.querySelectorAll('.poi-pill').forEach(pill => {
-      pill.classList.toggle('active', parseInt(pill.dataset.poiIndex) === this._activePoiIndex);
-    });
-  }
-
-  /**
-   * Forget the last free-text search destination and repaint the LOCATION
-   * readout. Public so camera owners that fly on their own — scene playback
-   * most of all — can invalidate it without reaching into private state.
-   * @returns {void}
-   */
-  clearSearchedLocation() {
-    if (this._searchedLocationLabel === null) return;
-    this._searchedLocationLabel = null;
-    this._updateLocationMiniStatus();
-  }
-
-  /**
-   * Sets the active city location, highlights its pill, and updates the mini-status readout.
-   * @param {string|null} locationId - City identifier, or null to clear.
-   * @returns {void}
-   */
-  _setActiveLocation(locationId) {
-    this._activeLocationId = locationId;
-    // A preset city is now what the camera is framed on, so any earlier
-    // free-text destination has been superseded. Clearing only on a real id
-    // leaves the search path's own _setActiveLocation(null) untouched.
-    if (locationId) this._searchedLocationLabel = null;
-    this._locationPills.querySelectorAll('.location-pill').forEach(pill => {
-      pill.classList.toggle('active', pill.dataset.locationId === locationId);
-    });
-    this._updateLocationMiniStatus();
-  }
-
-  /**
-   * Updates the collapsed mini-status readout with the current destination:
-   * a preset city + POI/landmark, or the last free-text geocode search.
-   * @returns {void}
-   */
-  _updateLocationMiniStatus() {
-    if (!this._locationMiniCity || !this._locationMiniPoi) return;
-    const lines = locationMiniStatus({
-      city: this._activeLocationId ? CITY_POIS[this._activeLocationId] : null,
-      currentPoi: this._currentPoi,
-      searchedLabel: this._searchedLocationLabel,
-    });
-    this._locationMiniCity.textContent = lines.city;
-    this._locationMiniPoi.textContent = lines.poi;
-  }
-
   /**
    * Updates the collapsed mini-status readout with the active style label.
    * @param {string} [styleName=this.activeStyle] - Style name to display.
@@ -2103,50 +1698,6 @@ export class StyleManager {
   _updateStyleMiniStatus(styleName = this.activeStyle) {
     if (!this._styleMiniValue) return;
     this._styleMiniValue.textContent = STYLE_STATUS_LABELS[styleName] || String(styleName || 'normal').toUpperCase();
-  }
-
-  // ── Orbit Mode ──────────────────────────────
-
-  /**
-   * Creates the orbit mode indicator DOM element and appends it to the body.
-   * @returns {void}
-   */
-  _initOrbit() {
-    // Create orbit indicator element
-    this._orbitIndicator = document.createElement('div');
-    this._orbitIndicator.id = 'orbit-indicator';
-    this._orbitIndicator.innerHTML = '<span class="orbit-icon">&#x21BB;</span> ORBIT';
-    document.body.appendChild(this._orbitIndicator);
-  }
-
-  /**
-   * Toggles the orbit controller around the current POI target. Shows a toast
-   * if no target position has been set (user must fly to a POI first).
-   * @returns {void}
-   */
-  _toggleOrbit() {
-    if (!this._currentTarget) {
-      this._showToast('Fly to a POI first');
-      return;
-    }
-
-    const isActive = this.orbitController.toggle(this._currentTarget, {
-      radius: this._currentPoi?.alt || 500,
-      pitch: this._currentPoi?.pitch || -30,
-    });
-
-    this._orbitIndicator.classList.toggle('active', isActive);
-  }
-
-  /**
-   * Stops orbit mode if active and hides the orbit indicator.
-   * @returns {void}
-   */
-  _stopOrbit() {
-    if (this.orbitController.active) {
-      this.orbitController.stop();
-      this._orbitIndicator.classList.remove('active');
-    }
   }
 
   /** Wire the persistent reset-to-globe control. */
@@ -2219,8 +1770,6 @@ export class StyleManager {
   resetToGlobeView() {
     if (this._globeResetPromise) return this._globeResetPromise;
     this._stampNavigation();
-    interruptCameraMotion('reset-globe');
-    this._stopOrbit();
     this.viewer.trackedEntity = undefined;
     this.viewer.camera.cancelFlight();
     this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
@@ -2355,8 +1904,6 @@ export class StyleManager {
       this._clearSelectedLayersBtn.removeEventListener('click', this._clearSelectedLayersHandler);
       this._clearSelectedLayersHandler = null;
     }
-    this._commandDockTrayObserver?.disconnect?.();
-    this._commandDockTrayObserver = null;
     if (this._windowResizeHandler) {
       window.removeEventListener('resize', this._windowResizeHandler);
       this._windowResizeHandler = null;
@@ -2369,10 +1916,6 @@ export class StyleManager {
     if (this._globalKeydownHandler) {
       document.removeEventListener('keydown', this._globalKeydownHandler);
       this._globalKeydownHandler = null;
-    }
-    if (this._poiKeydownHandler) {
-      document.removeEventListener('keydown', this._poiKeydownHandler);
-      this._poiKeydownHandler = null;
     }
     // Cancel the rAF animation loop and release its governor hold. (perf wave 2 fix)
     if (this._animFrameId) {

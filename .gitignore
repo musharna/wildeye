@@ -10,8 +10,6 @@ output/
 .DS_Store
 .gstack/
 3d-models/
-pinokio/ENVIRONMENT
-pinokio/.installed
 
 # wildeye pipeline
 pipeline/cron.log

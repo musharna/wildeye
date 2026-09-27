@@ -131,6 +131,12 @@ test('camera-only, partial, and malformed panel shares remain valid incoming sta
     { id: 'data-panel', collapsed: false, pinned: null },
   ] });
 
+  // The retired LOCATION panel ('l') is skipped; the panel beside it still restores.
+  const oldLocation = makeManager('#v=2&lat=10&lon=20&ui=l.c.0_l.p.1_d.c.0').parseInitialHash();
+  assert.deepEqual(oldLocation.panelState, { specs: [
+    { id: 'data-panel', collapsed: false, pinned: null },
+  ] });
+
   for (const hash of [
     '#v=2&lat=10&lon=20&ui=',
     '#v=2&lat=10&lon=20&ui=unknown.c.1',
@@ -163,7 +169,7 @@ test('a share link round-trips the SPECIES panel open, and ui.js and sharelink.j
   };
   const uiIds = ids(uiSource, 'const SHARE_PANEL_STATE_SPECS = Object.freeze([');
   const registryIds = ids(fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8'), 'const SHARE_PANEL_STATE_REGISTRY = Object.freeze([');
-  assert.ok(registryIds.length >= 4, `positive control: the registry's panels are read (${registryIds})`);
+  assert.ok(registryIds.length >= 3, `positive control: the registry's panels are read (${registryIds})`);
   assert.ok(uiIds.includes('species-panel'), `ui.js shares species-panel: ${uiIds}`);
   assert.deepEqual(uiIds, registryIds, 'ui.js and sharelink.js list the same panels in the same order');
 });
@@ -172,9 +178,9 @@ test('a share link round-trips the SPECIES panel open, and ui.js and sharelink.j
 // Stack panel. Nothing is owed to a link that carried them — no build with
 // either one ever shipped publicly — so the parser no longer knows them, and
 // each takes the ordinary unknown path: an unrecognized panel token is skipped,
-// and an unrecognized stack id lands on the controller's photoreal fallback
-// (pinned live in `scripts/qa-map-source-tray.mjs`). The camera half of such a
-// link must still restore.
+// and an unrecognized stack id lands on the controller's Esri fallback
+// (pinned in `src/mapStackChips.test.mjs` and live in `scripts/qa-map-source-tray.mjs`).
+// The camera half of such a link must still restore.
 test('a retired-vocabulary link degrades to the unknown paths instead of failing', () => {
   const parsed = makeManager('#v=2&lat=10&lon=20&map=bing-road&ui=k.c.0').parseInitialHash();
   assert.equal(parsed.lat, 10);
@@ -260,7 +266,7 @@ test('clipboard rejection leaves both live URL and restore suppression untouched
 // 0..100, so `sce=0` produced an unsupported sub-94 terminus — a hole in the
 // mask, not a scope — and the next hash write serialized it straight back out.
 
-test('share-link restore forces a final stationary render for Google 3D Tiles', () => {
+test('share-link restore forces a final stationary render', () => {
   const calls = { flyTo: null, setView: null, renders: 0 };
   const viewer = {
     camera: {

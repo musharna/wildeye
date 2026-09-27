@@ -47,12 +47,10 @@
  *    container only takes up the slack AFTER every flap has landed, as one
  *    smooth width ease.
  *
- * The motion vocabulary deliberately matches the cockpit odometer roll
- * (`setCockpitRollingValue`, style.css `.cockpit-roll-token`): ~200 ms per
- * character on `cubic-bezier(0.2, 0.75, 0.25, 1)`, reduced-motion collapsing
- * the duration rather than removing the animation. What this adds over the
- * odometer is the CASCADE — the left-to-right sweep that makes a departure
- * board read as a departure board.
+ * Motion: ~200 ms per character on `cubic-bezier(0.2, 0.75, 0.25, 1)`,
+ * reduced-motion collapsing the duration rather than removing the animation.
+ * The CASCADE — the left-to-right sweep — is what makes a departure board
+ * read as a departure board.
  */
 
 /**

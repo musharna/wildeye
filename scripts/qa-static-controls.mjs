@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 /**
  * qa-static-controls.mjs — on the static (GitHub Pages) build, click every visible control once and record
- * which ones trigger failed requests (4xx/5xx), request failures or page errors. Also submits a location search.
- * Run: node scripts/qa-static-controls.mjs --url https://musharna.github.io/wildeye/ [--sections <regex>] [--no-location]
+ * which ones trigger failed requests (4xx/5xx), request failures or page errors.
+ * Run: node scripts/qa-static-controls.mjs --url https://musharna.github.io/wildeye/ [--sections <regex>]
  * --sections limits the crawl to headers whose label matches; run one section per process when the renderer runs out of memory.
  */
 import puppeteer from 'puppeteer';
 const argv = process.argv.slice(2);
 const URL = argv[argv.indexOf('--url') + 1] || 'https://musharna.github.io/wildeye/';
 const ONLY = argv.includes('--sections') ? new RegExp(argv[argv.indexOf('--sections') + 1], 'i') : null;
-const WITH_LOCATION = !argv.includes('--no-location');
 const VERBOSE = argv.includes('--verbose');
 const b = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-dev-shm-usage', '--window-size=1400,900'], defaultViewport: { width: 1400, height: 900 } });
 const p = await b.newPage();
@@ -26,7 +25,6 @@ const ready = async () => {
   await p.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
   await p.keyboard.press('Escape');
   await p.waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 15000 }).catch(() => {});
-  await p.evaluate(() => document.getElementById('location-bar')?.classList.remove('collapsed'));
 };
 await p.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await ready();
@@ -68,8 +66,6 @@ const SKIP = /import|export|download|reset|clear|delete|copy share|collapse|clos
 const clickIdx = (i) => p.evaluate((i) => { const el = document.querySelector(`[data-qa-idx="${i}"]`); if (!el || !el.offsetParent) return false; el.click(); return true; }, i).catch(() => false);
 const top = await visibleControls();
 const headers = top.filter((c) => (/^Expand |^Open compact|toggle/i.test(c.label) || /toggle/i.test(c.id || '')) && (!ONLY || ONLY.test(c.label)));
-// Location tray lives behind a dock item; open it explicitly.
-await p.evaluate(() => document.getElementById('location-bar')?.classList.remove('collapsed'));
 console.log(`${top.length} top-level controls; opening ${headers.length} sections: ${headers.map((h) => h.label).join(' · ')}`);
 const bad = [];
 const clicked = new Set(top.map((c) => c.key));
@@ -122,28 +118,7 @@ for (const h of headers) {
   const again = (await visibleControls()).find((x) => x.key === h.key);
   if (again) { await clickIdx(again.idx); await new Promise((r) => setTimeout(r, 800)); flush(); }
 }
-if (WITH_LOCATION) {
-await p.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 }); await ready(); flush();
-const loc = await probeInside('location tray');
-console.log(`  location tray: ${loc.count} inner controls`);
-}
 console.log(`clicked ${total} inner controls`);
-const controls = top;
-// Location search: type and submit
-await p.evaluate(() => { document.getElementById('location-bar')?.classList.remove('collapsed'); document.getElementById('search-toggle')?.click(); });
-await new Promise((r) => setTimeout(r, 1000));
-const hasSearch = WITH_LOCATION && await p.evaluate(() => { const i = document.getElementById('location-search'); if (!i) return false; i.scrollIntoView(); return !!i.offsetParent; });
-if (hasSearch) {
-  await p.evaluate(() => document.getElementById('search-toggle')?.click());
-  await new Promise((r) => setTimeout(r, 800));
-  await p.click('#location-search').catch(() => {});
-  await p.type('#location-search', 'Yellowstone National Park', { delay: 20 }).catch(() => {});
-  await p.keyboard.press('Enter');
-  await new Promise((r) => setTimeout(r, 8000));
-  const ev = flush();
-  const msg = await p.evaluate(() => [...document.querySelectorAll('[role="status"], .toast, .search-status, .location-status')].map((e) => e.textContent.trim()).filter(Boolean).slice(0, 3).join(' / '));
-  console.log(`SEARCH "Yellowstone National Park" → ${ev.join(' | ') || 'no failed requests'}${msg ? ` · UI: ${msg.slice(0, 160)}` : ''}`);
-} else if (WITH_LOCATION) console.log('SEARCH input not visible');
 if (dialogs.length) console.log(`dismissed ${dialogs.length} dialogs (not failures): ${[...new Set(dialogs)].join(' · ')}`);
 console.log(`${bad.length} controls produced failed requests or errors; ${navigators.length} reloaded or navigated the page: ${navigators.join(' · ') || 'none'}`);
 await b.close();

@@ -78,6 +78,15 @@ This changelog records public product changes.
   Old share links still open, with their wildlife layers.
 - wildeye: the inherited God's Eye docs and media, and unused styles. The page's
   CSS is about a third of its previous size.
+- wildeye: place navigation (the LOCATION panel, its city buttons and their
+  letter-key shortcuts, the O orbit key, and Google place search), the AI summary line in the HUD, Google
+  Photorealistic 3D Tiles and Cesium ion, and the Pinokio and dev-fresh
+  launchers. Map sources are Esri Satellite and OpenStreetMap; old links that
+  name another source open on Esri. The globe reset, species search and
+  what-lives-here stay, and the GitHub Pages site now has every feature the
+  local server has.
+- wildeye: the God's Eye security policy, test plan and `.env.example`, and the
+  unused mgrs, satellite.js, sharp and ws dependencies.
 
 ## [0.1.1] — 2026-09-01 — Installation and live-data fixes
 

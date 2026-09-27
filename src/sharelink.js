@@ -5,7 +5,7 @@ import { decodeLayerStateParams, encodeLayerStateParams } from './data/layerStat
  * Share Links — URL Hash State Management
  *
  * Encodes camera position + style into the URL hash so links can be shared.
- * Format: #v=2&lat=37.77&lon=-122.42&alt=800&heading=0&pitch=-35&roll=0&style=crt&hv=1&map=photoreal&l=…&lo=…&ui=…
+ * Format: #v=2&lat=37.77&lon=-122.42&alt=800&heading=0&pitch=-35&roll=0&style=crt&hv=1&map=esri-imagery&l=…&lo=…&ui=…
  *
  * Retired fields that old links may still carry are ignored on parse: bloom, bi, bv, sharpen, si,
  * hud (layout), cr (celestial ring), sc/scf/sce (scope mask), sp (style parameters), and the
@@ -28,10 +28,9 @@ const SHARE_CREATED_AT_PARAM = 'at';
 
 const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
   { id: 'control-panel', token: 'c', pinnable: true },
-  { id: 'location-bar', token: 'l', pinnable: true },
   { id: 'data-panel', token: 'd', pinnable: false },
   // Retired panel tokens stay unknown and are never reissued: 'k' (Map Stack), 's' (Scenes), 'v' (CCTV),
-  // 'r' (Radio), 'g' (Global Context), 'p' (DISPLAY), 'm' (style parameters).
+  // 'r' (Radio), 'g' (Global Context), 'p' (DISPLAY), 'm' (style parameters), 'l' (LOCATION).
   { id: 'species-panel', token: 'b', pinnable: false },
 ]);
 
@@ -54,7 +53,7 @@ export class ShareLinkManager {
     this._debounceTimer = null;
     this._currentStyle = 'normal';
     this._hudVisible = false;
-    this._mapStack = 'photoreal';
+    this._mapStack = 'esri-imagery';
     this._layerStateProvider = null;
     this._panelStateProvider = null;
     this._initialRestorePending = false;
@@ -111,7 +110,7 @@ export class ShareLinkManager {
       roll: parseOr(params.get('roll'), 0),
       style,
       hudVisible: params.get('hv') === '1',
-      mapStack: params.get('map') || 'photoreal',
+      mapStack: params.get('map') || 'esri-imagery',
       layerState: decodedLayerState,
       layerStateInvalid: params.get('v') === '2'
         && params.has('l')

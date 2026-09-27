@@ -1,66 +1,29 @@
 import * as Cesium from 'cesium';
 import { governorRequestRender } from './renderGovernor.js';
-import { keySetupRequirement } from './keySetupCore.mjs';
 
-/**
- * Why Google 3D is unavailable, phrased so the tooltip and toast recommend the
- * RIGHT fix. With no credentials the fix is a key (or the ion route); with a
- * key or ion token configured, the tileset failed for another reason —
- * restrictions, quota, an EEA-billed key, or the network — and telling the
- * user to add a key they already added is the wrong advice.
- * @param {boolean} hasCredentials
- * @returns {string}
- */
-export function photorealUnavailableReason(hasCredentials) {
-  if (hasCredentials) return 'Google 3D tiles unavailable — check the key\'s API restrictions, quota, or network';
-  return `${keySetupRequirement('google-maps')} — or a Cesium ion token for the ion-hosted route`;
-}
-
+/** The two keyless basemaps. Esri World Imagery is the default. */
 export const MAP_STACKS = [
-  {
-    id: 'photoreal',
-    label: 'Google 3D',
-    shortLabel: '3D',
-    kind: 'photoreal',
-    requiresIon: false,
-  },
-  {
-    id: 'bing-aerial',
-    label: 'Bing Aerial',
-    shortLabel: 'Aerial',
-    kind: 'ion',
-    style: Cesium.IonWorldImageryStyle.AERIAL,
-    requiresIon: true,
-  },
-  {
-    id: 'bing-labels',
-    label: 'Bing Labels',
-    shortLabel: 'Labels',
-    kind: 'ion',
-    style: Cesium.IonWorldImageryStyle.AERIAL_WITH_LABELS,
-    requiresIon: true,
-  },
   {
     id: 'esri-imagery',
     label: 'Esri Satellite',
     shortLabel: 'SAT',
     kind: 'esri-imagery',
-    requiresIon: false,
   },
   {
     id: 'osm',
     label: 'OSM',
     shortLabel: 'OSM',
     kind: 'osm',
-    requiresIon: false,
   },
 ];
 
+/** A share link naming a retired stack (Google 3D, Bing, Bing Road) or an unknown id lands here. */
+export const DEFAULT_MAP_STACK = 'esri-imagery';
+
 const DEFAULT_OSM_CREDIT = '© OpenStreetMap contributors';
 
-// Esri World Imagery — the keyless satellite basemap and the default keyless
-// landing (a spy-satellite simulator should open on satellite imagery, not a
-// street map). The classic ArcGIS Online tile service answers without a key;
+// Esri World Imagery — the keyless satellite basemap and the default landing.
+// The classic ArcGIS Online tile service answers without a key;
 // attribution is required and the provider carries the service's own credit
 // line. Terms note in DATA_SOURCES.md.
 const ESRI_WORLD_IMAGERY_URL =
@@ -74,32 +37,24 @@ const ESRI_ATTRIBUTION_HTML =
   '<a href="https://www.esri.com" target="_blank" rel="noopener">Powered by Esri</a>';
 
 // Keyless global ellipsoidal terrain (Re:Earth Terrain / Mapterhorn, CC BY 4.0,
-// EGM2008 geoid via NGA) — quantized-mesh 1.0, `ellipsoid` data-type. Fixes
-// regime C (keyless globe stacks previously rendered a flat
-// EllipsoidTerrainProvider — see docs/superpowers/specs/2026-07-05-entity-height-datum-design.md
-// §1a). Constructed via `.fromUrl()`, never a hand-built `{z}/{x}/{y}.terrain`
-// URL (review correction, spec §1a).
+// EGM2008 geoid via NGA) — quantized-mesh 1.0, `ellipsoid` data-type.
+// Constructed via `.fromUrl()`, never a hand-built `{z}/{x}/{y}.terrain` URL.
 const REEARTH_TERRAIN_URL = 'https://terrain.reearth.land/cesium-mesh/ellipsoid';
 
 /**
- * Controls the active globe/map stack. Google Photorealistic 3D Tiles remain
- * the cinematic default, while Cesium ion world imagery and OSM run as globe
- * imagery stacks.
+ * Controls the active basemap: the imagery layer under the globe and the
+ * keyless terrain beneath it.
  */
 export class MapStackController {
   constructor(viewer, {
-    googleTileset = null,
-    cesiumToken = '',
-    initialStack = 'photoreal',
+    initialStack = DEFAULT_MAP_STACK,
     onChange = null,
     onError = null,
   } = {}) {
     this.viewer = viewer;
-    this.googleTileset = googleTileset;
-    this.cesiumToken = String(cesiumToken || '').trim();
     this._onChange = onChange;
     this._onError = onError;
-    this._activeId = googleTileset ? initialStack : 'esri-imagery';
+    this._activeId = this.getStack(initialStack) ? initialStack : DEFAULT_MAP_STACK;
     this._imageryLayer = null;
     this._activeImageryProvider = null;
     this._removeImageryErrorListener = null;
@@ -107,63 +62,20 @@ export class MapStackController {
     this._imageryProviders = new Map();
     this._isSwitching = false;
     this._lastError = null;
-    // Tracks which terrain PROVIDER is actually installed on the scene, not
-    // just an ion-available boolean: 'world' (Cesium World Terrain, ion
-    // token), 'keyless' (Re:Earth or its Ellipsoid fallback), or null (never
-    // set yet — Cesium's own startup default). Using a tri-state here (rather
-    // than the `enabled` boolean `_setWorldTerrainEnabled` receives) matters
-    // because both the "never set" and "keyless" states pass `enabled=false`;
-    // collapsing them to a boolean would make the first real keyless switch
-    // a no-op against the initial `false` default and leave Cesium's built-in
-    // provider in place instead of installing Re:Earth terrain.
-    this._terrainMode = null;
+    // The keyless terrain is installed on the first switch and kept.
+    this._terrainInstalled = false;
     // Cache of the constructed keyless Re:Earth CesiumTerrainProvider, so
-    // repeat switches into a keyless globe stack don't refetch `layer.json`.
-    // Lives independently of `_switchGen` — construction is async and racy
-    // switches are guarded where it's awaited (`_setWorldTerrainEnabled`).
+    // repeat switches don't refetch `layer.json`.
     this._reearthTerrainProvider = null;
     // Monotonic switch counter. setStack() awaits network-bound provider
-    // creation; a rapid A→B switch where A (e.g. slow Bing) resolves AFTER B
+    // creation; a rapid A→B switch where A (e.g. slow Esri) resolves AFTER B
     // (fast OSM) would otherwise revert the user's last choice (M7). Each call
     // captures a generation and aborts its own commit once superseded.
     this._switchGen = 0;
-
-    if (!this.getStack(this._activeId) || !this.isStackAvailable(this._activeId)) {
-      this._activeId = googleTileset ? 'photoreal' : 'esri-imagery';
-    }
   }
 
   getStacks() {
-    return MAP_STACKS.map((stack) => {
-      const available = this.isStackAvailable(stack.id);
-      return {
-        ...stack,
-        available,
-        // Why this stack can't be picked, from the ONE place that decides it.
-        // A stack can be unavailable for reasons other than a missing ion
-        // token (photoreal is unavailable when the Google tileset failed to
-        // load), so callers must not infer the reason from `available` alone.
-        unavailableReason: available ? null : this._unavailableReason(stack),
-      };
-    });
-  }
-
-  /**
-   * Human-readable reason a stack can't be activated. Shared by `getStacks()`
-   * and `setStack()` so the tooltip and the toast never drift apart.
-   * @param {object} stack - Stack descriptor.
-   * @returns {string}
-   */
-  _unavailableReason(stack) {
-    if (stack?.requiresIon) return keySetupRequirement('cesium-ion');
-    if (stack?.kind === 'photoreal') return photorealUnavailableReason(this._hasPhotorealCredentials());
-    return `${stack?.label || 'This map stack'} is unavailable`;
-  }
-
-  /** A direct Google key or an ion token is enough to attempt Google 3D. */
-  _hasPhotorealCredentials() {
-    const googleKey = typeof window !== 'undefined' ? window.__GOOGLE_MAPS_API_KEY__ : '';
-    return Boolean(String(googleKey || '').trim()) || Boolean(String(this.cesiumToken || '').trim());
+    return MAP_STACKS.map((stack) => ({ ...stack }));
   }
 
   getStack(id) {
@@ -192,24 +104,8 @@ export class MapStackController {
     return this.getStack(this._activeId);
   }
 
-  isStackAvailable(id) {
-    const stack = this.getStack(id);
-    if (!stack) return false;
-    if (stack.kind === 'photoreal') return !!this.googleTileset;
-    if (stack.requiresIon) return !!this.cesiumToken;
-    return true;
-  }
-
   async setStack(id, { silent = false } = {}) {
-    const stack = this.getStack(id) || this.getStack('photoreal');
-    if (!stack) return null;
-
-    if (!this.isStackAvailable(stack.id)) {
-      const message = this._unavailableReason(stack);
-      this._lastError = message;
-      this._onError?.(message, stack);
-      return this.getState();
-    }
+    const stack = this.getStack(id) || this.getStack(DEFAULT_MAP_STACK);
 
     const gen = ++this._switchGen;
     this._isSwitching = true;
@@ -217,12 +113,7 @@ export class MapStackController {
     if (!silent) this._emitChange('switching');
 
     try {
-      let activation = null;
-      if (stack.kind === 'photoreal') {
-        await this._activatePhotoreal(gen);
-      } else {
-        activation = await this._activateGlobeStack(stack, gen);
-      }
+      const activation = await this._activateGlobeStack(stack, gen);
       // A newer switch started while we were awaiting the provider — that call
       // owns the final state now, so don't commit ours or emit a stale 'ready'.
       if (gen !== this._switchGen) return this.getState();
@@ -240,11 +131,6 @@ export class MapStackController {
       const message = error?.message || String(error);
       this._lastError = message;
       this._onError?.(message, stack);
-      if (this.googleTileset) {
-        await this._activatePhotoreal(gen);
-        if (gen !== this._switchGen) return this.getState();
-        this._activeId = 'photoreal';
-      }
       if (!silent) this._emitChange('error');
     } finally {
       // Only the latest switch clears the switching flag; a superseded call
@@ -262,27 +148,7 @@ export class MapStackController {
       stacks: this.getStacks(),
       status,
       lastError: this._lastError,
-      hasCesiumIonToken: !!this.cesiumToken,
     };
-  }
-
-  async _activatePhotoreal(gen) {
-    this._removeImageryLayer();
-    this._syncEsriAttribution(null); // Esri is no longer on screen.
-    if (this.googleTileset) this.googleTileset.show = true;
-    this.viewer.scene.globe.show = false;
-    // Terrain is left UNTOUCHED here. The photoreal globe is hidden
-    // (`globe.show = false`), so the terrain provider is inert — it renders and
-    // streams nothing. Routing this through `_setWorldTerrainEnabled(false)`
-    // would make the DEFAULT startup stack await a keyless Re:Earth `layer.json`
-    // fetch it can't use, delaying photoreal boot on a slow/blocked network and
-    // (on failure) caching the flat `EllipsoidTerrainProvider` fallback for
-    // later OSM switches. The Re:Earth fetch is therefore lazy: it happens on
-    // the first switch to an actual globe stack (`_activateGlobeStack`).
-    // `_terrainMode` is intentionally not changed — every globe-stack transition
-    // re-derives the correct provider from it (null/'world'/'keyless'), so
-    // leaving it as-is keeps the next switch correct without a photoreal fetch.
-    void gen;
   }
 
   async _activateGlobeStack(stack, gen) {
@@ -298,9 +164,7 @@ export class MapStackController {
     this._syncEsriAttribution(resolution.effectiveStackId);
     this._watchEsriProvider(resolution, gen);
 
-    if (this.googleTileset) this.googleTileset.show = false;
-    this.viewer.scene.globe.show = true;
-    await this._setWorldTerrainEnabled(!!this.cesiumToken, gen);
+    await this._installKeylessTerrain(gen);
     return resolution;
   }
 
@@ -341,9 +205,7 @@ export class MapStackController {
     let provider;
     let effectiveStackId = stack.id;
     let fallbackMessage = null;
-    if (stack.kind === 'ion') {
-      provider = await Cesium.createWorldImageryAsync({ style: stack.style });
-    } else if (stack.kind === 'esri-imagery') {
+    if (stack.kind === 'esri-imagery') {
       try {
         provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(ESRI_WORLD_IMAGERY_URL, {
           credit: ESRI_IMAGERY_CREDIT,
@@ -422,45 +284,22 @@ export class MapStackController {
   }
 
   /**
-   * Sets the scene's terrain provider for the current globe stack.
-   *
-   * `enabled` selects Cesium World Terrain (ion token present — regime B,
-   * unchanged). Disabled/keyless (regime C: OSM or any globe stack without an
-   * ion token) now tries the keyless Re:Earth ellipsoidal terrain instead of
-   * the flat `EllipsoidTerrainProvider`, falling back to the flat provider
-   * (today's behavior) if construction fails — no worse than before this fix.
-   *
-   * `CesiumTerrainProvider.fromUrl()` is async (fetches `layer.json`), so this
-   * method is async-safe: `gen` is the caller's switch generation (from
-   * `setStack`'s `_switchGen`, threaded through `_activatePhotoreal` /
-   * `_activateGlobeStack`, mirroring the M7 pattern in `_activateGlobeStack`
-   * for imagery providers). If a newer switch starts while the Re:Earth
-   * fetch is in flight, this call's result is discarded instead of
-   * clobbering the newer switch's terrain.
-   * @param {boolean} enabled
+   * Installs the keyless terrain on the first switch. `CesiumTerrainProvider.fromUrl()`
+   * is async (it fetches `layer.json`); if a newer switch starts meanwhile, that
+   * switch installs it instead (M7 pattern).
    * @param {number} [gen] — switch generation this call belongs to
    */
-  async _setWorldTerrainEnabled(enabled, gen) {
-    const targetMode = enabled ? 'world' : 'keyless';
-    if (targetMode === this._terrainMode) return;
-    if (enabled) {
-      this.viewer.scene.setTerrain(Cesium.Terrain.fromWorldTerrain({
-        requestVertexNormals: true,
-      }));
-    } else {
-      const provider = await this._getKeylessTerrainProvider();
-      // A newer switch started while the Re:Earth layer.json fetch was in
-      // flight — that call owns terrain now; don't stomp it (M7 pattern).
-      if (gen != null && gen !== this._switchGen) return;
-      this.viewer.terrainProvider = provider;
-    }
-    this._terrainMode = targetMode;
+  async _installKeylessTerrain(gen) {
+    if (this._terrainInstalled) return;
+    const provider = await this._getKeylessTerrainProvider();
+    if (gen != null && gen !== this._switchGen) return;
+    this.viewer.terrainProvider = provider;
+    this._terrainInstalled = true;
   }
 
   /**
-   * Resolves (and caches) the keyless terrain provider for globe stacks
-   * without an ion token: Re:Earth ellipsoidal quantized-mesh terrain, or
-   * `EllipsoidTerrainProvider` (flat — current/prior behavior) if the
+   * Resolves (and caches) the keyless terrain provider: Re:Earth ellipsoidal
+   * quantized-mesh terrain, or the flat `EllipsoidTerrainProvider` if the
    * Re:Earth endpoint can't be constructed. Never throws.
    * @returns {Promise<Cesium.TerrainProvider>}
    */

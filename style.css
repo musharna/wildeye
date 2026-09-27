@@ -1,7 +1,4 @@
-/* ═══════════════════════════════════════════════
-   GOD'S EYE VIEW — Dark Sci-Fi UI
-   Apple meets Blade Runner
-   ═══════════════════════════════════════════════ */
+/* wildeye — globe UI styles */
 
 :root {
   --bg-dark: #0a0a0f;
@@ -21,13 +18,9 @@
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   --left-stack-x: 52px;
-  --right-rail-x: 52px;
   --left-stack-top: 26vh;
   --left-stack-gap: 72px;
   --left-collapsed-width: 176px;
-  --display-panel-expanded-width: 272px;
-  --cockpit-radio-collapsed-width: 148px;
-  --cockpit-radio-expanded-width: 232px;
 }
 
 * {
@@ -55,30 +48,6 @@ html, body {
   left: 0;
 }
 
-/* Unified world-overlay host: detection uses one host-owned blend surface
-   beneath the shared text/card canvas; both share one frame path. The root
-   holds ONLY the card canvas — it is a stacking context (z-index below), and
-   a canvas that blends against the scene cannot live inside one. */
-
-/* Scope mask — the explicit circular viewport treatment (see
-   src/scopeMask.js for the emergent-artifact history). z2 keeps it above
-   the WebGL scene but under the z5 detection surface, preserving the old
-   compositing order where detection's blend rode the masked scene. */
-
-/* The detection surface is host-owned but parented into #cesiumContainer
-   (position:absolute, z-index:auto — NOT a stacking context) so its
-   `mix-blend-mode: screen` composites against the WebGL scene. z5 keeps it
-   under the z6 root that carries the shared card canvas; do not move this
-   surface inside #world-overlay-root, which would isolate the blend. */
-
-/* Canvas cards retain their spatial renderer; this parallel focusable list
-   exposes only the currently painted actionable targets to assistive tech. */
-
-/* ── Source-backed cockpit weather ─────────────
-   Low-resolution GPU cloud pass composited only inside the cockpit keyhole. */
-
-/* ── Full-globe celestial keyhole ring ─────── */
-
 /* Hide Cesium default UI elements */
 .cesium-viewer-toolbar,
 .cesium-viewer-animationContainer,
@@ -92,20 +61,18 @@ html, body {
   display: none !important;
 }
 
-/* Data-source attribution (Google Maps / 3D Tiles, etc.).
-   Required by the Google Maps Platform Terms of Service — keep it visible.
-   Styled to be unobtrusive but legible against the dark UI. */
+/* Data-source attribution (Cesium, the basemap and terrain). Required by the
+   providers' terms — keep it visible. Styled to be unobtrusive but legible
+   against the dark UI. */
 #cesium-credits {
   position: fixed;
-  /* Bottom-LEFT corner, mirrored from the GEV mic pill (right:36/bottom:36) so the two bottom
-     corners are symmetric; sits below the coordinate HUD (.hud-bottom-left, bottom:180). Was
-     dead-center at the bottom, tucked under the LOCATIONS/STYLE panels. Must stay visible (Google
-     /Cesium attribution ToS). */
+  /* Bottom-LEFT corner, below the coordinate HUD (.hud-bottom-left, bottom:180). Must stay
+     visible (attribution terms). */
   bottom: 36px;
   left: 36px;
   z-index: 90;
   max-width: 90vw;
-  /* Keep the Google logo + "Data attribution" link on ONE line — they were wrapping to a second
+  /* Keep the logo + "Data attribution" link on ONE line — they were wrapping to a second
      row (looked like it was falling over). nowrap + a roomy max-width holds them inline. */
   white-space: nowrap;
   pointer-events: auto;
@@ -169,17 +136,6 @@ html, body {
     margin: 0 !important;
   }
 }
-/* Clean-view / recording: the Google + Cesium attribution MUST stay visible.
-   Google Maps Platform ToS and Cesium's terms require the credit whenever the
-   content is displayed — and these are exactly the modes used to record demos
-   and launch videos, so hiding #cesium-credits here (as it was before) shipped
-   non-compliant footage. The full credit line — Cesium/Ion logo, "Google Maps",
-   and the "Data attribution" link that opens the per-layer license popover —
-   stays on screen; it's already styled small and unobtrusive above. The GEV
-   chrome (panels/HUD) still fades via its own rules; only the required notice
-   is exempt. (Note: Cesium re-applies inline styles on the credit elements each
-   frame, so the on-screen credit content is owned by Cesium's update loop, not
-   CSS overrides — we deliberately don't fight it here.) */
 
 /* ── Title Bar ────────────────────────────────── */
 #title-bar {
@@ -225,7 +181,6 @@ html, body {
 
 #title-bar .title-logo::before,
 #title-bar .title-logo::after {
-  --radio-broadcast-opacity: .28;
   content: '';
   position: absolute;
   z-index: 1;
@@ -243,21 +198,9 @@ html, body {
 }
 
 #title-bar .title-logo::after {
-  --radio-broadcast-opacity: .17;
   top: -15px;
   width: 27px;
   height: 13px;
-}
-
-@keyframes title-radio-broadcast {
-  0%, 100% {
-    opacity: calc(var(--radio-broadcast-opacity) * .55);
-    transform: translateX(-50%) scale(.94);
-  }
-  50% {
-    opacity: var(--radio-broadcast-opacity);
-    transform: translateX(-50%) scale(1);
-  }
 }
 
 .brand-logo {
@@ -577,17 +520,6 @@ html, body {
   50% { opacity: 1; }
 }
 
-/* ── Post-Processing Toggles ─────────────────── */
-
-/* Expanded Display already owns the glass shell. Keep its header visually
- * integrated with that container, matching the other expanded panel headers;
- * the collapsed launcher retains the standalone card treatment above. */
-
-/* ── Bloom Slider (inline with toggle) ───────── */
-
-/* Quantitative companion sliders share Display / Sharpen's visible rail,
- * circular thumb, glow, and value treatment while retaining a taller hit area. */
-
 /* Map Source tiles live with Visual Presets in the bottom command tray. */
 .map-source-section {
   display: grid;
@@ -609,7 +541,7 @@ html, body {
 
 .map-stack-chip-row {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
 }
 
@@ -646,17 +578,10 @@ html, body {
   display: none;
 }
 
-@media (max-width: 620px) {
-  .map-stack-chip-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* Order matters, and matches `.data-toggle-btn`: hover/focus, then active, then
-   disabled — all at the same specificity, so the later rule wins. Hovering the
-   active chip must not wash the cyan out, and a disabled chip must not light up
-   under the cursor. Do not add `:not(...)` here: it would raise specificity and
-   let hover beat `.active` again. */
+/* Order matters, and matches `.data-toggle-btn`: hover/focus, then active — at
+   the same specificity, so the later rule wins and hovering the active chip does
+   not wash the cyan out. Do not add `:not(...)` here: it would raise specificity
+   and let hover beat `.active` again. */
 .map-stack-chip:hover,
 .map-stack-chip:focus-visible {
   border-color: var(--glass-border-hover);
@@ -678,20 +603,6 @@ html, body {
   border-color: var(--accent);
   background: var(--accent-dim);
   box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
-}
-
-.map-stack-chip.unavailable,
-.map-stack-chip[aria-disabled='true'] {
-  color: rgba(232, 234, 237, 0.28);
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  cursor: not-allowed;
-}
-
-.map-stack-chip-req {
-  font-size: 7px;
-  letter-spacing: 0.3px;
-  color: rgba(232, 234, 237, 0.28);
 }
 
 .pp-stack-status {
@@ -741,294 +652,10 @@ body.ui-clean-view #style-indicator,
 body.ui-clean-view #top-center-actions,
 body.ui-clean-view #global-loading-status,
 body.ui-clean-view #control-panel,
-body.ui-clean-view #location-bar,
 body.ui-clean-view #data-panel {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
-}
-
-/* ── Detection Toggle States ─────────────────── */
-
-@keyframes detection-pulse {
-  0%, 100% { box-shadow: 0 0 12px rgba(0, 255, 80, 0.15); }
-  50% { box-shadow: 0 0 22px rgba(0, 255, 80, 0.35); }
-}
-
-/* ── Parameter Slider Panel ──────────────────── */
-
-/* Display owns the constrained desktop scroll surface. Keeping Parameters as
- * a second scroll container traps wheel/touch input at its boundary and lets
- * the flex column compress newly added preset rows below the visible panel. */
-
-/* ── Location Bar ────────────────────────────── */
-#location-bar {
-  position: fixed;
-  bottom: 130px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  width: auto;
-  max-width: 720px;
-}
-
-#location-bar .panel-glow {
-  position: absolute;
-  inset: -20px;
-  background: radial-gradient(ellipse at center, var(--accent-dim) 0%, transparent 60%);
-  filter: blur(20px);
-  opacity: 0.25;
-  pointer-events: none;
-}
-
-.location-inner {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  padding: 8px 12px;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.location-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  padding: 0 4px;
-}
-
-.location-toolbar-label {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 2px;
-  color: var(--text-dim);
-}
-
-.location-mini-status {
-  display: none;
-  gap: 2px;
-  padding: 0 4px 4px;
-}
-
-#location-bar.collapsed .location-mini-status {
-  display: grid;
-}
-
-.location-mini-city {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.8px;
-  color: #bdefff;
-}
-
-.location-mini-poi {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1px;
-  color: var(--text-secondary);
-  max-width: 190px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.location-pills {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.location-pills::-webkit-scrollbar {
-  display: none;
-}
-
-.location-pill {
-  padding: 6px 14px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  outline: none;
-  white-space: nowrap;
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  letter-spacing: 0.3px;
-}
-
-.location-pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--glass-border-hover);
-  transform: translateY(-1px);
-}
-
-.location-pill.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
-}
-
-/* ── Expandable POI Row ──────────────────────── */
-.poi-row-container {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  transition: max-height 250ms cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 200ms ease,
-              padding 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 0 4px;
-}
-
-.poi-row-container.expanded {
-  max-height: 50px;
-  opacity: 1;
-  padding: 4px 4px 0;
-}
-
-.location-bar-divider {
-  height: 0;
-  border: none;
-  border-top: 1px solid var(--glass-border);
-  margin: 0 4px;
-  opacity: 0;
-  transition: opacity 200ms ease, margin 250ms ease;
-}
-
-.location-bar-divider.visible {
-  opacity: 1;
-  margin: 6px 4px;
-}
-
-.location-city-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.poi-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  outline: none;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.poi-pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--glass-border-hover);
-  transform: translateY(-1px);
-}
-
-.poi-pill.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
-}
-
-.poi-pill-name {
-  font-family: var(--font-sans);
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  letter-spacing: 0.3px;
-}
-
-.poi-pill.active .poi-pill-name {
-  color: var(--accent);
-}
-
-.poi-pill-key {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1px;
-  color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 2px 5px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-
-.poi-pill.active .poi-pill-key {
-  color: var(--accent);
-  background: rgba(0, 212, 255, 0.12);
-}
-
-/* ── Location Search ─────────────────────────── */
-.location-search-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  flex-shrink: 0;
-}
-
-.search-toggle-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  outline: none;
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.search-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--glass-border-hover);
-}
-
-#location-search {
-  width: 0;
-  padding: 0;
-  border: none;
-  background: none;
-  outline: none;
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  letter-spacing: 0.3px;
-  transition: width var(--transition-smooth), padding var(--transition-smooth);
-  caret-color: var(--accent);
-}
-
-#location-search.expanded {
-  width: 180px;
-  padding: 6px 10px;
-}
-
-#location-search::placeholder {
-  color: var(--text-dim);
-  font-style: italic;
-}
-
-#location-search.searching {
-  opacity: 0.5;
 }
 
 /* ── Top-center Globe Actions ────────────────── */
@@ -1106,8 +733,6 @@ body.ui-clean-view #data-panel {
   pointer-events: none;
 }
 #global-loading-status[hidden] { display: none; }
-/* GitHub Pages build (VITE_STATIC_HOST=1): surfaces whose data comes from the local /api server are not shown. */
-body.static-host [data-requires-backend] { display: none !important; }
 #global-loading-label {
   color: rgba(184, 244, 255, 0.92);
 }
@@ -1148,12 +773,6 @@ body.static-host [data-requires-backend] { display: none !important; }
   line-height: 1;
 }
 
-/* Stacked below the traffic chip so both can show at once */
-
-/* The settled traffic chip carries no progress number — the label's coverage
-   figure is the honest one. Collapse the empty slot so the chip closes up
-   instead of trailing a 34px stub and its flex gap. */
-
 /* ── Split-flap chip text ─────────────────────────────────────────
    Per-character departure-board flip when a chip label changes.
    Driven entirely by src/splitFlap.js, which rebuilds the label as
@@ -1173,10 +792,9 @@ body.static-host [data-requires-backend] { display: none !important; }
    freely while the aria-live region sees only one characterData
    change per label update.
 
-   Motion matches the cockpit odometer roll (.cockpit-roll-token):
-   same cubic-bezier, same reduced-motion treatment. Only the
-   left-to-right stagger is new — that cascade is what makes it read
-   as a Solari board rather than a counter.
+   Each cell rolls on cubic-bezier(0.2, 0.75, 0.25, 1); the
+   left-to-right stagger is what makes it read as a Solari board
+   rather than a counter.
    ------------------------------------------------------------------ */
 /* While the flaps play, the real text is clipped out of view but stays in
    the DOM and in the accessibility tree — same clipped-but-present treatment
@@ -1263,7 +881,7 @@ body.static-host [data-requires-backend] { display: none !important; }
   78% { transform: rotateX(-7deg); opacity: 1; }
   100% { transform: rotateX(0deg); opacity: 1; }
 }
-/* Matches the .cockpit-roll-track treatment: collapse the duration rather
+/* Reduced motion collapses the duration rather
    than dropping the animation, so the final frame still lands the glyph.
    src/splitFlap.js also checks the query and takes the instant path, so
    this is the belt to that braces. */
@@ -1307,59 +925,6 @@ body.static-host [data-requires-backend] { display: none !important; }
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
-}
-
-/* ── Aircraft Cockpit View ─────────────────── */
-@keyframes cockpit-altitude-pointer {
-  50% { transform: translateX(-3px); filter: brightness(1.35); }
-}
-@keyframes cockpit-speed-pointer {
-  50% { transform: translateX(3px); filter: brightness(1.35); }
-}
-@keyframes cockpit-live { 50% { opacity: 0.35; } }
-.cockpit-roll-token {
-  position: relative;
-  display: inline-block;
-  min-width: 0.56em;
-  height: 1em;
-  overflow: hidden;
-  line-height: 1;
-  text-align: center;
-  vertical-align: -0.08em;
-}
-@keyframes cockpit-number-roll-up {
-  from { transform: translateY(0); }
-  to { transform: translateY(-1em); }
-}
-@keyframes cockpit-number-roll-down {
-  from { transform: translateY(-1em); }
-  to { transform: translateY(0); }
-}
-/* CONTACT LOST reuses the amber the app already spends on unknown/stale inputs
-   (.cockpit-context-cohorts > div.unknown, .cockpit-brief-status[data-state="unavailable"]),
-   so a held last-known readout never reads as a live one. */
-/* The held values are last-known, not current — dim them to match the cue. */
-[data-cockpit-launcher="display"] {
-  width: var(--left-collapsed-width, 176px);
-}
-[data-cockpit-launcher="radio"] {
-  width: var(--cockpit-radio-collapsed-width, 148px);
-}
-[data-cockpit-brief-page] {
-  animation: cockpit-brief-enter 220ms ease-out both;
-}
-[data-cockpit-brief-page][hidden] { display: none; }
-@keyframes cockpit-brief-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Keep the user's intelligence HUD text available in first person. It stays
-   subordinate to the visor instruments and occupies the four peripheral
-   corridors, leaving the optical center, context rails, and heading tape free. */
-
-@media (prefers-reduced-motion: reduce) {
-  [data-cockpit-brief-page] { animation: none; }
 }
 
 /* ── Safe Frame Overlay ─────────────────────── */
@@ -1424,35 +989,6 @@ body.static-host [data-requires-backend] { display: none !important; }
       rgba(255, 255, 255, 0.2) 66.7%,
       transparent 66.7%
     );
-}
-
-/* ── Orbit Indicator ─────────────────────────── */
-#orbit-indicator {
-  position: fixed;
-  top: 70px;
-  right: 36px;
-  z-index: 100;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 2px;
-  color: var(--accent);
-  text-shadow: 0 0 12px var(--accent-glow);
-  pointer-events: none;
-  user-select: none;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity var(--transition-smooth), visibility var(--transition-smooth);
-}
-
-#orbit-indicator.active {
-  opacity: 1;
-  visibility: visible;
-}
-
-.orbit-icon {
-  font-size: 13px;
-  vertical-align: middle;
-  margin-right: 2px;
 }
 
 /* ── Intelligence HUD Overlay ────────────────── */
@@ -1728,17 +1264,6 @@ body.static-host [data-requires-backend] { display: none !important; }
   background: rgba(255, 255, 255, 0.03);
 }
 
-/* Selected-only, provenance-first proximity results. This is intentionally a
-   contextual panel, not a radar/engagement display. */
-
-@keyframes mission-thrust-wave {
-  0%, 18% { opacity: 0; }
-  24% { opacity: 1; }
-  32%, 100% { opacity: 0; }
-}
-/* TR-3B reclassify toggle rides an `auto` trailing column so the chip never
-   resizes the COCKPIT / SEARCH buttons beside it. */
-
 /* ── Radio companion section inside Context ── */
 
 .data-toggle-top {
@@ -1921,27 +1446,6 @@ body.static-host [data-requires-backend] { display: none !important; }
   flex: none;
 }
 
-/* ── CCTV Panel ─────────────────────────────── */
-
-/* Click-to-edit effective-pose readout (viewshed/gizmo design §3d): compact
-   value chips replace the seven offset sliders. */
-
-/* CAL badge states (cctv-v2 §3b, amended by LOCKED §9.2 — panel-only, no
-   in-world tint). Three visually distinct states: calibrated / curated /
-   raw-prior. */
-
-/* Unsaved live edits (save-gated persistence, viewshed design §3e). */
-
-/* Lightweight loading shimmer while the active frame is fetching */
-
-/* "Acquiring" caption only when no previous frame is showing underneath */
-
-@keyframes cctv-frame-shimmer {
-  to {
-    transform: translateX(100%);
-  }
-}
-
 /* ── Scene Director Panel ───────────────────── */
 
 #left-panel-stack > #data-panel {
@@ -2037,10 +1541,7 @@ body.static-host [data-requires-backend] { display: none !important; }
 }
 
 #control-panel.collapsed .button-grid,
-#data-panel.collapsed .data-toggle-list,
-#location-bar.collapsed .poi-row-container,
-#location-bar.collapsed .location-bar-divider,
-#location-bar.collapsed .location-city-row {
+#data-panel.collapsed .data-toggle-list {
   display: none !important;
 }
 
@@ -2054,8 +1555,7 @@ body.static-host [data-requires-backend] { display: none !important; }
 }
 
 #control-panel.collapsed .panel-inner,
-#data-panel.collapsed .data-panel-inner,
-#location-bar.collapsed .location-inner {
+#data-panel.collapsed .data-panel-inner {
   padding-bottom: 10px;
 }
 
@@ -2071,7 +1571,6 @@ body.recording-mode #top-center-actions,
 body.recording-mode #global-loading-status,
 body.recording-mode #clean-view-exit,
 body.recording-mode #control-panel,
-body.recording-mode #location-bar,
 body.recording-mode #data-panel {
   opacity: 0 !important;
   visibility: hidden !important;
@@ -2108,14 +1607,6 @@ body.recording-mode #data-panel {
 
   #title-bar .title-logo {
     width: 36px;
-  }
-
-  #location-bar {
-    left: 16px;
-    right: 16px;
-    transform: none;
-    max-width: none;
-    bottom: 120px;
   }
 
   .hud-top-left,
@@ -2185,10 +1676,6 @@ body.recording-mode #data-panel {
   bottom: 2vh;
   left: 50%;
   z-index: 145;
-  display: grid;
-  grid-template-areas: 'locations voice presets';
-  grid-template-columns: minmax(300px, 1fr) minmax(230px, 270px) minmax(390px, 1.15fr);
-  align-items: stretch;
   width: min(94vw, 1240px);
   padding: 6px;
   overflow: visible;
@@ -2205,7 +1692,6 @@ body.recording-mode #data-panel {
   transition: opacity var(--transition-smooth), visibility var(--transition-smooth);
 }
 
-#command-dock > #location-bar,
 #command-dock > #control-panel {
   position: relative;
   inset: auto;
@@ -2214,14 +1700,7 @@ body.recording-mode #data-panel {
   transform: none;
 }
 
-#command-dock > #location-bar {
-  grid-area: locations;
-  min-width: 0;
-  border-right: 1px solid rgba(123, 189, 211, 0.16);
-}
-
 #command-dock > #control-panel {
-  grid-area: presets;
   min-width: 0;
   border-left: 1px solid rgba(123, 189, 211, 0.16);
 }
@@ -2231,9 +1710,7 @@ body.recording-mode #data-panel {
 }
 
 #command-dock .panel-inner,
-#command-dock .location-inner,
-#command-dock #control-panel.collapsed .panel-inner,
-#command-dock #location-bar.collapsed .location-inner {
+#command-dock #control-panel.collapsed .panel-inner {
   height: 100%;
   padding: 8px 14px;
   background: transparent;
@@ -2245,28 +1722,24 @@ body.recording-mode #data-panel {
 }
 
 #command-dock .panel-header,
-#command-dock .location-toolbar,
 #command-dock #control-panel.collapsed .panel-header {
   min-height: 18px;
   margin: 0 0 6px;
   padding: 0;
 }
 
-#command-dock .panel-title,
-#command-dock .location-toolbar-label {
+#command-dock .panel-title {
   font-size: 8px;
   letter-spacing: 1.6px;
   color: rgba(190, 221, 230, 0.58);
 }
 
 #command-dock .panel-collapse-btn,
-#command-dock .panel-mini-status,
-#command-dock .location-mini-status {
+#command-dock .panel-mini-status {
   display: none !important;
 }
 
-#command-dock #control-panel.collapsed .button-grid,
-#command-dock #location-bar.collapsed .location-city-row {
+#command-dock #control-panel.collapsed .button-grid {
   display: flex !important;
 }
 
@@ -2298,50 +1771,6 @@ body.recording-mode #data-panel {
   font-size: 7px;
 }
 
-#command-dock .location-city-row {
-  min-width: 0;
-  gap: 8px;
-}
-
-#command-dock .location-search-wrap {
-  order: -1;
-  flex: 0 1 190px;
-  min-width: 132px;
-  padding-right: 8px;
-  border-right: 1px solid rgba(123, 189, 211, 0.14);
-}
-
-#command-dock .search-toggle-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
-}
-
-#command-dock #location-search,
-#command-dock #location-search.expanded {
-  width: 100%;
-  min-width: 0;
-  padding: 6px 8px;
-  font-size: 11px;
-}
-
-#command-dock .location-pills {
-  flex: 1;
-  min-width: 0;
-}
-
-#command-dock .location-pill {
-  padding: 7px 10px;
-  border-radius: 6px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
-}
-
-#command-dock .poi-row-container.expanded {
-  margin-bottom: 4px;
-}
-
 /* Keep required map attribution clear of the full-width command surface. */
 body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   bottom: calc(2vh + 7rem);
@@ -2361,6 +1790,12 @@ body.recording-mode #command-dock {
   pointer-events: none !important;
 }
 
+/* Clean-view / recording: the attribution MUST stay visible. The Cesium and
+   basemap terms require the credit whenever the content is displayed, and these
+   are the modes used to record demos, so hiding #cesium-credits here shipped
+   non-compliant footage. The panels and HUD still fade via their own rules;
+   only the required notice is exempt. (Cesium re-applies inline styles on the
+   credit elements each frame, so their content is owned by Cesium, not CSS.) */
 body.ui-clean-view #cesium-credits,
 body.recording-mode #cesium-credits {
   right: auto;
@@ -2377,19 +1812,6 @@ body.recording-mode #cesium-credits {
 }
 
 @media (max-width: 980px) {
-  #command-dock {
-    grid-template-areas:
-      'locations voice'
-      'presets presets';
-    grid-template-columns: minmax(0, 1fr) minmax(170px, 210px);
-    width: calc(100vw - 24px);
-  }
-
-  #command-dock > #location-bar {
-    border-right: 1px solid rgba(123, 189, 211, 0.16);
-    border-bottom: 1px solid rgba(123, 189, 211, 0.16);
-  }
-
   #command-dock > #control-panel {
     border-top: 1px solid rgba(123, 189, 211, 0.16);
     border-left: 0;
@@ -2413,14 +1835,8 @@ body.recording-mode #cesium-credits {
     bottom: 8px;
   }
 
-  #command-dock .location-search-wrap {
-    flex-basis: 150px;
-  }
-
   #command-dock .panel-inner,
-  #command-dock .location-inner,
-  #command-dock #control-panel.collapsed .panel-inner,
-  #command-dock #location-bar.collapsed .location-inner {
+  #command-dock #control-panel.collapsed .panel-inner {
     padding: 7px 9px;
   }
 
@@ -2431,12 +1847,10 @@ body.recording-mode #cesium-credits {
 /* ── Compact accordion command dock ──────────── */
 #command-dock {
   --dock-side-compact: clamp(9.5rem, 12vw, 10.5rem);
-  --dock-location-open: clamp(28rem, 40vw, 33rem);
+  --dock-tray-open: clamp(28rem, 40vw, 33rem);
   --dock-presets-open: clamp(25rem, 36vw, 29rem);
   --dock-voice-width: clamp(13.5rem, 17vw, 15rem);
   display: flex;
-  grid-template-areas: none;
-  grid-template-columns: none;
   align-items: center;
   width: fit-content;
   max-width: calc(100vw - 4vw);
@@ -2450,15 +1864,10 @@ body.recording-mode #cesium-credits {
     visibility var(--transition-smooth);
 }
 
-#command-dock:has(#location-bar:not(.collapsed)) {
-  transform: translateX(calc(-50% + (var(--dock-location-open) - var(--dock-side-compact)) / 2));
-}
-
 #command-dock:has(#control-panel:not(.collapsed)) {
   transform: translateX(calc(-50% - (var(--dock-presets-open) - var(--dock-side-compact)) / 2));
 }
 
-#command-dock > #location-bar,
 #command-dock > #control-panel {
   flex: 0 0 var(--dock-side-compact);
   align-self: stretch;
@@ -2469,16 +1878,8 @@ body.recording-mode #cesium-credits {
   transition: flex-basis 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-#command-dock > #location-bar:not(.collapsed) {
-  flex-basis: var(--dock-location-open);
-}
-
 #command-dock > #control-panel:not(.collapsed) {
   flex-basis: var(--dock-presets-open);
-}
-
-#command-dock > #location-bar {
-  border-right: 1px solid rgba(123, 189, 211, 0.18);
 }
 
 #command-dock > #control-panel {
@@ -2486,9 +1887,7 @@ body.recording-mode #cesium-credits {
 }
 
 #command-dock .panel-inner,
-#command-dock .location-inner,
-#command-dock #control-panel.collapsed .panel-inner,
-#command-dock #location-bar.collapsed .location-inner {
+#command-dock #control-panel.collapsed .panel-inner {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -2497,7 +1896,6 @@ body.recording-mode #cesium-credits {
 }
 
 #command-dock .panel-header,
-#command-dock .location-toolbar,
 #command-dock #control-panel.collapsed .panel-header {
   flex: 0 0 auto;
   min-width: calc(var(--dock-side-compact) - 1.5rem);
@@ -2505,16 +1903,14 @@ body.recording-mode #cesium-credits {
   margin: 0;
 }
 
-#command-dock .panel-title,
-#command-dock .location-toolbar-label {
+#command-dock .panel-title {
   width: max-content;
   font-size: 0.45rem;
   letter-spacing: 0.12rem;
   white-space: nowrap;
 }
 
-#command-dock .panel-title::after,
-#command-dock .location-toolbar-label::after {
+#command-dock .panel-title::after {
   content: '›';
   margin-left: 0.45rem;
   color: rgba(54, 220, 255, 0.68);
@@ -2528,87 +1924,17 @@ body.recording-mode #cesium-credits {
   float: left;
 }
 
-#command-dock #location-bar.collapsed .location-city-row,
-#command-dock #location-bar.collapsed .poi-row-container,
-#command-dock #location-bar.collapsed .location-bar-divider,
 #command-dock #control-panel.collapsed .button-grid {
   display: none !important;
 }
 
-#command-dock #location-bar:not(.collapsed) .location-toolbar,
 #command-dock #control-panel:not(.collapsed) .panel-header {
   margin-bottom: 0.35rem;
 }
 
-#command-dock #location-bar:not(.collapsed) .location-city-row,
 #command-dock #control-panel:not(.collapsed) .button-grid {
   display: flex !important;
   animation: command-dock-reveal 220ms ease-out both;
-}
-
-#command-dock .location-city-row {
-  flex-wrap: nowrap;
-  gap: 0.35rem;
-  overflow: hidden;
-}
-
-#command-dock .location-search-wrap {
-  flex: 0 0 10.5rem;
-  min-width: 0;
-  padding-right: 0.4rem;
-}
-
-#command-dock .search-toggle-btn {
-  width: 1.75rem;
-  height: 1.75rem;
-}
-
-#command-dock #location-search,
-#command-dock #location-search.expanded {
-  height: 1.75rem;
-  padding: 0.3rem 0.45rem;
-  font-size: 0.62rem;
-}
-
-#command-dock .location-pills {
-  display: flex;
-  gap: 0.3rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-#command-dock .location-pills::-webkit-scrollbar {
-  display: none;
-}
-
-#command-dock .location-pill,
-#command-dock .poi-pill {
-  flex: 0 0 auto;
-  min-height: 1.75rem;
-  padding: 0.3rem 0.55rem;
-  border-radius: 0.2rem;
-  font-size: 0.52rem;
-  white-space: nowrap;
-}
-
-#command-dock .poi-row-container.expanded {
-  display: flex;
-  justify-content: flex-start;
-  gap: 0.3rem;
-  max-height: 2.1rem;
-  margin: 0 0 0.35rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  animation: command-dock-reveal 180ms ease-out both;
-  scrollbar-width: none;
-}
-
-#command-dock .poi-row-container.expanded::-webkit-scrollbar {
-  display: none;
-}
-
-#command-dock .location-bar-divider.visible {
-  display: none;
 }
 
 #command-dock .button-grid {
@@ -2649,11 +1975,6 @@ body.recording-mode #cesium-credits {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes gev-voice-bar {
-  from { transform: scaleY(0.35); opacity: 0.5; }
-  to { transform: scaleY(1); opacity: 1; }
-}
-
 /* Compact dock clearance keeps the reference-like low profile. */
 body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   bottom: calc(2vh + 4.7rem);
@@ -2674,42 +1995,26 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
 
   #command-dock {
     --dock-side-compact: 4.25rem;
-    --dock-location-open: calc(100vw - 7rem);
+    --dock-tray-open: calc(100vw - 7rem);
     --dock-presets-open: calc(100vw - 7rem);
     --dock-voice-width: 11.5rem;
     max-width: calc(100vw - 1rem);
   }
 
-  #command-dock:has(#location-bar:not(.collapsed)),
   #command-dock:has(#control-panel:not(.collapsed)) {
     transform: translateX(-50%);
   }
-
-  #command-dock:has(#location-bar:not(.collapsed)) > #control-panel,
-  #command-dock:has(#control-panel:not(.collapsed)) > #location-bar {
-    flex-basis: 0;
-    border: 0;
-  }
-
-  #command-dock .location-search-wrap {
-    flex-basis: 8.5rem;
-  }
 }
 
-/* ── Command dock refinement: stacked trays + voice states ── */
+/* ── Command dock refinement ── */
 #command-dock {
   --dock-voice-width: 8.75rem;
-  --dock-location-pinned-height: 0px;
-  --dock-presets-pinned-height: 0px;
-  --dock-pinned-stack-height: 0px;
-  --dock-lower-pinned-height: 0px;
   --dock-unified-width: calc(var(--dock-side-compact) * 2 + var(--dock-voice-width));
-  --dock-location-open: max(34rem, calc(var(--dock-unified-width) + 0.75rem));
+  --dock-tray-open: max(34rem, calc(var(--dock-unified-width) + 0.75rem));
   --dock-presets-open: max(34rem, calc(var(--dock-unified-width) + 0.75rem));
 }
 
-#command-dock .panel-title,
-#command-dock .location-toolbar-label {
+#command-dock .panel-title {
   display: inline-flex;
   align-items: center;
   gap: 0.42rem;
@@ -2734,24 +2039,17 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   transition: background-color 160ms ease, filter 160ms ease;
 }
 
-#command-dock .dock-label-icon-location {
-  mask-image: url('/location.svg');
-  -webkit-mask-image: url('/location.svg');
-}
-
 #command-dock .dock-label-icon-presets {
   mask-image: url('/visual-presets.svg');
   -webkit-mask-image: url('/visual-presets.svg');
 }
 
-#command-dock :is(#location-bar, #control-panel):hover .dock-label-icon,
-#command-dock :is(#location-bar, #control-panel).dock-pinned .dock-label-icon {
+#command-dock :is(#control-panel):hover .dock-label-icon, #command-dock :is(#control-panel).dock-pinned .dock-label-icon {
   background: var(--accent);
   filter: drop-shadow(0 0 0.35rem rgba(0, 212, 255, 0.28));
 }
 
-#command-dock :is(#location-bar, #control-panel):hover .location-toolbar-label,
-#command-dock :is(#location-bar, #control-panel):hover .panel-title{
+#command-dock :is(#control-panel):hover .panel-title{
   color: var(--accent);
 }
 
@@ -2788,13 +2086,11 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   display: none;
 }
 
-#command-dock .location-toolbar-label,
 #command-dock #control-panel .panel-title {
   position: relative;
   padding-bottom: 0.4rem;
 }
 
-#command-dock .location-toolbar-label::after,
 #command-dock #control-panel .panel-title::after {
   content: '';
   position: absolute;
@@ -2805,16 +2101,11 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   height: 1px;
 }
 
-#command-dock .location-toolbar-label::after {
-  background: linear-gradient(to right, rgba(232, 234, 237, 0.3), transparent);
-}
-
 #command-dock #control-panel .panel-title::after {
   background: linear-gradient(to left, rgba(232, 234, 237, 0.3), transparent);
 }
 
 #command-dock .panel-title::after,
-#command-dock .location-toolbar-label::after,
 #command-dock #control-panel .panel-title::after {
   content: none;
   display: none;
@@ -2842,7 +2133,6 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   transform: translateY(-0.12rem);
 }
 
-#command-dock #location-bar:not(.collapsed) .dock-pin-btn,
 #command-dock #control-panel:not(.collapsed) .dock-pin-btn {
   display: grid;
 }
@@ -2854,36 +2144,14 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   transition: opacity 160ms ease, transform 160ms ease;
 }
 
-#command-dock #location-bar .dock-pin-btn {
-  align-self: flex-start;
-  margin-right: 0;
-  margin-left: -0.22rem;
-}
-
 #command-dock .dock-pin-btn:hover img,
 #command-dock .dock-pin-btn[aria-pressed='true'] img {
   opacity: 1;
   transform: rotate(-12deg) scale(1.08);
 }
 
-#command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content,
-#command-dock.dock-has-pinned-tray #control-panel:not(.collapsed):not(.dock-pinned) .dock-popover-content {
-  bottom: calc(100% + 1.2rem + var(--dock-pinned-stack-height));
-}
-
-#command-dock.dock-has-two-pinned-trays .dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content {
-  bottom: calc(100% + 1.2rem + var(--dock-lower-pinned-height));
-}
-
-#command-dock .location-pill,
-#command-dock .poi-pill,
 #command-dock .btn-label {
   font-size: 0.56rem;
-}
-
-#command-dock #location-search,
-#command-dock #location-search.expanded {
-  font-size: 0.68rem;
 }
 
 /* The compact dock leaves both lower corners free for required attribution and telemetry. */
@@ -2932,8 +2200,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
     --dock-voice-width: 8.75rem;
   }
 
-  #command-dock .panel-title,
-  #command-dock .location-toolbar-label {
+  #command-dock .panel-title {
     max-width: 2.3rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2946,13 +2213,10 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 
 /* ── Slide-up command trays ──────────────────── */
 #command-dock,
-#command-dock:has(#location-bar:not(.collapsed)),
 #command-dock:has(#control-panel:not(.collapsed)) {
   transform: translateX(-50%);
 }
 
-#command-dock > #location-bar,
-#command-dock > #location-bar:not(.collapsed),
 #command-dock > #control-panel,
 #command-dock > #control-panel:not(.collapsed) {
   position: relative;
@@ -2961,9 +2225,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   overflow: visible;
 }
 
-#command-dock .location-inner,
 #command-dock .panel-inner,
-#command-dock #location-bar.collapsed .location-inner,
 #command-dock #control-panel.collapsed .panel-inner {
   position: relative;
   overflow: visible;
@@ -2975,7 +2237,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   z-index: 5;
   display: flex;
   flex-direction: column;
-  width: var(--dock-location-open);
+  width: var(--dock-tray-open);
   padding: 1.55rem 0.6rem 0.6rem;
   visibility: hidden;
   opacity: 0;
@@ -2997,10 +2259,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
     transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-#command-dock #location-bar .dock-popover-content {
-  left: -0.75rem;
-}
-
 #command-dock #control-panel .dock-popover-content {
   right: -0.75rem;
   left: auto;
@@ -3008,7 +2266,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   transform-origin: bottom right;
 }
 
-#command-dock #location-bar:not(.collapsed) .dock-popover-content,
 #command-dock #control-panel:not(.collapsed) .dock-popover-content {
   visibility: visible;
   opacity: 1;
@@ -3017,7 +2274,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   margin-bottom: 10px;
 }
 
-#command-dock #location-bar.collapsed .dock-popover-content,
 #command-dock #control-panel.collapsed .dock-popover-content {
   display: flex !important;
 }
@@ -3040,13 +2296,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   left: auto;
 }
 
-#command-dock .dock-popover-content .location-city-row,
 #command-dock .dock-popover-content .button-grid {
   display: flex !important;
-}
-
-#command-dock .dock-popover-content .poi-row-container:not(.expanded) {
-  display: none !important;
 }
 
 #command-dock .dock-pin-btn {
@@ -3069,7 +2320,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   cursor: pointer;
 }
 
-#command-dock #location-bar:not(.collapsed) .dock-pin-btn,
 #command-dock #control-panel:not(.collapsed) .dock-pin-btn {
   display: block;
 }
@@ -3087,18 +2337,9 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 }
 
 @media (max-width: 900px) {
-  #command-dock:has(#location-bar:not(.collapsed)) > #control-panel,
-  #command-dock:has(#control-panel:not(.collapsed)) > #location-bar {
-    flex-basis: var(--dock-side-compact);
-    border: inherit;
-  }
 
   #command-dock .dock-popover-content {
     width: var(--dock-popover-mobile-width);
-  }
-
-  #command-dock #location-bar .dock-popover-content {
-    left: calc((var(--dock-side-compact) + var(--dock-side-compact) + var(--dock-voice-width) - var(--dock-popover-mobile-width)) / 2);
   }
 
   #command-dock #control-panel .dock-popover-content {
@@ -3116,8 +2357,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   /* ── Required-attribution clearance ─────────────────────────────────
      At this width the tray widens to nearly the whole viewport (the rule
      above), and at its stock 0.65rem offset it lands squarely on the
-     Google/Cesium credit line in the bottom-left corner — a notice the
-     Maps Platform and Cesium terms require to stay visible in EVERY state.
+     credit line in the bottom-left corner — a notice the Cesium and
+     basemap terms require to stay visible in EVERY state.
 
      The transient popover yields, not the permanent notice: the credit
      keeps the position every other state gives it.
@@ -3132,29 +2373,12 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
      repairs. Nothing here may be reasoned about "at every viewport height"
      without checking the dock anchor that actually applies.
 
-     Keep these in step with the base offsets (0.65rem, and 1.2rem for the
-     pinned variants); src/creditAttribution.test.mjs walks the real cascade
-     over a viewport grid and fails if any of them re-enters the credit
+     Keep this in step with the base offset (0.65rem);
+     src/creditAttribution.test.mjs walks the real cascade
+     over a viewport grid and fails if the tray re-enters the credit
      band. */
-  #command-dock #location-bar .dock-popover-content,
   #command-dock #control-panel .dock-popover-content {
     bottom: calc(100% + 3rem);
-  }
-
-  #command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content,
-  #command-dock.dock-has-pinned-tray #control-panel:not(.collapsed):not(.dock-pinned) .dock-popover-content {
-    bottom: calc(100% + 3rem + var(--dock-pinned-stack-height));
-  }
-
-  /* Written with the panel IDs on purpose. The stock two-pinned selector
-     carries one ID (#command-dock) against five classes, and the ordinary
-     narrow rule above carries two IDs — so the stock form LOSES here and the
-     top tray drops var(--dock-lower-pinned-height), landing on top of its
-     pinned sibling. Naming the panel makes it (2,5,0), ahead of both the
-     ordinary (2,1,0) and single-pinned (2,4,0) rules. */
-  #command-dock.dock-has-two-pinned-trays #location-bar.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content,
-  #command-dock.dock-has-two-pinned-trays #control-panel.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content {
-    bottom: calc(100% + 3rem + var(--dock-lower-pinned-height));
   }
 }
 
@@ -3165,20 +2389,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
    into the tray's own offset restores the same flat 12px the wider band gets.
    This block must stay AFTER the max-width:900px rules to win the cascade. */
 @media (max-width: 720px) {
-  #command-dock #location-bar .dock-popover-content,
   #command-dock #control-panel .dock-popover-content {
     bottom: calc(100% + 2vh + 2.5rem);
-  }
-
-  #command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content,
-  #command-dock.dock-has-pinned-tray #control-panel:not(.collapsed):not(.dock-pinned) .dock-popover-content {
-    bottom: calc(100% + 2vh + 2.5rem + var(--dock-pinned-stack-height));
-  }
-
-  /* Panel IDs for the same specificity reason as the max-width:900px block. */
-  #command-dock.dock-has-two-pinned-trays #location-bar.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content,
-  #command-dock.dock-has-two-pinned-trays #control-panel.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content {
-    bottom: calc(100% + 2vh + 2.5rem + var(--dock-lower-pinned-height));
   }
 }
 
@@ -3226,17 +2438,11 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   transform: none;
 }
 
-#command-dock #location-bar .dock-pin-btn {
-  top: -1rem;
-  right: -1rem;
-}
-
 #command-dock #control-panel .dock-pin-btn {
   top: -1rem;
   right: -1rem;
 }
 
-#command-dock #location-bar:not(.collapsed) .dock-pin-btn,
 #command-dock #control-panel:not(.collapsed) .dock-pin-btn {
   display: grid;
 }
@@ -3246,21 +2452,13 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   height: 1.15rem;
 }
 
-/* Five-pixel standby baseline; live microphone analysis sets --audio-level. */
-
 /* Center every slide-up tray on the complete unified dock, not its side wing. */
-#command-dock #location-bar .dock-popover-content {
-  left: calc((var(--dock-unified-width) - var(--dock-location-open)) / 2);
-}
 
 #command-dock #control-panel .dock-popover-content {
   right: calc((var(--dock-unified-width) - var(--dock-presets-open)) / 2);
 }
 
 @media (max-width: 900px) {
-  #command-dock #location-bar .dock-popover-content {
-    left: calc((var(--dock-unified-width) - var(--dock-popover-mobile-width)) / 2);
-  }
 
   #command-dock #control-panel .dock-popover-content {
     right: calc((var(--dock-unified-width) - var(--dock-popover-mobile-width)) / 2);
@@ -3277,16 +2475,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   -webkit-backdrop-filter: none;
 }
 
-#command-dock > #location-bar {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-#command-dock > #location-bar > .location-inner {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
 #command-dock > #control-panel {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
@@ -3301,14 +2489,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   transform: none;
 }
 
-#command-dock .dock-popover-content :is(.location-pill, .poi-pill):hover {
-  transform: none;
-}
-
-/* Keep the microphone neutral at rest; cyan signals hover and live states. */
-
 /* Match compact dock wings to the glass treatment used by left-panel buttons. */
-#command-dock > #location-bar,
 #command-dock > #control-panel {
   box-sizing: border-box;
   background: var(--glass-bg);
@@ -3326,34 +2507,19 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
     box-shadow 160ms ease;
 }
 
-#command-dock > :is(#location-bar, #control-panel):hover {
+#command-dock > :is(#control-panel):hover {
   background: var(--glass-bg);
   border-color: var(--glass-border-hover);
   color: var(--accent);
 
 }
 
-#command-dock > :is(#location-bar, #control-panel).dock-pinned {
+#command-dock > :is(#control-panel).dock-pinned {
   border-color: rgba(0, 212, 255, 0.55);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(0, 212, 255, 0.08) inset,
     0 0 1rem rgba(0, 212, 255, 0.12);
-}
-
-#command-dock #location-bar .location-toolbar {
-  justify-content: flex-start;
-  width: 100%;
-}
-
-#command-dock #location-bar .location-toolbar-label {
-  justify-content: flex-start;
-  width: 100%;
-  text-align: left;
-}
-
-#command-dock #location-bar .location-toolbar-label::after {
-  content: none;
 }
 
 #command-dock #control-panel .panel-header {
@@ -3368,17 +2534,12 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 }
 
 /* These must follow the shared wing skin so the visible borders stay joined. */
-#command-dock > #location-bar {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
 
 #command-dock > #control-panel {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
 }
 
-#command-dock #location-bar .location-toolbar,
 #command-dock #control-panel .panel-header {
   position: relative;
 }
@@ -3401,7 +2562,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   display: none;
 }
 
-#command-dock #location-bar .location-toolbar::after,
 #command-dock #control-panel .panel-header::after {
   content: '';
   position: absolute;
@@ -3412,100 +2572,9 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   pointer-events: none;
 }
 
-#command-dock #location-bar .location-toolbar::after {
-  background: linear-gradient(90deg, rgba(232, 234, 237, 0.24), rgba(232, 234, 237, 0));
-}
-
 #command-dock #control-panel .panel-header::after {
   background: linear-gradient(90deg, rgba(232, 234, 237, 0), rgba(232, 234, 237, 0.24));
 }
-
-/* ------------------------------------------------------------------ *
- * Voice cost control — model-tier toggle + running session estimate.
- * Appended (not woven into the dock passes above) so the three existing
- * #gev-voice-control cascades stay untouched; these rules only add the
- * new .gev-voice-cost cluster inside the existing .gev-voice-heading row.
- * ------------------------------------------------------------------ */
-
-/* MINI engaged — amber, distinct from the cyan default so the cheaper tier
-   is legible at a glance without reading the label. */
-
-/* The dock heading row is 0.8rem tall; keep the cluster inside it. */
-
-/* The dock collapses the kicker/readout when a tray is open — the cost
-   cluster follows the same rule so the row never overflows. */
-
-/* ── First-run mission launcher ───────────────────────────────────
-   Compact and non-modal: it gives a new visitor a meaningful starting
-   choice without blocking manual map interaction or spending API quota. */
-
-/* An AUTHOR `display` on this id beats the UA's `[hidden] { display: none }` in
-   the cascade, so the flex above would otherwise leave the card in the
-   accessibility tree from page parse until it is revealed — or, on a share
-   link, until it is removed. Restore the attribute's meaning explicitly. */
-
-/* aria-disabled, not :disabled — the JS keeps the buttons focusable while a
-   mission runs so the keyboard is never dumped out of the launcher mid-flight. */
-
-/* Ordered after the shared button rule rather than shouting !important at it. */
-
-/* The live region carries mission progress and failures, so it owns a full row
-   and reserves its height — otherwise the card resizes as it speaks. */
-
-/* Every surface that claims the screen hides the launcher. This list is the CSS
-   half of the ESC arbitration: src/firstRunExperience.js watches these same
-   classes and makes the launcher step aside, so a hidden card is never left
-   holding a keyboard handler. Keep the two lists in step —
-   EXCLUSIVE_SURFACE_CLASSES pins them together. */
-
-@media (max-width: 620px) {
-  /* Five tiles have to clear the dock on a 375 x 812 phone, so the rows tighten
-     and the redundant "ESC to dismiss" hint (no ESC key on a phone) drops. */
-}
-
-/* Short viewports — landscape phones, small laptop windows. The chrome tightens
-   so the mission list keeps a usable share of the height. The intro line STAYS:
-   it is the only copy that says what this thing is, and with four tiles it
-   fits. (It was dropped here while there were five; the tile that went is
-   exactly why it can come back.) */
-
-/* A soft edge on the list, so a tile cut by the fold reads as "more below"
-   rather than as a rendering seam. Gated on `data-scrollable`, which the JS sets
-   only when the list ACTUALLY overflows — a fade on a list that fits would
-   promise content that is not there, which is the opposite of the affordance
-   it is meant to be. Decorative only: the list scrolls under it. */
-
-/* Scrolled to the end, there is nothing left to promise, so the fade lifts.
-   Browsers without scroll-driven animations keep the static fade, which is
-   still honest — there IS more list, it is just above rather than below. */
-
-@keyframes first-run-scroll-fade {
-  to {
-    -webkit-mask-image: linear-gradient(to bottom, #000 100%, transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 100%, transparent 100%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Scrolling a tile into view must not animate either. */
-}
-
-/* ============================================================
-   POWER UP — in-app key setup (dev server only, src/keySetup.js)
-   Same voice as the first-run launcher: glass card, cyan trim,
-   mono kickers. The chip retires once every key is configured.
-   ============================================================ */
-
-/* Same cascade note as the launcher: an author display beats [hidden]. */
-
-/* The same exclusive surfaces that hide the launcher hide this surface —
-   nothing about key setup belongs in a recording, a cockpit, or a scene. */
-
-@media (max-width: 620px) {
-  /* Clear the dock. Desktop-first app; this is a courtesy, not a layout. */
-}
-
-/* Provider Settings additions: externally-managed badge + per-row remove. */
 
 /* ── Biology details card (src/bio/detailsCard.js) ── */
 /* I1 (final review): the card and the SPECIES panel have a background floor of 0.86 rather than the shared 0.72 glass, so their text holds 4.5:1
@@ -3916,12 +2985,8 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
     --dock-popover-mobile-width: calc(100vw - 2.5rem);
   }
 
-  #command-dock > #location-bar,
-  #command-dock > #location-bar:not(.collapsed),
   #command-dock > #control-panel,
-  #command-dock > #control-panel:not(.collapsed),
-  #command-dock:has(#location-bar:not(.collapsed)) > #control-panel,
-  #command-dock:has(#control-panel:not(.collapsed)) > #location-bar {
+  #command-dock > #control-panel:not(.collapsed) {
     position: static;
     flex: 0 0 auto;
     width: auto;
@@ -3931,20 +2996,16 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
     -webkit-backdrop-filter: none;
   }
 
-  #command-dock .location-inner,
   #command-dock .panel-inner,
-  #command-dock #location-bar.collapsed .location-inner,
   #command-dock #control-panel.collapsed .panel-inner {
     position: static;
   }
 
-  #command-dock .panel-title,
-  #command-dock .location-toolbar-label {
+  #command-dock .panel-title {
     max-width: none;
     overflow: visible;
   }
 
-  #command-dock #location-bar .dock-popover-content,
   #command-dock #control-panel .dock-popover-content {
     right: auto;
     left: calc(50% - var(--dock-popover-mobile-width) / 2);

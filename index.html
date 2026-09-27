@@ -53,8 +53,8 @@
 
   <button id="clean-view-exit" title="Return UI controls">EXIT CLEAN VIEW</button>
 
-  <!-- Unified bottom command dock: locations, visual presets -->
-  <div id="command-dock" aria-label="Navigation, voice, and visual preset controls">
+  <!-- Bottom command dock: visual presets and map source -->
+  <div id="command-dock" aria-label="Visual preset and map source controls">
   <!-- Control panel -->
   <div id="control-panel" class="panel-collapsible collapsed">
     <div class="panel-glow"></div>
@@ -105,35 +105,6 @@
       <div id="style-mini-status" class="panel-mini-status" aria-live="polite">
         <span class="panel-mini-label">Style</span>
         <span id="style-mini-value" class="panel-mini-value">NORMAL</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Location bar -->
-  <div id="location-bar" class="panel-collapsible collapsed">
-    <div class="panel-glow"></div>
-    <div class="location-inner">
-      <div class="location-toolbar">
-        <span class="location-toolbar-label"><span class="dock-label-icon dock-label-icon-location" aria-hidden="true"></span>LOCATION</span>
-        <button class="panel-collapse-btn" data-collapse-target="location-bar" title="Collapse panel">+</button>
-      </div>
-      <div id="location-mini-status" class="location-mini-status" aria-live="polite">
-        <div id="location-mini-city" class="location-mini-city">📍 Location: --</div>
-        <div id="location-mini-poi" class="location-mini-poi">Landmark: --</div>
-      </div>
-      <div class="dock-popover-content">
-        <button class="dock-pin-btn" data-pin-target="location-bar" type="button" aria-label="Pin location tray" aria-pressed="false" title="Keep location tray open"><img src="/pin.svg" alt="" /></button>
-        <div id="poi-row" class="poi-row-container"></div>
-        <div class="location-bar-divider" id="location-bar-divider"></div>
-        <div class="location-city-row">
-          <div id="location-pills" class="location-pills"></div>
-          <div class="location-search-wrap" data-requires-backend>
-            <button id="search-toggle" class="search-toggle-btn" title="Search any location">
-              <span>&#x1F50E;</span>
-            </button>
-            <input type="text" id="location-search" placeholder="Search any location..." autocomplete="off" spellcheck="false" />
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -210,7 +181,7 @@
     <div class="loader-content">
       <span class="loader-logo brand-logo" data-logo-gaze data-logo-src="logo.svg" aria-hidden="true"><img src="/logo.svg" alt="" /></span>
       <h2>wildeye</h2>
-      <p class="loader-status">Initializing photorealistic world...</p>
+      <p class="loader-status">Loading the globe...</p>
     </div>
   </div>
 

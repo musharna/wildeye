@@ -872,7 +872,6 @@ test('SPECIES panel markup, CSS, startup wiring and credits are in place', () =>
   assert.match(stack, /<div id="species-panel" class="panel-collapsible collapsed" data-panel-id="species-panel">/);
   for (const id of PANEL_IDS) assert.match(stack, new RegExp(`id="${id}"`), id);
   assert.match(stack, /data-collapse-target="species-panel"/);
-  assert.doesNotMatch(stack.slice(stack.indexOf('id="species-panel"')), /data-requires-backend/, 'species search works on the static host');
   // B1/S1: the action sits directly after the chosen-species block and the two chip rows follow it, each label beside its row in a group,
   // so the controls stay whole above the panel's cut on a 400x800 phone; the legend, the datasets and the credit line come after them.
   // Brief B fix round 1 (critic S2, N5): the order is back to search, status, chosen species, action. Moving the action first only moved the

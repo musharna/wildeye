@@ -1,4 +1,3 @@
-import { HAS_BACKEND } from './backend.js';
 /**
  * @module hud
  * @description Camera readout overlay.
@@ -14,10 +13,8 @@ import { HAS_BACKEND } from './backend.js';
  */
 
 import * as Cesium from 'cesium';
-import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
-import { isHudSummaryUnconfigured } from './hudSummaryResponse.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
 const HUD_COLORS = {
@@ -30,8 +27,8 @@ const MILITARY_STYLES = new Set(['retro']);
 
 /** Allowed HUD layout variants. */
 const HUD_VARIANTS = new Set(['tactical', 'operator', 'minimal']);
+/** The summary line carries the sun elevation and the clock, so it is retyped on this cadence too. */
 const HUD_SUMMARY_INTERVAL_MS = 15000;
-const HUD_SUMMARY_URL = '/api/openai/hud-summary';
 
 /**
  * Cell size (degrees) for the ALT readout's geoid-undulation cache. N changes
@@ -39,15 +36,6 @@ const HUD_SUMMARY_URL = '/api/openai/hud-summary';
  * the 4 Hz telemetry tick off the EGM96 grid without a visible step.
  */
 const HUD_GEOID_CELL_DEG = 0.01;
-
-/** Flattened list of all city POIs for nearest-point lookups. */
-const NEARBY_POINTS = Object.values(CITY_POIS)
-  .flatMap((city) => city.pois.map((poi) => ({
-    city: city.name,
-    poi: poi.name,
-    lat: poi.lat,
-    lon: poi.lon,
-  })));
 
 /**
  * Full-screen camera readout overlay rendered on top of the Cesium canvas.
@@ -73,18 +61,8 @@ export class IntelHUD {
     this._summaryInterval = null;
     this._summaryTypingInterval = null;
     this._latestMetrics = null;
-    this._dataManager = null;
-    this._dataManagerUnsubscribe = null;
-    this._summaryDirty = true;
-    this._summaryRequest = null;
-    this._lastSummarySignature = '';
-    this._summaryRevision = 0;
-    // One-shot guards so the very first summary lands immediately instead of
-    // waiting for the 15s interval tick: B) swap the "Awaiting telemetry..."
-    // placeholder for the deterministic line as soon as metrics exist, then
-    // A) kick a real AI summary once the intro fly-to settles.
+    // Swap the "Awaiting telemetry..." placeholder for the summary line as soon as metrics exist.
     this._firstMetricsShown = false;
-    this._firstSummaryKicked = false;
     // ALT readout datum: the camera height Cesium reports is ELLIPSOIDAL, the
     // number a viewer reads is MSL. N comes from the same lazy 0.5° EGM96
     // grid chunk (~0.69 MB) the flight layers use — requested on the first telemetry tick of a
@@ -99,22 +77,11 @@ export class IntelHUD {
     // session, so this flips once — and both altitude readouts have to move
     // together when it does (see the repaint in _updateCameraData).
     this._geoidCorrectionApplied = false;
+    // Refresh the summary line as soon as the camera settles, not on the next 15 s tick.
     this._onCameraMoveEnd = () => {
-      this._markSummaryDirty();
-      // The 250 ms telemetry timer and 15 s semantic-summary timer must not
-      // leave the prior city on-screen after a long CCTV focus flight.
-      // Refresh deterministic camera context synchronously on settle; the AI
-      // summary can still upgrade it on its normal cadence.
-      if (this._visible) {
-        this._updateCameraData();
-        this._setSummaryText(this._composeSummary(), false);
-      }
-      // First settled view: request the AI summary now rather than waiting for
-      // the periodic tick (saves up to ~15s of "Awaiting telemetry...").
-      if (!this._firstSummaryKicked && this._visible && this._latestMetrics) {
-        this._firstSummaryKicked = true;
-        void this._updateSummary(true, true);
-      }
+      if (!this._visible) return;
+      this._updateCameraData();
+      this._setSummaryText(this._composeSummary(), false);
     };
 
     this._buildDOM();
@@ -172,8 +139,8 @@ export class IntelHUD {
   }
 
   /**
-   * Start all periodic update timers (timestamp, camera telemetry, semantic
-   * summary). Timers run independently at different cadences and are
+   * Start all periodic update timers (timestamp, camera telemetry, summary
+   * line). Timers run independently at different cadences and are
    * cleaned up in {@link destroy}.
    */
   _startTimers() {
@@ -189,10 +156,9 @@ export class IntelHUD {
       this._updateCameraData();
     }, 250);
 
-    // Semantic summary refresh cadence
     this._summaryInterval = setInterval(() => {
       if (!this._visible) return;
-      void this._updateSummary(true);
+      this._setSummaryText(this._composeSummary(), true);
     }, HUD_SUMMARY_INTERVAL_MS);
   }
 
@@ -287,9 +253,7 @@ export class IntelHUD {
     };
 
     // First time we have real telemetry: replace the "Awaiting telemetry..."
-    // placeholder with the deterministic summary line instantly (no network),
-    // so there's always meaningful context on screen. The AI summary upgrades
-    // this within a second via the moveEnd kick / periodic refresh.
+    // placeholder with the summary line.
     if (!this._firstMetricsShown) {
       this._firstMetricsShown = true;
       this._setSummaryText(this._composeSummary(), false);
@@ -297,16 +261,13 @@ export class IntelHUD {
 
     // The EGM96 grid lands mid-session, and the corner readout picks it up on
     // the very next telemetry tick. The summary line has no such cadence — it
-    // repaints on camera settle or its own 15 s retry — so without this the
-    // corner reads `ALT: 17m` beside a summary still reading `ALT -15M`, for
-    // up to fifteen seconds. Repaint the deterministic line in the SAME tick
-    // the correction turns on (or off, if a lookup starts failing), and mark
-    // the summary dirty so the AI line refreshes on its normal cadence —
-    // exactly what a camera settle already does.
+    // repaints on camera settle or its 15 s tick — so without this the corner
+    // reads `ALT: 17m` beside a summary still reading `ALT -15M`, for up to
+    // fifteen seconds. Repaint the line in the SAME tick the correction turns
+    // on (or off, if a lookup starts failing).
     const geoidCorrectionApplied = Number.isFinite(geoidN);
     if (geoidCorrectionApplied !== this._geoidCorrectionApplied) {
       this._geoidCorrectionApplied = geoidCorrectionApplied;
-      this._markSummaryDirty();
       this._setSummaryText(this._composeSummary(), false);
     }
   }
@@ -420,44 +381,8 @@ export class IntelHUD {
   }
 
   /**
-   * Compute the great-circle distance between two geographic points
-   * using the Haversine formula.
-   * @param {number} lat1 - Start latitude (decimal degrees).
-   * @param {number} lon1 - Start longitude (decimal degrees).
-   * @param {number} lat2 - End latitude (decimal degrees).
-   * @param {number} lon2 - End longitude (decimal degrees).
-   * @returns {number} Distance in kilometers.
-   */
-  _haversineKm(lat1, lon1, lat2, lon2) {
-    const toRad = (deg) => Cesium.Math.toRadians(deg);
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat / 2) ** 2
-      + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
-
-  /**
-   * Find the closest known POI to the given coordinates.
-   * @param {number} latDeg - Latitude in decimal degrees.
-   * @param {number} lonDeg - Longitude in decimal degrees.
-   * @returns {{ city: string, poi: string, lat: number, lon: number, distKm: number }|null}
-   *   Nearest point with distance, or null if no POIs are loaded.
-   */
-  _nearestKnownPoint(latDeg, lonDeg) {
-    let best = null;
-    for (const point of NEARBY_POINTS) {
-      const distKm = this._haversineKm(latDeg, lonDeg, point.lat, point.lon);
-      if (!best || distKm < best.distKm) {
-        best = { ...point, distKm };
-      }
-    }
-    return best;
-  }
-
-  /**
    * Build the one-line semantic summary string from the latest camera metrics.
-   * Includes mode, view band, nearest POI or lat/lon cell, region, altitude,
+   * Includes mode, view band, lat/lon, region, altitude,
    * size of the view, sun elevation, and local timezone.
    * @returns {string} Formatted summary line for the HUD summary readout.
    */
@@ -468,7 +393,6 @@ export class IntelHUD {
     const modeEl = document.getElementById('hud-mode');
     const modeLabel = modeEl?.textContent || 'NORMAL';
     const region = this._regionLabel(m.latDeg, m.lonDeg);
-    const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
     const band = this._viewBand(m.altM);
     const window = this._viewWindowKm(m.latDeg);
     // Rough local timezone from longitude (15 deg per hour)
@@ -484,8 +408,7 @@ export class IntelHUD {
     const winTag = window
       ? `${Math.max(1, Math.round(window.widthKm))}x${Math.max(1, Math.round(window.heightKm))}KM`
       : 'N/A';
-    // NEAR the nearest catalogued POI at metro range; otherwise the lat/lon cell.
-    const localityTag = composeLocalityTag(nearest, m.latDeg, m.lonDeg);
+    const localityTag = composeLocalityTag(m.latDeg, m.lonDeg);
 
     return `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | VIEW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ${localTag}`;
   }
@@ -513,86 +436,6 @@ export class IntelHUD {
     }, 24);
   }
 
-  /**
-   * Refresh the summary readout. Optionally animates the text via typewriter.
-   * @param {boolean} [animate=false] - If true, types the summary character
-   *   by character; otherwise sets it instantly.
-   */
-  async _updateSummary(animate = false, force = false) {
-    const fallbackText = this._composeSummary();
-    if (!this._latestMetrics) {
-      this._setSummaryText(fallbackText, animate);
-      return;
-    }
-    if (!force && !this._summaryDirty) return;
-
-    const revision = this._summaryRevision;
-    // Every caller invokes this as `void this._updateSummary(...)`, so nothing
-    // owns the returned promise — a rejection escaping from here lands as an
-    // unhandled rejection in the console. Building the context walks the live
-    // scene (the view-target pick, the layer roster), so it belongs INSIDE a
-    // guard rather than in front of one. A summary we cannot build is a
-    // fallback line, not a crash.
-    let context;
-    try {
-      context = await this._summaryContext();
-    } catch (error) {
-      console.warn('[HUD] summary context unavailable:', error);
-      // Left dirty on purpose: the next periodic tick retries instead of
-      // sticking on the fallback line for the rest of the session.
-      this._setSummaryText(fallbackText, animate);
-      return;
-    }
-    if (revision !== this._summaryRevision) return;
-    const signature = JSON.stringify(context);
-    if (!force && signature === this._lastSummarySignature) {
-      this._summaryDirty = false;
-      return;
-    }
-    if (this._summaryRequest) return;
-
-    if (force) this._setSummaryText(fallbackText, false);
-    this._summaryDirty = false;
-    this._lastSummarySignature = signature;
-    if (!HAS_BACKEND) {
-      this._setSummaryText(fallbackText, animate);
-      return;
-    }
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
-    this._summaryRequest = controller;
-    try {
-      const response = await fetch(HUD_SUMMARY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(context),
-        signal: controller.signal,
-      });
-      const data = await response.json().catch(() => null);
-      if (revision !== this._summaryRevision) return;
-      if (isHudSummaryUnconfigured(response.status, data)) {
-        this._setSummaryText(fallbackText, animate);
-        return;
-      }
-      if (!response.ok || !data?.summary) {
-        throw new Error(data?.error || `HTTP ${response.status}`);
-      }
-      this._setSummaryText(data.summary, animate);
-    } catch (error) {
-      if (error?.name !== 'AbortError') {
-        console.warn('[HUD] AI summary unavailable:', error);
-        // Invalidate the committed signature so the next periodic tick
-        // retries instead of sticking on the fallback line forever.
-        this._lastSummarySignature = null;
-        this._summaryDirty = true;
-      }
-      this._setSummaryText(fallbackText, animate);
-    } finally {
-      window.clearTimeout(timeout);
-      if (this._summaryRequest === controller) this._summaryRequest = null;
-    }
-  }
-
   _setSummaryText(text, animate) {
     if (animate) {
       this._typeSummary(text);
@@ -600,25 +443,6 @@ export class IntelHUD {
     }
     const el = document.getElementById('hud-summary');
     if (el) el.textContent = text;
-  }
-
-  // The basemap place/street labels came from the God's Eye voice module, removed
-  // 2026-09-26; the summary request still carries the fields, empty.
-  async _summaryContext() {
-    const enabledLayers = this._dataManager?.getAll?.()
-      ?.filter((layer) => layer.enabled)
-      .map((layer) => layer.name) || [];
-    return {
-      placeLabels: [],
-      streetLabels: [],
-      nearbyPlaceLabels: [],
-      enabledLayerLabels: enabledLayers,
-    };
-  }
-
-  _markSummaryDirty() {
-    this._summaryDirty = true;
-    this._summaryRevision++;
   }
 
   // ── Public API ──────────────────────────
@@ -661,8 +485,7 @@ export class IntelHUD {
     this._visible = true;
     if (this._el) this._el.classList.add('active');
     this._updateCameraData(); // immediate update
-    this._markSummaryDirty();
-    void this._updateSummary(false, true);
+    this._setSummaryText(this._composeSummary(), false);
   }
 
   /** Hide the HUD overlay. */
@@ -733,20 +556,6 @@ export class IntelHUD {
     return this._visible;
   }
 
-  attachDataManager(dataManager) {
-    if (this._dataManagerUnsubscribe) {
-      this._dataManagerUnsubscribe();
-      this._dataManagerUnsubscribe = null;
-    }
-    this._dataManager = dataManager || null;
-    if (typeof this._dataManager?.subscribe === 'function') {
-      this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
-        if (change?.type === 'visibility') this._markSummaryDirty();
-      });
-    }
-    this._markSummaryDirty();
-  }
-
   /** Tear down all running intervals. Call when discarding the HUD instance. */
   destroy() {
     clearInterval(this._updateInterval);
@@ -754,7 +563,5 @@ export class IntelHUD {
     clearInterval(this._summaryInterval);
     clearInterval(this._summaryTypingInterval);
     this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
-    this._dataManagerUnsubscribe?.();
-    this._summaryRequest?.abort();
   }
 }

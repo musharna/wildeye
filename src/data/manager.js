@@ -1,4 +1,3 @@
-import { HAS_BACKEND } from '../backend.js';
 import { governorRequestRender } from '../renderGovernor.js';
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
@@ -103,23 +102,13 @@ export function layerFeedState(stats = {}) {
  * for real-time data overlays on the CesiumJS globe.
  */
 export class DataLayerManager {
-  constructor(viewer, { allowQaRegistration = false, hasBackend = HAS_BACKEND } = {}) {
+  constructor(viewer, { allowQaRegistration = false } = {}) {
     this.viewer = viewer;
-    this._hasBackend = hasBackend !== false;
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
     this._listeners = new Set();
     this._visibilityRequestListeners = new Set();
     this._beforeDestroyListeners = new Set();
     this._visibilityGuards = new Set();
-    // A static host (GitHub Pages) cannot serve the /api proxies requiresBackend layers read. Hiding their
-    // toggles is not enough: Context modes, scenes and share links call setEnabled directly, so refuse here.
-    if (!this._hasBackend) {
-      this._visibilityGuards.add(({ layerId, enabled }) => (
-        enabled && this.layers.get(layerId)?.module?.requiresBackend
-          ? 'Needs the local server (not available on the hosted site)'
-          : null
-      ));
-    }
     this._registrationsFinalized = false;
     this._registrationDispositions = null;
     this._allowQaRegistration = allowQaRegistration === true;
@@ -1805,8 +1794,7 @@ export class DataLayerManager {
         name: entry.module.name,
         icon: entry.module.icon,
         source: entry.module.source,
-        // `requiresBackend` layers read /api/* proxies that a static host (GitHub Pages) cannot serve.
-        showInTogglePanel: entry.module.showInTogglePanel !== false && !(entry.module.requiresBackend && !this._hasBackend),
+        showInTogglePanel: entry.module.showInTogglePanel !== false,
         enabled: entry.enabled,
         lifecycleState: entry.lifecycleState,
         lifecycleUncertain: entry.lifecycleUncertain,
