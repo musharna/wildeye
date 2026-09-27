@@ -26,6 +26,9 @@ This changelog records public product changes.
 
 ### Fixed
 
+- wildeye: opening the map-source tray with Enter or Space now always moves focus
+  to a map tile. On a busy page (for example just after the globe switched map
+  source) focus used to stay on the tray button.
 - wildeye: species search follow-ups. A late suggestion can no longer overwrite a
   newer what-lives-here pick, Escape does one thing per press (and no longer ends
   flight or vessel tracking as well), and the details card announces one short
