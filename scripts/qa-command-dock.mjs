@@ -10,7 +10,7 @@
  * the right. The tabs were also fixed at 52-68 px, narrower than "VISUAL PRESETS", so their labels were
  * clipped to "ESETS" and "L". Every existing dock check ran at desktop width or against a dev server.
  * A tray must lie wholly on screen, its first control must take a real tap, and a tab's label must not
- * be cut.
+ * be cut. The LOCATION tab was removed on 2026-09-26; the presets tab is the dock's only tray.
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
@@ -24,7 +24,7 @@ if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 const results = [];
 const report = (check, ok, detail) => { results.push({ check, ok }); console.log(JSON.stringify({ check, ok, ...detail })); };
 
-const TABS = { presets: '#control-panel', location: '#location-bar' };
+const TABS = { presets: '#control-panel' };
 
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-dev-shm-usage'], protocolTimeout: 300000 });
 try {
@@ -51,7 +51,7 @@ try {
       const tabs = {};
       for (const [k, sel] of Object.entries(TABS)) {
         const tab = dock.querySelector(sel);
-        const label = tab.querySelector('.panel-title, .location-toolbar-label');
+        const label = tab.querySelector('.panel-title');
         const t = R(tab), l = R(label);
         // The rendered text's own box, not scrollWidth: a centred label overflows both ways and scrollWidth
         // counts only the right side, so it read "VISUAL PRESETS" clipped to "ESETS" as uncut.
@@ -88,7 +88,7 @@ try {
         // two frames so the settled tray is painted; bounded, since a stalled software renderer once hung this
         await Promise.race([new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res))), new Promise((res) => setTimeout(res, 1000))]);
         const b = pop.getBoundingClientRect();
-        // first real control in the tray (not the pin): a style button or a location pill / search toggle
+        // first real control in the tray (not the pin): a style button
         // a control counts only if its whole box is on screen and a pointer at its centre reaches it
         const hitTest = (e) => {
           if (!e) return 'none';
@@ -100,7 +100,7 @@ try {
         const pin = pop.querySelector('.dock-pin-btn'); const pr = pin?.getBoundingClientRect();
         return { open: !panel.classList.contains('collapsed'), vw, tray: { x: Math.round(b.left), r: Math.round(b.right), y: Math.round(b.top), w: Math.round(b.width) },
           inside: b.left >= 0 && b.right <= vw && b.top >= 0 && b.bottom <= vh,
-          firstControl: hitTest(pop.querySelector('.style-btn, .location-pill, .search-toggle-btn')),
+          firstControl: hitTest(pop.querySelector('.style-btn')),
           pin: hitTest(pin), pinBox: pr && { x: Math.round(pr.left), r: Math.round(pr.right), y: Math.round(pr.top) } };
       }, sel);
       report(`dock-tray-${k}-${w}x${h}`, tray.open && tray.inside && tray.firstControl === 'ok' && tray.pin === 'ok', tray);

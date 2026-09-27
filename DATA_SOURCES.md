@@ -4,7 +4,7 @@ wildeye's **code** is [MIT](LICENSE)-licensed (it began as a fork of God's Eye V
 
 How to read this:
 
-- **Attribution is shown in-app** and listed here. Keep it intact. The required Google/Cesium credit renders on the on-globe credit line (bottom-left, `#cesium-credits`), and every per-layer credit below is registered into the expandable **"Data attribution"** lightbox on that line (`src/data/dataCredits.js` → `viewer.creditDisplay.addStaticCredit`). Both stay visible in clean-view and recording modes.
+- **Attribution is shown in-app** and listed here. Keep it intact. The required Cesium and basemap credits render on the on-globe credit line (bottom-left, `#cesium-credits`), and every per-layer credit below is registered into the expandable **"Data attribution"** lightbox on that line (`src/data/dataCredits.js` → `viewer.creditDisplay.addStaticCredit`). Both stay visible in clean-view and recording modes.
 
 ---
 
@@ -12,25 +12,14 @@ How to read this:
 
 | Source | Used for | License / terms | Attribution |
 |--------|----------|-----------------|-------------|
-| **Google Places/Geocoding** | Place search in local development (not on the hosted site) | Google Maps Platform ToS (proprietary, your own key + billing) | "Google" / "Google Maps" logo — **shown in-app**, required |
 | **Esri World Imagery** (ArcGIS Online tile service) | The satellite basemap: the default landing and the "Esri Satellite" map stack | [Esri Master Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement): the public World Imagery service is usable in public-facing apps with attribution; no key is required for this classic endpoint, but Esri governs and can change access — an app at scale should review current ArcGIS Location Platform terms | "Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" (provider carries the service's own credit line) |
-| **Re:Earth Terrain** (Mapterhorn) | Terrain (keyless globe stacks — OSM etc.) | Terrain mesh: CC BY 4.0; geoid: EGM2008 (NGA, public domain) | "Terrain (keyless globe stacks): Re:Earth Terrain / Mapterhorn (CC BY 4.0) / EGM2008 (NGA)" |
+| **Re:Earth Terrain** (Mapterhorn) | Terrain under both map sources | Terrain mesh: CC BY 4.0; geoid: EGM2008 (NGA, public domain) | "Terrain (keyless globe stacks): Re:Earth Terrain / Mapterhorn (CC BY 4.0) / EGM2008 (NGA)" |
 
 ### Notes on the live sources
 
-- **Google Maps Platform.** You supply your own API key and are bound by [Google's ToS](https://cloud.google.com/maps-platform/terms). Google Maps Content (tiles, geocodes, places) **may not be cached, stored, rehosted, or committed** — this app only ever uses it live, which is the compliant pattern. The "Google" attribution is displayed on the globe and must stay visible. Restrict your key (see [SECURITY.md](SECURITY.md)).
-- **Re:Earth Terrain.** Keyless (no API key). `src/mapStackController.js` swaps in a `Cesium.CesiumTerrainProvider` pointed at Re:Earth's `cesium-mesh/ellipsoid` quantized-mesh endpoint for globe stacks without a Cesium ion token (e.g. OSM), replacing a flat `EllipsoidTerrainProvider`; falls back to the flat provider if the endpoint can't be reached.
+- **Re:Earth Terrain.** Keyless (no API key). `src/mapStackController.js` swaps in a `Cesium.CesiumTerrainProvider` pointed at Re:Earth's `cesium-mesh/ellipsoid` quantized-mesh endpoint under both map sources, replacing a flat `EllipsoidTerrainProvider`; falls back to the flat provider if the endpoint can't be reached.
 
 ---
-
-## Bundled snapshots (committed under `src/data/local_data/`)
-
-Static datasets shipped in the repo for an out-of-the-box experience. **None are MIT** — each keeps its own license (see the carve-out in [LICENSE](LICENSE)). Each folder also has its own provenance README.
-
-| Dataset | Folder | License | Commercial use? | Attribution |
-|---------|--------|---------|-----------------|-------------|
-| **Natural Earth physical regions** (1,046 land + 292 marine named polygons) | `natural_earth/` | **Public domain** | ✅ (no restrictions) | "Made with Natural Earth" (courtesy credit — not legally required) |
-| **DataSF Analysis Neighborhoods** (41 SF neighborhood polygons) | `neighborhoods/` | **PDDL 1.0** (public domain) | ✅ (no restrictions) | "City & County of San Francisco — DataSF" (courtesy — not legally required) |
 
 ### NASA FIRMS acknowledgement
 
@@ -38,44 +27,11 @@ Static datasets shipped in the repo for an out-of-the-box experience. **None are
 
 The fires layer (`pipeline/fires.py`, token `fi`) builds from the no-key global 7-day VIIRS CSVs; see the licence matrix below.
 
-### Natural Earth physical regions (`natural_earth/`)
-
-Curated from the **Natural Earth 10m physical vectors** (https://www.naturalearthdata.com/ —
-fetched from the canonical `nvkelso/natural-earth-vector` GitHub repo, commit
-`ca96624a56bd078437bca8184e78163e5039ad19`, 2026-07-28): `ne_10m_geography_regions_polys`
-(mountain ranges, deserts, plateaus, peninsulas, islands, …) → `regions.json` and
-`ne_10m_geography_marine_polys` (seas, gulfs, straits, bays) → `marine.json`. They back the
-location resolver's named-natural-region lookup (`src/data/naturalEarthRegions.js`).
-
-Curation (provenance in each file's `meta` header): named features only, outer rings only,
-Douglas-Peucker simplified at ~0.01° with coordinates rounded to 3 decimals, sub-20 km²
-MultiPolygon crumbs and zero-area sliver artifacts dropped (7.3 MB source → 2.5 MB pack).
-
-Natural Earth is **public domain** (no permission needed, no attribution legally required —
-https://www.naturalearthdata.com/about/terms-of-use/). We credit anyway: "Made with Natural
-Earth". The credit is registered in `src/data/dataCredits.js`.
-
-### DataSF Analysis Neighborhoods (`neighborhoods/`)
-
-`neighborhoods/san-francisco.json` bundles the City & County of San Francisco's official
-**"Analysis Neighborhoods"** dataset (41 neighborhood polygons; DataSF dataset `j2bu-swwd`,
-catalog map view
-[`p5b7-5n3h`](https://data.sfgov.org/Geographic-Locations-and-Boundaries/Analysis-Neighborhoods-Map/p5b7-5n3h)).
-It backs the location resolver's offline neighborhood-boundary lookup
-(`src/data/neighborhoodPolygons.js`).
-
-The dataset is licensed **PDDL 1.0** (Open Data Commons Public Domain Dedication and
-License — public domain; the DataSF metadata declares `licenseId: "PDDL"`). No attribution
-is legally required; we note the source here and in the folder's `SOURCE.md`, which records
-the retrieval date (2026-07-30), exact download URL, license evidence, and the
-deterministic transform (`scripts/build-sf-neighborhoods.mjs`: `nhood` → `name`, ~2 m
-Douglas-Peucker simplification, 6-decimal rounding).
-
 ---
 
 ## In-app attribution
 
-The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the panels/HUD fade). The layer-specific credits are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+The required Cesium and basemap credits render on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + the "Data attribution" link, stays on screen; only the panels/HUD fade). The layer-specific credits are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
 
 ## wildeye additions
 

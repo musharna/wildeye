@@ -91,10 +91,6 @@ async function init() {
   try {
     loaderStatus.textContent = 'Configuring viewer...';
 
-    // A Google key enables place search in local development.
-    const googleApiKey = import.meta.env.GOOGLE_MAPS_API_KEY;
-    if (googleApiKey) window.__GOOGLE_MAPS_API_KEY__ = googleApiKey;
-
     // Create the Cesium viewer with minimal chrome
     const viewer = new Cesium.Viewer('cesiumContainer', {
       timeline: false,

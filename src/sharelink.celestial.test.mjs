@@ -131,6 +131,12 @@ test('camera-only, partial, and malformed panel shares remain valid incoming sta
     { id: 'data-panel', collapsed: false, pinned: null },
   ] });
 
+  // The retired LOCATION panel ('l') is skipped; the panel beside it still restores.
+  const oldLocation = makeManager('#v=2&lat=10&lon=20&ui=l.c.0_l.p.1_d.c.0').parseInitialHash();
+  assert.deepEqual(oldLocation.panelState, { specs: [
+    { id: 'data-panel', collapsed: false, pinned: null },
+  ] });
+
   for (const hash of [
     '#v=2&lat=10&lon=20&ui=',
     '#v=2&lat=10&lon=20&ui=unknown.c.1',
@@ -163,7 +169,7 @@ test('a share link round-trips the SPECIES panel open, and ui.js and sharelink.j
   };
   const uiIds = ids(uiSource, 'const SHARE_PANEL_STATE_SPECS = Object.freeze([');
   const registryIds = ids(fs.readFileSync(new URL('./sharelink.js', import.meta.url), 'utf8'), 'const SHARE_PANEL_STATE_REGISTRY = Object.freeze([');
-  assert.ok(registryIds.length >= 4, `positive control: the registry's panels are read (${registryIds})`);
+  assert.ok(registryIds.length >= 3, `positive control: the registry's panels are read (${registryIds})`);
   assert.ok(uiIds.includes('species-panel'), `ui.js shares species-panel: ${uiIds}`);
   assert.deepEqual(uiIds, registryIds, 'ui.js and sharelink.js list the same panels in the same order');
 });

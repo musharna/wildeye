@@ -13,7 +13,6 @@
  */
 
 import * as Cesium from 'cesium';
-import { CITY_POIS } from './locations.js';
 import { composeLocalityTag } from './hudLocality.js';
 import { ellipsoidalToMslDisplayM, ensureGeoidReady, geoidHeight } from './data/geoid.js';
 
@@ -37,15 +36,6 @@ const HUD_SUMMARY_INTERVAL_MS = 15000;
  * the 4 Hz telemetry tick off the EGM96 grid without a visible step.
  */
 const HUD_GEOID_CELL_DEG = 0.01;
-
-/** Flattened list of all city POIs for nearest-point lookups. */
-const NEARBY_POINTS = Object.values(CITY_POIS)
-  .flatMap((city) => city.pois.map((poi) => ({
-    city: city.name,
-    poi: poi.name,
-    lat: poi.lat,
-    lon: poi.lon,
-  })));
 
 /**
  * Full-screen camera readout overlay rendered on top of the Cesium canvas.
@@ -391,44 +381,8 @@ export class IntelHUD {
   }
 
   /**
-   * Compute the great-circle distance between two geographic points
-   * using the Haversine formula.
-   * @param {number} lat1 - Start latitude (decimal degrees).
-   * @param {number} lon1 - Start longitude (decimal degrees).
-   * @param {number} lat2 - End latitude (decimal degrees).
-   * @param {number} lon2 - End longitude (decimal degrees).
-   * @returns {number} Distance in kilometers.
-   */
-  _haversineKm(lat1, lon1, lat2, lon2) {
-    const toRad = (deg) => Cesium.Math.toRadians(deg);
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat / 2) ** 2
-      + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  }
-
-  /**
-   * Find the closest known POI to the given coordinates.
-   * @param {number} latDeg - Latitude in decimal degrees.
-   * @param {number} lonDeg - Longitude in decimal degrees.
-   * @returns {{ city: string, poi: string, lat: number, lon: number, distKm: number }|null}
-   *   Nearest point with distance, or null if no POIs are loaded.
-   */
-  _nearestKnownPoint(latDeg, lonDeg) {
-    let best = null;
-    for (const point of NEARBY_POINTS) {
-      const distKm = this._haversineKm(latDeg, lonDeg, point.lat, point.lon);
-      if (!best || distKm < best.distKm) {
-        best = { ...point, distKm };
-      }
-    }
-    return best;
-  }
-
-  /**
    * Build the one-line semantic summary string from the latest camera metrics.
-   * Includes mode, view band, nearest POI or lat/lon cell, region, altitude,
+   * Includes mode, view band, lat/lon, region, altitude,
    * size of the view, sun elevation, and local timezone.
    * @returns {string} Formatted summary line for the HUD summary readout.
    */
@@ -439,7 +393,6 @@ export class IntelHUD {
     const modeEl = document.getElementById('hud-mode');
     const modeLabel = modeEl?.textContent || 'NORMAL';
     const region = this._regionLabel(m.latDeg, m.lonDeg);
-    const nearest = this._nearestKnownPoint(m.latDeg, m.lonDeg);
     const band = this._viewBand(m.altM);
     const window = this._viewWindowKm(m.latDeg);
     // Rough local timezone from longitude (15 deg per hour)
@@ -455,8 +408,7 @@ export class IntelHUD {
     const winTag = window
       ? `${Math.max(1, Math.round(window.widthKm))}x${Math.max(1, Math.round(window.heightKm))}KM`
       : 'N/A';
-    // NEAR the nearest catalogued POI at metro range; otherwise the lat/lon cell.
-    const localityTag = composeLocalityTag(nearest, m.latDeg, m.lonDeg);
+    const localityTag = composeLocalityTag(m.latDeg, m.lonDeg);
 
     return `${modeLabel} ${band} ${localityTag} | ${region} | ALT ${altTag} | VIEW ${winTag} | SUN ${m.sunEl.toFixed(0)}° | ${localTag}`;
   }

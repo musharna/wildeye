@@ -6,12 +6,11 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
-const ui = fs.readFileSync(path.join(ROOT, 'src', 'ui.js'), 'utf8');
 
 /*
  * Required-attribution keep-out pin.
  *
- * Google Maps Platform and Cesium both require the credit line to stay visible
+ * The Cesium and basemap providers require the credit line to stay visible
  * whenever their content is on screen, so this pin FAILS CLOSED: any cascade
  * construct it cannot resolve exactly is an explicit failure naming the
  * construct, never a silent skip. An earlier version modelled `bottom` only and
@@ -198,22 +197,14 @@ const RECOGNIZED = new Set([
   'body.recording-mode #cesium-credits',
   // dock
   '#command-dock',
-  '#command-dock:has(#location-bar:not(.collapsed))',
   '#command-dock:has(#control-panel:not(.collapsed))',
   // rail
   '#right-context-rail',
   '#right-context-rail.layout-focus',
   // tray
   '#command-dock .dock-popover-content',
-  '#command-dock #location-bar .dock-popover-content',
   '#command-dock #control-panel .dock-popover-content',
-  '#command-dock #location-bar:not(.collapsed) .dock-popover-content',
   '#command-dock #control-panel:not(.collapsed) .dock-popover-content',
-  '#command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content',
-  '#command-dock.dock-has-pinned-tray #control-panel:not(.collapsed):not(.dock-pinned) .dock-popover-content',
-  '#command-dock.dock-has-two-pinned-trays .dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
-  '#command-dock.dock-has-two-pinned-trays #location-bar.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
-  '#command-dock.dock-has-two-pinned-trays #control-panel.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
 ]);
 
 const ELEMENT_KEYS = ['#cesium-credits', '#command-dock', '#right-context-rail', '.dock-popover-content'];
@@ -226,15 +217,10 @@ const GUARDED_PROPS = new Set([
   'height', 'min-height', 'max-height', 'position', 'transform', 'translate', 'scale', 'zoom',
 ]);
 
-// Custom properties allowed inside a modelled offset. Each is a pinned-tray
-// stack height, proven non-negative below, so evaluating them at 0 is a
-// conservative floor rather than a guess.
-const VETTED_VARS = new Set([
-  '--dock-pinned-stack-height',
-  '--dock-lower-pinned-height',
-  '--dock-location-pinned-height',
-  '--dock-presets-pinned-height',
-]);
+// Custom properties allowed inside a modelled offset: none. The pinned-tray
+// stack heights left with the second dock tray (2026-09-26); a custom property
+// in an offset now fails as unmodelled until it is proven non-negative here.
+const VETTED_VARS = new Set();
 
 /** Rules whose final compound targets a modelled element (pseudo-elements aside). */
 function ownBoxEntries() {
@@ -327,24 +313,9 @@ const HEIGHTS = [500, 560, 640, 700, 800, 900, 1000, 1080, 1200, 1440, 1600];
 
 const CREDIT_SELECTORS = ['#cesium-credits', 'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits'];
 const MINIMAL_HUD_CREDIT = "body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits";
-const TRAY_ORDINARY = ['#command-dock .dock-popover-content', '#command-dock #location-bar .dock-popover-content'];
+const TRAY_ORDINARY = ['#command-dock .dock-popover-content', '#command-dock #control-panel .dock-popover-content'];
 const TRAY_SCENARIOS = [
   { name: 'ordinary tray', offset: TRAY_ORDINARY },
-  {
-    name: 'one pinned tray',
-    offset: [...TRAY_ORDINARY,
-      '#command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content'],
-    stackVar: '--dock-pinned-stack-height',
-  },
-  {
-    name: 'two pinned trays (upper)',
-    offset: [...TRAY_ORDINARY,
-      // The stock form still governs above 900px; the ID form is what keeps it
-      // ahead of the ordinary narrow rule below it.
-      '#command-dock.dock-has-two-pinned-trays .dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content',
-      '#command-dock.dock-has-two-pinned-trays #location-bar.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content'],
-    stackVar: '--dock-lower-pinned-height',
-  },
 ];
 
 function creditTopPx(width, height) {
@@ -355,7 +326,7 @@ function creditTopPx(width, height) {
 function trayBottomPx(scenario, width, height) {
   const dock = resolve(['#command-dock'], 'bottom', width, 'command dock');
   const offset = resolve(scenario.offset, 'bottom', width, scenario.name);
-  const margin = resolve(['#command-dock #location-bar:not(.collapsed) .dock-popover-content'],
+  const margin = resolve(['#command-dock #control-panel:not(.collapsed) .dock-popover-content'],
     'margin-bottom', width, 'open tray margin');
   return toPx(dock.decl.value, height, 'dock bottom')
     + COMPACT_DOCK_HEIGHT_PX
@@ -369,10 +340,10 @@ test('the specificity calculator itself is pinned', () => {
   const cases = [
     ['#cesium-credits', [1, 0, 0]],
     ['body:not(.ui-clean-view):not(.recording-mode) #cesium-credits', [1, 2, 1]],
-    ['#command-dock #location-bar .dock-popover-content', [2, 1, 0]],
-    ['#command-dock.dock-has-pinned-tray #location-bar:not(.collapsed):not(.dock-pinned) .dock-popover-content', [2, 4, 0]],
-    ['#command-dock.dock-has-two-pinned-trays #location-bar.dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content', [2, 5, 0]],
-    ['#command-dock.dock-has-two-pinned-trays .dock-pinned-top.dock-pinned:not(.collapsed) .dock-popover-content', [1, 5, 0]],
+    ['#command-dock #control-panel .dock-popover-content', [2, 1, 0]],
+    ['#command-dock #control-panel:not(.collapsed) .dock-popover-content', [2, 2, 0]],
+    ['#command-dock:has(#control-panel:not(.collapsed))', [2, 1, 0]],
+    ['#command-dock.dock-pinned .dock-popover-content:where(.a, #b)', [1, 2, 0]],
     ['#command-dock .dock-popover-content::after', [1, 1, 1]],
   ];
   for (const [selector, expected] of cases) {
@@ -427,31 +398,6 @@ test('the model refuses every cascade construct it cannot resolve', () => {
   assert.deepEqual(complaints, [], `the attribution model cannot resolve:\n  ${complaints.join('\n  ')}\n`);
 });
 
-test('custom properties inside modelled offsets are provably non-negative', () => {
-  // The model evaluates them at 0, which is only a conservative floor if they
-  // can never go negative. Both writers are checked: CSS and the JS.
-  const declared = RULES.flatMap((rule) => rule.decls.filter((decl) => VETTED_VARS.has(decl.prop)));
-  assert.ok(declared.length >= VETTED_VARS.size, 'every vetted custom property needs a CSS default');
-  for (const decl of declared) {
-    assert.doesNotMatch(decl.value, /-\s*\d/, `${decl.prop} has a negative CSS default: ${decl.value}`);
-    assert.match(decl.value, /^(0|0px)$/, `${decl.prop} default is not a vetted shape: ${decl.value}`);
-  }
-  const start = ui.indexOf('_updateCommandDockTrayStack() {');
-  assert.ok(start > 0, '_updateCommandDockTrayStack is missing');
-  const writer = ui.slice(start, start + 1800);
-  // Every value traces back to a rect height, floored at 0 and rounded up.
-  assert.match(writer, /const locationHeight = [\s\S]{0,120}?getBoundingClientRect\(\)\.height \|\| 0;/);
-  assert.match(writer, /const presetsHeight = [\s\S]{0,120}?getBoundingClientRect\(\)\.height \|\| 0;/);
-  assert.match(writer, /const lowerPinnedHeight = [\s\S]{0,160}?getBoundingClientRect\(\)\.height \|\| 0;/);
-  assert.match(writer, /const locationHeightPx = Math\.ceil\(locationHeight\);/);
-  assert.match(writer, /const presetsHeightPx = Math\.ceil\(presetsHeight\);/);
-  assert.match(writer, /'--dock-location-pinned-height', `\$\{locationHeightPx\}px`/);
-  assert.match(writer, /'--dock-presets-pinned-height', `\$\{presetsHeightPx\}px`/);
-  assert.match(writer, /'--dock-lower-pinned-height', `\$\{Math\.ceil\(lowerPinnedHeight\)\}px`/);
-  assert.match(writer, /'--dock-pinned-stack-height', stackHeight/);
-  assert.match(writer, /const stackHeight = pinnedCount > 1[\s\S]{0,160}?`calc\(\$\{locationHeightPx\}px \+ \$\{presetsHeightPx\}px \+ 1\.2rem\)`/);
-});
-
 test('the inputs behind the measured constants are unchanged', () => {
   // 28px credit / 62px dock are measured, not derived. Guard the CSS that
   // determines them so a change forces a re-measure instead of a silent drift.
@@ -492,22 +438,6 @@ test('every open dock tray clears the required credit at every modelled viewport
     }
   }
   assert.deepEqual(failures, [], `a dock tray re-enters the credit band:\n  ${failures.join('\n  ')}\n`);
-});
-
-test('a pinned tray still stacks above its sibling at narrow widths', () => {
-  // The stock two-pinned selector carries one ID against five classes, so the
-  // ordinary narrow rule (two IDs) outranks it and the upper tray silently
-  // drops var(--dock-lower-pinned-height), landing on top of the lower one.
-  for (const width of [1440, 900, 800, 720, 700, 600]) {
-    for (const scenario of TRAY_SCENARIOS) {
-      if (!scenario.stackVar) continue;
-      const resolved = resolve(scenario.offset, 'bottom', width, scenario.name);
-      assert.ok(
-        resolved.decl.value.includes(`var(${scenario.stackVar})`),
-        `at ${width}px the ${scenario.name} resolves to "${resolved.decl.value}" via "${resolved.part}" and loses its stack offset`,
-      );
-    }
-  }
 });
 
 test('the dock anchor changes at 720px — the 2vh cancellation is band-limited', () => {

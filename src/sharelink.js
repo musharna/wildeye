@@ -28,10 +28,9 @@ const SHARE_CREATED_AT_PARAM = 'at';
 
 const SHARE_PANEL_STATE_REGISTRY = Object.freeze([
   { id: 'control-panel', token: 'c', pinnable: true },
-  { id: 'location-bar', token: 'l', pinnable: true },
   { id: 'data-panel', token: 'd', pinnable: false },
   // Retired panel tokens stay unknown and are never reissued: 'k' (Map Stack), 's' (Scenes), 'v' (CCTV),
-  // 'r' (Radio), 'g' (Global Context), 'p' (DISPLAY), 'm' (style parameters).
+  // 'r' (Radio), 'g' (Global Context), 'p' (DISPLAY), 'm' (style parameters), 'l' (LOCATION).
   { id: 'species-panel', token: 'b', pinnable: false },
 ]);
 

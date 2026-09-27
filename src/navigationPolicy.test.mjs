@@ -1,12 +1,12 @@
-// Camera-ownership policy for user-issued destinations. The ORDER is the
-// contract: the release happens before the flight, and a deferred flight retires the moment ANY newer
-// navigation intent claims the camera.
+// Camera-ownership policy for deferred destinations (the share-link restore
+// flight). The ORDER is the contract: the release happens before the flight,
+// and a deferred flight retires the moment ANY newer navigation intent claims
+// the camera.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   beginDeferredNavigation,
   reassertNavigationHandoff,
-  runExplicitNavigation,
 } from './navigationPolicy.js';
 
 /** Records every policy side effect in the order it happened. */
@@ -16,15 +16,14 @@ function spy(overrides = {}) {
     log,
     stamp: () => log.push('stamp'),
     release: () => log.push('release'),
-    navigate: () => { log.push('navigate'); return 'flew'; },
     ...overrides,
   };
 }
 
 /**
- * The wiring StyleManager applies: one generation counter shared by every
- * explicit navigation intent AND by a tracked entity taking the camera.
- * Deferred flights capture their stamp and recheck it before flying.
+ * The wiring StyleManager applies: one generation counter advanced by every
+ * navigation intent (the globe reset, a user gesture, a tracked entity taking
+ * the camera). Deferred flights capture their stamp and recheck it before flying.
  */
 function navigator() {
   const state = { generation: 0, log: [] };
@@ -32,18 +31,7 @@ function navigator() {
   const release = () => state.log.push('release');
   return {
     state,
-    /** One explicit intent that flies immediately. Returns its stamp, or false. */
-    navigate(noun) {
-      return runExplicitNavigation({
-        stamp,
-        release,
-        navigate: (generation) => {
-          state.log.push(`fly:${noun}`);
-          return generation;
-        },
-      });
-    },
-    /** An intent whose flight resolves later (the geocoded search). */
+    /** An intent whose flight resolves later (the share-link restore). */
     startDeferred() {
       return beginDeferredNavigation({ stamp });
     },
@@ -57,39 +45,12 @@ function navigator() {
       if (cleared) state.log.push(`fly:${label}`);
       return cleared;
     },
-    trackEntity() {
-      // Mirrors StyleManager's trackedEntityChanged listener.
+    /** Any newer intent: the globe reset, a gesture, or entity tracking. */
+    claim() {
       stamp();
     },
   };
 }
-
-test('a free camera is stamped, released, then flown — in that order', () => {
-  const s = spy();
-  const result = runExplicitNavigation({ ...s });
-  assert.equal(result, 'flew');
-  assert.deepEqual(s.log, ['stamp', 'release', 'navigate']);
-});
-
-test('the accepted intent hands its stamp to the flight', () => {
-  let seen = null;
-  runExplicitNavigation({ stamp: () => 42, navigate: (generation) => { seen = generation; } });
-  assert.equal(seen, 42, 'a deferred flight needs its stamp to recheck later');
-});
-
-test('disposed navigation is inert before any camera or UI mutation', () => {
-  const s = spy();
-  const result = runExplicitNavigation({ disposed: true, ...s });
-  assert.equal(result, false);
-  assert.deepEqual(s.log, []);
-});
-
-test('the refusal is a strict false, distinguishable from a flight result', () => {
-  const refused = runExplicitNavigation({ disposed: true, navigate: () => 'flew' });
-  assert.strictEqual(refused, false);
-  // A navigate() that legitimately returns undefined is not a refusal.
-  assert.strictEqual(runExplicitNavigation({ navigate: () => undefined }), undefined);
-});
 
 test('deferred handoff: the current request re-releases, then proceeds', () => {
   const s = spy();
@@ -129,37 +90,25 @@ test('deferred handoff: a superseded request neither flies nor releases', () => 
   assert.deepEqual(s.log, [], 'a stale flight must be completely inert');
 });
 
-// Interleavings: the generation advances on EVERY explicit intent, not just on
-// another search. A search-only token left all of these open — the stale search
-// still held the current token and flew over the newer destination.
-test('interleaving: a canned destination during a search retires the search', () => {
+test('interleaving: a newer intent during a deferred flight retires it', () => {
   const nav = navigator();
-  const searchGeneration = nav.startDeferred('location');
-  nav.navigate('location'); // user clicks a city pill while the geocode runs
-  assert.equal(nav.resolveDeferred(searchGeneration, 'search'), false);
-  assert.deepEqual(nav.state.log, ['release', 'fly:location']);
-  assert.ok(!nav.state.log.includes('fly:search'), 'the stale search must not fly');
+  const restoreGeneration = nav.startDeferred();
+  nav.claim(); // the user resets the globe or a tracked entity takes the camera
+  assert.equal(nav.resolveDeferred(restoreGeneration, 'restore'), false);
+  assert.deepEqual(nav.state.log, [], 'the retired flight never released or flew');
 });
 
-test('interleaving: a tracked entity taking the camera during a search retires it', () => {
+test('interleaving: an uninterrupted deferred flight still flies', () => {
   const nav = navigator();
-  const searchGeneration = nav.startDeferred('location');
-  nav.trackEntity();
-  assert.equal(nav.resolveDeferred(searchGeneration, 'search'), false);
-  assert.deepEqual(nav.state.log, [], 'the deferred search never released');
+  const restoreGeneration = nav.startDeferred();
+  assert.equal(nav.resolveDeferred(restoreGeneration, 'restore'), true);
+  assert.deepEqual(nav.state.log, ['release', 'fly:restore']);
 });
 
-test('interleaving: an uninterrupted search still flies', () => {
+test('interleaving: the newest of two deferred flights wins', () => {
   const nav = navigator();
-  const searchGeneration = nav.startDeferred('location');
-  assert.equal(nav.resolveDeferred(searchGeneration, 'search'), true);
-  assert.deepEqual(nav.state.log, ['release', 'fly:search']);
-});
-
-test('interleaving: the newest of two searches wins', () => {
-  const nav = navigator();
-  const first = nav.startDeferred('location');
-  const second = nav.startDeferred('location');
+  const first = nav.startDeferred();
+  const second = nav.startDeferred();
   assert.equal(nav.resolveDeferred(first, 'first'), false);
   assert.equal(nav.resolveDeferred(second, 'second'), true);
   assert.ok(!nav.state.log.includes('fly:first'));

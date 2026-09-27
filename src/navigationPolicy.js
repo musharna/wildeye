@@ -1,22 +1,8 @@
 /**
- * Camera-ownership policy for explicit and deferred navigation.
- *
- * Immediate destinations stamp, release, and fly. Deferred destinations stamp
- * without releasing; after resolution they must recheck the stamp immediately
- * before releasing and flying.
+ * Camera-ownership policy for deferred navigation (the share-link restore
+ * flight). A deferred destination stamps without releasing; when it resolves it
+ * must recheck the stamp immediately before releasing and flying.
  */
-
-/**
- * Run an immediate explicit camera navigation.
- * @param {Object} options
- * @returns {*} Navigation result, or false when disposed.
- */
-export function runExplicitNavigation({ disposed = false, stamp, release, navigate } = {}) {
-  if (disposed) return false;
-  const generation = stamp?.();
-  release?.();
-  return navigate?.(generation);
-}
 
 /**
  * Accept a deferred navigation intent without releasing the current owner.
