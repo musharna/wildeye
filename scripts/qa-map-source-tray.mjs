@@ -121,9 +121,13 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
     // The controller commits `activeId` before its fallback promise callback
-    // emits the terminal error state that re-syncs the chips. Give that
-    // callback one turn so the DOM assertion observes the completed contract.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // emits the terminal error state that re-syncs the chips: poll for the lit
+    // OSM chip (3 s ceiling) so the DOM assertion observes the completed contract.
+    const litDeadline = performance.now() + 3000;
+    while (document.querySelector('.map-stack-chip[aria-pressed="true"]')?.dataset.stackId !== 'osm'
+        && performance.now() < litDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     const afterTwo = {
       activeId: controller.getActiveId(),
       lastError: controller.getState().lastError,
@@ -155,7 +159,8 @@ try {
 
   await page.focus('#control-panel-toggle');
   await page.keyboard.press('Enter');
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  // Focus moves to a tile after the tray's open transition; poll for it (3 s ceiling) instead of a fixed wait.
+  await page.waitForFunction(() => document.activeElement?.dataset?.stackId, { timeout: 3000 }).catch(() => {});
   const keyboardOpen = await page.evaluate(() => ({
     expanded: document.getElementById('control-panel-toggle').getAttribute('aria-expanded'),
     activeStack: document.activeElement?.dataset?.stackId || null,
@@ -179,7 +184,8 @@ try {
   );
 
   await page.keyboard.press('Space');
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  // Focus moves to a tile after the tray's open transition; poll for it (3 s ceiling) instead of a fixed wait.
+  await page.waitForFunction(() => document.activeElement?.dataset?.stackId, { timeout: 3000 }).catch(() => {});
   const spaceOpen = await page.evaluate(() => ({
     expanded: document.getElementById('control-panel-toggle').getAttribute('aria-expanded'),
     activeStack: document.activeElement?.dataset?.stackId || null,
@@ -196,7 +202,8 @@ try {
   await page.keyboard.up('Enter');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Enter');
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  // Focus moves to a tile after the tray's open transition; poll for it (3 s ceiling) instead of a fixed wait.
+  await page.waitForFunction(() => document.activeElement?.dataset?.stackId, { timeout: 3000 }).catch(() => {});
   const longHoldRecovery = await page.evaluate(() => ({
     expanded: document.getElementById('control-panel-toggle').getAttribute('aria-expanded'),
     activeStack: document.activeElement?.dataset?.stackId || null,
@@ -324,9 +331,10 @@ try {
   );
 
   await setControlPanelPinned(false);
-  const dismissAfterTileClick = await clickTileThenLeave('osm');
+  // Click the tile the keyboard step did NOT leave focused, so focus moves by pointer.
+  const dismissAfterTileClick = await clickTileThenLeave('esri-imagery');
   const pinnedForHold = await setControlPanelPinned(true);
-  const pinnedHold = await clickTileThenLeave('esri-imagery');
+  const pinnedHold = await clickTileThenLeave('osm');
   await setControlPanelPinned(false);
   await page.evaluate(() => window.__godsEyeView.styleManager
     ._setMapStack('esri-imagery', { syncShare: false }));
