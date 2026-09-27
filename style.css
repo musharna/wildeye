@@ -1,7 +1,4 @@
-/* ═══════════════════════════════════════════════
-   GOD'S EYE VIEW — Dark Sci-Fi UI
-   Apple meets Blade Runner
-   ═══════════════════════════════════════════════ */
+/* wildeye — globe UI styles */
 
 :root {
   --bg-dark: #0a0a0f;
@@ -21,13 +18,9 @@
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   --left-stack-x: 52px;
-  --right-rail-x: 52px;
   --left-stack-top: 26vh;
   --left-stack-gap: 72px;
   --left-collapsed-width: 176px;
-  --display-panel-expanded-width: 272px;
-  --cockpit-radio-collapsed-width: 148px;
-  --cockpit-radio-expanded-width: 232px;
 }
 
 * {
@@ -54,30 +47,6 @@ html, body {
   top: 0;
   left: 0;
 }
-
-/* Unified world-overlay host: detection uses one host-owned blend surface
-   beneath the shared text/card canvas; both share one frame path. The root
-   holds ONLY the card canvas — it is a stacking context (z-index below), and
-   a canvas that blends against the scene cannot live inside one. */
-
-/* Scope mask — the explicit circular viewport treatment (see
-   src/scopeMask.js for the emergent-artifact history). z2 keeps it above
-   the WebGL scene but under the z5 detection surface, preserving the old
-   compositing order where detection's blend rode the masked scene. */
-
-/* The detection surface is host-owned but parented into #cesiumContainer
-   (position:absolute, z-index:auto — NOT a stacking context) so its
-   `mix-blend-mode: screen` composites against the WebGL scene. z5 keeps it
-   under the z6 root that carries the shared card canvas; do not move this
-   surface inside #world-overlay-root, which would isolate the blend. */
-
-/* Canvas cards retain their spatial renderer; this parallel focusable list
-   exposes only the currently painted actionable targets to assistive tech. */
-
-/* ── Source-backed cockpit weather ─────────────
-   Low-resolution GPU cloud pass composited only inside the cockpit keyhole. */
-
-/* ── Full-globe celestial keyhole ring ─────── */
 
 /* Hide Cesium default UI elements */
 .cesium-viewer-toolbar,
@@ -167,17 +136,6 @@ html, body {
     margin: 0 !important;
   }
 }
-/* Clean-view / recording: the attribution MUST stay visible.
-   The Cesium and basemap terms require the credit whenever the
-   content is displayed — and these are exactly the modes used to record demos
-   and launch videos, so hiding #cesium-credits here (as it was before) shipped
-   non-compliant footage. The full credit line — the Cesium logo
-   and the "Data attribution" link that opens the per-layer license popover —
-   stays on screen; it's already styled small and unobtrusive above. The GEV
-   chrome (panels/HUD) still fades via its own rules; only the required notice
-   is exempt. (Note: Cesium re-applies inline styles on the credit elements each
-   frame, so the on-screen credit content is owned by Cesium's update loop, not
-   CSS overrides — we deliberately don't fight it here.) */
 
 /* ── Title Bar ────────────────────────────────── */
 #title-bar {
@@ -223,7 +181,6 @@ html, body {
 
 #title-bar .title-logo::before,
 #title-bar .title-logo::after {
-  --radio-broadcast-opacity: .28;
   content: '';
   position: absolute;
   z-index: 1;
@@ -241,21 +198,9 @@ html, body {
 }
 
 #title-bar .title-logo::after {
-  --radio-broadcast-opacity: .17;
   top: -15px;
   width: 27px;
   height: 13px;
-}
-
-@keyframes title-radio-broadcast {
-  0%, 100% {
-    opacity: calc(var(--radio-broadcast-opacity) * .55);
-    transform: translateX(-50%) scale(.94);
-  }
-  50% {
-    opacity: var(--radio-broadcast-opacity);
-    transform: translateX(-50%) scale(1);
-  }
 }
 
 .brand-logo {
@@ -575,17 +520,6 @@ html, body {
   50% { opacity: 1; }
 }
 
-/* ── Post-Processing Toggles ─────────────────── */
-
-/* Expanded Display already owns the glass shell. Keep its header visually
- * integrated with that container, matching the other expanded panel headers;
- * the collapsed launcher retains the standalone card treatment above. */
-
-/* ── Bloom Slider (inline with toggle) ───────── */
-
-/* Quantitative companion sliders share Display / Sharpen's visible rail,
- * circular thumb, glow, and value treatment while retaining a taller hit area. */
-
 /* Map Source tiles live with Visual Presets in the bottom command tray. */
 .map-source-section {
   display: grid;
@@ -724,25 +658,6 @@ body.ui-clean-view #data-panel {
   pointer-events: none !important;
 }
 
-/* ── Detection Toggle States ─────────────────── */
-
-@keyframes detection-pulse {
-  0%, 100% { box-shadow: 0 0 12px rgba(0, 255, 80, 0.15); }
-  50% { box-shadow: 0 0 22px rgba(0, 255, 80, 0.35); }
-}
-
-/* ── Parameter Slider Panel ──────────────────── */
-
-/* Display owns the constrained desktop scroll surface. Keeping Parameters as
- * a second scroll container traps wheel/touch input at its boundary and lets
- * the flex column compress newly added preset rows below the visible panel. */
-
-/* ── Location Bar ────────────────────────────── */
-
-/* ── Expandable POI Row ──────────────────────── */
-
-/* ── Location Search ─────────────────────────── */
-
 /* ── Top-center Globe Actions ────────────────── */
 #top-center-actions {
   position: fixed;
@@ -858,12 +773,6 @@ body.ui-clean-view #data-panel {
   line-height: 1;
 }
 
-/* Stacked below the traffic chip so both can show at once */
-
-/* The settled traffic chip carries no progress number — the label's coverage
-   figure is the honest one. Collapse the empty slot so the chip closes up
-   instead of trailing a 34px stub and its flex gap. */
-
 /* ── Split-flap chip text ─────────────────────────────────────────
    Per-character departure-board flip when a chip label changes.
    Driven entirely by src/splitFlap.js, which rebuilds the label as
@@ -883,10 +792,9 @@ body.ui-clean-view #data-panel {
    freely while the aria-live region sees only one characterData
    change per label update.
 
-   Motion matches the cockpit odometer roll (.cockpit-roll-token):
-   same cubic-bezier, same reduced-motion treatment. Only the
-   left-to-right stagger is new — that cascade is what makes it read
-   as a Solari board rather than a counter.
+   Each cell rolls on cubic-bezier(0.2, 0.75, 0.25, 1); the
+   left-to-right stagger is what makes it read as a Solari board
+   rather than a counter.
    ------------------------------------------------------------------ */
 /* While the flaps play, the real text is clipped out of view but stays in
    the DOM and in the accessibility tree — same clipped-but-present treatment
@@ -973,7 +881,7 @@ body.ui-clean-view #data-panel {
   78% { transform: rotateX(-7deg); opacity: 1; }
   100% { transform: rotateX(0deg); opacity: 1; }
 }
-/* Matches the .cockpit-roll-track treatment: collapse the duration rather
+/* Reduced motion collapses the duration rather
    than dropping the animation, so the final frame still lands the glyph.
    src/splitFlap.js also checks the query and takes the instant path, so
    this is the belt to that braces. */
@@ -1017,59 +925,6 @@ body.ui-clean-view #data-panel {
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
-}
-
-/* ── Aircraft Cockpit View ─────────────────── */
-@keyframes cockpit-altitude-pointer {
-  50% { transform: translateX(-3px); filter: brightness(1.35); }
-}
-@keyframes cockpit-speed-pointer {
-  50% { transform: translateX(3px); filter: brightness(1.35); }
-}
-@keyframes cockpit-live { 50% { opacity: 0.35; } }
-.cockpit-roll-token {
-  position: relative;
-  display: inline-block;
-  min-width: 0.56em;
-  height: 1em;
-  overflow: hidden;
-  line-height: 1;
-  text-align: center;
-  vertical-align: -0.08em;
-}
-@keyframes cockpit-number-roll-up {
-  from { transform: translateY(0); }
-  to { transform: translateY(-1em); }
-}
-@keyframes cockpit-number-roll-down {
-  from { transform: translateY(-1em); }
-  to { transform: translateY(0); }
-}
-/* CONTACT LOST reuses the amber the app already spends on unknown/stale inputs
-   (.cockpit-context-cohorts > div.unknown, .cockpit-brief-status[data-state="unavailable"]),
-   so a held last-known readout never reads as a live one. */
-/* The held values are last-known, not current — dim them to match the cue. */
-[data-cockpit-launcher="display"] {
-  width: var(--left-collapsed-width, 176px);
-}
-[data-cockpit-launcher="radio"] {
-  width: var(--cockpit-radio-collapsed-width, 148px);
-}
-[data-cockpit-brief-page] {
-  animation: cockpit-brief-enter 220ms ease-out both;
-}
-[data-cockpit-brief-page][hidden] { display: none; }
-@keyframes cockpit-brief-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Keep the user's intelligence HUD text available in first person. It stays
-   subordinate to the visor instruments and occupies the four peripheral
-   corridors, leaving the optical center, context rails, and heading tape free. */
-
-@media (prefers-reduced-motion: reduce) {
-  [data-cockpit-brief-page] { animation: none; }
 }
 
 /* ── Safe Frame Overlay ─────────────────────── */
@@ -1135,8 +990,6 @@ body.ui-clean-view #data-panel {
       transparent 66.7%
     );
 }
-
-/* ── Orbit Indicator ─────────────────────────── */
 
 /* ── Intelligence HUD Overlay ────────────────── */
 #intel-hud {
@@ -1411,17 +1264,6 @@ body.ui-clean-view #data-panel {
   background: rgba(255, 255, 255, 0.03);
 }
 
-/* Selected-only, provenance-first proximity results. This is intentionally a
-   contextual panel, not a radar/engagement display. */
-
-@keyframes mission-thrust-wave {
-  0%, 18% { opacity: 0; }
-  24% { opacity: 1; }
-  32%, 100% { opacity: 0; }
-}
-/* TR-3B reclassify toggle rides an `auto` trailing column so the chip never
-   resizes the COCKPIT / SEARCH buttons beside it. */
-
 /* ── Radio companion section inside Context ── */
 
 .data-toggle-top {
@@ -1602,27 +1444,6 @@ body.ui-clean-view #data-panel {
      hairline ring so a near-black class still reads on the panel glass. */
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
   flex: none;
-}
-
-/* ── CCTV Panel ─────────────────────────────── */
-
-/* Click-to-edit effective-pose readout (viewshed/gizmo design §3d): compact
-   value chips replace the seven offset sliders. */
-
-/* CAL badge states (cctv-v2 §3b, amended by LOCKED §9.2 — panel-only, no
-   in-world tint). Three visually distinct states: calibrated / curated /
-   raw-prior. */
-
-/* Unsaved live edits (save-gated persistence, viewshed design §3e). */
-
-/* Lightweight loading shimmer while the active frame is fetching */
-
-/* "Acquiring" caption only when no previous frame is showing underneath */
-
-@keyframes cctv-frame-shimmer {
-  to {
-    transform: translateX(100%);
-  }
 }
 
 /* ── Scene Director Panel ───────────────────── */
@@ -1974,6 +1795,12 @@ body.recording-mode #command-dock {
   pointer-events: none !important;
 }
 
+/* Clean-view / recording: the attribution MUST stay visible. The Cesium and
+   basemap terms require the credit whenever the content is displayed, and these
+   are the modes used to record demos, so hiding #cesium-credits here shipped
+   non-compliant footage. The panels and HUD still fade via their own rules;
+   only the required notice is exempt. (Cesium re-applies inline styles on the
+   credit elements each frame, so their content is owned by Cesium, not CSS.) */
 body.ui-clean-view #cesium-credits,
 body.recording-mode #cesium-credits {
   right: auto;
@@ -2161,11 +1988,6 @@ body.recording-mode #cesium-credits {
 @keyframes command-dock-reveal {
   from { opacity: 0; transform: translateY(0.2rem); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes gev-voice-bar {
-  from { transform: scaleY(0.35); opacity: 0.5; }
-  to { transform: scaleY(1); opacity: 1; }
 }
 
 /* Compact dock clearance keeps the reference-like low profile. */
@@ -2585,8 +2407,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   #command-dock #control-panel .dock-popover-content {
     bottom: calc(100% + 2vh + 2.5rem);
   }
-
-  /* Panel IDs for the same specificity reason as the max-width:900px block. */
 }
 
 /* Final top-right positioning for the floating SVG tray pins. */
@@ -2647,8 +2467,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   height: 1.15rem;
 }
 
-/* Five-pixel standby baseline; live microphone analysis sets --audio-level. */
-
 /* Center every slide-up tray on the complete unified dock, not its side wing. */
 
 #command-dock #control-panel .dock-popover-content {
@@ -2685,8 +2503,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 #command-dock .dock-popover-content .style-btn:hover {
   transform: none;
 }
-
-/* Keep the microphone neutral at rest; cyan signals hover and live states. */
 
 /* Match compact dock wings to the glass treatment used by left-panel buttons. */
 #command-dock > #control-panel {
