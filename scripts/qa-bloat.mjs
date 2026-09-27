@@ -2,7 +2,7 @@
 /**
  * qa-bloat.mjs — real-browser acceptance for removing God's Eye inheritance wildeye does not need
  * (grill_wildeye_bloat_2026-09-26: Q4-Q6, A6, A9-A12, A18; step 2: Q11, A19-A20, A23). Headless Chrome on swiftshader only.
- * Run against a Pages build (VITE_STATIC_HOST=1): node scripts/qa-bloat.mjs [--url https://musharna.github.io/wildeye/]
+ * Run against a Pages build: node scripts/qa-bloat.mjs [--url https://musharna.github.io/wildeye/]
  * One JSON line per check; exits 1 when any check fails.
  *
  * Every denylist check is paired with a positive control in the same row, so a page that failed to
@@ -73,12 +73,10 @@ try {
   step = 'inventory';
   const inv = await page.evaluate((CUT_ELEMENTS, KEEP_ELEMENTS) => {
     const g = window.__godsEyeView;
-    const staticHost = document.body.classList.contains('static-host');
-    const visible = (el) => !(staticHost && el.closest('[data-requires-backend]')) && getComputedStyle(el).display !== 'none';
+    const visible = (el) => getComputedStyle(el).display !== 'none';
     const all = g.dataManager.getAll();
     const label = (el) => (el.getAttribute('aria-label') || el.textContent || el.title || '').replace(/\s+/g, ' ').trim();
     return {
-      staticHost,
       registered: all.map((l) => l.id),
       shown: all.filter((l) => l.showInTogglePanel).map((l) => l.id),
       styles: [...document.querySelectorAll('.style-btn')].filter(visible).map((b) => b.dataset.style),
@@ -95,7 +93,6 @@ try {
     const urls = [...new Set(performance.getEntriesByType('resource').map((e) => e.name).filter((u) => /\/assets\/[^/]+\.js(\?|$)/.test(u)))];
     return Promise.all(urls.map(async (u) => ({ url: u.split('/').pop(), text: await (await fetch(u)).text() })));
   });
-  report('static-host', inv.staticHost, { note: 'run against a VITE_STATIC_HOST=1 build: that is what visitors get' });
   const leftLayers = CUT_LAYERS.filter((id) => inv.registered.includes(id));
   const missingKeep = KEEP_LAYERS.filter((id) => !inv.shown.includes(id));
   report('layers', leftLayers.length === 0 && missingKeep.length === 0 && inv.registered.includes('species'),

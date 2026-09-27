@@ -1,5 +1,4 @@
 import * as Cesium from 'cesium';
-import { HAS_BACKEND } from './backend.js';
 import { StyleManager } from './ui.js';
 import { showWholeGlobe } from './camera.js';
 import { DataLayerManager } from './data/manager.js';
@@ -51,8 +50,6 @@ import {
 } from './renderGovernor.js';
 
 initLogoGaze();
-// Static host (GitHub Pages): hide server-only surfaces marked data-requires-backend in index.html.
-if (!HAS_BACKEND) document.body.classList.add('static-host');
 
 /**
  * Extract a human-readable error message from any thrown value.
