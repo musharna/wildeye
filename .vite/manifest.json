@@ -1,30 +1,23 @@
 {
-  "_vendor-cesium-COa84Irs.js": {
-    "file": "assets/vendor-cesium-COa84Irs.js",
+  "_vendor-cesium-B_0GIsZ3.js": {
+    "file": "assets/vendor-cesium-B_0GIsZ3.js",
     "name": "vendor-cesium"
   },
   "index.html": {
-    "file": "assets/index-DVRBOHWw.js",
+    "file": "assets/index-Cbckdjn8.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_vendor-cesium-COa84Irs.js"
+      "_vendor-cesium-B_0GIsZ3.js"
     ],
     "dynamicImports": [
-      "src/data/local_data/neighborhoods/san-francisco.json",
       "src/data/local_data/natural_earth/regions.json",
       "src/data/local_data/natural_earth/marine.json",
       "src/data/egm96Grid.generated.js"
     ],
     "css": [
-      "assets/index-ZUMC0Tow.css"
-    ],
-    "assets": [
-      "assets/cable-geo-i2PzBJi6.json",
-      "assets/landing-point-geo-CiAWPhfe.json",
-      "assets/datacenters-CtzejECr.geojsonl",
-      "assets/dams-B2lCjFgp.geojsonl"
+      "assets/index-SYGn5X-N.css"
     ]
   },
   "src/data/egm96Grid.generated.js": {
@@ -32,14 +25,6 @@
     "name": "egm96Grid.generated",
     "src": "src/data/egm96Grid.generated.js",
     "isDynamicEntry": true
-  },
-  "src/data/local_data/dams/dams.geojsonl": {
-    "file": "assets/dams-B2lCjFgp.geojsonl",
-    "src": "src/data/local_data/dams/dams.geojsonl"
-  },
-  "src/data/local_data/datacenters/datacenters.geojsonl": {
-    "file": "assets/datacenters-CtzejECr.geojsonl",
-    "src": "src/data/local_data/datacenters/datacenters.geojsonl"
   },
   "src/data/local_data/natural_earth/marine.json": {
     "file": "assets/marine-BOD1SOq9.js",
@@ -52,19 +37,5 @@
     "name": "regions",
     "src": "src/data/local_data/natural_earth/regions.json",
     "isDynamicEntry": true
-  },
-  "src/data/local_data/neighborhoods/san-francisco.json": {
-    "file": "assets/san-francisco-MZ170vc-.js",
-    "name": "san-francisco",
-    "src": "src/data/local_data/neighborhoods/san-francisco.json",
-    "isDynamicEntry": true
-  },
-  "src/data/local_data/telegeography_submarine_cables/cable-geo.json": {
-    "file": "assets/cable-geo-i2PzBJi6.json",
-    "src": "src/data/local_data/telegeography_submarine_cables/cable-geo.json"
-  },
-  "src/data/local_data/telegeography_submarine_cables/landing-point-geo.json": {
-    "file": "assets/landing-point-geo-CiAWPhfe.json",
-    "src": "src/data/local_data/telegeography_submarine_cables/landing-point-geo.json"
   }
 }
