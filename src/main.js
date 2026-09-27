@@ -102,6 +102,13 @@ async function init() {
       selectionIndicator: false,
       infoBox: false,
       baseLayer: false,
+      // Cesium's own Tycho-2 star box re-encoded as WebP q60 (public/skybox): the six 1024 px JPEG faces were 849 KB of a first
+      // visit, and blocking them took ~5 s off a slow-4G wait for the globe (grill_wildeye_cesium A10). 276 KB, same 1024 px:
+      // halving the size instead averaged every one-pixel star into a smudge.
+      skyBox: new Cesium.SkyBox({
+        sources: Object.fromEntries(['positiveX', 'negativeX', 'positiveY', 'negativeY', 'positiveZ', 'negativeZ']
+          .map((k) => [k, `${import.meta.env.BASE_URL}skybox/tycho2t3_80_${k[0] === 'p' ? 'p' : 'm'}${k.at(-1).toLowerCase()}.webp`])),
+      }),
       // Visible attribution container (styled subtly via #cesium-credits). The
       // credit line stays visible in clean-view AND recording modes too, since
       // the basemap and data terms require attribution while their content is

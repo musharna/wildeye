@@ -29,6 +29,8 @@ This changelog records public product changes.
 - wildeye: fonts are served from the site instead of Google Fonts, and the two
   top-bar icons are drawn inline instead of coming from an icon font. A first
   visit makes no requests to Google, and the text looks the same.
+- wildeye: the star background is the same 1024 px Tycho-2 sky as WebP instead
+  of JPEG, 278 KB instead of 849 KB.
 
 ### Fixed
 

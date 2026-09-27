@@ -21,7 +21,8 @@ const TERRAIN_ALTITUDE_M = 2_000_000;
 const SKYBOX_BUDGET_KB = 300;
 const GOOGLE_FONTS = /fonts\.(googleapis|gstatic)\.com/;
 const TERRAIN = /terrain\.reearth\.land/;
-const SKYBOX = /\/cesium\/Assets\/Textures\/SkyBox\//;
+/** Cesium's default star box or the site's own (public/skybox): both at once would count 12 faces and fail. */
+const SKYBOX = /\/(cesium\/Assets\/Textures\/SkyBox|skybox)\/tycho2t3_80_/;
 
 const results = [];
 const report = (check, ok, detail) => { results.push({ check, ok }); console.log(JSON.stringify({ check, ok, ...detail })); };
