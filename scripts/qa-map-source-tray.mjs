@@ -128,6 +128,13 @@ try {
         && performance.now() < litDeadline) {
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
+    // Cesium redraws its credit list once per rendered frame, ~400 ms after the chip lights on
+    // swiftshader (same on the step-1 build): poll for the Esri credit to leave (3 s ceiling), or
+    // the read races that frame and the check flakes.
+    const creditDeadline = performance.now() + 3000;
+    while (document.body.innerText.includes('Powered by Esri') && performance.now() < creditDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
     const afterTwo = {
       activeId: controller.getActiveId(),
       lastError: controller.getState().lastError,
