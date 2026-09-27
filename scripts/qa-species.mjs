@@ -459,7 +459,9 @@ if (CHECKS.has('left-stack')) {
       const pill = (id) => { const el = document.getElementById(id); return { display: getComputedStyle(el).display, height: +el.getBoundingClientRect().height.toFixed(1) }; };
       const tick = () => {
         const cs = getComputedStyle(data);
-        frames.push({ t: Math.round(performance.now() - started), visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: stack.dataset.layoutMode, species: pill('species-panel') });
+        // sliding: the stack's own top/bottom transition (150 ms, style.css #left-panel-stack) is running, as it does when the lane changes mode.
+        const sliding = stack.getAnimations().some((animation) => ['top', 'bottom'].includes(animation.transitionProperty) && animation.playState === 'running');
+        frames.push({ t: Math.round(performance.now() - started), visibility: cs.visibility, opacity: +Number(cs.opacity).toFixed(3), height: +data.getBoundingClientRect().height.toFixed(1), mode: stack.dataset.layoutMode, allocated: data.style.getPropertyValue('--left-panel-allocated-height') || null, sliding, species: pill('species-panel') });
         if (ended !== null) framesAfterEnd += 1;
         const elapsed = performance.now() - started;
         if ((ended !== null && framesAfterEnd > 10) || (!expectTransition && elapsed > 1200) || elapsed > 3000) {
@@ -570,8 +572,11 @@ if (CHECKS.has('left-stack')) {
   const shownOk = shown.data.active && !shown.data.collapsed && shown.data.visibility === 'visible' && shown.mode === 'focus';
   // A hiding step: the panel stays at its height while it can be seen, and the lane settles out of focus mode with the pills laid out.
   const hideOk = (result) => result.visibleFrames.every((frame) => frame.height >= 100) && result.settled.data.visibility === 'hidden' && result.settled.mode !== 'focus' && !result.settled.focusClass && laidOut(result.settled.species);
-  // A showing step: every frame where the panel can be seen is already in the shown mode, at 100 px or more, with both pills out of layout.
-  const showOk = (result) => result.firstVisible !== null && result.visibleFrames.every((frame) => frame.mode === shown.mode && frame.height >= 100 && frame.species.display === 'none') && result.settled.data.visibility === 'visible' && result.settled.mode === shown.mode;
+  // A showing step: every frame where the panel can be seen already has the shown mode and allocation, with both pills out of layout. The
+  // box is 100 px or more on every frame once the stack's top/bottom slide has ended, and at least one such frame is drawn: while the stack
+  // slides into the focus corridor, its flex column squeezes the panel below its allocation (97.8 px at opacity 0.007 on the first frame).
+  const showRule = (frame) => frame.mode === shown.mode && frame.allocated === shown.data.allocated && frame.species.display === 'none' && (frame.sliding || frame.height >= 100);
+  const showOk = (result) => result.firstVisible !== null && result.visibleFrames.every(showRule) && result.visibleFrames.some((frame) => !frame.sliding) && result.settled.data.visibility === 'visible' && result.settled.mode === shown.mode;
   // R11-M1 (final review M7): the sampled show steps need a visible frame but not one mid-fade, and swiftshader can draw a 300 ms fade in no frame
   // at all. The frame held at 150 ms of the F show is mid-fade by construction, so it is gated: visible, 0 < opacity < 1, at least 100 px tall,
   // in the shown state's mode, and both pills out of layout, on the reads just before and just after its capture.
@@ -589,7 +594,6 @@ if (CHECKS.has('left-stack')) {
   };
   // The report keeps each step's first visible frame and every frame that breaks its rule, not the whole timeline.
   const summarize = (result, rule) => ({ label: result.label, ended: result.ended, frames: result.frames, firstVisible: result.firstVisible, broken: result.visibleFrames.filter((frame) => !rule(frame)).slice(0, 5), settled: { mode: result.settled.mode, data: result.settled.data, species: result.settled.species } });
-  const showRule = (frame) => frame.mode === shown.mode && frame.height >= 100 && frame.species.display === 'none';
   const hideRule = (frame) => frame.height >= 100;
   report('left-stack', Object.values(checks).every(Boolean), {
     initial, setup: setup && setup.label, shown,
