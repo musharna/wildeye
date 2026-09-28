@@ -312,10 +312,18 @@ try {
       focusVisible,
     };
   });
+  // Open the tray the way a pointer does (hovering the wing cancels a pending mouse-away close), then wait until the
+  // tile itself takes a hit at its centre. The tray fades in and widens over 280 ms; a fixed 240 ms wait clicked
+  // before it was there on a busy page ("Node is either not clickable"). Times out loudly after 5 s.
   const clickTileThenLeave = async (stackId) => {
-    await page.evaluate(() => window.__godsEyeView.styleManager
-      .setPanelCollapsed('control-panel', false, { explicit: true }));
-    await new Promise((resolve) => setTimeout(resolve, 240));
+    await page.hover('#control-panel-toggle');
+    await page.waitForFunction((id) => {
+      const tile = document.querySelector(`[data-stack-id="${id}"]`);
+      if (!tile || document.getElementById('control-panel').classList.contains('collapsed')) return false;
+      const rect = tile.getBoundingClientRect();
+      if (rect.width < 4 || rect.height < 4 || getComputedStyle(tile).visibility !== 'visible') return false;
+      return tile.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
+    }, { timeout: 5000, polling: 'raf' }, stackId);
     await page.click(`[data-stack-id="${stackId}"]`);
     await new Promise((resolve) => setTimeout(resolve, 120));
     const afterClick = await readTrayState();
