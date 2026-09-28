@@ -69,6 +69,51 @@ try {
     && !!read.summary && read.summary !== 'Awaiting telemetry...', { latlon: read.latlon, alt: read.alt, clock: read.clock, mode: read.mode, summary: read.summary });
   const hits = REMOVED.filter((re) => re.test(read.text)).map(String);
   report('no spy-satellite readout on screen', hits.length === 0, { hits });
+
+  // The summary re-types itself every 15 s. The HUD corner is an obstacle the left panel stack lays out around
+  // (src/ui.js), so if the box changes size while typing, the stack slides again (the qa-species left-stack flake).
+  // Every text change is measured in a MutationObserver callback, so a 24 ms empty state cannot fall between frames.
+  // Positive control: the visible text (innerText skips visibility:hidden) really grows during the re-type.
+  const retype = await page.evaluate(() => new Promise((resolve) => {
+    const el = document.getElementById('hud-summary');
+    const box = document.querySelector('#intel-hud .hud-top-left');
+    const stack = document.getElementById('left-panel-stack');
+    const samples = [];
+    let started = null;
+    let last = el.innerText.length;
+    const sample = () => {
+      const len = el.innerText.length;
+      if (started === null && len < last) started = performance.now();
+      last = len;
+      if (started === null) return;
+      const r = box.getBoundingClientRect();
+      samples.push({ t: Math.round(performance.now() - started), len, width: +r.width.toFixed(1), height: +r.height.toFixed(1), safeTop: stack?.style.getPropertyValue('--left-stack-safe-top') || null });
+    };
+    const observer = new MutationObserver(sample);
+    observer.observe(el, { childList: true, characterData: true, subtree: true });
+    const deadline = performance.now() + 20000;
+    const tick = () => {
+      sample();
+      const done = started !== null && performance.now() - started > 2500;
+      if (done || performance.now() > deadline) {
+        observer.disconnect();
+        resolve({ samples, timedOut: !done });
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }));
+  const spread = (key) => {
+    const values = retype.samples.map((s) => s[key]);
+    return values.length ? +(Math.max(...values) - Math.min(...values)).toFixed(1) : null;
+  };
+  const lengths = [...new Set(retype.samples.map((s) => s.len))];
+  const typed = !retype.timedOut && lengths.length >= 3 && retype.samples.at(-1).len === Math.max(...lengths);
+  const safeTops = [...new Set(retype.samples.map((s) => s.safeTop))];
+  report('summary re-type keeps the HUD box size', typed && spread('width') <= 0.5 && spread('height') <= 0.5 && safeTops.length <= 1, {
+    typed, timedOut: retype.timedOut, samples: retype.samples.length, lengths: lengths.slice(0, 8), widthSpread: spread('width'), heightSpread: spread('height'), safeTops,
+  });
   report('no page errors', pageErrors.length === 0, { pageErrors: pageErrors.slice(0, 3) });
 } finally {
   await browser.close();

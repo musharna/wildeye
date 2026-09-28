@@ -415,7 +415,9 @@ export class IntelHUD {
 
   /**
    * Animate the summary text into the DOM using a typewriter effect
-   * (2 characters every 24ms).
+   * (2 characters every 24ms). The whole line is laid out from the first tick and the untyped rest is invisible, so
+   * the HUD corner keeps its final size while typing: the left panel stack lays out around it (src/ui.js) and slid
+   * again on every re-type when the box grew with the text.
    * @param {string} text - Full summary string to type out.
    */
   _typeSummary(text) {
@@ -423,16 +425,23 @@ export class IntelHUD {
     if (!el) return;
     clearInterval(this._summaryTypingInterval);
     let index = 0;
-    el.textContent = '';
+    const typed = document.createElement('span');
+    const rest = document.createElement('span');
+    rest.className = 'hud-summary-untyped';
+    rest.textContent = text;
+    el.classList.add('is-typing');
+    el.replaceChildren(typed, rest);
     this._summaryTypingInterval = setInterval(() => {
       index += 2;
       if (index >= text.length) {
         el.textContent = text;
+        el.classList.remove('is-typing');
         clearInterval(this._summaryTypingInterval);
         this._summaryTypingInterval = null;
         return;
       }
-      el.textContent = text.slice(0, index);
+      typed.textContent = text.slice(0, index);
+      rest.textContent = text.slice(index);
     }, 24);
   }
 
