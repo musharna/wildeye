@@ -114,6 +114,35 @@ try {
   report('summary re-type keeps the HUD box size', typed && spread('width') <= 0.5 && spread('height') <= 0.5 && safeTops.length <= 1, {
     typed, timedOut: retype.timedOut, samples: retype.samples.length, lengths: lengths.slice(0, 8), widthSpread: spread('width'), heightSpread: spread('height'), safeTops,
   });
+
+  // Two corners share each row. On a phone their one-line readouts are wider than half the screen: lat/lon printed over
+  // ALT/SUN at 390 px and the summary ran 69 px off the right edge (live, 2026-09-28). Each readout's own text extent
+  // (a Range; the summary clips, so its box) must be on screen and clear of every other readout. Positive control: all
+  // five readouts have text, and 1400 px, where the corners always fit, is checked the same way.
+  const READOUTS = ['hud-mode', 'hud-summary', 'hud-timestamp', 'hud-latlon', 'hud-alt'];
+  for (const [width, height] of [[390, 844], [360, 740], [1400, 900]]) {
+    await page.setViewport({ width, height });
+    await page.waitForFunction((w) => innerWidth === w, { timeout: 10000 }, width);
+    await sleep(1500);
+    const layout = await page.evaluate((ids) => {
+      const boxes = ids.map((id) => {
+        const el = document.getElementById(id);
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const r = id === 'hud-summary' ? el.getBoundingClientRect() : range.getBoundingClientRect();
+        return { id, l: +r.left.toFixed(1), r: +r.right.toFixed(1), t: +r.top.toFixed(1), b: +r.bottom.toFixed(1), chars: el.textContent.trim().length };
+      });
+      const offscreen = boxes.filter((b) => b.l < -0.5 || b.r > innerWidth + 0.5 || b.t < -0.5 || b.b > innerHeight + 0.5).map((b) => b.id);
+      const overlaps = [];
+      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i], b = boxes[j];
+        if (Math.min(a.r, b.r) - Math.max(a.l, b.l) > 0.5 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 0.5) overlaps.push(`${a.id}/${b.id}`);
+      }
+      return { boxes, offscreen, overlaps, empty: boxes.filter((b) => !b.chars).map((b) => b.id) };
+    }, READOUTS);
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/hud-plain-${width}.png` });
+    report(`HUD readouts on screen and apart at ${width} px`, !layout.offscreen.length && !layout.overlaps.length && !layout.empty.length, layout);
+  }
   report('no page errors', pageErrors.length === 0, { pageErrors: pageErrors.slice(0, 3) });
 } finally {
   await browser.close();

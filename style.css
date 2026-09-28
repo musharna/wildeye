@@ -1021,6 +1021,7 @@ body.ui-clean-view #data-panel {
   --hud-color: rgba(0, 255, 255, 0.6);
   --hud-glow: rgba(0, 255, 255, 0.4);
   --hud-border: rgba(0, 255, 255, 0.15);
+  --hud-inset: 36px;
 }
 
 #intel-hud.active {
@@ -1066,24 +1067,37 @@ body.ui-clean-view #data-panel {
   padding: 4px;
 }
 
+/* Two corners share each row, so each gets at most its share of it and its readout wraps at a space. Unbounded, their
+   one-line readouts printed over each other below ~666 px (lat/lon under ALT/SUN on a phone) and the summary ran off
+   the right edge. The top-left summary sits below the clock's line, so that corner may span the row. */
 .hud-top-left {
   top: 120px;
-  left: 36px;
+  left: var(--hud-inset);
+  max-width: calc(100% - 2 * var(--hud-inset));
 }
 
 .hud-top-right {
   top: 120px;
-  right: 36px;
+  right: var(--hud-inset);
 }
 
 .hud-bottom-left {
   bottom: 180px;
-  left: 36px;
+  left: var(--hud-inset);
 }
 
 .hud-bottom-right {
   bottom: 180px;
-  right: 36px;
+  right: var(--hud-inset);
+}
+
+.hud-bottom-left,
+.hud-bottom-right {
+  max-width: calc(50% - var(--hud-inset) - 6px);
+}
+
+.hud-corner > .hud-content {
+  min-width: 0;
 }
 
 .hud-bracket {
@@ -1177,6 +1191,7 @@ body.ui-clean-view #data-panel {
 
 #intel-hud[data-variant='minimal'] .hud-bottom-left {
   bottom: 12vh;
+  max-width: calc(100% - 2 * var(--hud-inset));
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-bar {
@@ -1636,14 +1651,8 @@ body.recording-mode #data-panel {
     width: 36px;
   }
 
-  .hud-top-left,
-  .hud-bottom-left {
-    left: 16px;
-  }
-
-  .hud-top-right,
-  .hud-bottom-right {
-    right: 16px;
+  #intel-hud {
+    --hud-inset: 16px;
   }
 
   .hud-bottom-bar {
