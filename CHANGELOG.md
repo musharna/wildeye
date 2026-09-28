@@ -24,6 +24,17 @@ This changelog records public product changes.
 - wildeye: scheduled pipelines under `pipeline/`, a licence ledger in
   `DATA_SOURCES.md`, and a GitHub Pages deploy script.
 
+### Changed
+
+- wildeye: fonts are served from the site instead of Google Fonts, and the two
+  top-bar icons are drawn inline instead of coming from an icon font. A first
+  visit makes no requests to Google, and the text looks the same.
+- wildeye: the star background is the same 1024 px Tycho-2 sky as WebP instead
+  of JPEG, 278 KB instead of 849 KB.
+- wildeye: terrain loads the first time the view comes closer than 2,000 km, and
+  stays. From farther out relief is too small to see, and its tiles no longer
+  hold up the first view of the globe.
+
 ### Fixed
 
 - wildeye: on phones narrower than 480 px the clear, share and reset buttons no

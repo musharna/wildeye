@@ -112,9 +112,10 @@ try {
   report('bundle-strings', bundleLeft.length === 0 && scripts.some((s) => s.text.includes('api.gbif.org')),
     { godsEyeLeft: bundleLeft, scanned: scripts.length });
   const cutRequests = [...new Set(requests.filter((u) => CUT_REQUEST.test(u)).map((u) => u.slice(0, 120)))];
-  // Positive control: the keyless basemap loaded (no layer is on at first load, so no data file is fetched).
-  const basemap = ['services.arcgisonline.com', 'terrain.reearth.land'].filter((host) => requests.some((u) => new URL(u).host === host));
-  report('requests', cutRequests.length === 0 && basemap.length === 2,
+  // Positive control: the keyless basemap imagery loaded (no layer is on at first load, so no data file is fetched). Terrain
+  // is not in it: since 2026-09-27 it waits for the camera to come below 2,000 km, which qa-first-load checks.
+  const basemap = ['services.arcgisonline.com'].filter((host) => requests.some((u) => new URL(u).host === host));
+  report('requests', cutRequests.length === 0 && basemap.length === 1,
     { godsEyeLeft: cutRequests.slice(0, 8), basemap, total: requests.length });
   // The HUD keeps its plain line (A19): after the load wait it shows a composed readout, not its placeholder.
   report('hud-line', /UTC/.test(inv.hudSummary) && !/Awaiting/.test(inv.hudSummary), { hudSummary: inv.hudSummary.slice(0, 160) });

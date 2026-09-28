@@ -40,6 +40,10 @@ const ESRI_ATTRIBUTION_HTML =
 // EGM2008 geoid via NGA) — quantized-mesh 1.0, `ellipsoid` data-type.
 // Constructed via `.fromUrl()`, never a hand-built `{z}/{x}/{y}.terrain` URL.
 const REEARTH_TERRAIN_URL = 'https://terrain.reearth.land/cesium-mesh/ellipsoid';
+// Terrain waits until the camera first comes below this height, then stays. The opening view is ~18,000 km up, where
+// relief is below a pixel (Himalaya side by side, with and without terrain: identical at 5,000 km, no visible relief at
+// 2,000 km), yet its ~1.6 MB of tiles held a slow-4G first visit ~5 s longer (grill_wildeye_cesium_2026-09-27, Q4).
+export const TERRAIN_BELOW_M = 2_000_000;
 
 /**
  * Controls the active basemap: the imagery layer under the globe and the
@@ -62,8 +66,10 @@ export class MapStackController {
     this._imageryProviders = new Map();
     this._isSwitching = false;
     this._lastError = null;
-    // The keyless terrain is installed on the first switch and kept.
+    // The keyless terrain is installed the first time the camera comes below TERRAIN_BELOW_M, and kept.
     this._terrainInstalled = false;
+    this._terrainPending = null;
+    this._removeTerrainWatch = null;
     // Cache of the constructed keyless Re:Earth CesiumTerrainProvider, so
     // repeat switches don't refetch `layer.json`.
     this._reearthTerrainProvider = null;
@@ -164,7 +170,7 @@ export class MapStackController {
     this._syncEsriAttribution(resolution.effectiveStackId);
     this._watchEsriProvider(resolution, gen);
 
-    await this._installKeylessTerrain(gen);
+    this._watchForTerrain();
     return resolution;
   }
 
@@ -284,17 +290,34 @@ export class MapStackController {
   }
 
   /**
-   * Installs the keyless terrain on the first switch. `CesiumTerrainProvider.fromUrl()`
-   * is async (it fetches `layer.json`); if a newer switch starts meanwhile, that
-   * switch installs it instead (M7 pattern).
-   * @param {number} [gen] — switch generation this call belongs to
+   * Installs the keyless terrain on the first rendered frame whose camera is below TERRAIN_BELOW_M. Terrain does not
+   * depend on the imagery stack, so it is armed once and outlives every switch. `preRender` fires only on frames that
+   * render, so the watch costs nothing while the globe is idle, and it is removed as soon as terrain is on its way.
    */
-  async _installKeylessTerrain(gen) {
-    if (this._terrainInstalled) return;
-    const provider = await this._getKeylessTerrainProvider();
-    if (gen != null && gen !== this._switchGen) return;
-    this.viewer.terrainProvider = provider;
-    this._terrainInstalled = true;
+  _watchForTerrain() {
+    if (this._terrainInstalled || this._terrainPending || this._removeTerrainWatch) return;
+    const check = () => {
+      if (this.viewer.camera.positionCartographic.height >= TERRAIN_BELOW_M) return;
+      this._removeTerrainWatch?.();
+      this._removeTerrainWatch = null;
+      this._installKeylessTerrain();
+    };
+    this._removeTerrainWatch = this.viewer.scene.preRender.addEventListener(check);
+    check();
+  }
+
+  /**
+   * Installs the keyless terrain once. `CesiumTerrainProvider.fromUrl()` is async (it fetches `layer.json`); a call
+   * made while one is in flight joins it.
+   */
+  _installKeylessTerrain() {
+    if (this._terrainInstalled) return Promise.resolve();
+    this._terrainPending ||= this._getKeylessTerrainProvider().then((provider) => {
+      this.viewer.terrainProvider = provider;
+      this._terrainInstalled = true;
+      governorRequestRender('map-stack');
+    });
+    return this._terrainPending;
   }
 
   /**

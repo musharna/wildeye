@@ -704,8 +704,11 @@ body.ui-clean-view #data-panel {
   transform: none;
 }
 
-#top-center-actions .material-symbols-outlined {
-  font-size: 18px;
+/* Material Symbols "layers_clear" and "public" (Apache 2.0) inline, not an icon font fetched for two glyphs */
+#top-center-actions .action-icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
 }
 
 /* Below 480 px the title (139 px), the centred actions (124 px) and the style indicator (108 px) need more width than the top bar has,
