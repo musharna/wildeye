@@ -7,14 +7,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>wildeye</title>
   <link rel="icon" type="image/svg+xml" href="/wildeye/logo.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0" rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet" />
-  <script type="module" crossorigin src="/wildeye/assets/index-D5FBWQhV.js"></script>
-  <link rel="modulepreload" crossorigin href="/wildeye/assets/vendor-cesium-eRKAzoPc.js">
-  <link rel="stylesheet" crossorigin href="/wildeye/assets/index-CFzyJWzQ.css">
+  <!-- Self-hosted type: three Google stylesheets once cost a slow-4G visit 1.6 s. The two Latin files every page draws are preloaded. -->
+  <link rel="preload" href="/wildeye/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/wildeye/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/wildeye/fonts/fonts.css" />
+  <script type="module" crossorigin src="/wildeye/assets/index-yR6uXZ1y.js"></script>
+  <link rel="modulepreload" crossorigin href="/wildeye/assets/vendor-cesium-BTdxMSHX.js">
+  <link rel="stylesheet" crossorigin href="/wildeye/assets/index-CjrnrJND.css">
 </head>
 <body>
   <div id="cesiumContainer"></div>
@@ -34,13 +33,13 @@
   <!-- Top-center camera and share actions -->
   <nav id="top-center-actions" aria-label="Globe actions">
     <button id="clear-selected-layers" type="button" aria-label="Clear selected data layers" title="Turn off all selected data layers">
-      <span class="material-symbols-outlined" aria-hidden="true">layers_clear</span>
+      <svg class="action-icon" viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="m631-455-51-51 119-94-219-173-93 74-51-51 144-114 336 264-185 145Zm108 108-52-52 71-55 58 46-77 61Zm29 233L624-258 480-144 144-408l58-46 278 218 93-73-56-57-37 30-336-264 77-61L90-793l51-51 678 679-51 51ZM480-603Z"/></svg>
     </button>
     <button id="share-btn" type="button" aria-label="Copy share link" title="Copy share link">
       <span class="share-icon" aria-hidden="true">&#x1F517;</span>
     </button>
     <button id="reset-globe-view" type="button" aria-label="Reset to full globe view" title="Reset camera and return to full globe view">
-      <span class="material-symbols-outlined" aria-hidden="true">public</span>
+      <svg class="action-icon" viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M331-126q-70-30-122.5-82.5T126-331q-30-70-30-149.5t30-149q30-69.5 82.5-122T331-834q70-30 149.5-30t149 30q69.5 30 122 82.5t82.5 122q30 69.5 30 149T834-331q-30 70-82.5 122.5t-122 82.5q-69.5 30-149 30T331-126Zm101-46v-68q-20 0-34-14t-14-34v-48L175-545q-4 19-5.5 35t-1.5 30q0 115 74.5 203T432-172Zm288-109q36-42 54-93t18-106q0-95-52-173T600-768v24q0 30-21 51t-51 21h-96v48q0 20-14 34t-34 14h-48v96h240q20 0 34 14t14 34v96h41q23 0 39 16t16 39Z"/></svg>
     </button>
   </nav>
   <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>
