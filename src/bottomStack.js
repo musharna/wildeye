@@ -64,8 +64,11 @@ export function stackAboveChrome({
         .filter(([l, rt]) => l < r.right && r.left < rt)
         .map(([, , above]) => above);
       if (!clear.length) continue;
+      // Only a box that must rise gets an inline bottom. One copied from its own CSS outlives the CSS state it
+      // was read in: the corner held its recording-mode place for a frame after the HUD variant changed.
       const own = parseFloat(win?.getComputedStyle?.(e)?.bottom) || 0;
-      e.style.bottom = `${Math.max(own, ...clear)}px`;
+      const need = Math.max(...clear);
+      if (need > own) e.style.bottom = `${need}px`;
     }
   };
 

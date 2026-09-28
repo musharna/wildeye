@@ -158,7 +158,24 @@ test('a box beside the stack keeps its CSS place unless it overlaps the stack ac
   stackAboveChrome({ doc, below: () => [box(774, 62, 117, 273)], items: () => [phonePill], beside: () => [phoneLeft, phoneRight] });
   assert.equal(phonePill.style.bottom, '134px'); // 900 - 774 + 8
   assert.equal(phoneLeft.style.bottom, '168px'); // max(its 120, the stack top 134 + 26 + 8)
-  assert.equal(phoneRight.style.bottom, '400px'); // already higher: its own place
+  assert.equal(phoneRight.style.bottom, ''); // already higher: its own place, left to the CSS
+});
+
+// An inline bottom copied from the CSS outlives the CSS state it was copied from. At 1400 px the HUD's bottom-left corner
+// overlaps the map credits across but sits well above them; it was pinned inline at its own CSS bottom anyway, so on leaving
+// recording mode (minimal HUD → tactical, 17.6 px higher) it held the minimal place for a frame and the left stack laid out
+// 17.6 px too tall (qa-species left-stack recordingOffOk: 518.2 px allocated, then 500.6). A box that need not rise is left to the CSS.
+test('a box beside the stack that already clears what it overlaps gets no inline bottom, so a CSS change moves it at once', () => {
+  const { doc } = env();
+  doc.defaultView.getComputedStyle = (e) => ({ bottom: e.cssBottom });
+  const credits = box(867, 20, 24, 257);
+  const corner = box(735, 40, 36, 338, { cssBottom: '125px' });
+  const { place } = stackAboveChrome({ doc, below: () => [credits], items: () => [], beside: () => [corner] });
+  assert.equal(corner.style.bottom, ''); // 125 > the credits' 900 - 867 + 8 = 41
+  corner.cssBottom = '108px'; // the HUD variant changed; nothing re-placed yet, and nothing needs to
+  assert.equal(corner.style.bottom, '');
+  place();
+  assert.equal(corner.style.bottom, '');
 });
 
 test('a box beside the stack is watched, so its own resize re-places it', () => {
