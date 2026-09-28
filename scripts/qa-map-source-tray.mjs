@@ -190,7 +190,10 @@ try {
       && sameTaskFocus.openVisibility === 'visible' && sameTaskFocus.openLanded && sameTaskFocus.collapsedAfter,
     JSON.stringify(sameTaskFocus),
   );
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  // Enter on the toggle of a tray that is still closing would toggle it the wrong way: wait until the Escape above has
+  // closed it (collapsed, and its fade has ended in visibility: hidden), not a fixed 500 ms.
+  await page.waitForFunction(() => document.getElementById('control-panel').classList.contains('collapsed')
+    && getComputedStyle(document.getElementById('control-panel-popover')).visibility === 'hidden', { timeout: 5000, polling: 'raf' });
 
   await page.focus('#control-panel-toggle');
   await page.keyboard.press('Enter');
@@ -341,10 +344,11 @@ try {
   await setControlPanelPinned(false);
   await page.evaluate(() => window.__godsEyeView.styleManager
     .setPanelCollapsed('control-panel', true, { explicit: true }));
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await page.waitForFunction(() => document.getElementById('control-panel').classList.contains('collapsed')
+    && getComputedStyle(document.getElementById('control-panel-popover')).visibility === 'hidden', { timeout: 5000, polling: 'raf' });
   await page.focus('#control-panel-toggle');
   await page.keyboard.press('Enter'); // opens and hands focus to the active tile
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  await page.waitForFunction(() => document.activeElement?.dataset?.stackId, { timeout: 5000, polling: 'raf' });
   await page.keyboard.press('Tab'); // tab ONTO a tile, keyboard modality
   await page.keyboard.press('Enter'); // activate it from the keyboard
   await new Promise((resolve) => setTimeout(resolve, 200));

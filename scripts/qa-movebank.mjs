@@ -54,9 +54,7 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.observedTime, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
   await sleep(12000);
-  await page.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
   await page.keyboard.press('Escape');
-  await page.waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 60000 }).catch(() => {});
 
   // A polyline is 2-3 px wide: pick a 9x9 px box at the centre, camera straight down on the fix.
   const pickAt = (waitMs = 3000) => page.evaluate(async ([lon, lat], waitMs, prefix) => {

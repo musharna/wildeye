@@ -52,11 +52,9 @@ try {
   if (process.env.QA_SELFTEST_CONSOLE) await page.evaluate(() => console.error('[Data:gibs-selftest] injected by QA_SELFTEST_CONSOLE'));
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.styleManager, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
-  // Boot flies the camera and shows a first-run launcher over the centre (the qa-gibs / qa-compare pattern).
+  // Boot flies the camera to its first view (the qa-gibs / qa-compare pattern).
   await sleep(12000);
-  await page.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
   await page.keyboard.press('Escape');
-  await page.waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 15000 }).catch(() => {});
 
   const hasReadout = await page.evaluate(() => typeof window.__godsEyeView.readoutAt === 'function');
   report('readout-exposed', hasReadout, {});

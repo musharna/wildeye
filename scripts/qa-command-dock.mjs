@@ -34,12 +34,9 @@ try {
     await m.setViewport({ width: w, height: h, isMobile: touch, hasTouch: touch, deviceScaleFactor: 1 });
     await m.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
     await m.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView.styleManager, { timeout: 180000 });
-    // the first-run launcher arrives after boot and covers the bottom of a phone; dismissed as qa-compare does
+    // the boot camera flight settles first (a fixed wait: no app signal marks it; the first-run launcher it once also waited for was removed in 54192b3)
     await new Promise((r) => setTimeout(r, 12000));
-    await m.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
     await m.keyboard.press('Escape');
-    const launcherGone = await m.waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 15000 }).then(() => true, () => false);
-    if (!launcherGone) { report(`dock-${w}x${h}`, false, { error: 'first-run launcher still up after 15 s' }); await m.close(); continue; }
 
     // Closed dock: whole dock on screen, each tab's label uncut and inside its tab.
     const closed = await m.evaluate(async (TABS) => {

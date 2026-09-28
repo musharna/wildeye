@@ -72,7 +72,6 @@ page.on('pageerror', (e) => log({ pageerror: String(e?.message || e).slice(0, 20
 await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
 await sleep(12000);
-await page.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
 await page.keyboard.press('Escape');
 await sleep(1500);
 const basemap = await page.evaluate(() => String(window.__godsEyeView.viewer.imageryLayers.get(0)?.imageryProvider?.url ?? ''));

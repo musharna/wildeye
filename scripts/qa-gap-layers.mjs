@@ -63,15 +63,7 @@ page.on('response', (r) => {
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
 await new Promise((r) => setTimeout(r, 12000)); // boot flyTo + deferred init
-// Dismiss the first-run launcher so it does not cover the frame.
-await page.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
 await page.keyboard.press('Escape');
-// The launcher removes itself on a 400 ms timer after Escape; under host load a fixed sleep lost that race
-// (2026-09-12). Wait for it to be gone, and fail loudly if it never goes.
-const launcherGone = await page
-  .waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 15000 })
-  .then(() => true, () => false);
-if (!launcherGone) { console.log('FAIL first-run launcher still visible after 15 s; screenshots would be covered'); process.exit(1); }
 const baselineErrors = pageErrors.length;
 console.log(`app ready; ${baselineErrors} console/page errors before any gap layer (not attributed)`);
 pageErrors = [];

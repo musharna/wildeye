@@ -39,7 +39,6 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
   await sleep(12000);
-  await page.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
   await page.keyboard.press('Escape');
 
   const title = await page.evaluate(() => ({ doc: document.title, bar: document.querySelector('#title-bar h1 > span:not(.brand-logo)')?.textContent.trim(), tagline: !!document.querySelector('#title-bar .subtitle') }));
