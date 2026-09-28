@@ -1048,7 +1048,6 @@ body.ui-clean-view #data-panel {
   padding: 4px 10px;
   font-size: 10px;
   letter-spacing: 1.4px;
-  justify-content: space-between;
   align-items: center;
   pointer-events: none;
 }
@@ -1190,13 +1189,11 @@ body.ui-clean-view #data-panel {
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: 12vh;
   max-width: calc(100% - 2 * var(--hud-inset));
 }
 
 #intel-hud[data-variant='minimal'] .hud-bottom-bar {
   display: flex;
-  bottom: calc(12vh + 4rem);
 }
 
 #intel-hud[data-variant='minimal'] .hud-summary-wrap {
@@ -1685,7 +1682,6 @@ body.recording-mode #data-panel {
   #left-panel-stack {
     top: 70px;
     right: 16px;
-    bottom: calc(50vh + 8px);
     left: 16px;
     width: auto;
     max-height: none;
@@ -1712,33 +1708,13 @@ body.recording-mode #data-panel {
   bottom: 2vh;
   left: 50%;
   z-index: 145;
-  width: min(94vw, 1240px);
-  padding: 6px;
   overflow: visible;
-  background: rgba(9, 18, 27, 0.84);
-  border: 1px solid rgba(123, 189, 211, 0.28);
-  border-radius: 12px;
-  box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.58),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 0 28px rgba(0, 212, 255, 0.06);
-  backdrop-filter: blur(28px) saturate(1.35);
-  -webkit-backdrop-filter: blur(28px) saturate(1.35);
-  transform: translateX(-50%);
-  transition: opacity var(--transition-smooth), visibility var(--transition-smooth);
 }
 
 #command-dock > #control-panel {
-  position: relative;
   inset: auto;
-  width: auto;
   max-width: none;
   transform: none;
-}
-
-#command-dock > #control-panel {
-  min-width: 0;
-  border-left: 1px solid rgba(123, 189, 211, 0.16);
 }
 
 #command-dock .panel-glow {
@@ -1748,7 +1724,6 @@ body.recording-mode #data-panel {
 #command-dock .panel-inner,
 #command-dock #control-panel.collapsed .panel-inner {
   height: 100%;
-  padding: 8px 14px;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -1759,15 +1734,7 @@ body.recording-mode #data-panel {
 
 #command-dock .panel-header,
 #command-dock #control-panel.collapsed .panel-header {
-  min-height: 18px;
-  margin: 0 0 6px;
   padding: 0;
-}
-
-#command-dock .panel-title {
-  font-size: 8px;
-  letter-spacing: 1.6px;
-  color: rgba(190, 221, 230, 0.58);
 }
 
 #command-dock .panel-collapse-btn,
@@ -1775,29 +1742,8 @@ body.recording-mode #data-panel {
   display: none !important;
 }
 
-#command-dock #control-panel.collapsed .button-grid {
-  display: flex !important;
-}
-
-#command-dock .button-grid {
-  gap: 6px;
-}
-
-#command-dock .style-btn {
-  min-width: 52px;
-  gap: 4px;
-  padding: 9px 8px 7px;
-  border-radius: 7px;
-}
-
-#command-dock .btn-icon {
-  font-size: 16px;
-}
-
 #command-dock .btn-label {
   font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.4px;
   text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
 }
 
@@ -1805,18 +1751,6 @@ body.recording-mode #data-panel {
   top: 3px;
   right: 4px;
   font-size: 7px;
-}
-
-/* Keep required map attribution clear of the full-width command surface. */
-body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
-  bottom: calc(2vh + 7rem);
-}
-
-body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits {
-  right: 36px;
-  left: auto;
-  width: min(340px, calc(100vw - 72px)) !important;
-  text-align: right;
 }
 
 body.ui-clean-view #command-dock,
@@ -1839,41 +1773,15 @@ body.recording-mode #cesium-credits {
   left: 36px;
 }
 
-#intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: calc(2vh + 7.5rem);
-}
-
-#intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  bottom: calc(2vh + 11.5rem);
-}
-
 @media (max-width: 980px) {
   #command-dock > #control-panel {
     border-top: 1px solid rgba(123, 189, 211, 0.16);
-    border-left: 0;
-  }
-
-  body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
-    bottom: calc(2vh + 9.5rem);
-  }
-
-  #intel-hud[data-variant='minimal'] .hud-bottom-left {
-    bottom: calc(2vh + 12rem);
-  }
-
-  #intel-hud[data-variant='minimal'] .hud-bottom-bar {
-    bottom: calc(2vh + 16rem);
   }
 }
 
 @media (max-width: 720px) {
   #command-dock {
     bottom: 8px;
-  }
-
-  #command-dock .panel-inner,
-  #command-dock #control-panel.collapsed .panel-inner {
-    padding: 7px 9px;
   }
 
   #left-panel-stack {
@@ -1883,14 +1791,11 @@ body.recording-mode #cesium-credits {
 /* ── Compact accordion command dock ──────────── */
 #command-dock {
   --dock-side-compact: clamp(9.5rem, 12vw, 10.5rem);
-  --dock-tray-open: clamp(28rem, 40vw, 33rem);
-  --dock-presets-open: clamp(25rem, 36vw, 29rem);
   display: flex;
   align-items: center;
   width: fit-content;
   max-width: calc(100vw - 4vw);
   min-height: 3.75rem;
-  padding: 0.2rem;
   border-radius: 0.4rem;
   transform: translateX(-50%);
   transition:
@@ -1899,22 +1804,11 @@ body.recording-mode #cesium-credits {
     visibility var(--transition-smooth);
 }
 
-#command-dock:has(#control-panel:not(.collapsed)) {
-  transform: translateX(calc(-50% - (var(--dock-presets-open) - var(--dock-side-compact)) / 2));
-}
-
 #command-dock > #control-panel {
   flex: 0 0 var(--dock-side-compact);
   align-self: stretch;
   min-width: 0;
   height: auto;
-  overflow: hidden;
-  border: 0;
-  transition: flex-basis 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-#command-dock > #control-panel:not(.collapsed) {
-  flex-basis: var(--dock-presets-open);
 }
 
 #command-dock > #control-panel {
@@ -1940,20 +1834,16 @@ body.recording-mode #cesium-credits {
 
 #command-dock .panel-title {
   width: max-content;
-  font-size: 0.45rem;
-  letter-spacing: 0.12rem;
   white-space: nowrap;
 }
 
 #command-dock .panel-title::after {
-  content: '›';
   margin-left: 0.45rem;
   color: rgba(54, 220, 255, 0.68);
   font-size: 0.7rem;
 }
 
 #command-dock #control-panel .panel-title::after {
-  content: '‹';
   margin-right: 0.45rem;
   margin-left: 0;
   float: left;
@@ -1997,7 +1887,6 @@ body.recording-mode #cesium-credits {
 }
 
 #command-dock .btn-label {
-  font-size: 0.43rem;
   letter-spacing: 0.02rem;
 }
 
@@ -2015,28 +1904,11 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   bottom: calc(2vh + 4.7rem);
 }
 
-#intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: calc(2vh + 5.4rem);
-}
-
-#intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  bottom: calc(2vh + 8.9rem);
-}
-
 @media (max-width: 900px) {
-  #command-dock {
-    --dock-popover-mobile-width: calc(100vw - 1.5rem);
-  }
 
   #command-dock {
     --dock-side-compact: 4.25rem;
-    --dock-tray-open: calc(100vw - 7rem);
-    --dock-presets-open: calc(100vw - 7rem);
     max-width: calc(100vw - 1rem);
-  }
-
-  #command-dock:has(#control-panel:not(.collapsed)) {
-    transform: translateX(-50%);
   }
 }
 
@@ -2088,12 +1960,6 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   color: var(--accent);
 }
 
-
-
-#command-dock #control-panel .panel-header {
-  justify-content: center;
-}
-
 #command-dock #control-panel .dock-tray-toggle {
   box-sizing: border-box;
   width: 100%;
@@ -2112,27 +1978,15 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
 }
 
 #command-dock #control-panel .panel-title {
-  justify-content: center;
-  width: 100%;
-  text-align: center;
-}
-
-#command-dock #control-panel .panel-divider {
-  display: none;
-}
-
-#command-dock #control-panel .panel-title {
   position: relative;
   padding-bottom: 0.4rem;
 }
 
 #command-dock #control-panel .panel-title::after {
-  content: '';
   position: absolute;
   right: 0;
   bottom: 0;
   left: 0;
-  display: block;
   height: 1px;
 }
 
@@ -2146,35 +2000,11 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   display: none;
 }
 
-#command-dock .dock-popover-content {
-  padding: 0.7rem;
-}
-
 #command-dock .dock-pin-btn {
-  position: relative;
-  top: auto;
-  right: auto;
   align-self: flex-end;
-  display: none;
-  place-items: center;
-  width: 1.65rem;
-  min-width: 1.65rem;
-  height: 1.65rem;
-  margin: -1.48rem -0.22rem 0.25rem 0;
-  padding: 0;
-  border-radius: 50%;
-  background: rgba(8, 24, 34, 0.96);
-  box-shadow: 0 0.35rem 0.9rem rgba(0, 0, 0, 0.5);
-  transform: translateY(-0.12rem);
-}
-
-#command-dock #control-panel:not(.collapsed) .dock-pin-btn {
-  display: grid;
 }
 
 #command-dock .dock-pin-btn img {
-  width: 0.9rem;
-  height: 0.9rem;
   opacity: 0.58;
   transition: opacity 160ms ease, transform 160ms ease;
 }
@@ -2272,7 +2102,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   display: flex;
   flex-direction: column;
   width: var(--dock-tray-open);
-  padding: 1.55rem 0.6rem 0.6rem;
   visibility: hidden;
   opacity: 0;
   background: rgba(8, 20, 30, 0.94);
@@ -2294,7 +2123,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 }
 
 #command-dock #control-panel .dock-popover-content {
-  right: -0.75rem;
   left: auto;
   width: var(--dock-presets-open);
   transform-origin: bottom right;
@@ -2341,27 +2169,14 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 }
 
 #command-dock .dock-pin-btn {
-  position: absolute;
-  top: 0.4rem;
-  right: 0.5rem;
-  z-index: 2;
   display: none;
   flex: 0 0 auto;
-  min-width: 1.65rem;
-  height: 1rem;
-  padding: 0 0.28rem;
   color: rgba(190, 221, 230, 0.5);
-  background: rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(123, 189, 211, 0.2);
-  border-radius: 0.2rem;
   font-family: var(--font-mono);
   font-size: 0.35rem;
   letter-spacing: 0.04rem;
   cursor: pointer;
-}
-
-#command-dock #control-panel:not(.collapsed) .dock-pin-btn {
-  display: block;
 }
 
 #command-dock .dock-pin-btn:hover,
@@ -2508,11 +2323,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   -webkit-backdrop-filter: none;
 }
 
-#command-dock > #control-panel {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
-
 #command-dock > #control-panel > .panel-inner {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
@@ -2562,7 +2372,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 
 #command-dock #control-panel .panel-title {
   justify-content: flex-end;
-  width: 100%;
   text-align: right;
 }
 
