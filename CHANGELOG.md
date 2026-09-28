@@ -31,6 +31,9 @@ This changelog records public product changes.
   visit makes no requests to Google, and the text looks the same.
 - wildeye: the star background is the same 1024 px Tycho-2 sky as WebP instead
   of JPEG, 278 KB instead of 849 KB.
+- wildeye: terrain loads the first time the view comes closer than 2,000 km, and
+  stays. From farther out relief is too small to see, and its tiles no longer
+  hold up the first view of the globe.
 
 ### Fixed
 
