@@ -37,6 +37,9 @@ This changelog records public product changes.
 
 ### Fixed
 
+- wildeye: the left panels no longer shift every 15 s when the HUD summary line
+  re-types itself. The HUD corner grew as the line typed out, and the panels,
+  which sit below it, moved to make room.
 - wildeye: on phones narrower than 480 px the clear, share and reset buttons no
   longer sit on top of the title and the style label. They move to the top-right
   corner and the style label is hidden there; the style name is still in the HUD

@@ -1126,6 +1126,15 @@ body.ui-clean-view #data-panel {
   text-overflow: ellipsis;
 }
 
+/* While the summary types out, the untyped rest holds its space unseen (src/hud.js _typeSummary); clip, so no early ellipsis. */
+.hud-summary.is-typing {
+  text-overflow: clip;
+}
+
+.hud-summary-untyped {
+  visibility: hidden;
+}
+
 #intel-hud[data-variant='tactical'] .hud-bottom-bar {
   display: none;
 }
