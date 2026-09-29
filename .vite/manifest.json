@@ -1,25 +1,28 @@
 {
-  "_vendor-cesium-BWicFAFN.js": {
-    "file": "assets/vendor-cesium-BWicFAFN.js",
+  "_vendor-cesium-BkxkeN5P.js": {
+    "file": "assets/vendor-cesium-BkxkeN5P.js",
     "name": "vendor-cesium"
   },
   "index.html": {
-    "file": "assets/index-CJK8M0U4.js",
+    "file": "assets/index-D9mDcFe2.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_vendor-cesium-BWicFAFN.js"
+      "_vendor-cesium-BkxkeN5P.js"
     ],
     "dynamicImports": [
       "src/data/egm96Grid.generated.js"
     ],
     "css": [
-      "assets/index-qMLtCjRd.css"
+      "assets/index-0GgvB-qA.css"
+    ],
+    "assets": [
+      "assets/hansenLoss.worker-C__W5Y9m.js"
     ]
   },
   "src/data/egm96Grid.generated.js": {
-    "file": "assets/egm96Grid.generated-BvAJVAbN.js",
+    "file": "assets/egm96Grid.generated-wavK1IGt.js",
     "name": "egm96Grid.generated",
     "src": "src/data/egm96Grid.generated.js",
     "isDynamicEntry": true
