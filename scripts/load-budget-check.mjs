@@ -14,7 +14,12 @@
  *      module pulled onto it — the way the 2.77 MB egm96-universal grid was
  *      fetched on the HUD's first tick until it was replaced — is a red build, not a silent regression;
  *   2. the bytes of VENDOR files (sources under `node_modules/`, and
- *      `/cesium/*`), which change only on a dependency bump.
+ *      `/cesium/*`). These change on a dependency bump, and chunk:vendor-cesium
+ *      also changes when the app starts or stops using a Cesium module: Cesium
+ *      is bundled from npm and tree-shaken (9ce19f0), so the chunk holds only
+ *      what the app imports. A change that drops or adds Cesium use updates the
+ *      baseline in the same commit (the 09-26 bloat merges shrank it 17,521 B
+ *      and left CI red for two days).
  *
  * The app's own chunks are printed but not byte-gated: their size moves with
  * nearly every edit, and a gate that fails on every PR teaches people to
