@@ -297,19 +297,19 @@ test('a list foot names the top datasets above the gbif.org link; with none it i
 });
 
 // Brief B S-1: the Top datasets rows carry the panel's "more ↓" cue (moreCue.js): shown while more rows are below their view, hidden at the
-// end and when nothing is cut, on scroll and on a size change; a new list stops the old list's watcher. Positive control in the same test:
+// end and when nothing is cut, on scroll and when the end of the rows moves; a new list stops the old list's watcher. Positive control in the same test:
 // the cue shows for a cut list before it is asserted hidden anywhere.
 test('the Top datasets rows in the card show the SPECIES panel "more" cue while more rows are below', () => {
   const doc = cardDoc();
   const watched = [];
-  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html, observeSize: (targets, onChange) => { const entry = { targets, onChange, stopped: false }; watched.push(entry); return () => { entry.stopped = true; }; } });
+  const card = createDetailsCard({ viewer: fakeViewer(), doc, sanitize: (html) => html, observeEnd: (scroller, onChange) => { const entry = { scroller, onChange, stopped: false }; watched.push(entry); return () => { entry.stopped = true; }; } });
   const foot = card.element.querySelector('.bio-card-foot');
   const base = { heading: 'What lives here', filterLine: 'CC0 and CC BY records', entries: [], onRow: () => {}, footer: 'Occurrence data: GBIF.org', footerHref: 'https://www.gbif.org/occurrence/search?geometry=x' };
   card.showList({ ...base, datasets: [{ key: INAT_RG, count: 1179, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }] });
   const [, rows, cue] = foot.children[0].children;
   assert.deepEqual([cue.tag, cue.className, cue.textContent, cue.attributes['aria-hidden']], ['span', 'dataset-list-more', 'more ↓', 'true']);
   assert.equal(watched.length, 1);
-  assert.deepEqual(watched[0].targets, [rows, ...rows.children], 'the rows and each row are watched for size changes');
+  assert.equal(watched[0].scroller, rows, 'the end of the rows is watched');
   Object.assign(rows, { scrollTop: 0, scrollHeight: 185, clientHeight: 98 });
   watched[0].onChange();
   assert.equal(cue.style.visibility, 'visible', 'cut rows: the cue shows');

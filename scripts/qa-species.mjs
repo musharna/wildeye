@@ -322,6 +322,28 @@ if (CHECKS.has('panel-layout')) {
       rangeLeft: body.scrollHeight - body.clientHeight - body.scrollTop, overlapCount: overlaps.length, overlaps: overlaps.slice(0, 5),
     };
   };
+  // 2026-09-28: at the end of the scroll, the end of the body's content moves with no scroll and no box resizing: the credit line (the last
+  // content row) gains a 60 px bottom margin, then the body a 60 px bottom padding. The cue must come back while that is on and go when it is
+  // off. Positive control: the move really left more than MORE_SLACK_PX to scroll. Until then the cue watched content-box sizes and missed both.
+  const cueFollowsEnd = async () => {
+    const steps = {};
+    for (const [name, target, prop] of [['creditMargin', '#species-body .species-credit', 'marginBottom'], ['bodyPadding', '#species-body', 'paddingBottom']]) {
+      const setAtEnd = (value) => page.evaluate((target, prop, value) => {
+        const body = document.getElementById('species-body');
+        body.scrollTop = body.scrollHeight;
+        document.querySelector(target).style[prop] = value;
+        return body.scrollHeight - body.clientHeight - body.scrollTop;
+      }, target, prop, value);
+      const cueBecomes = (visibility) => page.waitForFunction((v) => getComputedStyle(document.getElementById('species-more')).visibility === v, { timeout: 3000, polling: 'raf' }, visibility).then(() => true, () => false);
+      const rangeLeft = await setAtEnd('60px');
+      const shown = await cueBecomes('visible');
+      await setAtEnd('');
+      await page.evaluate(() => { const body = document.getElementById('species-body'); body.scrollTop = body.scrollHeight; });
+      const hiddenAgain = await cueBecomes('hidden');
+      steps[name] = { rangeLeft, shown, hiddenAgain, ok: rangeLeft > MORE_SLACK_PX && shown && hiddenAgain };
+    }
+    return steps;
+  };
   const linksAtEnd = async () => {
     const count = await page.evaluate(() => document.querySelectorAll('#species-datasets a').length);
     const rows = [];
@@ -398,6 +420,7 @@ if (CHECKS.has('panel-layout')) {
     const cueEnd = await page.evaluate(cueState);
     const endLinks = links ? await linksAtEnd() : null;
     if (shotName && !shotAtTop) await shot(shotName);
+    const endMoves = overflow ? await cueFollowsEnd() : null;
     await page.evaluate(() => { document.activeElement?.blur?.(); document.getElementById('species-body').scrollTop = 0; });
     const range = fit.scrollHeight - fit.clientHeight;
     const overflowOk = overflow ? range > MORE_SLACK_PX : range === 0;
@@ -407,8 +430,9 @@ if (CHECKS.has('panel-layout')) {
     const controlsOk = controlKeys.every((key) => fit[key].inside && fit[key].corners);
     const captionOk = Boolean(fit.caption) && fit.caption.right <= fit.caption.legendContentRight + 0.5;
     const linksOk = !links || Boolean(endLinks?.ok);
-    const ok = mapTiles.settled && datasetsWait === 'settled' && datasetsFailure === null && fit.scrollTop === 0 && controlsOk && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden && fit.clipped.length === 0 && captionOk && overflowOk && cueOk && linksOk;
-    return { ...fit, range, mapTiles, datasetsWait, datasetsFailure, cueTop, cueEnd, endLinks, overflowOk, cueOk, controlsOk, captionOk, linksOk, ok };
+    const endMovesOk = !endMoves || Object.values(endMoves).every((step) => step.ok);
+    const ok = mapTiles.settled && datasetsWait === 'settled' && datasetsFailure === null && fit.scrollTop === 0 && controlsOk && !fit.legendHidden && fit.legendOpaque && !fit.datasetsHidden && fit.clipped.length === 0 && captionOk && overflowOk && cueOk && linksOk && endMovesOk;
+    return { ...fit, range, mapTiles, datasetsWait, datasetsFailure, cueTop, cueEnd, endLinks, endMoves, overflowOk, cueOk, endMovesOk, controlsOk, captionOk, linksOk, ok };
   };
   await page.evaluate(async () => {
     const dm = window.__godsEyeView.dataManager;

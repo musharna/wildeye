@@ -5,11 +5,11 @@
  */
 import { SPECIES_MAP_LEGEND, gbifPortalTaxonUrl, yearLabel } from './gbif.js';
 import { createDatasetRows } from './datasetList.js';
-import { observeSizeWithResizeObserver, watchMoreBelow } from './moreCue.js';
+import { observeEndWithIntersectionObserver, watchMoreBelow } from './moreCue.js';
 
 export const MIN_QUERY_LENGTH = 3;
 export const SUGGEST_DEBOUNCE_MS = 300;
-// The scroll cue's rule and the size observer live in moreCue.js, shared with the details card's Top datasets rows.
+// The scroll cue's rule and the end-of-content observer live in moreCue.js, shared with the details card's Top datasets rows.
 
 /**
  * "Common · Scientific (rank)", plus the term iNaturalist matched, which can be another common name ("Hump-back Cicada" for Swamp
@@ -71,7 +71,7 @@ export function renderLegendInto(container, doc, legend = SPECIES_MAP_LEGEND) {
 
 export function createSpeciesPanel({
   doc = document, dataManager, speciesLayer, client, whatLivesHere, setTimer = setTimeout, clearTimer = clearTimeout,
-  observeSize = observeSizeWithResizeObserver,
+  observeEnd = observeEndWithIntersectionObserver,
 }) {
   const el = (id) => {
     const node = doc.getElementById(id);
@@ -114,8 +114,8 @@ export function createSpeciesPanel({
   let datasetsSettled = false;
   let datasetsFailed = false;
   renderLegendInto(legend, doc);
-  // The body's size follows the window and the panel stack; its content's follows the legend, the datasets and the suggestions.
-  watchMoreBelow(body, more, observeSize);
+  // The body's size follows the window and the panel stack; its content's end follows the legend, the datasets and the suggestions.
+  watchMoreBelow(body, more, observeEnd);
 
   const params = () => dataManager.getLayerParams('species') || { taxonKey: null, name: null, years: 'recent', radiusKm: 10 };
 

@@ -14,22 +14,53 @@ export function hasMoreBelow({ scrollTop, scrollHeight, clientHeight }) {
   return scrollHeight - clientHeight - scrollTop > MORE_SLACK_PX;
 }
 
-/** Size changes of the targets call onChange; returns a function that stops watching. No ResizeObserver (node tests): nothing to watch. */
-export function observeSizeWithResizeObserver(targets, onChange) {
-  if (typeof ResizeObserver !== 'function') return () => {};
-  const observer = new ResizeObserver(onChange);
-  for (const target of targets) observer.observe(target);
-  return () => observer.disconnect();
+/**
+ * Calls onChange whenever the end of `scroller`'s content crosses the line hasMoreBelow draws, however it moved: a scroll, the scroller or a
+ * child resizing, a child shown or hidden, a margin or padding changing. Until 2026-09-28 a ResizeObserver over the scroller and its children
+ * watched instead; it sees content-box sizes only, so an end that moved with no box resizing (a bottom margin) left a stale cue.
+ * An empty marker appended after the last child sits where the content ends; its top margin cancels the flex gap in front of it, so it adds
+ * nothing to scrollHeight. An IntersectionObserver rooted at the scroller reports it crossing the view's bottom edge moved by MORE_SLACK_PX
+ * and back up by the scroller's bottom padding (scrollHeight counts that padding after the end). The gap and padding are read again whenever
+ * the scroller's own box resizes, which a padding or gap change (a breakpoint) does to a scroller that scrolls, its height being capped; the
+ * line is then redrawn if it moved and onChange called. Returns a function that stops watching and removes the marker. No
+ * IntersectionObserver (node tests): nothing is watched or added.
+ */
+export function observeEndWithIntersectionObserver(scroller, onChange, {
+  Observer = globalThis.IntersectionObserver, Resize = globalThis.ResizeObserver, computedStyle = (element) => globalThis.getComputedStyle(element),
+} = {}) {
+  if (typeof Observer !== 'function') return () => {};
+  const px = (value) => Number.parseFloat(value) || 0;
+  // An <ol> or <ul> holds list items only.
+  const end = scroller.ownerDocument.createElement(/^(OL|UL)$/.test(scroller.tagName) ? 'li' : 'div');
+  end.setAttribute('aria-hidden', 'true');
+  Object.assign(end.style, { display: 'block', flex: 'none', height: '0px', margin: '0px', padding: '0px', listStyle: 'none', pointerEvents: 'none' });
+  scroller.appendChild(end);
+  let observer = null;
+  let line = null;
+  const sync = () => {
+    const style = computedStyle(scroller);
+    end.style.marginTop = `${-px(style.rowGap)}px`;
+    const rootMargin = `0px 0px ${MORE_SLACK_PX - px(style.paddingBottom)}px 0px`;
+    if (rootMargin === line) return;
+    observer?.disconnect();
+    observer = new Observer(onChange, { root: scroller, rootMargin });
+    observer.observe(end);
+    line = rootMargin;
+  };
+  sync();
+  const resize = typeof Resize === 'function' ? new Resize(() => { sync(); onChange(); }) : null;
+  resize?.observe(scroller);
+  return () => { observer.disconnect(); resize?.disconnect(); end.remove(); };
 }
 
 /**
- * Keep `cue` visible while more of `scroller` is below its view and hidden otherwise: on scroll, and when the scroller or its children change
- * size (`observeSize(targets, onChange)`, which may return a stop function). Returns a function that stops both.
+ * Keep `cue` visible while more of `scroller` is below its view and hidden otherwise: on scroll, and whenever the end of its content moves
+ * across the view's edge (`observeEnd(scroller, onChange)`, which may return a stop function). Returns a function that stops both.
  */
-export function watchMoreBelow(scroller, cue, observeSize = observeSizeWithResizeObserver) {
+export function watchMoreBelow(scroller, cue, observeEnd = observeEndWithIntersectionObserver) {
   const update = () => { cue.style.visibility = hasMoreBelow(scroller) ? 'visible' : 'hidden'; };
   scroller.addEventListener('scroll', update, { passive: true });
-  const stopObserving = observeSize([scroller, ...scroller.children], update);
+  const stopObserving = observeEnd(scroller, update);
   update();
   return () => {
     scroller.removeEventListener?.('scroll', update);

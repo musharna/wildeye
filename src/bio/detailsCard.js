@@ -8,7 +8,7 @@
  */
 import DOMPurify from 'dompurify';
 import { createDatasetList } from './datasetList.js';
-import { observeSizeWithResizeObserver, watchMoreBelow } from './moreCue.js';
+import { observeEndWithIntersectionObserver, watchMoreBelow } from './moreCue.js';
 
 export const BIO_CARD_LAYER_IDS = new Set([
   'arbonet', 'birds', 'cetaceans', 'drought', 'ecoregions', 'fires', 'fishing', 'gfw', 'h5n1', 'hpai',
@@ -114,7 +114,7 @@ function failuresLine(rows, what) {
   return `${failed.length} ${what}${failed.length === 1 ? '' : 's'} failed (${[...new Set(failed.map((row) => row.error))].join(', ')})`;
 }
 
-export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {}, observeSize = observeSizeWithResizeObserver, nextFrame = (fn) => setTimeout(fn, 50), cancelFrame = (id) => clearTimeout(id), isRendered = null }) {
+export function createDetailsCard({ viewer, layerName = (id) => id, doc = document, sanitize = browserSanitizer(doc), onDismiss = () => {}, onListEnd = () => {}, observeEnd = observeEndWithIntersectionObserver, nextFrame = (fn) => setTimeout(fn, 50), cancelFrame = (id) => clearTimeout(id), isRendered = null }) {
   const root = doc.createElement('aside');
   root.id = 'bio-card';
   root.className = 'bio-card';
@@ -325,7 +325,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
         if (datasets.length) {
           const block = foot.appendChild(createDatasetList(doc, datasets, { heading: 'Top datasets in this area' }));
           // [heading, rows, cue] (createDatasetList): the panel's cue, shown while more rows are below the rows' view.
-          stopDatasetsCue = watchMoreBelow(block.children[1], block.children[2], observeSize);
+          stopDatasetsCue = watchMoreBelow(block.children[1], block.children[2], observeEnd);
         }
         let note = null;
         if (footerNote) {

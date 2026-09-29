@@ -74,9 +74,9 @@ function panelRig({ match = async () => ({ key: 5133088, matchType: 'EXACT', can
     },
   };
   const whatLivesHere = { armed: false, arm() {}, disarm() {} };
-  const resizes = [];
-  const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer, observeSize: (targets, onChange) => { resizes.push({ targets, onChange }); } });
-  return { panel, els, calls, doc, resizes, dataManager };
+  const ends = [];
+  const panel = createSpeciesPanel({ doc, dataManager, speciesLayer, client, whatLivesHere, setTimer, clearTimer, observeEnd: (scroller, onChange) => { ends.push({ scroller, onChange }); } });
+  return { panel, els, calls, doc, ends, dataManager };
 }
 
 test('choosing an iNaturalist suggestion matches it in GBIF, sets the taxon and turns the map on', async () => {
@@ -756,12 +756,12 @@ test('a failed dataset lookup is a row naming its error', async () => {
 
 // B1: the scroll cue is a row of its own below the scrolling body. It shows while more of the body is below and hides at the end. I2:
 // scrollHeight and clientHeight are whole pixels rounded from fractional layout, so a range of up to 2 px counts as nothing to scroll.
-// Final review m-5: the panel watches sizes through moreCue.js's observer (one implementation, with a stop function), not a copy of it.
-test('the SPECIES panel uses the shared size observer and cue rule from moreCue.js', () => {
+// Final review m-5: the panel watches its content's end through moreCue.js's observer (one implementation, with a stop function), not a copy.
+test('the SPECIES panel uses the shared end-of-content observer and cue rule from moreCue.js', () => {
   const src = readFileSync(new URL('./speciesPanel.js', import.meta.url), 'utf8');
-  assert.match(src, /import \{[^}]*observeSizeWithResizeObserver[^}]*\} from '\.\/moreCue\.js';/, 'positive control: the shared observer is imported');
-  assert.match(src, /observeSize = observeSizeWithResizeObserver,/);
-  assert.doesNotMatch(src, /new ResizeObserver/, 'no second ResizeObserver implementation');
+  assert.match(src, /import \{[^}]*observeEndWithIntersectionObserver[^}]*\} from '\.\/moreCue\.js';/, 'positive control: the shared observer is imported');
+  assert.match(src, /observeEnd = observeEndWithIntersectionObserver,/);
+  assert.doesNotMatch(src, /new (Resize|Intersection)Observer/, 'no second observer implementation');
   assert.doesNotMatch(src, /export \{ MORE_SLACK_PX, hasMoreBelow \}/, 'no re-export: importers use moreCue.js');
 });
 
@@ -769,16 +769,14 @@ test('the scroll cue shows while more of the panel body is below, hides at the e
   assert.equal(MORE_SLACK_PX, 2);
   const cases = [[0, 500, 500, false], [0, 501, 500, false], [0, 502, 500, false], [0, 503, 500, true], [100, 616, 500, true], [113, 616, 500, true], [114, 616, 500, false], [116, 616, 500, false]];
   assert.deepEqual(cases.map(([scrollTop, scrollHeight, clientHeight]) => hasMoreBelow({ scrollTop, scrollHeight, clientHeight })), cases.map((c) => c[3]));
-  const { els, resizes } = panelRig();
+  const { els, ends } = panelRig();
   const body = els['species-body'];
   const cue = els['species-more'];
   assert.equal(cue.style.visibility, 'hidden', 'nothing to scroll');
-  assert.ok(resizes.length === 1 && resizes[0].targets.includes(body), 'the body\'s size is observed');
-  // R9-M1: the content is observed too. The datasets load after the panel is sized, so the body's box does not change and only an observer on
-  // its children sees the content grow past it.
-  assert.ok(resizes[0].targets.includes(els['species-datasets']), 'the Top datasets block, content inside the body, is observed');
+  // R9-M1: the datasets load after the panel is sized, so the body's box does not change; the end of its content moving is what is watched.
+  assert.ok(ends.length === 1 && ends[0].scroller === body, 'the end of the body\'s content is observed');
   Object.assign(body, { scrollHeight: 616, clientHeight: 500 });
-  resizes[0].onChange();
+  ends[0].onChange();
   assert.equal(cue.style.visibility, 'visible', 'content grew past the body');
   body.scrollTop = 116;
   body.listeners.scroll();
@@ -787,7 +785,7 @@ test('the scroll cue shows while more of the panel body is below, hides at the e
   body.listeners.scroll();
   assert.equal(cue.style.visibility, 'visible', 'scrolled back up');
   Object.assign(body, { scrollTop: 0, scrollHeight: 501, clientHeight: 500 });
-  resizes[0].onChange();
+  ends[0].onChange();
   assert.equal(cue.style.visibility, 'hidden', 'I2: a 1 px range is rounding');
 });
 
