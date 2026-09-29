@@ -60,14 +60,15 @@ export default defineConfig(({ mode }) => {
       // dist/.vite/manifest.json maps each built file to its source module;
       // scripts/load-budget-check.mjs keys the startup gate by it.
       manifest: true,
-      rollupOptions: {
+      rolldownOptions: {
         output: {
           // Cesium in its own chunk: its hash changes only when Cesium or the
           // set of Cesium members the app uses changes, so an app-only deploy
           // does not make every visitor re-download ~1.4 MB of engine.
-          manualChunks(id) {
-            if (/[\\/]node_modules[\\/](cesium|@cesium)[\\/]/.test(id)) return 'vendor-cesium';
-            return undefined;
+          codeSplitting: {
+            groups: [
+              { name: 'vendor-cesium', test: /[\\/]node_modules[\\/](cesium|@cesium)[\\/]/ },
+            ],
           },
         },
       },

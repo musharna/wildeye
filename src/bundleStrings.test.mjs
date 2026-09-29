@@ -1,6 +1,5 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { bundleLeftovers } from '../scripts/bundleStrings.mjs';
 
 // qa-bloat's bundle-strings check looks for God's Eye endpoints in the app's code. Cesium 1.145 added a Street View
@@ -26,10 +25,12 @@ test('the same needle in an app chunk is still reported, lazy chunks included', 
   assert.deepEqual(bundleLeftovers(scripts, NEEDLES), ['index-B4EN-qZR.js: maps.googleapis.com', 'speciesPanel-Q1w2E3r4.js: /api/google']);
 });
 
-test("vite names every manual chunk vendor-*, which is what marks a chunk as someone else's code", () => {
-  const config = readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8');
-  const manual = config.slice(config.indexOf('manualChunks('));
-  const names = [...manual.slice(0, manual.indexOf('return undefined')).matchAll(/return '([^']+)'/g)].map((m) => m[1]);
-  assert.ok(names.length > 0, 'found no manualChunks return names in vite.config.js');
+test("vite names every split-out chunk vendor-*, which is what marks a chunk as someone else's code", async () => {
+  const { default: factory } = await import('../vite.config.js');
+  const output = factory({ mode: 'production', command: 'build' }).build.rolldownOptions.output;
+  // Rolldown ignores manualChunks when codeSplitting is set, so a chunk named there would never be built.
+  assert.equal(output.manualChunks, undefined);
+  const names = output.codeSplitting.groups.map((group) => group.name);
+  assert.ok(names.length > 0, 'found no codeSplitting groups in vite.config.js');
   for (const name of names) assert.match(name, /^vendor-/);
 });
