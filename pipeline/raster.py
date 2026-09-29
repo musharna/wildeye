@@ -6,6 +6,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("raster")
 HERE = Path(__file__).parent
@@ -35,7 +36,7 @@ UA = {"User-Agent": "wildeye/0.1 (raster sync; +https://github.com/musharna)"}
 
 def _open(url: str, timeout: int):
     # coastwatch.noaa.gov (ERDDAP redirect target) returns 403 to the default Python-urllib agent
-    return urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=timeout)
+    return urlopen(urllib.request.Request(url, headers=UA), timeout=timeout)
 
 def fetch_png(url: str, timeout: int = 180) -> np.ndarray:
     with _open(url, timeout) as r:

@@ -25,6 +25,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("otn")
 BASE = "https://erddap.oceantrack.org/erddap/tabledap"
@@ -59,7 +60,7 @@ def _get_json(url: str, timeout: int = 600, retries: int = RETRIES, sleep=time.s
     req = urllib.request.Request(url, headers=UA)
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code < 500 or attempt == retries - 1:

@@ -29,6 +29,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("tracks")
 HERE = Path(__file__).parent
@@ -49,7 +50,7 @@ MAX_BYTES = 6_000_000
 
 def _get_json(url: str, timeout: int = 90) -> dict:
     req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
 

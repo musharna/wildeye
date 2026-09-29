@@ -25,6 +25,7 @@ import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
 from .wastewater import load_county_shapes, week_ends
+from .net import urlopen
 
 log = logging.getLogger("hpai")
 CSV_URL = "https://www.aphis.usda.gov/sites/default/files/hpai-wild-birds.csv"
@@ -36,7 +37,7 @@ LICENCE = "Public Domain U.S. Government (USDA APHIS)"
 
 def fetch_csv(url: str = CSV_URL, timeout: int = 600) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8-sig")
 
 

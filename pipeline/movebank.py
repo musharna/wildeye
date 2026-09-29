@@ -25,6 +25,7 @@ import logging
 import os
 import urllib.parse
 import urllib.request
+from .net import urlopen
 
 log = logging.getLogger("movebank")
 BASE = "https://www.movebank.org/movebank/service/direct-read"
@@ -44,7 +45,7 @@ def _auth_header() -> str:
 
 def _get_text(url: str, timeout: int = 120) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Authorization": _auth_header()})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8", "replace")
 
 

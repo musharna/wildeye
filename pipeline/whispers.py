@@ -24,6 +24,7 @@ import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
 from .wastewater import load_county_shapes, week_ends
+from .net import urlopen
 
 log = logging.getLogger("whispers")
 API = "https://whispers.usgs.gov/api/eventsummaries/"
@@ -37,7 +38,7 @@ NOTE = ("Events are reported by partner agencies as they investigate; counts are
 
 def _get_json(url: str, timeout: int = 120) -> dict:
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
 

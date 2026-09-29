@@ -36,6 +36,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("arbonet")
 SOCRATA = "https://data.cdc.gov/resource/x9gk-5huc.json"
@@ -114,7 +115,7 @@ def _get_json(
     )
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code < 500 or attempt == retries - 1:
@@ -289,7 +290,7 @@ def load_state_shapes(zip_path: Path, fetch_bytes=None) -> dict[str, dict]:
         data = (
             fetch_bytes(CENSUS_STATE_ZIP)
             if fetch_bytes
-            else urllib.request.urlopen(
+            else urlopen(
                 urllib.request.Request(CENSUS_STATE_ZIP, headers={"User-Agent": UA}),
                 timeout=120,
             ).read()

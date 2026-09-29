@@ -38,6 +38,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("cetaceans")
 BASE = "https://passiveacoustics.fisheries.noaa.gov/pacm/data"
@@ -80,7 +81,7 @@ def _get_bytes(
     req = urllib.request.Request(url, headers=UA)
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 raw = r.read()
                 if (r.headers.get("Content-Encoding") or "").lower() == "gzip":
                     raw = gzip.decompress(raw)

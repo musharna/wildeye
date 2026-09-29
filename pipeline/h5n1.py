@@ -42,6 +42,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("h5n1")
 CHARON = "https://nextstrain.org/charon/getAvailable"
@@ -142,7 +143,7 @@ def decode_body(raw: bytes, encoding: str | None) -> dict:
 
 def _get_json(url: str, timeout: int = 300) -> dict:
     req = urllib.request.Request(url, headers={**UA, "Accept": "application/json", "Accept-Encoding": "gzip"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return decode_body(r.read(), r.headers.get("Content-Encoding"))
 
 

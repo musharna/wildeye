@@ -30,6 +30,7 @@ import zipfile
 from pathlib import Path
 from .atomic import write_atomic
 from .gfw import geometry_area_km2
+from .net import urlopen
 
 log = logging.getLogger("ecoregions")
 ZIP_URL = "https://storage.googleapis.com/teow2016/Ecoregions2017.zip"
@@ -90,7 +91,7 @@ def fetch_zip(zip_path: Path, fetch_bytes=None) -> Path:
     if fetch_bytes:
         data = fetch_bytes(ZIP_URL)
     else:
-        with urllib.request.urlopen(
+        with urlopen(
             urllib.request.Request(ZIP_URL, headers={"User-Agent": UA}), timeout=600
         ) as r:
             data = r.read()

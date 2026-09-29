@@ -10,6 +10,7 @@ from pathlib import Path
 import urllib.request
 from .vol2bird import reduce_profile
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("aloft")
 BUCKET = "https://aloftdata.s3-eu-west-1.amazonaws.com"
@@ -18,7 +19,7 @@ _KEY = re.compile(r"<Key>([^<]+)</Key>")
 _PFX = re.compile(r"<Prefix>([^<]+)</Prefix>")
 
 def _get(url: str, timeout: int = 60) -> str:
-    with urllib.request.urlopen(url, timeout=timeout) as r:
+    with urlopen(url, timeout=timeout) as r:
         return r.read().decode("utf-8")
 
 def list_radars() -> list[str]:

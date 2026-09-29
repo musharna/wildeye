@@ -30,6 +30,7 @@ import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
 from .wastewater import week_ends
+from .net import urlopen
 
 log = logging.getLogger("phenology")
 API = "https://services.usanpn.org/npn_portal"
@@ -85,7 +86,7 @@ def _get_json(url: str, timeout: int = 600, retries: int = RETRIES, sleep=time.s
     )
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code < 500 or attempt == retries - 1:

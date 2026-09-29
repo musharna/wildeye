@@ -48,6 +48,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("fishing")
 API = "https://gateway.api.globalfishingwatch.org/v3/4wings/report"
@@ -141,7 +142,7 @@ def _post(
             },
         )
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 return parse_report(r.read(), r.headers.get("Content-Type", ""))
         except urllib.error.HTTPError as e:
             msg = e.read(400).decode(errors="replace")

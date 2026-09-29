@@ -24,6 +24,7 @@ import urllib.request
 from pathlib import Path
 
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("gmw")
 RECORD = "21346457"
@@ -164,7 +165,7 @@ def seed_collection(gj: dict, n: int = SEED_N, tol: float = SEED_TOL, min_area: 
 
 
 def _fetch_bytes(url: str) -> bytes:
-    return urllib.request.urlopen(
+    return urlopen(
         urllib.request.Request(url, headers={"User-Agent": UA}), timeout=300
     ).read()
 

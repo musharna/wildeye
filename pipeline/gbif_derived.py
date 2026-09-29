@@ -17,6 +17,7 @@ import datetime as dt
 import json
 import os
 import urllib.request
+from .net import urlopen
 from pathlib import Path
 
 API = "https://api.gbif.org/v1/derivedDataset"
@@ -53,7 +54,7 @@ def payload(gj: dict, source_url: str, today: dt.date | None = None) -> dict:
 def register(body: dict, user: str, password: str, post=None) -> dict:
     def _post(url, data, headers):
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=120) as r:
+        with urlopen(req, timeout=120) as r:
             return json.load(r)
 
     auth = "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()

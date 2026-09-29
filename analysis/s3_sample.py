@@ -24,6 +24,7 @@ from pathlib import Path
 from PIL import Image
 
 from analysis import s3_lib as s
+from pipeline.net import urlopen
 
 GIBS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best"
 UA = "wildeye-s3-pilot (github.com/musharna/wildeye)"
@@ -70,7 +71,7 @@ def get(url: str, tries: int = 4) -> tuple[bytes, dict]:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     for k in range(tries):
         try:
-            with urllib.request.urlopen(req, timeout=60) as r:
+            with urlopen(req, timeout=60) as r:
                 return r.read(), {h.lower(): v for h, v in r.headers.items()}
         except Exception as e:  # noqa: BLE001 — retried, then re-raised with the URL
             if k == tries - 1:

@@ -28,6 +28,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("wastewater")
 SOCRATA = "https://data.cdc.gov/resource/j9g8-acpt.json"
@@ -45,7 +46,7 @@ UA = "wildeye/1.0 (+https://github.com; bio globe; contact via repo)"
 
 def _get_json(url: str, timeout: int = 120):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
@@ -154,7 +155,7 @@ def load_county_shapes(zip_path: Path, wanted: set[str] | None, fetch_bytes=None
     import shapefile  # pyshp
     if not zip_path.exists():
         zip_path.parent.mkdir(parents=True, exist_ok=True)
-        data = fetch_bytes(CENSUS_ZIP) if fetch_bytes else urllib.request.urlopen(
+        data = fetch_bytes(CENSUS_ZIP) if fetch_bytes else urlopen(
             urllib.request.Request(CENSUS_ZIP, headers={"User-Agent": UA}), timeout=120).read()
         zip_path.write_bytes(data)
     z = zipfile.ZipFile(zip_path)

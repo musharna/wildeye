@@ -19,6 +19,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("occurrences")
 HERE = Path(__file__).parent
@@ -58,7 +59,7 @@ def _get_json(url: str, timeout: int = 60) -> dict:
     req = urllib.request.Request(
         url, headers={"User-Agent": "wildeye/0.1 (occurrence sync)"}
     )
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
 

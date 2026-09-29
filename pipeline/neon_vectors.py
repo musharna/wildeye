@@ -37,6 +37,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("neon_vectors")
 API = "https://data.neonscience.org/api/v0"
@@ -80,7 +81,7 @@ def _get(
         h["X-API-Token"] = token
     for attempt in range(RETRIES):
         try:
-            with urllib.request.urlopen(
+            with urlopen(
                 urllib.request.Request(url, headers=h), timeout=timeout
             ) as r:
                 return r.read()

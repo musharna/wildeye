@@ -29,6 +29,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("iucn")
 HERE = Path(__file__).parent
@@ -56,7 +57,7 @@ def _get_json(url: str, token: str, timeout: int = 60, tries: int = 4) -> dict |
     )
     for i in range(tries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code == 404:

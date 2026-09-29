@@ -21,6 +21,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("gibs")
 CAPABILITIES = (
@@ -63,7 +64,7 @@ def _get(url: str, timeout: int = 120, tries: int = 4) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     for k in range(tries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 return r.read()
         except urllib.error.HTTPError as e:
             if e.code < 500 or k == tries - 1:

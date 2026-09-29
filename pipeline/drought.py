@@ -25,6 +25,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("drought")
 SITE = "https://droughtmonitor.unl.edu"
@@ -65,7 +66,7 @@ def _get(url: str, timeout: int = 300, tries: int = 4) -> bytes:
     )
     for k in range(tries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 return r.read()
         except urllib.error.HTTPError as e:
             if e.code < 500 or k == tries - 1:

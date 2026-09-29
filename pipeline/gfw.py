@@ -25,6 +25,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("gfw")
 API = "https://data-api.globalforestwatch.org"
@@ -54,7 +55,7 @@ def with_key(url: str, key: str | None) -> str:
 
 def _get_json(url: str, key: str | None = None, timeout: int = 300) -> dict:
     req = urllib.request.Request(with_key(url, key), headers={"User-Agent": UA})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
 
@@ -109,7 +110,7 @@ def load_countries(path: Path, fetch_bytes=None) -> dict[str, dict]:
     """ISO3 → {name, area_km2, geometry} from the Natural Earth 110m admin-0 file (cached)."""
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-        data = fetch_bytes(NE_URL) if fetch_bytes else urllib.request.urlopen(urllib.request.Request(NE_URL, headers={"User-Agent": UA}), timeout=120).read()
+        data = fetch_bytes(NE_URL) if fetch_bytes else urlopen(urllib.request.Request(NE_URL, headers={"User-Agent": UA}), timeout=120).read()
         path.write_bytes(data)
     out = {}
     for f in json.loads(path.read_text())["features"]:

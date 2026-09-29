@@ -27,6 +27,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("fires")
 BASE = "https://firms.modaps.eosdis.nasa.gov/data/active_fire"
@@ -66,7 +67,7 @@ def _get_text(
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 return r.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as e:
             if e.code < 500 or attempt == retries - 1:

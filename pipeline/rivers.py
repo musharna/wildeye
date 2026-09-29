@@ -41,6 +41,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("rivers")
 BASE = "https://api.waterdata.usgs.gov/ogcapi/v0/collections"
@@ -75,7 +76,7 @@ def _get_json(
     req = urllib.request.Request(url, headers=_headers())
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as r:
+            with urlopen(req, timeout=timeout) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if (e.code < 500 and e.code != 429) or attempt == retries - 1:

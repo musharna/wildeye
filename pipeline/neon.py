@@ -24,6 +24,7 @@ import time
 import urllib.request
 from pathlib import Path
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("neon")
 API = "https://data.neonscience.org/api/v0"
@@ -45,7 +46,7 @@ def _get(url: str, timeout: int = 120, token: str | None = None) -> bytes:
     h = {"User-Agent": UA}
     if token:
         h["X-API-Token"] = token
-    with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:
+    with urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:
         return r.read()
 
 

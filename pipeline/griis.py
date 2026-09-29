@@ -21,6 +21,7 @@ import urllib.request
 from pathlib import Path
 
 from .atomic import write_atomic
+from .net import urlopen
 
 log = logging.getLogger("griis")
 ORG = "cdef28b1-db4e-4c58-aa71-3c5238c2d0b5"  # Invasive Species Specialist Group ISSG on GBIF
@@ -475,7 +476,7 @@ def build(
 
 
 def _fetch_bytes(url: str) -> bytes:
-    return urllib.request.urlopen(
+    return urlopen(
         urllib.request.Request(url, headers={"User-Agent": UA}), timeout=300
     ).read()
 
