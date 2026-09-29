@@ -111,7 +111,7 @@ def main(argv=None):
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--tolerance-min", type=int, default=20)
     ap.add_argument("--out", type=Path, default=Path("public/data/birds_archive"))
-    ap.add_argument("--workdir", type=Path, default=Path(os.environ.get("WILDEYE_WORK", "/tmp/wildeye-nexrad-archive")))
+    ap.add_argument("--workdir", type=Path, default=Path(os.environ.get("WILDEYE_WORK") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wildeye" / "nexrad-archive"))
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     h0, h1 = (int(x) for x in a.hours.split("-"))

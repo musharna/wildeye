@@ -196,7 +196,7 @@ def main(argv=None, *, fetch_bytes=_fetch_bytes, md5=XLSX_MD5):
     xlsx = a.cache / f"gmw_{VERSION}_{XLSX}"
     if not xlsx.exists():
         data = fetch_bytes(XLSX_URL)
-        got = hashlib.md5(data).hexdigest()
+        got = hashlib.md5(data, usedforsecurity=False).hexdigest()  # GMW publishes an md5 of the file: a download check
         if got != md5:
             raise SystemExit(
                 f"{XLSX_URL}: md5 {got} does not match the Zenodo record's {md5}"

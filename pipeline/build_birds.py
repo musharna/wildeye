@@ -85,7 +85,7 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--workdir", type=Path,
-                    default=Path(os.environ.get("WILDEYE_WORK", "/tmp/wildeye-nexrad")))
+                    default=Path(os.environ.get("WILDEYE_WORK") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wildeye" / "nexrad"))
     ap.add_argument("--sites", type=int, default=None, help="limit to first N sites")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

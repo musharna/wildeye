@@ -74,7 +74,8 @@ def week_ends(today: dt.date, weeks: int) -> list[dt.date]:
 def query_week(version: str, end: dt.date, key: str, fetch=_get_json) -> dict[str, dict]:
     """iso → {n, ha} for the 7 days ending on `end` (inclusive), confidence != low."""
     start = end - dt.timedelta(days=6)
-    sql = (f"SELECT iso, SUM(alert__count) AS n, SUM(alert_area__ha) AS ha FROM data "
+    sql = (
+        f"SELECT iso, SUM(alert__count) AS n, SUM(alert_area__ha) AS ha FROM data "  # nosec B608 - GFW Data API query; the only values interpolated are date.isoformat() strings
            f"WHERE gfw_integrated_alerts__date >= '{start.isoformat()}' AND gfw_integrated_alerts__date <= '{end.isoformat()}' "
            f"AND gfw_integrated_alerts__confidence != 'low' GROUP BY iso")
     d = fetch(f"{API}/dataset/{DATASET}/{version}/query/json?{urllib.parse.urlencode({'sql': sql})}", key)

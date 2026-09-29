@@ -141,7 +141,7 @@ def read_dwca(data: bytes | Path) -> dict[str, list[dict]]:
     if "meta.xml" not in z.namelist():
         raise ValueError(f"no meta.xml in archive ({z.namelist()[:5]})")
     ns = "{http://rs.tdwg.org/dwc/text/}"
-    root = ET.fromstring(z.read("meta.xml"))
+    root = ET.fromstring(z.read("meta.xml"))  # nosec B314 - GBIF IPT archive over HTTPS; expat 2.7.1 bounds entity expansion, see docstring
     out: dict[str, list[dict]] = {}
     for node in [*root.findall(f"{ns}core"), *root.findall(f"{ns}extension")]:
         kind = node.get("rowType", "").rstrip("/").rsplit("/", 1)[-1]

@@ -181,7 +181,7 @@ def test_build_keeps_countries_with_shapes_and_names_the_rest():
 def test_main_refuses_a_download_whose_checksum_does_not_match(tmp_path):
     xlsx = tmp_path / "src.xlsx"
     write_xlsx(xlsx, [("IDN", "Indonesia", series(100.0))])
-    good_md5 = hashlib.md5(xlsx.read_bytes()).hexdigest()
+    good_md5 = hashlib.md5(xlsx.read_bytes(), usedforsecurity=False).hexdigest()
     mu = {
         "type": "FeatureCollection",
         "features": [

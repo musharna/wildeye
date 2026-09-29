@@ -19,6 +19,7 @@ import json, re, signal, subprocess, sys
 from pathlib import Path
 signal.signal(signal.SIGALRM, lambda *_: (sys.stderr.write("aborting: walltime guard\n"), sys.exit(2))); signal.alarm(1800)
 import numpy as np
+from colour_diff import lab, de2000  # scripts/colour_diff.py, shared with species-legend-colours.py
 HERE = Path(__file__).resolve().parent
 COLOURS = HERE / 'species-legend-colours.py'
 dirs = sys.argv[1:]
@@ -35,8 +36,6 @@ committed = re.findall(r"color: '#([0-9a-f]{6})'", gbif_js)
 if len(committed) != 5:
     sys.exit(f'expected 5 legend colours in src/bio/gbif.js, found {len(committed)}')
 committed = [tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) for h in committed]
-src = COLOURS.read_text()
-exec(src[src.index('def lab('):src.index('LABELS = ')])  # lab() and de2000() from species-legend-colours.py
 runs = {}
 for d in dirs:
     out = subprocess.run([sys.executable, str(COLOURS), d, 'global', '', MODE], capture_output=True, text=True, timeout=900)

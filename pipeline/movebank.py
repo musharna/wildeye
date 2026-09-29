@@ -60,7 +60,7 @@ def fetch_csv(params: dict, fetch_text=_get_text) -> list[dict]:
     url = f"{BASE}?{urllib.parse.urlencode(params)}"
     body = fetch_text(url)
     if is_licence_page(body):
-        md5 = hashlib.md5(body.encode("utf-8")).hexdigest()
+        md5 = hashlib.md5(body.encode("utf-8"), usedforsecurity=False).hexdigest()  # Movebank's licence handshake is an md5 of the text
         body = fetch_text(f"{url}&license-md5={md5}")
         if is_licence_page(body):
             raise RuntimeError(f"Movebank still returned a licence page after the md5 handshake: {params}")

@@ -283,7 +283,7 @@ def fetch_all(
             v, r = rows_of(rep)
             if v is not None and v != DATASET:
                 raise RuntimeError(
-                    f"requested {DATASET} but the API answered with {v}: update DATASET after reading the release notes"
+                    f"requested {DATASET} but the API answered with {v}: update DATASET after reading the release notes"  # nosec B608 - an error message, not SQL
                 )
             rows.extend(r)
             log.info(

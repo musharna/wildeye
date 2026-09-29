@@ -81,7 +81,7 @@ def _get(url: str, timeout: int = 120, tries: int = 4) -> bytes:
 def parse_layers(xml: bytes, ids: set[str]) -> dict:
     """Tile set, zoom limit, format, served time intervals and v1.3 colour-map link for each id.
     Raises LookupError naming any id the capabilities no longer list."""
-    root = ET.fromstring(xml)
+    root = ET.fromstring(xml)  # nosec B314 - NASA GIBS over HTTPS; expat 2.7.1 (>= 2.4.1 bounds entity expansion), see module docstring
     found = {}
     for layer in root.iter(f"{{{NS['w']}}}Layer"):
         lid = layer.findtext("o:Identifier", namespaces=NS)
@@ -117,7 +117,7 @@ def _num(label: str) -> float:
 def parse_colormap(xml: bytes) -> dict:
     """{'classes': [...]} for a classification legend, {'ramp': {...}} for a continuous one.
     The data map is the one whose legend has more than one entry; 'No Data'/'Fill' maps have one."""
-    root = ET.fromstring(xml)
+    root = ET.fromstring(xml)  # nosec B314 - NASA GIBS over HTTPS; expat 2.7.1 (>= 2.4.1 bounds entity expansion), see module docstring
     data = [
         cm
         for cm in root.iter("ColorMap")
