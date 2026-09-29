@@ -10,6 +10,7 @@
  */
 import puppeteer from 'puppeteer';
 import { bootSettled } from './bootSettled.mjs';
+import { bundleLeftovers } from './bundleStrings.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -34,7 +35,7 @@ const CUT_ELEMENTS = ['#scene-panel', '#scope-mask', '#celestial-ring-overlay', 
 const KEEP_ELEMENTS = ['#intel-hud', '#hud-latlon', '#hud-alt', '#hud-timestamp', '#data-panel', '#reset-globe-view', '#map-stack-chips'];
 /** Step 2, A20: map sources that need a key the site never has (Google 3D Tiles, Cesium ion's Bing). */
 const KEEP_MAP_SOURCES = ['Esri Satellite', 'OSM'];
-/** Step 2, A19-A20 and Q11: server routes, Google and ion endpoints, and the deleted key panel, in any script the page loaded. */
+/** Step 2, A19-A20 and Q11: server routes, Google and ion endpoints, and the deleted key panel, in any app script the page loaded (vendor-* chunks skipped: scripts/bundleStrings.mjs). */
 const CUT_BUNDLE_STRINGS = ['/api/openai', '/api/google', '/api/overpass', 'maps.googleapis.com', 'Provider Settings', 'createGooglePhotorealistic3DTileset'];
 /** Requests to a local server route or a keyed Google Maps/Tiles or ion endpoint (Google Fonts is keyless and stays). */
 const CUT_REQUEST = /\/api\/|maps\.googleapis\.com|tile\.googleapis\.com|api\.cesium\.com/;
@@ -109,7 +110,7 @@ try {
   const sourceLabels = inv.mapSources.map((c) => c.label);
   report('map-sources', sourceLabels.length === KEEP_MAP_SOURCES.length && KEEP_MAP_SOURCES.every((l) => sourceLabels.includes(l))
     && !inv.mapSources.some((c) => /Provider Settings/.test(c.title)), { mapSources: inv.mapSources });
-  const bundleLeft = scripts.flatMap((s) => CUT_BUNDLE_STRINGS.filter((needle) => s.text.includes(needle)).map((needle) => `${s.url}: ${needle}`));
+  const bundleLeft = bundleLeftovers(scripts, CUT_BUNDLE_STRINGS);
   report('bundle-strings', bundleLeft.length === 0 && scripts.some((s) => s.text.includes('api.gbif.org')),
     { godsEyeLeft: bundleLeft, scanned: scripts.length });
   const cutRequests = [...new Set(requests.filter((u) => CUT_REQUEST.test(u)).map((u) => u.slice(0, 120)))];
