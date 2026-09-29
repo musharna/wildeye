@@ -34,12 +34,9 @@ try {
     await m.setViewport({ width: w, height: h, isMobile: touch, hasTouch: touch, deviceScaleFactor: 1 });
     await m.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
     await m.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView.styleManager, { timeout: 180000 });
-    // the first-run launcher arrives after boot and covers the bottom of a phone; dismissed as qa-compare does
+    // the boot camera flight settles first (a fixed wait: no app signal marks it; the first-run launcher it once also waited for was removed in 54192b3)
     await new Promise((r) => setTimeout(r, 12000));
-    await m.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
     await m.keyboard.press('Escape');
-    const launcherGone = await m.waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 15000 }).then(() => true, () => false);
-    if (!launcherGone) { report(`dock-${w}x${h}`, false, { error: 'first-run launcher still up after 15 s' }); await m.close(); continue; }
 
     // Closed dock: whole dock on screen, each tab's label uncut and inside its tab.
     const closed = await m.evaluate(async (TABS) => {
@@ -125,12 +122,24 @@ try {
         };
         // the pin floats past the tray's top-right corner, so the tray being on screen does not cover it
         const pin = pop.querySelector('.dock-pin-btn'); const pr = pin?.getBoundingClientRect();
-        return { open: !panel.classList.contains('collapsed'), vw, offCentre, tray: { x: Math.round(b.left), r: Math.round(b.right), y: Math.round(b.top), w: Math.round(b.width) },
+        // The bottom-centre stack (time bar, Compare pill) rose above a PINNED tray only: a tray opened by a click or a hover
+        // took the same room and covered the pill but its bottom 11 px (1400 px, live 2026-09-28). Each shown stack item must
+        // clear the open tray and take a real pointer at its centre. Positive control: the pill is shown.
+        const stack = {};
+        for (const id of ['compare-toggle', 'observed-time']) {
+          const e = document.getElementById(id);
+          const cs = e && getComputedStyle(e);
+          if (!e || cs.display === 'none' || cs.visibility === 'hidden' || !e.getBoundingClientRect().height) { stack[id] = null; continue; }
+          const s = e.getBoundingClientRect();
+          stack[id] = { y: Math.round(s.top), b: Math.round(s.bottom), overTray: s.left < b.right && b.left < s.right && s.top < b.bottom && b.top < s.bottom, hit: hitTest(e) };
+        }
+        return { open: !panel.classList.contains('collapsed'), pinned: panel.classList.contains('dock-pinned'), vw, offCentre, tray: { x: Math.round(b.left), r: Math.round(b.right), y: Math.round(b.top), b: Math.round(b.bottom), w: Math.round(b.width) },
           inside: b.left >= 0 && b.right <= vw && b.top >= 0 && b.bottom <= vh,
           firstControl: hitTest(pop.querySelector('.style-btn')),
-          pin: hitTest(pin), pinBox: pr && { x: Math.round(pr.left), r: Math.round(pr.right), y: Math.round(pr.top) } };
+          pin: hitTest(pin), pinBox: pr && { x: Math.round(pr.left), r: Math.round(pr.right), y: Math.round(pr.top) }, stack };
       }, sel);
-      report(`dock-tray-${k}-${w}x${h}`, tray.open && tray.inside && Math.abs(tray.offCentre) <= 2 && tray.firstControl === 'ok' && tray.pin === 'ok', tray);
+      const stackClear = Boolean(tray.stack?.['compare-toggle']) && Object.values(tray.stack ?? {}).every((s) => !s || (!s.overTray && s.hit === 'ok'));
+      report(`dock-tray-${k}-${w}x${h}`, tray.open && tray.inside && Math.abs(tray.offCentre) <= 2 && tray.firstControl === 'ok' && tray.pin === 'ok' && stackClear, tray);
       if (SHOTS) await m.screenshot({ path: `${SHOTS}/dock-${w}x${h}-${k}.png` });
       // close it again through the same tab so the next tray opens alone
       if (tray.open) {

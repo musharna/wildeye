@@ -37,6 +37,12 @@ This changelog records public product changes.
 
 ### Fixed
 
+- wildeye: the Compare button no longer hides half under the visual presets tray
+  when the tray is open without being pinned, and on a phone it no longer sits on
+  the HUD's position readouts.
+- wildeye: on a phone the HUD's position readouts no longer print over each other.
+  Each one wraps onto two lines in its own half of the screen, and the summary
+  line stays on screen.
 - wildeye: the left panels no longer shift every 15 s when the HUD summary line
   re-types itself. The HUD corner grew as the line typed out, and the panels,
   which sit below it, moved to make room.

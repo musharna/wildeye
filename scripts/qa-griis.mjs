@@ -50,9 +50,7 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.observedTime, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
   await sleep(12000);
-  await page.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
   await page.keyboard.press('Escape');
-  await page.waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 60000 }).catch(() => {});
 
   // Entity polygons are tessellated asynchronously (slow under swiftshader, up to ~2 min for gmw), so a hit
   // is polled for up to `waitMs`; the layer-off pick waits a fixed 3 s and must find nothing of this layer.

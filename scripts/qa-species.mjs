@@ -249,7 +249,6 @@ const installContrast = () => page.evaluate(() => {
 await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
 await sleep(12000);
-await page.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
 await page.keyboard.press('Escape');
 
 if (CHECKS.has('panel-layout')) {
@@ -1110,7 +1109,7 @@ if (CHECKS.has('card-foot-rest')) {
       await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { radiusKm: 50 }, { origin: 'user' })) throw new Error('species radius rejected'); });
       await flyTo(...TAVEUNI);
       await openSpeciesPanel();
-      // Final review m-2: a real click on WHAT LIVES HERE at every size (the first-run launcher is dismissed at the start of the run). The page
+      // Final review m-2: a real click on WHAT LIVES HERE at every size. The page
       // must hit the button at its centre first; a miss fails the check with what was hit instead of falling back to a JS click.
       const armAt = await page.evaluate(() => {
         document.getElementById('species-body').scrollTop = 0;
@@ -2306,7 +2305,13 @@ if (CHECKS.has('landscape-regions')) {
       // (5) keyboard
       await closeCard();
       await page.evaluate(() => { const p = document.getElementById('species-panel'); if (p.classList.contains('collapsed')) p.querySelector('[data-collapse-target="species-panel"]').click(); document.getElementById('species-body').scrollTop = 0; });
-      await sleep(900);
+      // focus lands only on a laid-out, visible button: wait for the panel to be open with its slide ended, not 900 ms
+      await page.waitForFunction(() => {
+        const p = document.getElementById('species-panel'); const b = document.getElementById('species-what-lives-here');
+        const r = b?.getBoundingClientRect();
+        return !p.classList.contains('collapsed') && r?.height > 4 && getComputedStyle(b).visibility === 'visible'
+          && document.getElementById('left-panel-stack').getAnimations({ subtree: true }).every((a) => a.playState !== 'running');
+      }, { timeout: 5000, polling: 'raf' });
       await page.evaluate(() => document.getElementById('species-what-lives-here').focus());
       await page.keyboard.press('Enter');
       await sleep(900);
@@ -2389,7 +2394,6 @@ if (CHECKS.has('phone-accordion')) {
     await tab.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await tab.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
     await sleep(12000);
-    await tab.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
     await tab.keyboard.press('Escape');
     await sleep(1500);
     steps.shareLink = await stackState();

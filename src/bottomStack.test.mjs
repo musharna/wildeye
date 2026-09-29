@@ -130,3 +130,84 @@ test('the stack sits above the highest of all the bottom chrome it is given (doc
   assert.equal(bar.style.bottom, '150px'); // 900 - 758 + 8
   assert.ok(ros[0].seen.includes(credits) && mos[0].seen.some(([t]) => t === credits));
 });
+
+// At 390 px the HUD's bottom corners (constant CSS offsets) sat under the Compare pill; at 1400 px they sit far to the
+// sides and must not move. A box beside the stack keeps its own CSS place unless it overlaps the stack across (a shown
+// item or the chrome); then it sits at least as high as the stack's top.
+const box = (top, height, left, right, extra = {}) => el(top, height, {
+  getBoundingClientRect: () => ({ top, height, left, right, width: right - left, bottom: top + height }),
+  ...extra,
+});
+
+test('a box beside the stack keeps its CSS place unless it overlaps the stack across; then it sits above it', () => {
+  const { doc } = env();
+  doc.defaultView.getComputedStyle = (e) => ({ bottom: e.cssBottom });
+  // desktop: the corners are far to the sides, so they keep their CSS place (a stale inline value is cleared)
+  const pill = box(0, 26, 648, 752);
+  const hiddenBar = box(0, 0, 0, 1400); // no layer to scrub: takes no room and overlaps nothing
+  const farLeft = box(0, 40, 59, 334, { cssBottom: '122px', style: { bottom: '999px' } });
+  const farRight = box(0, 40, 1076, 1341, { cssBottom: '122px' });
+  stackAboveChrome({ doc, below: () => [box(820, 62, 616, 784)], items: () => [hiddenBar, pill], beside: () => [farLeft, farRight] });
+  assert.equal(pill.style.bottom, '88px'); // 900 - 820 + 8
+  assert.equal(farLeft.style.bottom, '');
+  assert.equal(farRight.style.bottom, '');
+  // phone: each corner spans half the row, so both overlap the centred pill and sit at least at the stack's top
+  const phonePill = box(0, 26, 143, 247);
+  const phoneLeft = box(0, 40, 16, 189, { cssBottom: '120px' });
+  const phoneRight = box(0, 40, 201, 374, { cssBottom: '400px' });
+  stackAboveChrome({ doc, below: () => [box(774, 62, 117, 273)], items: () => [phonePill], beside: () => [phoneLeft, phoneRight] });
+  assert.equal(phonePill.style.bottom, '134px'); // 900 - 774 + 8
+  assert.equal(phoneLeft.style.bottom, '168px'); // max(its 120, the stack top 134 + 26 + 8)
+  assert.equal(phoneRight.style.bottom, ''); // already higher: its own place, left to the CSS
+});
+
+// An inline bottom copied from the CSS outlives the CSS state it was copied from. At 1400 px the HUD's bottom-left corner
+// overlaps the map credits across but sits well above them; it was pinned inline at its own CSS bottom anyway, so on leaving
+// recording mode (minimal HUD → tactical, 17.6 px higher) it held the minimal place for a frame and the left stack laid out
+// 17.6 px too tall (qa-species left-stack recordingOffOk: 518.2 px allocated, then 500.6). A box that need not rise is left to the CSS.
+test('a box beside the stack that already clears what it overlaps gets no inline bottom, so a CSS change moves it at once', () => {
+  const { doc } = env();
+  doc.defaultView.getComputedStyle = (e) => ({ bottom: e.cssBottom });
+  const credits = box(867, 20, 24, 257);
+  const corner = box(735, 40, 36, 338, { cssBottom: '125px' });
+  const { place } = stackAboveChrome({ doc, below: () => [credits], items: () => [], beside: () => [corner] });
+  assert.equal(corner.style.bottom, ''); // 125 > the credits' 900 - 867 + 8 = 41
+  corner.cssBottom = '108px'; // the HUD variant changed; nothing re-placed yet, and nothing needs to
+  assert.equal(corner.style.bottom, '');
+  place();
+  assert.equal(corner.style.bottom, '');
+});
+
+test('a box beside the stack is watched, so its own resize re-places it', () => {
+  const { doc, ros } = env();
+  doc.defaultView.getComputedStyle = (e) => ({ bottom: e.cssBottom });
+  const corner = box(0, 40, 16, 189, { cssBottom: '120px' });
+  stackAboveChrome({ doc, below: () => [box(774, 62, 117, 273)], items: () => [box(0, 26, 143, 247)], beside: () => [corner] });
+  assert.ok(ros[0].seen.includes(corner));
+});
+
+// A tray opens with a transform (it slides up 10 px and scales from 0.985). A ResizeObserver never fires for a
+// transform, so the stack was placed against the tray's first frame and the pill ended 3 px inside the settled tray
+// at every width (qa-command-dock, 2026-09-28). The end of a transition or animation in the chrome re-places it.
+test('the end of a transition or animation in the bottom chrome re-places the stack', () => {
+  const { doc } = env();
+  const listeners = {};
+  let trayTop = 671;
+  const tray = el(0, 0, { getBoundingClientRect: () => ({ top: trayTop, height: 140 }) });
+  const dock = el(820, 62, {
+    querySelectorAll: (sel) => (sel.includes('dock-popover-content') ? [tray] : []),
+    addEventListener: (ev, fn) => { (listeners[ev] ??= []).push(fn); },
+    removeEventListener: (ev, fn) => { listeners[ev] = (listeners[ev] ?? []).filter((f) => f !== fn); },
+  });
+  const pill = el(0, 26);
+  const s = stackAboveChrome({ doc, below: () => [dock], items: () => [pill] });
+  assert.equal(pill.style.bottom, '237px'); // 900 - 671 + 8: the tray's first frame
+  trayTop = 660; // settled
+  for (const fn of listeners.transitionend ?? []) fn();
+  assert.equal(pill.style.bottom, '248px'); // 900 - 660 + 8
+  trayTop = 650;
+  for (const fn of listeners.animationend ?? []) fn();
+  assert.equal(pill.style.bottom, '258px');
+  s.destroy();
+  assert.equal((listeners.transitionend ?? []).length + (listeners.animationend ?? []).length, 0);
+});

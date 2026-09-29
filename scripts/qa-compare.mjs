@@ -64,24 +64,9 @@ const open = async (url) => {
       () => false,
     ),
   );
-  // Boot flies the camera and shows a first-run launcher over the centre (stage-1 critic round 1).
-  // Dismissed the way qa-gibs does it; checking for the element's mere presence fails even when hidden.
+  // the boot camera flight settles first (a fixed wait: no app signal marks it; the first-run launcher it once also waited for was removed in 54192b3).
   await sleep(12000);
-  await page.evaluate(() =>
-    document.querySelector("[data-first-run-suppress]")?.click(),
-  );
   await page.keyboard.press("Escape");
-  const launcherGone = await page
-    .waitForFunction(
-      () => !document.querySelector("[data-first-run-choice]")?.offsetParent,
-      { timeout: 15000 },
-    )
-    .then(
-      () => true,
-      () => false,
-    );
-  if (!launcherGone)
-    throw new Error("first-run launcher still covers the globe after 15 s");
   return page;
 };
 const sides = (page) =>

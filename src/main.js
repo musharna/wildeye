@@ -256,6 +256,7 @@ async function init() {
       observedTime,
     });
     // Bottom-centre is one stack above the dock and the map credits: time bar, then compare pill | panel.
+    // The HUD's bottom corners sit beside it and rise above it only where they overlap it (a phone).
     stackAboveChrome({
       doc: document,
       below: () => [document.getElementById('command-dock'), document.getElementById('cesium-credits')],
@@ -263,6 +264,7 @@ async function init() {
         document.getElementById('observed-time'),
         [compareUi.toggle, compareUi.panel],
       ],
+      beside: () => [...document.querySelectorAll('#intel-hud .hud-bottom-left, #intel-hud .hud-bottom-right')],
     });
     // Restoration starts only after the complete production registry is sealed.
     dataManager.finalizeRegistrations(LAYER_STATE_REGISTRY);

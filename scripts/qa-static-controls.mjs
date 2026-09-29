@@ -22,9 +22,7 @@ p.on('dialog', (d) => { dialogs.push(`${d.type()} "${d.message().slice(0, 100)}"
 const ready = async () => {
   await p.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
   await new Promise((r) => setTimeout(r, 12000));
-  await p.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
   await p.keyboard.press('Escape');
-  await p.waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 15000 }).catch(() => {});
 };
 await p.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await ready();

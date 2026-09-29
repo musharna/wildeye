@@ -228,12 +228,9 @@ try {
     await m.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
     await m.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView.styleManager, { timeout: 180000 });
     await m.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
-    // the first-run launcher arrives after boot and covers the bottom of a phone; dismissed as qa-compare does
+    // the boot camera flight settles first (a fixed wait: no app signal marks it; the first-run launcher it once also waited for was removed in 54192b3)
     await new Promise((r) => setTimeout(r, 12000));
-    await m.evaluate(() => document.querySelector('[data-first-run-suppress]')?.click());
     await m.keyboard.press('Escape');
-    const launcherGone = await m.waitForFunction(() => !document.querySelector('[data-first-run-choice]')?.offsetParent, { timeout: 15000 }).then(() => true, () => false);
-    if (!launcherGone) { report(`fits-viewport-${w}x${h}`, false, { error: 'first-run launcher still up after 15 s' }); await m.close(); continue; }
     await m.evaluate(() => window.__godsEyeView.dataManager.setEnabled('gibs-landcover', true, { origin: 'user' }));
     await m.waitForFunction(() => { const b = document.getElementById('observed-time'); return b && b.getBoundingClientRect().width > 0; }, { timeout: 60000 }).catch(() => {});
     await new Promise((r) => setTimeout(r, 2000));
