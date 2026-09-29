@@ -27,7 +27,7 @@ jobs:
       PUPPETEER_SKIP_DOWNLOAD: '1'
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
