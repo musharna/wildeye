@@ -7,8 +7,11 @@ import puppeteer from 'puppeteer';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const shotsDir = path.join(repoRoot, 'qa-shots', 'map-source-tray');
-const appUrl = process.env.QA_BASE_URL || 'http://localhost:4173';
-const headful = process.argv.includes('--headful');
+const argv = process.argv.slice(2);
+const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
+// The page paths below add their own '/', so a trailing one on --url would double it.
+const appUrl = arg('--url', process.env.QA_BASE_URL || 'http://localhost:4173').replace(/\/+$/, '');
+const headful = argv.includes('--headful');
 const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH
   || await (async () => { try { return await puppeteer.executablePath(); } catch { return null; } })();
 
