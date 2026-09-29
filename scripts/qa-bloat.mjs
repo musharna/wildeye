@@ -9,6 +9,7 @@
  * load (nothing registered, no HUD) cannot read as "nothing left to remove".
  */
 import puppeteer from 'puppeteer';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -69,7 +70,7 @@ try {
   step = 'load';
   await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
   await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
-  await sleep(12000);
+  await bootSettled(page);
   step = 'inventory';
   const inv = await page.evaluate((CUT_ELEMENTS, KEEP_ELEMENTS) => {
     const g = window.__godsEyeView;

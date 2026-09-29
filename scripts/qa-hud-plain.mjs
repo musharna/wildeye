@@ -8,6 +8,7 @@
  * Software WebGL only (swiftshader): hardware-GPU headless Chrome crashed the laptop twice (2026-09-25).
  */
 import puppeteer from 'puppeteer';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -38,8 +39,7 @@ try {
   report('loading screen says wildeye', loader === 'wildeye', { loader });
   await page.waitForFunction(() => window.__godsEyeView?.styleManager, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
-  await sleep(12000);
-  await page.keyboard.press('Escape');
+  await bootSettled(page);
 
   const title = await page.evaluate(() => ({ doc: document.title, bar: document.querySelector('#title-bar h1 > span:not(.brand-logo)')?.textContent.trim(), tagline: !!document.querySelector('#title-bar .subtitle') }));
   report('page is titled wildeye, no tagline', title.doc === 'wildeye' && title.bar === 'wildeye' && !title.tagline, title);

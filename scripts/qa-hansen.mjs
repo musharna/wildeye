@@ -11,6 +11,7 @@
  * the layer is on (the tiles are recoloured in a worker, whose requests the page may not see).
  */
 import puppeteer from 'puppeteer';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -52,8 +53,7 @@ try {
   await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.observedTime, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
-  await sleep(12000);
-  await page.keyboard.press('Escape');
+  await bootSettled(page);
 
   // The globe's centre, rendered and read back in one task (no preserveDrawingBuffer needed).
   const lossPixels = () => page.evaluate(async () => {

@@ -10,6 +10,7 @@
  */
 import puppeteer from "puppeteer";
 import { mkdirSync } from "node:fs";
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) =>
@@ -64,9 +65,7 @@ const open = async (url) => {
       () => false,
     ),
   );
-  // the boot camera flight settles first (a fixed wait: no app signal marks it; the first-run launcher it once also waited for was removed in 54192b3).
-  await sleep(12000);
-  await page.keyboard.press("Escape");
+  await bootSettled(page);
   return page;
 };
 const sides = (page) =>

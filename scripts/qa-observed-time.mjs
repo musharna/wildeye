@@ -20,6 +20,7 @@
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -228,9 +229,7 @@ try {
     await m.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
     await m.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView.styleManager, { timeout: 180000 });
     await m.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
-    // the boot camera flight settles first (a fixed wait: no app signal marks it; the first-run launcher it once also waited for was removed in 54192b3)
-    await new Promise((r) => setTimeout(r, 12000));
-    await m.keyboard.press('Escape');
+    await bootSettled(m);
     await m.evaluate(() => window.__godsEyeView.dataManager.setEnabled('gibs-landcover', true, { origin: 'user' }));
     await m.waitForFunction(() => { const b = document.getElementById('observed-time'); return b && b.getBoundingClientRect().width > 0; }, { timeout: 60000 }).catch(() => {});
     await new Promise((r) => setTimeout(r, 2000));

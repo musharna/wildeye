@@ -8,6 +8,7 @@ import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
 import { GBIF_BACKBONE_CHECKLIST_KEY, SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX } from '../src/bio/gbif.js';
 import { MORE_SLACK_PX } from '../src/bio/moreCue.js';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -248,8 +249,7 @@ const installContrast = () => page.evaluate(() => {
 
 await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
-await sleep(12000);
-await page.keyboard.press('Escape');
+await bootSettled(page);
 
 if (CHECKS.has('panel-layout')) {
   // CSS regex pins cannot see cascade results, so measure the stack panels in the page (R-6e): collapsed SPECIES is
@@ -2393,9 +2393,7 @@ if (CHECKS.has('phone-accordion')) {
     url.hash = new URLSearchParams({ lat: '30.27', lon: '-97.74', alt: '400000', v: '2', ui: 'd.c.0_b.c.0' }).toString();
     await tab.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 120000 });
     await tab.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
-    await sleep(12000);
-    await tab.keyboard.press('Escape');
-    await sleep(1500);
+    await bootSettled(tab);
     steps.shareLink = await stackState();
     await clickToggle('species-panel');
     steps.speciesClosed = await stackState();

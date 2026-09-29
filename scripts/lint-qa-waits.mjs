@@ -4,14 +4,14 @@
  * Run: node scripts/lint-qa-waits.mjs [files...]   (default: every scripts/*.mjs; exits 1 on any finding)
  *
  * Flags a statement that awaits a fixed sleep — sleep/delay/wait/pause(N), `new Promise(r => setTimeout(r, N))`,
- * `x.waitForTimeout(N)` — when the NEXT statement in the same block clicks, focuses, hovers or taps anything (a
+ * `x.waitForTimeout(N)` — when the NEXT statement in the same block clicks, focuses, hovers, taps, presses a key or types (a
  * puppeteer call or a DOM call inside page.evaluate). The sleep stands in for "the thing is ready", and on a busy page
  * it is not: three QA misses in one day (2026-09-27: the held frame, the tray keyboard focus, the tray tile click)
  * were each a fixed sleep lost to a transition or a pending timer. Wait for the state instead (waitForFunction,
  * waitForSelector with a visibility/hit test). A deliberate sleep is allowed with a reason on its line:
  * `// qa-wait-ok: <why a duration, not a state, is the point>`.
- * Not counted (yet): key presses. Sixteen scripts sleep 12 s at boot and then press Escape — a leftover of the first-run
- * launcher removed in 54192b3; whether that Escape still does anything was not traced, so it stays and is not flagged.
+ * Key presses count since 2026-09-28: sixteen scripts slept 12 s at boot and then pressed Escape, a leftover of the
+ * first-run launcher removed in 54192b3 that changed nothing in the page; they now wait for bootSettled (scripts/bootSettled.mjs).
  * Parser: rollup's (`rollup/parseAst`, installed with vite) — current syntax incl. top-level await and `?.`.
  */
 import { readFileSync, readdirSync } from 'node:fs';
@@ -19,7 +19,7 @@ import path from 'node:path';
 import { parseAst } from 'rollup/parseAst';
 
 const SLEEP_NAMES = new Set(['sleep', 'delay', 'wait', 'pause']);
-const ACTIONS = new Set(['click', 'focus', 'hover', 'tap']);
+const ACTIONS = new Set(['click', 'focus', 'hover', 'tap', 'press', 'type']);
 const MARKER = /\/\/\s*qa-wait-ok:\s*\S.{3,}/;
 
 const walk = (node, visit) => {

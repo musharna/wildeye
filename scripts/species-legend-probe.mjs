@@ -27,6 +27,7 @@ import puppeteer from 'puppeteer';
 import { VectorTile } from '@mapbox/vector-tile';
 import { PbfReader as Pbf } from 'pbf';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -71,9 +72,7 @@ page.on('response', (r) => { if (r.url().includes('/v2/map/occurrence/')) { pend
 page.on('pageerror', (e) => log({ pageerror: String(e?.message || e).slice(0, 200) }));
 await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
-await sleep(12000);
-await page.keyboard.press('Escape');
-await sleep(1500);
+await bootSettled(page);
 const basemap = await page.evaluate(() => String(window.__godsEyeView.viewer.imageryLayers.get(0)?.imageryProvider?.url ?? ''));
 if (!/arcgisonline\.com/.test(basemap)) {
   await page.evaluate(() => window.__godsEyeView.mapStackController.setStack('esri-imagery', { silent: true }));

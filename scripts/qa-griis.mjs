@@ -14,6 +14,7 @@
  * and nothing of it with the layer off. Off the time bar: the layer registers no observed extent.
  */
 import puppeteer from 'puppeteer';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -49,8 +50,7 @@ try {
   await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.observedTime, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
-  await sleep(12000);
-  await page.keyboard.press('Escape');
+  await bootSettled(page);
 
   // Entity polygons are tessellated asynchronously (slow under swiftshader, up to ~2 min for gmw), so a hit
   // is polled for up to `waitMs`; the layer-off pick waits a fixed 3 s and must find nothing of this layer.

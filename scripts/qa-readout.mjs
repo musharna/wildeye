@@ -13,6 +13,7 @@
  * only itself on, and the real-click card check uses a Compare pair.
  */
 import puppeteer from 'puppeteer';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -52,9 +53,7 @@ try {
   if (process.env.QA_SELFTEST_CONSOLE) await page.evaluate(() => console.error('[Data:gibs-selftest] injected by QA_SELFTEST_CONSOLE'));
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.styleManager, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
-  // Boot flies the camera to its first view (the qa-gibs / qa-compare pattern).
-  await sleep(12000);
-  await page.keyboard.press('Escape');
+  await bootSettled(page);
 
   const hasReadout = await page.evaluate(() => typeof window.__godsEyeView.readoutAt === 'function');
   report('readout-exposed', hasReadout, {});

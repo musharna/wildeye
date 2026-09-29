@@ -9,6 +9,7 @@
 import puppeteer from "puppeteer";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (n, f) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : f);
@@ -62,9 +63,7 @@ try {
       window.__godsEyeView?.dataManager && window.__godsEyeView?.observedTime,
     { timeout: 180000 },
   );
-  // boot flies to a first view after the manager is up; measuring before it lands lets it move the camera
-  await new Promise((r) => setTimeout(r, 12000));
-  await page.keyboard.press("Escape");
+  await bootSettled(page);
   const fetched = await page.evaluate(async () => {
     const res = await fetch(`data/gibs.json?t=${Date.now()}`);
     return {

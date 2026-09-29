@@ -17,6 +17,7 @@
  * and the track is painted in the land-mammal colour.
  */
 import puppeteer from 'puppeteer';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -53,8 +54,7 @@ try {
   await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
   await page.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView?.observedTime, { timeout: 180000 });
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
-  await sleep(12000);
-  await page.keyboard.press('Escape');
+  await bootSettled(page);
 
   // A polyline is 2-3 px wide: pick a 9x9 px box at the centre, camera straight down on the fix.
   const pickAt = (waitMs = 3000) => page.evaluate(async ([lon, lat], waitMs, prefix) => {

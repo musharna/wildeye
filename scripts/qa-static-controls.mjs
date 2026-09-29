@@ -6,6 +6,7 @@
  * --sections limits the crawl to headers whose label matches; run one section per process when the renderer runs out of memory.
  */
 import puppeteer from 'puppeteer';
+import { bootSettled } from './bootSettled.mjs';
 const argv = process.argv.slice(2);
 const URL = argv[argv.indexOf('--url') + 1] || 'https://musharna.github.io/wildeye/';
 const ONLY = argv.includes('--sections') ? new RegExp(argv[argv.indexOf('--sections') + 1], 'i') : null;
@@ -21,8 +22,7 @@ const dialogs = [];
 p.on('dialog', (d) => { dialogs.push(`${d.type()} "${d.message().slice(0, 100)}"`); d.dismiss().catch(() => {}); });
 const ready = async () => {
   await p.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
-  await new Promise((r) => setTimeout(r, 12000));
-  await p.keyboard.press('Escape');
+  await bootSettled(p);
 };
 await p.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await ready();

@@ -8,12 +8,16 @@ import { findSleepThenInteract } from '../scripts/lint-qa-waits.mjs';
 
 const lines = (src) => findSleepThenInteract(src).map((h) => h.line);
 
-test('a fixed sleep then a click, focus, hover or tap is flagged, in every sleep spelling', () => {
+test('a fixed sleep then a click, focus, hover, tap, key press or typing is flagged, in every sleep spelling', () => {
   assert.deepEqual(lines('await sleep(240);\nawait page.click("#a");'), [1]);
   assert.deepEqual(lines('await new Promise((r) => setTimeout(r, 500));\nawait page.focus("#a");'), [1]);
   assert.deepEqual(lines('await page.waitForTimeout(300);\nawait page.hover("#a");'), [1]);
   assert.deepEqual(lines('async function f() {\n  await delay(9);\n  await page.evaluate(() => document.querySelector("#a").click());\n}'), [2]);
   assert.deepEqual(lines('await sleep(1);\nawait page.touchscreen.tap(1, 2);'), [1]);
+  // key presses count too: 16 scripts slept 12 s and pressed Escape at boot, and the Escape had nothing left to act on
+  assert.deepEqual(lines('await sleep(12000);\nawait page.keyboard.press("Escape");'), [1]);
+  assert.deepEqual(lines('await sleep(300);\nawait page.keyboard.type("monarch");'), [1]);
+  assert.deepEqual(lines('await page.waitForFunction(() => ready());\nawait page.keyboard.press("Escape");'), []);
 });
 
 test('a state wait, a measurement, or a sleep and a click in different functions are not flagged', () => {

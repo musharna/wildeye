@@ -10,6 +10,7 @@ import puppeteer from 'puppeteer';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { bootSettled } from './bootSettled.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SHOTS = path.join(REPO, 'qa-shots', 'gap-layers');
@@ -62,8 +63,7 @@ page.on('response', (r) => {
 });
 await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
-await new Promise((r) => setTimeout(r, 12000)); // boot flyTo + deferred init
-await page.keyboard.press('Escape');
+await bootSettled(page);
 const baselineErrors = pageErrors.length;
 console.log(`app ready; ${baselineErrors} console/page errors before any gap layer (not attributed)`);
 pageErrors = [];

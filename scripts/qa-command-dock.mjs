@@ -14,6 +14,7 @@
  */
 import puppeteer from 'puppeteer';
 import { mkdirSync } from 'node:fs';
+import { bootSettled } from './bootSettled.mjs';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -34,9 +35,7 @@ try {
     await m.setViewport({ width: w, height: h, isMobile: touch, hasTouch: touch, deviceScaleFactor: 1 });
     await m.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 180000 });
     await m.waitForFunction(() => window.__godsEyeView?.dataManager && window.__godsEyeView.styleManager, { timeout: 180000 });
-    // the boot camera flight settles first (a fixed wait: no app signal marks it; the first-run launcher it once also waited for was removed in 54192b3)
-    await new Promise((r) => setTimeout(r, 12000));
-    await m.keyboard.press('Escape');
+    await bootSettled(m);
 
     // Closed dock: whole dock on screen, each tab's label uncut and inside its tab.
     const closed = await m.evaluate(async (TABS) => {
