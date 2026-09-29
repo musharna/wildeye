@@ -818,14 +818,14 @@ if (CHECKS.has('contrast')) {
       await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { taxonKey: null, years: 'all', radiusKm: 10 }, { origin: 'user' })) throw new Error('species params rejected'); });
       await openSpeciesPanel();
       await page.evaluate(() => { document.getElementById('species-body').scrollTop = 0; });
-      await page.click('#species-search', { clickCount: 3 });
+      await page.click('#species-search', { count: 3 });
       await page.keyboard.press('Backspace');
       await page.type('#species-search', 'monarch', { delay: 30 });
       await page.waitForFunction(() => document.querySelector('#species-suggestions button')?.textContent.includes('Danaus plexippa'), { timeout: 20000 });
       await page.click('#species-suggestions button');
       await page.waitForFunction(() => /^GBIF dataset search failed/.test(document.getElementById('species-datasets-status')?.textContent || '') && document.getElementById('species-chosen-note')?.hidden === false, { timeout: 45000 });
       await setFailures([INAT_AUTOCOMPLETE, '^https://api\\.gbif\\.org/v1/species/suggest', TAXON_DATASET_SEARCH]);
-      await page.click('#species-search', { clickCount: 3 });
+      await page.click('#species-search', { count: 3 });
       await page.keyboard.press('Backspace');
       await page.type('#species-search', 'monarch', { delay: 30 });
       await page.waitForFunction(() => /^Name search failed/.test(document.getElementById('species-status')?.textContent || ''), { timeout: 30000 });
@@ -1347,7 +1347,7 @@ if (CHECKS.has('panel-fold')) {
     window.__qaFoldRules = rules;
   }, rules);
   const typeQuery = async (text) => {
-    await page.click('#species-search', { clickCount: 3 });
+    await page.click('#species-search', { count: 3 });
     await page.keyboard.press('Backspace');
     await page.type('#species-search', text, { delay: 30 });
   };
@@ -1449,7 +1449,7 @@ if (CHECKS.has('fuzzy-match')) {
   });
   const chooseFirst = async (expected) => {
     await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { taxonKey: null }, { origin: 'user' })) throw new Error('species params rejected'); });
-    await page.click('#species-search', { clickCount: 3 });
+    await page.click('#species-search', { count: 3 });
     await page.keyboard.press('Backspace');
     await page.type('#species-search', 'monarch', { delay: 40 });
     await page.waitForFunction((expected) => document.querySelector('#species-suggestions button')?.textContent.includes(expected), { timeout: 20000 }, expected);
@@ -1644,7 +1644,7 @@ if (CHECKS.has('suggestion-fade')) {
   // itself, so its ratio is 1 by construction): "sialia currucoides" gives 3;
   // "megaptera nov" gives 4, but its subspecies names wrap past the cap and the list fades, as it should.
   const clearSearch = async () => {
-    await page.click('#species-search', { clickCount: 3 });
+    await page.click('#species-search', { count: 3 });
     await page.keyboard.press('Backspace');
     await page.waitForFunction(() => document.getElementById('species-suggestions').hidden, { timeout: 5000 });
   };
@@ -1732,7 +1732,7 @@ if (CHECKS.has('escape')) {
     await openSpeciesPanel();
     await page.click('#species-what-lives-here');
     await page.waitForFunction(() => !document.getElementById('bio-card').hidden, { timeout: 10000 });
-    await page.click('#species-search', { clickCount: 3 });
+    await page.click('#species-search', { count: 3 });
     await page.keyboard.press('Backspace');
     await page.type('#species-search', 'mona', { delay: 40 });
     await listShowing();
