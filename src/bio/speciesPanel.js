@@ -243,6 +243,7 @@ export function createSpeciesPanel({
     list.replaceChildren();
     list.hidden = true;
     listQuery = null;
+    delete list.dataset.query;
   }
 
   /** Ends the name search (M3, R12-M1): a pending debounce or a request still out would otherwise reopen the list. */
@@ -267,6 +268,9 @@ export function createSpeciesPanel({
     }
     list.hidden = result.items.length === 0;
     listQuery = query;
+    // Which query this list answers, for anything that must act on the list of the query it typed (qa-species): a keystroke that stalls
+    // past the debounce renders a list for the partial query first.
+    list.dataset.query = query;
     if (result.items.length === 0 && result.source !== 'none') status.textContent = `No names match "${query}".`;
   }
 

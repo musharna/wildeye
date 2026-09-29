@@ -106,6 +106,15 @@ const openSpeciesPanel = async () => {
   });
   await sleep(800);
 };
+/**
+ * Waits for the suggestion list rendered for `query` (its data-query, set by speciesPanel.showSuggestions), shown, with a first row whose
+ * text includes `text`. Waiting for any row was not enough: a keystroke that stalls past the debounce renders a list for the partial query
+ * ("monarc"), which satisfied the wait, and the full query's list then replaced the row mid-click ("Node is detached", 2026-09-28).
+ */
+const suggestionsFor = (query, text = '') => page.waitForFunction((query, text) => {
+  const list = document.getElementById('species-suggestions');
+  return !list.hidden && list.dataset.query === query && Boolean(list.querySelector('button')?.textContent.includes(text));
+}, { timeout: 20000 }, query, text);
 
 // suggestion-fade and escape failed together for a stretch on 2026-09-26 (~22:05-23:00 EDT; the clear after "hump" timed out, then "mona"
 // never listed) and passed before and after on the same code; the error cut dropped the line, so the cause was never read. On a failure both
@@ -821,7 +830,7 @@ if (CHECKS.has('contrast')) {
       await page.click('#species-search', { count: 3 });
       await page.keyboard.press('Backspace');
       await page.type('#species-search', 'monarch', { delay: 30 });
-      await page.waitForFunction(() => document.querySelector('#species-suggestions button')?.textContent.includes('Danaus plexippa'), { timeout: 20000 });
+      await suggestionsFor('monarch', 'Danaus plexippa');
       await page.click('#species-suggestions button');
       await page.waitForFunction(() => /^GBIF dataset search failed/.test(document.getElementById('species-datasets-status')?.textContent || '') && document.getElementById('species-chosen-note')?.hidden === false, { timeout: 45000 });
       await setFailures([INAT_AUTOCOMPLETE, '^https://api\\.gbif\\.org/v1/species/suggest', TAXON_DATASET_SEARCH]);
@@ -1390,7 +1399,7 @@ if (CHECKS.has('panel-fold')) {
       // (1) the FUZZY choice first, so a species is chosen; its 2-line status is measured after the 1-line one below.
       await setRules([{ pattern: INAT_AUTOCOMPLETE, body: FUZZY_SUGGESTION }]);
       await typeQuery('monarch');
-      await page.waitForFunction(() => document.querySelector('#species-suggestions button')?.textContent.includes('Danaus plexippa'), { timeout: 20000 });
+      await suggestionsFor('monarch', 'Danaus plexippa');
       await page.click('#species-suggestions button');
       await page.waitForFunction(() => document.getElementById('species-chosen-note')?.hidden === false && /^No exact GBIF match for Danaus plexippa; shown as GBIF's Danaus plexippus\./.test(document.getElementById('species-status').textContent), { timeout: 45000 });
       await sleep(1000);
@@ -1452,7 +1461,7 @@ if (CHECKS.has('fuzzy-match')) {
     await page.click('#species-search', { count: 3 });
     await page.keyboard.press('Backspace');
     await page.type('#species-search', 'monarch', { delay: 40 });
-    await page.waitForFunction((expected) => document.querySelector('#species-suggestions button')?.textContent.includes(expected), { timeout: 20000 }, expected);
+    await suggestionsFor('monarch', expected);
     const suggestion = await page.evaluate(() => document.querySelector('#species-suggestions button').textContent);
     await page.click('#species-suggestions button');
     await page.waitForFunction(() => window.__godsEyeView.dataManager.getLayerParams('species')?.taxonKey === 5133088 && !/^Looking up/.test(document.getElementById('species-status').textContent), { timeout: 30000 });
@@ -1651,7 +1660,7 @@ if (CHECKS.has('suggestion-fade')) {
   const listFor = async (query) => {
     await clearSearch();
     await page.type('#species-search', query, { delay: 40 });
-    await page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
+    await suggestionsFor(query);
     await page.mouse.move(700, 120); // no hover highlight on a row
     await sleep(1000);
     const box = await page.evaluate(() => {
@@ -1723,7 +1732,7 @@ if (CHECKS.has('escape')) {
     focused: document.activeElement?.id || document.activeElement?.tagName || null,
     focusedSuggestion: Boolean(document.activeElement?.classList?.contains('species-suggestion')),
   }));
-  const listShowing = () => page.waitForFunction(() => { const list = document.getElementById('species-suggestions'); return !list.hidden && list.querySelectorAll('button').length > 0; }, { timeout: 20000 });
+  const listShowing = (query) => suggestionsFor(query);
   const states = {};
   let error = null;
   let where = null;
@@ -1735,14 +1744,14 @@ if (CHECKS.has('escape')) {
     await page.click('#species-search', { count: 3 });
     await page.keyboard.press('Backspace');
     await page.type('#species-search', 'mona', { delay: 40 });
-    await listShowing();
+    await listShowing('mona');
     await page.keyboard.press('Tab');
     states.tabbed = await read();
     await page.keyboard.press('Escape');
     await sleep(700);
     states.fromSuggestion = await read();
     await page.keyboard.type('rch', { delay: 40 });
-    await listShowing();
+    await listShowing('monarch');
     states.before = await read();
     await page.keyboard.type('s');
     await page.keyboard.press('Escape');
@@ -1814,7 +1823,7 @@ if (CHECKS.has('search')) {
   requests.length = 0;
   await page.click('#species-search');
   await page.type('#species-search', 'monarch', { delay: 40 });
-  await page.waitForFunction(() => document.querySelectorAll('#species-suggestions button').length > 0, { timeout: 20000 });
+  await suggestionsFor('monarch');
   const first = await page.evaluate(() => document.querySelector('#species-suggestions button').textContent);
   await page.click('#species-suggestions button');
   await page.waitForFunction(() => window.__godsEyeView.dataManager.isEnabled('species'), { timeout: 20000 });

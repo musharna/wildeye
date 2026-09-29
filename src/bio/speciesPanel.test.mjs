@@ -149,6 +149,32 @@ test('suggestion rows are worded for the query that was sent, even when the box 
   ]);
 });
 
+// qa-species waited for "a suggestion whose text includes X" and clicked it. A keystroke that stalled past the debounce sent a partial query
+// ("monarc"), its list satisfied the wait, and the full query's list replaced the button mid-click: "Node is detached from document" (1 in 8
+// runs, 2026-09-28; 3/3 when forced). The list now says which query it answers, so a caller can wait for the list of the query it typed.
+test('the suggestion list names the query it was rendered for, and a cleared list names none', async () => {
+  const answers = [];
+  const { els } = panelRig({ suggest: () => new Promise((resolve) => { answers.push(resolve); }), setTimer: (fn) => { fn(); return 1; } });
+  const list = els['species-suggestions'];
+  const item = { id: 48662, gbifKey: null, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species', matchedTerm: 'Monarch' };
+  els['species-search'].value = 'monarc';
+  els['species-search'].listeners.input();
+  answers[0]({ source: 'inaturalist', items: [item] });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(list.dataset.query, 'monarc');
+  els['species-search'].value = 'monarch';
+  els['species-search'].listeners.input();
+  assert.equal(list.dataset.query, 'monarc', 'the shown list is still the one for "monarc" until the new answer arrives');
+  answers[1]({ source: 'inaturalist', items: [item] });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(list.dataset.query, 'monarch');
+  assert.equal(list.hidden, false);
+  els['species-search'].value = 'mo';
+  els['species-search'].listeners.input();
+  assert.equal(list.hidden, true);
+  assert.equal(list.dataset.query, undefined);
+});
+
 // M1 (final review): a strict GBIF match can answer FUZZY (live 2026-09-14: "Danaus plexippa" → 5133088 Danaus plexippus, confidence 97), and
 // the map then shows another name's records under the chosen label. So a match that is not EXACT is mapped and the chosen row and the status
 // say it is shown as GBIF's name; an EXACT match says nothing; NONE maps nothing; choosing the same taxon exactly clears the note.
