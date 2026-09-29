@@ -1303,8 +1303,6 @@ body.ui-clean-view #data-panel {
   background: rgba(255, 255, 255, 0.03);
 }
 
-/* ── Radio companion section inside Context ── */
-
 .data-toggle-top {
   display: flex;
   align-items: center;
@@ -1673,11 +1671,6 @@ body.recording-mode #data-panel {
   #data-panel.collapsed {
     width: 260px;
   }
-
-  /* Narrow viewports: cap the preview height to keep the panel compact. Cap
-     the IMAGE, not the wrap — the wrap is overflow:hidden, so capping it would
-     re-crop the very timestamp this is protecting. object-fit: contain then
-     letterboxes inside the shorter box. */
 
   #left-panel-stack {
     top: 70px;
