@@ -178,9 +178,9 @@ async function waitForHttp(url, child, timeoutMs) {
   throw new Error(`vite preview did not serve ${url} within ${timeoutMs} ms`);
 }
 
-async function chromePath(puppeteer) {
+export async function chromePath(puppeteer) {
   const candidates = [process.env.PUPPETEER_EXECUTABLE_PATH];
-  try { candidates.push(puppeteer.executablePath()); } catch { /* download skipped */ }
+  try { candidates.push(await puppeteer.executablePath()); } catch { /* download skipped */ }
   candidates.push('/usr/bin/google-chrome', '/usr/bin/google-chrome-stable');
   const found = candidates.find((candidate) => candidate && existsSync(candidate));
   if (!found) throw new Error(`no Chrome found; tried ${candidates.filter(Boolean).join(', ')}`);

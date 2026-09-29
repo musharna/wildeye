@@ -1,6 +1,35 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareLoad, isVendorKey, manifestSources, startupKey, summarizeEntries } from '../scripts/load-budget-check.mjs';
+import { chromePath, compareLoad, isVendorKey, manifestSources, startupKey, summarizeEntries } from '../scripts/load-budget-check.mjs';
+
+/** Runs `fn` with PUPPETEER_EXECUTABLE_PATH set to `value` (unset when undefined). */
+async function withChromeEnv(value, fn) {
+  const saved = process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (value === undefined) delete process.env.PUPPETEER_EXECUTABLE_PATH;
+  else process.env.PUPPETEER_EXECUTABLE_PATH = value;
+  try { return await fn(); } finally {
+    if (saved === undefined) delete process.env.PUPPETEER_EXECUTABLE_PATH;
+    else process.env.PUPPETEER_EXECUTABLE_PATH = saved;
+  }
+}
+
+// Puppeteer's executablePath() returns a Promise (25.x). Read without await, the
+// candidate was a Promise, existsSync() said no, and the gate fell through to
+// /usr/bin/google-chrome: it worked in CI, where the runner has that, and died
+// with "no Chrome found; tried [object Promise]" on a machine with only
+// Puppeteer's own Chrome. process.execPath stands in for that Chrome: a file
+// that exists and is listed before the /usr/bin fallbacks.
+test("the gate uses Puppeteer's own Chrome, whose path arrives as a Promise", async () => {
+  const found = await withChromeEnv(undefined, () => chromePath({ executablePath: async () => process.execPath }));
+  assert.equal(found, process.execPath);
+});
+
+test('an explicit PUPPETEER_EXECUTABLE_PATH wins, and a skipped Chrome download is not fatal', async () => {
+  const skipped = { executablePath: async () => { throw new Error('Could not find Chrome'); } };
+  assert.equal(await withChromeEnv(process.execPath, () => chromePath(skipped)), process.execPath);
+  const bundled = { executablePath: async () => '/nonexistent/chrome' };
+  assert.equal(await withChromeEnv(process.execPath, () => chromePath(bundled)), process.execPath);
+});
 
 /**
  * Pure half of the startup-weight gate (`scripts/load-budget-check.mjs`). The
