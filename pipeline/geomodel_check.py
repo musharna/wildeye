@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import logging
 import math
+import shutil
 import statistics
+import tempfile
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -481,12 +484,24 @@ def default_work() -> Path:
     )
 
 
+@contextmanager
+def run_workdir(root: Path, keep: bool = False):
+    """A fresh directory under `root` for one run's GeoPackages, removed on exit unless `keep`. The monthly check and the
+    species listing (or a rerun) can overlap, so a run removes only its own directory, never the shared root."""
+    root.mkdir(parents=True, exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="run-", dir=root))
+    try:
+        yield work
+    finally:
+        if not keep:
+            shutil.rmtree(work, ignore_errors=True)
+
+
 def main(argv=None, *, sources=None) -> int:
     import argparse
     import datetime as dt
     import logging
     import os
-    import shutil
 
     from .atomic import write_atomic
     from .geomodel_sources import GROUPS
@@ -523,15 +538,17 @@ def main(argv=None, *, sources=None) -> int:
     if unknown:
         ap.error(f"unknown collections: {unknown}")
     live = sources is None
-    sources = sources or LiveSources(args.work)
-    try:
-        doc = run(sources, groups, np.random.default_rng(seed), args.species_per_group)
-    except ControlFailure as e:
-        log.error("controls failed, no verdicts written: %s", e)
-        return 2
-    finally:
-        if live and not args.keep_ranges:
-            shutil.rmtree(args.work, ignore_errors=True)
+    with (
+        run_workdir(args.work, keep=args.keep_ranges) if live else nullcontext() as work
+    ):
+        sources = sources or LiveSources(work)
+        try:
+            doc = run(
+                sources, groups, np.random.default_rng(seed), args.species_per_group
+            )
+        except ControlFailure as e:
+            log.error("controls failed, no verdicts written: %s", e)
+            return 2
     doc = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "seed": seed,
