@@ -7,3 +7,4 @@ for f in birds aloft occurrences tracks wastewater otn hpai neon gfw whispers ar
   if [ ! -s "public/data/$f.geojson" ]; then cp "public/data/seed/$f.geojson" "public/data/$f.geojson"; echo "seeded $f.geojson"; fi
 done
 if [ ! -s public/data/gibs.json ]; then cp public/data/seed/gibs.json public/data/gibs.json; echo "seeded gibs.json"; fi
+if [ ! -s public/data/geomodel_verdicts.json ]; then cp public/data/seed/geomodel_verdicts.json public/data/geomodel_verdicts.json; echo "seeded geomodel_verdicts.json"; fi
