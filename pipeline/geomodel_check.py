@@ -212,7 +212,11 @@ def score_group(
     run = GroupRun()
     background = sources.background(group, BACKGROUND_POINTS, rng)
     candidates = sources.species(group)
-    log.info("%s: effort background drawn, %d species in the collection", group, len(candidates))
+    log.info(
+        "%s: effort background drawn, %d species in the collection",
+        group,
+        len(candidates),
+    )
     order = rng.permutation(len(candidates))[: species_per_group * MAX_CANDIDATES]
     controls: dict = {}
     for i in order:
@@ -231,7 +235,9 @@ def score_group(
             run.skipped["fewer than 30 non-iNaturalist presences"] = (
                 run.skipped.get("fewer than 30 non-iNaturalist presences", 0) + 1
             )
-            log.info("%s: skipped %s: fewer than 30 non-iNaturalist presences", group, name)
+            log.info(
+                "%s: skipped %s: fewer than 30 non-iNaturalist presences", group, name
+            )
             continue
         training = sources.training(key, rng)
         if not len(training):
@@ -250,7 +256,14 @@ def score_group(
             round(tss(baseline, presences, background), 4),
         )
         run.results.append(result)
-        log.info("%s: %s TSS %s, baseline %s (%d presences)", group, name, result.model_tss, result.baseline_tss, len(presences))
+        log.info(
+            "%s: %s TSS %s, baseline %s (%d presences)",
+            group,
+            name,
+            result.model_tss,
+            result.baseline_tss,
+            len(presences),
+        )
         if not controls:  # the run's controls, on this group's first scored species
             positive = transform(
                 _FROM_EA,
@@ -325,14 +338,24 @@ def run(
         if not candidates:
             continue
         taxon_id, name = candidates[int(rng.integers(len(candidates)))]
-        iou = round(tile_agreement(sources.range_geom(group, taxon_id), taxon_id, sources.tile_mask), 4)
+        iou = round(
+            tile_agreement(
+                sources.range_geom(group, taxon_id), taxon_id, sources.tile_mask
+            ),
+            4,
+        )
         agreement.append({"group": group, "species": name, "iou": iou})
-        log.info("tile agreement %s (%s): IoU %s (min %s)", name, group, iou, TILE_IOU_MIN)
+        log.info(
+            "tile agreement %s (%s): IoU %s (min %s)", name, group, iou, TILE_IOU_MIN
+        )
     bad = [a for a in agreement if a["iou"] < TILE_IOU_MIN]
     if bad or len(agreement) < min(TILE_AGREEMENT_SPECIES, len(groups)):
         raise ControlFailure(
             "iNaturalist's thresholded tiles do not show the GeoPackage ranges tested: "
-            + (", ".join(f"{a['species']} IoU {a['iou']}" for a in bad) or f"only {len(agreement)} species checked")
+            + (
+                ", ".join(f"{a['species']} IoU {a['iou']}" for a in bad)
+                or f"only {len(agreement)} species checked"
+            )
             + f" (must be >= {TILE_IOU_MIN})"
         )
     out_groups, out_controls, failures = {}, {}, []
@@ -345,7 +368,13 @@ def run(
             "species": [r.__dict__ for r in scored.results],
         }
         v = out_groups[group]
-        log.info("%s: %s (%s scored, median TSS %s)", group, v["verdict"], v["n_scored"], v.get("median_tss"))
+        log.info(
+            "%s: %s (%s scored, median TSS %s)",
+            group,
+            v["verdict"],
+            v["n_scored"],
+            v.get("median_tss"),
+        )
     if failures:
         raise ControlFailure("; ".join(failures))
     return {
@@ -440,7 +469,12 @@ def main(argv=None, *, sources=None) -> int:
     ap.add_argument(
         "--work",
         type=Path,
-        default=Path(os.environ.get("WILDEYE_WORK", "/tmp/wildeye-geomodel")),
+        default=Path(
+            os.environ.get("WILDEYE_WORK")
+            or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+            / "wildeye"
+            / "geomodel"
+        ),
     )
     ap.add_argument(
         "--groups",

@@ -495,8 +495,8 @@ def species_ranges(path: Path) -> Iterator[Range]:
             "select table_name from gpkg_contents where data_type = 'features'"
         ).fetchone()
         rows = con.execute(
-            f'select taxon_id, name, geomodel_version, geom from "{table}" where rank = ?',
-            ("species",),  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+            f'select taxon_id, name, geomodel_version, geom from "{table}" where rank = ?',  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+            ("species",),
         )
         for taxon_id, name, version, geom in rows:
             yield Range(int(taxon_id), name, str(version), geometry_from_gpkg(geom))
@@ -519,8 +519,8 @@ def species_index(path: Path) -> list[tuple[int, str, str]]:
         return [
             (int(t), n, str(v))
             for t, n, v in con.execute(
-                f'select taxon_id, name, geomodel_version from "{table}" where rank = ?',
-                ("species",),  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+                f'select taxon_id, name, geomodel_version from "{table}" where rank = ?',  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+                ("species",),
             )
         ]
     finally:
@@ -532,8 +532,9 @@ def range_geometry(path: Path, taxon_id: int):
     try:
         table = _features_table(con)
         row = con.execute(
-            f'select geom from "{table}" where taxon_id = ?', (taxon_id,)
-        ).fetchone()  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+            f'select geom from "{table}" where taxon_id = ?',  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+            (taxon_id,),
+        ).fetchone()
     finally:
         con.close()
     if row is None:
