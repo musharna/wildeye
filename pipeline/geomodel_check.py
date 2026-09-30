@@ -313,7 +313,9 @@ def check_controls(group: str, controls: dict) -> list[str]:
     return failures
 
 
-def check_tile_agreement(sources, groups: list[str], rng: np.random.Generator) -> list[dict]:
+def check_tile_agreement(
+    sources, groups: list[str], rng: np.random.Generator
+) -> list[dict]:
     """IoU between GeoPackage ranges and iNaturalist's thresholded tiles for up to TILE_AGREEMENT_SPECIES
     species; ControlFailure unless the median reaches TILE_IOU_MIN (spec, "Tile agreement")."""
     # iNaturalist's API is the run's only call to iNaturalist: check it before hours of GBIF work, so its
@@ -341,7 +343,12 @@ def check_tile_agreement(sources, groups: list[str], rng: np.random.Generator) -
             agreement.append({"group": group, "species": name, "iou": iou})
             log.info("tile agreement %s (%s): IoU %s", name, group, iou)
     median_iou = statistics.median(a["iou"] for a in agreement) if agreement else 0.0
-    log.info("tile agreement median IoU %s over %s species (min %s)", median_iou, len(agreement), TILE_IOU_MIN)
+    log.info(
+        "tile agreement median IoU %s over %s species (min %s)",
+        median_iou,
+        len(agreement),
+        TILE_IOU_MIN,
+    )
     if not agreement or median_iou < TILE_IOU_MIN:
         raise ControlFailure(
             "iNaturalist's thresholded tiles do not show the GeoPackage ranges tested: "
@@ -462,6 +469,18 @@ class LiveSources:
         return self.gs.thresholded_tile_mask(taxon_id, z, x, y)
 
 
+def default_work() -> Path:
+    """Where GeoPackages are cached during a run: $WILDEYE_WORK, else the user cache dir."""
+    import os
+
+    return Path(
+        os.environ.get("WILDEYE_WORK")
+        or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+        / "wildeye"
+        / "geomodel"
+    )
+
+
 def main(argv=None, *, sources=None) -> int:
     import argparse
     import datetime as dt
@@ -476,16 +495,7 @@ def main(argv=None, *, sources=None) -> int:
     ap.add_argument(
         "--out", type=Path, default=Path("public/data/geomodel_verdicts.json")
     )
-    ap.add_argument(
-        "--work",
-        type=Path,
-        default=Path(
-            os.environ.get("WILDEYE_WORK")
-            or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
-            / "wildeye"
-            / "geomodel"
-        ),
-    )
+    ap.add_argument("--work", type=Path, default=default_work())
     ap.add_argument(
         "--groups",
         default=",".join(GROUPS),

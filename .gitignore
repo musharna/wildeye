@@ -82,4 +82,5 @@ pipeline/cron_gmw.log
 public/data/griis.geojson
 pipeline/cron_griis.log
 public/data/geomodel_verdicts.json
+public/data/geomodel_species.json
 pipeline/cron_geomodel.log
