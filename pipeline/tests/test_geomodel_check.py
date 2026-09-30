@@ -183,3 +183,17 @@ def test_misplaced_effort_tiles_write_nothing(tmp_path):
     # positive control in the same test: tiles within the bar write
     assert gc.main(argv, sources=FakeSources(placement=0.39)) == 0
     assert out.exists()
+
+
+def test_a_run_reports_progress_as_it_goes(caplog):
+    # a monthly run takes hours; jobd kills a job silent for an hour, and a silent run cannot be followed
+    import logging
+
+    fake = FakeSources(n=12, unmatched=1)  # asking for 12 of 12 tries every one, the unmatched one too
+    with caplog.at_level(logging.INFO, logger="geomodel"):
+        gc.run(fake, ["Aves"], np.random.default_rng(2), species_per_group=12)
+    lines = [r.getMessage() for r in caplog.records]
+    assert any(m.startswith("effort placement error 0.1") for m in lines)
+    assert sum(m.startswith("Aves: Species ") for m in lines) == 11  # one line per scored species
+    assert any(m.startswith("Aves: skipped Species ") and "no exact GBIF species match" in m for m in lines)
+    assert any(m.startswith("Aves: pass (11 scored") for m in lines)

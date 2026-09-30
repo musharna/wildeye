@@ -12,6 +12,7 @@ circles drawn around the model's own iNaturalist records at the same total area.
 
 from __future__ import annotations
 
+import logging
 import math
 import statistics
 from dataclasses import dataclass, field
@@ -22,6 +23,8 @@ import shapely
 from pyproj import Transformer
 from shapely.geometry import box
 from shapely.ops import transform, unary_union
+
+log = logging.getLogger("geomodel")
 
 # Decision rule (spec, "Per group verdict"). Fixed before the first run.
 SPECIES_PER_GROUP = 30
@@ -209,6 +212,7 @@ def score_group(
     run = GroupRun()
     background = sources.background(group, BACKGROUND_POINTS, rng)
     candidates = sources.species(group)
+    log.info("%s: effort background drawn, %d species in the collection", group, len(candidates))
     order = rng.permutation(len(candidates))[: species_per_group * MAX_CANDIDATES]
     controls: dict = {}
     for i in order:
@@ -220,18 +224,21 @@ def score_group(
             run.skipped["no exact GBIF species match"] = (
                 run.skipped.get("no exact GBIF species match", 0) + 1
             )
+            log.info("%s: skipped %s: no exact GBIF species match", group, name)
             continue
         presences = sources.presences(key, rng)
         if len(presences) < MIN_PRESENCES:
             run.skipped["fewer than 30 non-iNaturalist presences"] = (
                 run.skipped.get("fewer than 30 non-iNaturalist presences", 0) + 1
             )
+            log.info("%s: skipped %s: fewer than 30 non-iNaturalist presences", group, name)
             continue
         training = sources.training(key, rng)
         if not len(training):
             run.skipped["no iNaturalist records on GBIF"] = (
                 run.skipped.get("no iNaturalist records on GBIF", 0) + 1
             )
+            log.info("%s: skipped %s: no iNaturalist records on GBIF", group, name)
             continue
         geom = sources.range_geom(group, taxon_id)
         baseline = equal_area_baseline(training, area_km2(geom))
@@ -243,6 +250,7 @@ def score_group(
             round(tss(baseline, presences, background), 4),
         )
         run.results.append(result)
+        log.info("%s: %s TSS %s, baseline %s (%d presences)", group, name, result.model_tss, result.baseline_tss, len(presences))
         if not controls:  # the run's controls, on this group's first scored species
             positive = transform(
                 _FROM_EA,
@@ -302,6 +310,7 @@ def run(
     sources.verify()
     # before hours of scoring: a background built from tiles that misplace records is not effort
     placement = round(sources.placement_error(), 3)
+    log.info("effort placement error %s (max %s)", placement, PLACEMENT_ERROR_MAX)
     if placement > PLACEMENT_ERROR_MAX:
         raise ControlFailure(
             f"GBIF count tiles misplace records: L1 error {placement} against occurrence search (must be <= {PLACEMENT_ERROR_MAX})"
@@ -315,6 +324,8 @@ def run(
             **group_verdict(scored.results, scored.skipped),
             "species": [r.__dict__ for r in scored.results],
         }
+        v = out_groups[group]
+        log.info("%s: %s (%s scored, median TSS %s)", group, v["verdict"], v["n_scored"], v.get("median_tss"))
         if controls and len(agreement) < TILE_AGREEMENT_SPECIES:
             geom = sources.range_geom(group, controls["taxon_id"])
             iou = round(
@@ -469,14 +480,7 @@ def main(argv=None, *, sources=None) -> int:
         **doc,
     }
     write_atomic(args.out, doc)
-    for g, v in doc["groups"].items():
-        log.info(
-            "%s: %s (%s scored, median TSS %s)",
-            g,
-            v["verdict"],
-            v["n_scored"],
-            v.get("median_tss"),
-        )
+    log.info("wrote %s", args.out)
     return 0
 
 
