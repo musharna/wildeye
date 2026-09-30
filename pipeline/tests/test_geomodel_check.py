@@ -103,6 +103,7 @@ class FakeSources:
     def __init__(self, n=40, presence_share=0.85, tiles_agree=True, unmatched=0, sparse=0, placement=0.1, inat_down=False):
         self.n, self.share, self.tiles_agree, self.placement = n, presence_share, tiles_agree, placement
         self.inat_down, self.presence_calls = inat_down, 0
+        self.backgrounds = []  # groups whose effort background was drawn, in order
         self.unmatched, self.sparse = set(range(unmatched)), set(range(unmatched, unmatched + sparse))
         self.verified = False
 
@@ -122,6 +123,7 @@ class FakeSources:
         return RANGE
 
     def background(self, group, n, rng):
+        self.backgrounds.append(group)
         return _points_with_share_inside(rng, n, 0.15)
 
     def match(self, name):
@@ -217,3 +219,22 @@ def test_the_inaturalist_check_runs_before_hours_of_gbif_work():
     up = FakeSources()
     gc.run(up, ["Aves", "Mammalia"], np.random.default_rng(1), species_per_group=12)
     assert up.presence_calls >= 24
+
+
+def test_a_group_failing_its_controls_stops_the_run_before_the_next_group(monkeypatch):
+    # each group costs minutes to hours of GBIF work; a run that will write nothing must stop at the first
+    # failed control, not score every other group first. The real check_controls runs; Aves gets one more
+    # failure on top, as a failed planted fake would give it.
+    real = gc.check_controls
+    monkeypatch.setattr(
+        gc, "check_controls", lambda g, c: real(g, c) + (["Aves: planted fake scored 0.5"] if g == "Aves" else [])
+    )
+    bad = FakeSources()
+    with pytest.raises(gc.ControlFailure, match="Aves: planted fake"):
+        gc.run(bad, ["Aves", "Mammalia", "Amphibia"], np.random.default_rng(1), species_per_group=12)
+    assert bad.backgrounds == ["Aves"]
+    # positive control in the same test: with sound controls every group is scored
+    monkeypatch.setattr(gc, "check_controls", real)
+    good = FakeSources()
+    gc.run(good, ["Aves", "Mammalia", "Amphibia"], np.random.default_rng(1), species_per_group=12)
+    assert good.backgrounds == ["Aves", "Mammalia", "Amphibia"]
