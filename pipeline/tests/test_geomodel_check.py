@@ -263,3 +263,18 @@ def test_tile_agreement_is_a_median_over_ten_species():
     solo = FakeSources()
     gc.run(solo, ["Aves"], np.random.default_rng(3), species_per_group=12)
     assert len(solo.tiles_asked) == 10
+
+
+def test_tile_agreement_reaches_every_collection_when_there_are_more_than_ten():
+    # 13 collections, 10 species: a draw that always walks the collections in the same order checks the
+    # first ten every month and never the last three (PR #25 review: Protozoa, Chromista, OtherAnimalia)
+    groups = [f"Group{i:02d}" for i in range(13)]
+    reached = set()
+    for seed in range(20):
+        checked = gc.check_tile_agreement(FakeSources(n=40), groups, np.random.default_rng(seed))
+        assert len(checked) == 10 and len({a["group"] for a in checked}) == 10  # one per collection
+        reached |= {a["group"] for a in checked}
+    assert reached == set(groups)
+    # positive control in the same test: a failing median still stops the run
+    with pytest.raises(gc.ControlFailure, match="median IoU"):
+        gc.check_tile_agreement(FakeSources(n=40, tiles_agree=False), groups, np.random.default_rng(0))
