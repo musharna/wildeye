@@ -18,6 +18,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -165,13 +166,21 @@ def effort_grid(
     terms = [(spec["include"], None, 1), (spec["include"], INAT_DATASET, -1)]
     if spec.get("exclude"):
         terms += [(spec["exclude"], None, -1), (spec["exclude"], INAT_DATASET, 1)]
-    for x in range(n):
-        for y in range(n):
-            for keys, dataset, sign in terms:
-                for c in mvt.cells(get_tile(_tile_url(TILE_ZOOM, x, y, keys, dataset))):
-                    grid[y * per + c.y0 // SQUARE, x * per + c.x0 // SQUARE] += (
-                        sign * c.total
-                    )
+    jobs = [
+        (x, y, keys, dataset, sign)
+        for x in range(n)
+        for y in range(n)
+        for keys, dataset, sign in terms
+    ]
+    with ThreadPoolExecutor(WORKERS) as pool:
+        tiles = pool.map(
+            lambda j: get_tile(_tile_url(TILE_ZOOM, j[0], j[1], j[2], j[3])), jobs
+        )
+        for (x, y, _keys, _dataset, sign), tile in zip(jobs, tiles):
+            for c in mvt.cells(tile):
+                grid[y * per + c.y0 // SQUARE, x * per + c.x0 // SQUARE] += (
+                    sign * c.total
+                )
     # tiles fetched a moment apart can disagree by a few records; a negative count is not effort
     return np.clip(grid, 0, None)
 
@@ -275,6 +284,22 @@ def _search(params: list[tuple[str, str]], get_json) -> dict:
     return get_json(f"{GBIF}occurrence/search?" + urllib.parse.urlencode(params))
 
 
+WINDOW = 10_000  # GBIF answers pages below this offset in ~2 s and deeper ones in minutes (2026-09-29)
+READ_ALL = (
+    3_000  # a species with at most this many records is read whole, then subsampled
+)
+DRAWS = 25  # leaf boxes visited per sample of a commoner species
+MIN_BOX_DEG = 1.0  # stop splitting here; the within-box index order is then at most this far from random
+WORKERS = 4  # concurrent GBIF requests within one sample
+
+
+def _box(lon0: float, lat0: float, lon1: float, lat1: float) -> list[tuple[str, str]]:
+    return [
+        ("decimalLongitude", f"{lon0},{lon1}"),
+        ("decimalLatitude", f"{lat0},{lat1}"),
+    ]
+
+
 def occurrence_points(
     taxon_key: int,
     *,
@@ -282,9 +307,15 @@ def occurrence_points(
     want: int,
     rng: np.random.Generator,
     get_json: Callable[[str], dict] = fetch_json,
-    max_pages: int = 6,
 ) -> np.ndarray:
-    """Up to `want` distinct lon/lat points for a species from pages at random offsets.
+    """Up to `want` distinct lon/lat points for a species, a spatial random sample of its records.
+
+    GBIF's index order groups records by dataset, so the first 10,000 are not a sample of the species
+    (house sparrow: 56% of records in the US, none of the first 10,000), and deeper pages are too slow.
+    A species with more records than `want` is sampled in DRAWS draws: from the whole world, split the box
+    into quadrants and pick one in proportion to its record count (GBIF counts, cached), until the box holds
+    at most WINDOW records or is MIN_BOX_DEG across; then take a page at a random offset in it. A species
+    with at most READ_ALL records is read whole and subsampled.
 
     inat=False: CC0/CC BY records NOT from iNaturalist (GBIF cannot negate a dataset, so iNaturalist
     records are dropped here). inat=True: the species' iNaturalist records, any licence, locations only.
@@ -298,30 +329,57 @@ def occurrence_points(
         base.append(("datasetKey", INAT_DATASET))
     else:
         base += [("license", lic) for lic in OPEN_LICENCES]
-    count = _search(base + [("limit", "0")], get_json)["count"]
-    if not count:
-        return np.zeros((0, 2))
-    limit = 300
-    last_offset = max(
-        0, min(count, 100_000) - limit
-    )  # GBIF search pages stop at offset 100,000
-    offsets = (
-        sorted({int(o) for o in rng.integers(0, last_offset + 1, max_pages)})
-        if last_offset
-        else [0]
-    )
+    counts: dict[tuple, int] = {}
+
+    def count(box: tuple) -> int:
+        return _search(base + _box(*box) + [("limit", "0")], get_json)["count"]
+
+    def page(job: tuple) -> list[dict]:
+        box, offset, limit = job
+        return _search(
+            base + _box(*box) + [("limit", str(limit)), ("offset", str(offset))],
+            get_json,
+        ).get("results", [])
+
+    world = (-180.0, -90.0, 180.0, 90.0)
+    total = count(world)
+    with ThreadPoolExecutor(WORKERS) as pool:
+        if total <= READ_ALL:
+            jobs = [(world, offset, 300) for offset in range(0, total, 300)]
+        else:
+            counts[world] = total
+            per_draw = -(-want // DRAWS)
+            jobs = []
+            for _ in range(DRAWS):
+                box, n = world, total
+                while n > WINDOW and box[2] - box[0] > MIN_BOX_DEG:
+                    lon0, lat0, lon1, lat1 = box
+                    lonm, latm = (lon0 + lon1) / 2, (lat0 + lat1) / 2
+                    kids = [
+                        (lon0, lat0, lonm, latm),
+                        (lonm, lat0, lon1, latm),
+                        (lon0, latm, lonm, lat1),
+                        (lonm, latm, lon1, lat1),
+                    ]
+                    new = [k for k in kids if k not in counts]
+                    counts.update(zip(new, pool.map(count, new)))
+                    n_kids = np.array([counts[k] for k in kids], dtype=float)
+                    if n_kids.sum() == 0:
+                        break
+                    i = int(rng.choice(4, p=n_kids / n_kids.sum()))
+                    box, n = kids[i], int(n_kids[i])
+                span = min(n, WINDOW) - per_draw
+                jobs.append(
+                    (box, int(rng.integers(0, span + 1)) if span > 0 else 0, per_draw)
+                )
+        pages = list(pool.map(page, jobs))
     seen: dict[int, tuple[float, float]] = {}
-    for offset in offsets:
-        page = _search(
-            base + [("limit", str(limit)), ("offset", str(offset))], get_json
-        )
-        for rec in page.get("results", []):
+    for results in pages:
+        for rec in results:
             if not inat and rec.get("datasetKey") == INAT_DATASET:
                 continue
             if "decimalLongitude" in rec and "decimalLatitude" in rec:
                 seen[rec["key"]] = (rec["decimalLongitude"], rec["decimalLatitude"])
-        if len(seen) >= want:
-            break
     pts = np.array(list(seen.values()), dtype=float).reshape(-1, 2)
     if len(pts) > want:
         pts = pts[rng.choice(len(pts), want, replace=False)]

@@ -22,8 +22,15 @@ For a random sample of species (rank `species`) in the collection, uniform over 
 
 - **Presences**: GBIF occurrences of the species that are NOT from iNaturalist (datasetKey
   `50c9509d-22c7-4a22-a47d-8c48425ef4a7` excluded client-side; GBIF cannot negate a dataset), CC0 or
-  CC BY, with coordinates and no geospatial issue. Up to 500, drawn at random offsets. Independent of
-  the model's training source.
+  CC BY, with coordinates and no geospatial issue. Up to 500, a spatial random sample: a species with
+  ≤ 3,000 records is read whole and subsampled; a commoner one in 25 draws, each descending from the
+  whole world through quadrants chosen in proportion to GBIF's record counts until a box holds ≤ 10,000
+  records (or is 1° across), then a page at a random offset in it. Independent of
+  the model's training source. The model's own iNaturalist records (for the baseline) are sampled the
+  same way.
+  *Ruling 2026-09-29, before the first full run:* "random offsets" over the whole species failed on
+  both counts. GBIF's index order groups records by dataset (house sparrow: 56% of records in the US,
+  none in the first 10,000), and pages past offset 10,000 take minutes (9,700: 1.6 s; 10,300: 358 s).
 - **Background**: points drawn in proportion to the non-iNaturalist GBIF record count of the whole
   collection's taxon (target group), from GBIF's count tiles (`/v2/map/occurrence/adhoc/…mvt`, all
   records minus iNaturalist). This is the effort control: a range that only redraws where people record

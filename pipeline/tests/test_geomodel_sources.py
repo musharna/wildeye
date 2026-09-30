@@ -259,3 +259,48 @@ def test_placement_error_reads_misplaced_tiles():
     # tiles that put every record one cell south, as GBIF's z3 adhoc tiles did, do not
     get_tile, get_json = _block_sources(truth, 1)
     assert gs.placement_error(7.0, 47.5, 212, get_tile=get_tile, get_json=get_json) > 0.4
+
+
+class _FakeGbif:
+    """GBIF occurrence search over known records, in an index order that groups them by place (as GBIF's
+    does, by dataset). Pages past offset 10,000 are refused: live, they take minutes."""
+
+    def __init__(self, lon, lat):
+        self.lon, self.lat, self.requests = np.asarray(lon, float), np.asarray(lat, float), []
+
+    def __call__(self, url):
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        self.requests.append(q)
+        m = np.ones(len(self.lon), bool)
+        if "decimalLatitude" in q:
+            a, b = (float(v) for v in q["decimalLatitude"][0].split(","))
+            m &= (self.lat >= a) & (self.lat <= b)
+        if "decimalLongitude" in q:
+            a, b = (float(v) for v in q["decimalLongitude"][0].split(","))
+            m &= (self.lon >= a) & (self.lon <= b)
+        idx = np.flatnonzero(m)
+        limit, offset = int(q["limit"][0]), int(q.get("offset", ["0"])[0])
+        assert offset + limit <= 10_000, f"deep page requested: offset {offset}"
+        page = idx[offset : offset + limit]
+        results = [{"key": int(i), "datasetKey": "d", "decimalLongitude": self.lon[i], "decimalLatitude": self.lat[i]} for i in page]
+        return {"count": int(len(idx)), "results": results}
+
+
+def test_presences_are_a_spatial_random_sample_of_a_common_species():
+    rng = np.random.default_rng(3)
+    n_b, n_a = 30_000, 120_000  # 20% in B (indexed first), 80% in A
+    lon = np.concatenate([rng.uniform(-100, -90, n_b), rng.uniform(0, 10, n_a)])
+    lat = np.concatenate([rng.uniform(30, 40, n_b), rng.uniform(40, 50, n_a)])
+    gbif = _FakeGbif(lon, lat)
+    pts = gs.occurrence_points(99, inat=False, want=500, rng=np.random.default_rng(0), get_json=gbif)
+    assert len(pts) == 500
+    # the first 10,000 records are all B; a sample of the species is ~80% A
+    assert (pts[:, 0] >= 0).mean() == pytest.approx(0.8, abs=0.15)
+    # positive control in the same test: a rare species comes back whole
+    few = _FakeGbif(rng.uniform(0, 10, 420), rng.uniform(40, 50, 420))
+    assert len(gs.occurrence_points(99, inat=False, want=500, rng=np.random.default_rng(0), get_json=few)) == 420
+    # and one with a few thousand records is read in full and subsampled, not taken in clustered pages
+    mid = _FakeGbif(np.r_[rng.uniform(-100, -90, 500), rng.uniform(0, 10, 2000)], np.r_[rng.uniform(30, 40, 500), rng.uniform(40, 50, 2000)])
+    pts = gs.occurrence_points(99, inat=False, want=500, rng=np.random.default_rng(0), get_json=mid)
+    assert len(pts) == 500 and (pts[:, 0] >= 0).mean() == pytest.approx(0.8, abs=0.06)
+    assert sum(int(q["limit"][0]) for q in mid.requests) >= 2500  # every record was read
