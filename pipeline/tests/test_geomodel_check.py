@@ -95,3 +95,76 @@ def test_planted_fake_scores_as_effort():
     # positive control in the same test: real presences concentrated in the range score high
     real = _points_with_share_inside(rng, 400, 0.95)
     assert gc.tss(RANGE, real, background) >= gc.POSITIVE_TSS_MIN
+
+
+class FakeSources:
+    """A group 'Aves' of `n` species whose ranges are RANGE, with known right answers."""
+
+    def __init__(self, n=40, presence_share=0.85, tiles_agree=True, unmatched=0, sparse=0):
+        self.n, self.share, self.tiles_agree = n, presence_share, tiles_agree
+        self.unmatched, self.sparse = set(range(unmatched)), set(range(unmatched, unmatched + sparse))
+        self.verified = False
+
+    def verify(self):
+        self.verified = True
+
+    def version(self):
+        return "2.34"
+
+    def species(self, group):
+        return [(i, f"Species {i}") for i in range(self.n)]
+
+    def range_geom(self, group, taxon_id):
+        return RANGE
+
+    def background(self, group, n, rng):
+        return _points_with_share_inside(rng, n, 0.15)
+
+    def match(self, name):
+        i = int(name.split()[1])
+        return None if i in self.unmatched else 1000 + i
+
+    def presences(self, key, rng):
+        return _points_with_share_inside(rng, 5 if key - 1000 in self.sparse else 200, self.share)
+
+    def training(self, key, rng):
+        # the model's own records sit far from its range, so circles around them do worse than the model
+        return np.column_stack([rng.uniform(-55, -45, 50), rng.uniform(25, 35, 50)])
+
+    def tile_mask(self, taxon_id, z, x, y):
+        size = 64
+        return gc.range_tile_mask(RANGE, z, x, y, size) if self.tiles_agree else np.zeros((size, size), bool)
+
+
+def test_run_scores_a_group_and_writes_the_verdicts(tmp_path):
+    import json
+
+    out = tmp_path / "verdicts.json"
+    # 17 species: 2 with no GBIF match, 3 with too few presences, 12 good. Asking for 13 tries all 17.
+    fake = FakeSources(n=17, unmatched=2, sparse=3)
+    assert gc.main(["--out", str(out), "--groups", "Aves", "--species-per-group", "13", "--seed", "5"], sources=fake) == 0
+    doc = json.loads(out.read_text())
+    aves = doc["groups"]["Aves"]
+    assert fake.verified and doc["geomodel_version"] == "2.34" and doc["seed"] == 5
+    assert aves["verdict"] == "pass" and aves["n_scored"] == 12
+    assert aves["median_tss"] == pytest.approx(0.70, abs=0.06)
+    # unscored species are findings with their reason, not silently dropped
+    assert aves["skipped"] == {"no exact GBIF species match": 2, "fewer than 30 non-iNaturalist presences": 3}
+    c = doc["controls"]["per_group"]["Aves"]
+    assert c["fake_tss"] < gc.FAKE_TSS_MAX and c["positive_tss"] >= gc.POSITIVE_TSS_MIN and abs(c["shuffle_tss"]) < 0.05
+    assert doc["controls"]["tile_agreement"][0]["iou"] == 1.0
+
+
+def test_a_failed_control_writes_nothing_and_exits_nonzero(tmp_path):
+    out = tmp_path / "verdicts.json"
+    # iNaturalist's tiles draw nothing where the GeoPackage has a range: what is tested is not what is shown
+    assert gc.main(["--out", str(out), "--groups", "Aves", "--species-per-group", "12", "--seed", "5"], sources=FakeSources(tiles_agree=False)) == 2
+    assert not out.exists()
+    # positive control in the same test: the same run with agreeing tiles writes
+    assert gc.main(["--out", str(out), "--groups", "Aves", "--species-per-group", "12", "--seed", "5"], sources=FakeSources()) == 0
+    assert out.exists()
+
+
+def test_a_group_with_too_few_scorable_species_is_insufficient():
+    doc = gc.run(FakeSources(n=8), ["Aves"], np.random.default_rng(2), species_per_group=30)
+    assert doc["groups"]["Aves"]["verdict"] == "insufficient" and doc["groups"]["Aves"]["n_scored"] == 8
