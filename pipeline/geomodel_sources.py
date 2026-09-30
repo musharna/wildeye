@@ -86,12 +86,16 @@ class SourceError(RuntimeError):
         self.code, self.body = code, body
 
 
-def fetch(url: str, *, attempts: int = 4, pause: float = 0.0) -> bytes:
-    """GET with retries on 429 and 5xx; anything else, or the last failure, raises with the URL."""
+def fetch(url: str, *, attempts: int = 6, pause: float = 0.0) -> bytes:
+    """GET with retries on 429 and 5xx; anything else, or the last failure, raises with the URL.
+
+    429 means the server is loaded (GBIF's limit follows its load): wait its Retry-After, else a minute
+    doubling each time, about half an hour in all before giving up."""
     last = None
     for attempt in range(attempts):
         if pause:
             time.sleep(pause)
+        wait = 2**attempt * 5
         try:
             with urlopen(
                 urllib.request.Request(url, headers={"User-Agent": UA}), timeout=120
@@ -104,9 +108,14 @@ def fetch(url: str, *, attempts: int = 4, pause: float = 0.0) -> bytes:
                 raise SourceError(
                     f"{e.code} for {url}: {body[:200]}", e.code, body
                 ) from e
+            if e.code == 429:
+                after = (e.headers or {}).get("Retry-After", "")
+                wait = int(after) if after.isdigit() else 60 * 2**attempt
+                log.info("429 from %s, waiting %d s", url.split("?")[0], wait)
         except (urllib.error.URLError, TimeoutError) as e:
             last = e
-        time.sleep(2**attempt * 5)
+        if attempt < attempts - 1:
+            time.sleep(wait)
     raise SourceError(f"gave up on {url}: {last}")
 
 
@@ -172,7 +181,7 @@ def effort_grid(
         for y in range(n)
         for keys, dataset, sign in terms
     ]
-    with ThreadPoolExecutor(WORKERS) as pool:
+    with ThreadPoolExecutor(TILE_WORKERS) as pool:
         tiles = pool.map(
             lambda j: get_tile(_tile_url(TILE_ZOOM, j[0], j[1], j[2], j[3])), jobs
         )
@@ -290,7 +299,10 @@ READ_ALL = (
 )
 DRAWS = 25  # leaf boxes visited per sample of a commoner species
 MIN_BOX_DEG = 1.0  # stop splitting here; the within-box index order is then at most this far from random
-WORKERS = 4  # concurrent GBIF requests within one sample
+# GBIF's map tiles are cached and take 4 at a time; its occurrence search answered 4 at a time with 429
+# after 25 minutes (2026-09-30), and its limit follows server load, so search goes one at a time
+TILE_WORKERS = 4
+SEARCH_WORKERS = 1
 
 
 def _box(lon0: float, lat0: float, lon1: float, lat1: float) -> list[tuple[str, str]]:
@@ -343,7 +355,7 @@ def occurrence_points(
 
     world = (-180.0, -90.0, 180.0, 90.0)
     total = count(world)
-    with ThreadPoolExecutor(WORKERS) as pool:
+    with ThreadPoolExecutor(SEARCH_WORKERS) as pool:
         if total <= READ_ALL:
             jobs = [(world, offset, 300) for offset in range(0, total, 300)]
         else:
