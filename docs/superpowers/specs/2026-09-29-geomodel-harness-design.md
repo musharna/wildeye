@@ -57,10 +57,16 @@ Sample size: 30 species per collection (fewer where the collection or the data r
   species that is pure effort). Its TSS must be < 0.10.
 - **Positive control**: score a synthetic range made of the buffered presences themselves. TSS must be
   ≥ 0.60.
-- **Tile agreement**: for 3 species, rasterise the GeoPackage range and the live thresholded tiles at
-  z3 over the same pixels; intersection-over-union must be ≥ 0.85, or what is tested is not what is
-  shown. Run first (random species from the first collections), so an iNaturalist outage stops the run
-  before any GBIF work (the first full run lost 25 minutes to a 503 "downtime" here).
+- **Tile agreement**: for 10 species (drawn round-robin across the collections, or all of them if fewer),
+  rasterise the GeoPackage range and the live thresholded tiles at z3 over the same pixels; the median
+  intersection-over-union must be ≥ 0.85, or what is tested is not what is shown. Every species' IoU is
+  recorded. Run first, so an iNaturalist outage stops the run before any GBIF work (the first full run
+  lost 25 minutes to a 503 "downtime" here).
+  *Ruling 2026-09-30, maintainer, after a run failed on it:* the first rule (each of 3 species ≥ 0.85)
+  failed when tiles and GeoPackage agree: of 20 random birds, 15 scored ≥ 0.85 and 5 scored 0.80–0.83
+  (ranges under 2.5 M km², coarse at z3), so 3 draws passed about 42% of the time. One real mismatch
+  (Anser cygnoides, IoU 0.03: tiles far broader) is a property of that species, not of the run; step 2
+  checks agreement per species before showing a tile range.
 - **Planted-effect ladder** (unit tests, calling the harness's own `tss()` and `group_verdict()`):
   synthetic species whose true TSS is 0.0, 0.2, 0.4, 0.6 and 0.8 must come back within ±0.05, and the
   verdict must flip between 0.2 and 0.6 — the smallest effect the rule can see, so a `fail` is a bound.
