@@ -278,3 +278,18 @@ def test_tile_agreement_reaches_every_collection_when_there_are_more_than_ten():
     # positive control in the same test: a failing median still stops the run
     with pytest.raises(gc.ControlFailure, match="median IoU"):
         gc.check_tile_agreement(FakeSources(n=40, tiles_agree=False), groups, np.random.default_rng(0))
+
+
+def test_each_run_gets_its_own_work_dir_and_removes_only_that(tmp_path):
+    # the monthly check and the species listing (or two listings) can overlap; one finishing must not delete the other's ranges
+    with gc.run_workdir(tmp_path) as a:
+        with gc.run_workdir(tmp_path) as b:
+            assert a != b and a.parent == tmp_path and b.parent == tmp_path
+            (a / "x.gpkg").write_text("a")
+            (b / "y.gpkg").write_text("b")
+        assert not b.exists()
+        assert (a / "x.gpkg").exists()
+    assert not a.exists() and tmp_path.exists()
+    with gc.run_workdir(tmp_path, keep=True) as kept:
+        pass
+    assert kept.exists()

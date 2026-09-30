@@ -2,19 +2,25 @@
 
 Spec: docs/superpowers/specs/2026-09-30-modeled-range-design.md. Reads the verdicts file the check wrote and writes
 public/data/geomodel_species.json, which the species card reads to decide whether to offer the modeled range.
+At one tile a second the list is slow (Arachnida: 20,861 z3 tiles, about 8 h), so it names every species from its first write
+(iou null until checked), rewrites itself every CHECKPOINT_EVERY species, and a later run of the same model version checks only
+what is still null.
 Exit 2 = nothing written (the ranges are not the model that was checked, or a name is listed twice); exit 3 =
 written, but some species' tiles could not be fetched (listed with iou null, never shown).
 """
 
 from __future__ import annotations
 
+import json
 import logging
+from contextlib import nullcontext
 from pathlib import Path
 
-from .geomodel_check import LiveSources, tile_agreement
+from .geomodel_check import LiveSources, run_workdir, tile_agreement
 from .geomodel_sources import GROUPS, SourceError
 
 SPECIES_IOU_MIN = 0.70  # spec ruling 1, fixed before the first per-species run
+CHECKPOINT_EVERY = 200
 log = logging.getLogger("geomodel")
 
 
@@ -22,8 +28,8 @@ class ListingError(RuntimeError):
     pass
 
 
-def species_list(sources, verdicts: dict) -> tuple[dict, int]:
-    """{name: {id, group, iou}} for every species in a passing collection, and how many could not be checked."""
+def passing_species(sources, verdicts: dict) -> list[tuple[str, int, str]]:
+    """(group, taxon id, name) of every species in a passing collection; ListingError on a model or name conflict."""
     sources.verify()
     if sources.version() != verdicts["geomodel_version"]:
         raise ListingError(
@@ -41,32 +47,65 @@ def species_list(sources, verdicts: dict) -> tuple[dict, int]:
                 )
             seen[name] = taxon_id
             todo.append((group, taxon_id, name))
-    log.info("tile agreement for %s species in passing collections", len(todo))
-    species, unchecked = {}, 0
-    for i, (group, taxon_id, name) in enumerate(todo, 1):
+    return todo
+
+
+def previous_ious(path: Path, version: str) -> dict[str, tuple[int, float]]:
+    """{name: (taxon id, iou)} already checked in the list at `path`, if it is of the same model version."""
+    try:
+        doc = json.loads(path.read_text())
+    except FileNotFoundError:
+        return {}
+    if doc.get("geomodel_version") != version:
+        return {}
+    return {
+        n: (s["id"], s["iou"])
+        for n, s in doc["species"].items()
+        if s["iou"] is not None
+    }
+
+
+def check_tiles(sources, todo, known, write) -> int:
+    """Fill each species' IoU (reusing `known`), calling write(species) from the start and every CHECKPOINT_EVERY checks; returns unchecked."""
+    species = {}
+    for group, taxon_id, name in todo:
+        prev = known.get(name)
+        species[name] = {
+            "id": taxon_id,
+            "group": group,
+            "iou": prev[1] if prev and prev[0] == taxon_id else None,
+        }
+    missing = [(g, t, n) for g, t, n in todo if species[n]["iou"] is None]
+    log.info(
+        "tile agreement for %s of %s species in passing collections (%s reused)",
+        len(missing),
+        len(todo),
+        len(todo) - len(missing),
+    )
+    write(species)
+    failed = 0
+    for i, (group, taxon_id, name) in enumerate(missing, 1):
         try:
-            iou = round(
-                tile_agreement(
-                    sources.range_geom(group, taxon_id), taxon_id, sources.tile_mask
-                ),
-                4,
+            geom = sources.range_geom(group, taxon_id)
+            species[name]["iou"] = round(
+                tile_agreement(geom, taxon_id, sources.tile_mask), 4
             )
         except SourceError as e:
             log.error(
                 "tiles for %s (%s, taxon %s) failed: %s", name, group, taxon_id, e
             )
-            iou, unchecked = None, unchecked + 1
-        species[name] = {"id": taxon_id, "group": group, "iou": iou}
-        if i % 100 == 0 or i == len(todo):
-            log.info("%s/%s species checked, %s unchecked", i, len(todo), unchecked)
-    return species, unchecked
+            failed += 1
+        if i % CHECKPOINT_EVERY == 0:
+            write(species)
+        if i % 100 == 0 or i == len(missing):
+            log.info("%s/%s species checked, %s failed", i, len(missing), failed)
+    write(species)
+    return sum(1 for s in species.values() if s["iou"] is None)
 
 
 def main(argv=None, *, sources=None) -> int:
     import argparse
     import datetime as dt
-    import json
-    import shutil
 
     from .atomic import write_atomic
     from .geomodel_check import default_work
@@ -86,39 +125,47 @@ def main(argv=None, *, sources=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
     verdicts = json.loads(args.verdicts.read_text())
-    live = sources is None
-    sources = sources or LiveSources(args.work)
-    try:
-        species, unchecked = species_list(sources, verdicts)
-    except ListingError as e:
-        log.error("no species list written: %s", e)
-        return 2
-    finally:
-        if live and not args.keep_ranges:
-            shutil.rmtree(args.work, ignore_errors=True)
-    write_atomic(
-        args.out,
-        {
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(
-                timespec="seconds"
-            ),
-            "geomodel_version": verdicts["geomodel_version"],
-            "verdicts_generated_at": verdicts["generated_at"],
-            "spec": "docs/superpowers/specs/2026-09-30-modeled-range-design.md",
-            "species_iou_min": SPECIES_IOU_MIN,
-            "unchecked": unchecked,
-            "groups": {
-                g: {
-                    "verdict": v["verdict"],
-                    "include": sorted(GROUPS[g]["include"]),
-                    "exclude": sorted(GROUPS[g].get("exclude", {})),
-                }
-                for g, v in verdicts["groups"].items()
+    groups = {
+        g: {
+            "verdict": v["verdict"],
+            "include": sorted(GROUPS[g]["include"]),
+            "exclude": sorted(GROUPS[g].get("exclude", {})),
+        }
+        for g, v in verdicts["groups"].items()
+    }
+
+    def write(species: dict) -> None:
+        unchecked = sum(1 for s in species.values() if s["iou"] is None)
+        write_atomic(
+            args.out,
+            {
+                "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(
+                    timespec="seconds"
+                ),
+                "geomodel_version": verdicts["geomodel_version"],
+                "verdicts_generated_at": verdicts["generated_at"],
+                "spec": "docs/superpowers/specs/2026-09-30-modeled-range-design.md",
+                "species_iou_min": SPECIES_IOU_MIN,
+                "unchecked": unchecked,
+                "groups": groups,
+                "species": species,
             },
-            "species": species,
-        },
-    )
-    log.info("wrote %s (%s species, %s unchecked)", args.out, len(species), unchecked)
+        )
+
+    live = sources is None
+    with (
+        run_workdir(args.work, keep=args.keep_ranges) if live else nullcontext() as work
+    ):
+        sources = sources or LiveSources(work)
+        try:
+            todo = passing_species(sources, verdicts)
+        except ListingError as e:
+            log.error("no species list written: %s", e)
+            return 2
+        unchecked = check_tiles(
+            sources, todo, previous_ious(args.out, verdicts["geomodel_version"]), write
+        )
+    log.info("wrote %s (%s species, %s unchecked)", args.out, len(todo), unchecked)
     return 3 if unchecked else 0
 
 

@@ -23,12 +23,19 @@ verdicts, and it can be rerun alone:
   can place a species in its collection from GBIF's classification.
 - `species`: for every species in every `pass` collection, keyed by scientific name:
   `{id: <iNaturalist taxon id>, group, iou}`, where `iou` is `tile_agreement()` at z3 (the check the harness
-  already runs on 10 species), or `null` when its tiles could not be fetched.
+  already runs on 10 species), or `null` while not yet checked or when its tiles could not be fetched.
 - Shown only when `iou >= species_iou_min` = **0.70**.
 - A run with any `null` still writes the file, logs the count, and exits 3, so jobd shows it failed.
 
-Cost: all 2,931 Arachnida species at ≤ 1 tile request/s, about 3–4 h on top of the check (run 4950 logged
-1.5–7 s a species). Groups that fail add nothing.
+Cost, measured 2026-09-30: the 2,931 Arachnida species span 20,861 z3 tiles (median 4 a species, p90 18,
+max 64); at ≤ 1 request/s that is about 8 h. The first estimate (3–4 h, from 10 species in run 4950) was low.
+So the list names every species from its first write (`iou: null`, which the card reads as "couldn't be
+checked this month", not "not in the model"), rewrites itself every 200 species, and a later run of the same
+geomodel version checks only the species still `null`. A killed or timed-out run keeps its progress; a
+collection too big for one month fills in over several. Groups that fail add nothing.
+
+Each run downloads into its own directory under the work root and removes only that (`run_workdir`): the
+monthly check and a listing can overlap, and the check used to remove the whole shared root.
 
 ## Browser
 
@@ -69,7 +76,8 @@ Cost: all 2,931 Arachnida species at ≤ 1 tile request/s, about 3–4 h on top 
 - `pytest pipeline/tests` and `npm test` exit 0; pipeline tests use fake sources (seen to fail first).
 - A real per-species run for Arachnida writes `geomodel_species.json`; Anser cygnoides (in a failing
   collection) and a planted disagreeing species are not shown.
-- `node scripts/qa-species.mjs --checks modeled-range` passes against the local preview:
+- `node scripts/qa-modeled-range.mjs` passes against the local preview (its own script: qa-species is one long
+  flow, and these checks need request interception):
   an arachnid shows the switch; on, tiles come from api.inaturalist.org at z ≤ 3 and nothing else;
   the field is styled apart from records; the credit is present; a readout inside and outside reads as
   above; a bird shows "Aves failed validation"; a forced 429 shows the throttling line (not a blank);

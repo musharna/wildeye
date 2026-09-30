@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from pipeline import geomodel_species as gsp
 from pipeline.geomodel_sources import GROUPS, SourceError
 from pipeline.tests.test_geomodel_check import FakeSources
@@ -122,3 +124,56 @@ def test_a_name_listed_twice_stops_before_any_tile(tmp_path):
     code, out = _run(tmp_path, fake, _verdicts(tmp_path, Arachnida="pass"))
     assert code == 2
     assert not out.exists() and fake.tiles_asked == set()
+
+
+def test_a_second_run_checks_only_what_the_last_run_of_the_same_model_left(tmp_path):
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    first = ListingFakes(n=4, failing_tiles={3})
+    code, out = _run(tmp_path, first, verdicts)
+    assert code == 3 and first.tiles_asked == {0, 1, 2}
+    second = ListingFakes(n=4)
+    code, out = _run(tmp_path, second, verdicts)
+    assert code == 0
+    assert second.tiles_asked == {3}  # 0-2 reused from the last list
+    assert json.loads(out.read_text())["species"]["Species 3"]["iou"] == 1.0
+    # positive control: a list from another model version is not reused
+    doc = json.loads(out.read_text())
+    doc["geomodel_version"] = "2.33"
+    out.write_text(json.dumps(doc))
+    third = ListingFakes(n=4)
+    assert _run(tmp_path, third, verdicts)[0] == 0
+    assert third.tiles_asked == {0, 1, 2, 3}
+
+
+class Killed(BaseException):
+    """A timeout or SIGTERM stand-in: nothing in the listing catches it."""
+
+
+def test_progress_is_written_as_it_goes_so_a_killed_run_keeps_it(tmp_path, monkeypatch):
+    monkeypatch.setattr(gsp, "CHECKPOINT_EVERY", 2)
+
+    class KilledAt4(ListingFakes):
+        def tile_mask(self, taxon_id, z, x, y):
+            if taxon_id == 4:
+                raise Killed()
+            return super().tile_mask(taxon_id, z, x, y)
+
+    with pytest.raises(Killed):
+        _run(tmp_path, KilledAt4(n=6), _verdicts(tmp_path, Arachnida="pass"))
+    doc = json.loads((tmp_path / "species.json").read_text())
+    # every species is named from the first write, so an unchecked one reads "couldn't be checked", not "not in the model"
+    assert set(doc["species"]) == {f"Species {i}" for i in range(6)}
+    assert [doc["species"][f"Species {i}"]["iou"] for i in range(6)] == [1.0, 1.0, 1.0, 1.0, None, None]
+    assert doc["unchecked"] == 2
+
+
+def test_a_run_killed_on_its_first_species_already_names_them_all(tmp_path):
+    class KilledAt0(ListingFakes):
+        def tile_mask(self, taxon_id, z, x, y):
+            raise Killed()
+
+    with pytest.raises(Killed):
+        _run(tmp_path, KilledAt0(n=3), _verdicts(tmp_path, Arachnida="pass"))
+    doc = json.loads((tmp_path / "species.json").read_text())
+    assert {n: s["iou"] for n, s in doc["species"].items()} == {"Species 0": None, "Species 1": None, "Species 2": None}
+    assert doc["unchecked"] == 3
