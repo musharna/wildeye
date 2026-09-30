@@ -315,7 +315,27 @@ def run(
         raise ControlFailure(
             f"GBIF count tiles misplace records: L1 error {placement} against occurrence search (must be <= {PLACEMENT_ERROR_MAX})"
         )
-    out_groups, out_controls, failures, agreement = {}, {}, [], []
+    # iNaturalist's API is the run's only call to iNaturalist: check it before hours of GBIF work, so its
+    # downtime (503 "downtime", 2026-09-30 00:05 EDT) costs seconds rather than the run
+    agreement = []
+    for group in groups:
+        if len(agreement) >= TILE_AGREEMENT_SPECIES:
+            break
+        candidates = sources.species(group)
+        if not candidates:
+            continue
+        taxon_id, name = candidates[int(rng.integers(len(candidates)))]
+        iou = round(tile_agreement(sources.range_geom(group, taxon_id), taxon_id, sources.tile_mask), 4)
+        agreement.append({"group": group, "species": name, "iou": iou})
+        log.info("tile agreement %s (%s): IoU %s (min %s)", name, group, iou, TILE_IOU_MIN)
+    bad = [a for a in agreement if a["iou"] < TILE_IOU_MIN]
+    if bad or len(agreement) < min(TILE_AGREEMENT_SPECIES, len(groups)):
+        raise ControlFailure(
+            "iNaturalist's thresholded tiles do not show the GeoPackage ranges tested: "
+            + (", ".join(f"{a['species']} IoU {a['iou']}" for a in bad) or f"only {len(agreement)} species checked")
+            + f" (must be >= {TILE_IOU_MIN})"
+        )
+    out_groups, out_controls, failures = {}, {}, []
     for group in groups:
         scored, controls = score_group(group, sources, rng, species_per_group)
         failures += check_controls(group, controls)
@@ -326,22 +346,6 @@ def run(
         }
         v = out_groups[group]
         log.info("%s: %s (%s scored, median TSS %s)", group, v["verdict"], v["n_scored"], v.get("median_tss"))
-        if controls and len(agreement) < TILE_AGREEMENT_SPECIES:
-            geom = sources.range_geom(group, controls["taxon_id"])
-            iou = round(
-                tile_agreement(geom, controls["taxon_id"], sources.tile_mask), 4
-            )
-            agreement.append(
-                {"group": group, "species": controls["species"], "iou": iou}
-            )
-            if iou < TILE_IOU_MIN:
-                failures.append(
-                    f"{group}: {controls['species']} range and iNaturalist's thresholded tiles overlap {iou} (must be >= {TILE_IOU_MIN})"
-                )
-    if len(agreement) < min(
-        TILE_AGREEMENT_SPECIES, sum(bool(c) for c in out_controls.values())
-    ):
-        failures.append("tile agreement ran on fewer species than required")
     if failures:
         raise ControlFailure("; ".join(failures))
     return {

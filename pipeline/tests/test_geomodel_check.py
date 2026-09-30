@@ -100,8 +100,9 @@ def test_planted_fake_scores_as_effort():
 class FakeSources:
     """A group 'Aves' of `n` species whose ranges are RANGE, with known right answers."""
 
-    def __init__(self, n=40, presence_share=0.85, tiles_agree=True, unmatched=0, sparse=0, placement=0.1):
+    def __init__(self, n=40, presence_share=0.85, tiles_agree=True, unmatched=0, sparse=0, placement=0.1, inat_down=False):
         self.n, self.share, self.tiles_agree, self.placement = n, presence_share, tiles_agree, placement
+        self.inat_down, self.presence_calls = inat_down, 0
         self.unmatched, self.sparse = set(range(unmatched)), set(range(unmatched, unmatched + sparse))
         self.verified = False
 
@@ -128,6 +129,7 @@ class FakeSources:
         return None if i in self.unmatched else 1000 + i
 
     def presences(self, key, rng):
+        self.presence_calls += 1
         return _points_with_share_inside(rng, 5 if key - 1000 in self.sparse else 200, self.share)
 
     def training(self, key, rng):
@@ -135,6 +137,10 @@ class FakeSources:
         return np.column_stack([rng.uniform(-55, -45, 50), rng.uniform(25, 35, 50)])
 
     def tile_mask(self, taxon_id, z, x, y):
+        if self.inat_down:
+            from pipeline.geomodel_sources import SourceError
+
+            raise SourceError("503 for https://api.inaturalist.org/v2/geomodel/1/3/4/3.png: downtime", 503)
         size = 64
         return gc.range_tile_mask(RANGE, z, x, y, size) if self.tiles_agree else np.zeros((size, size), bool)
 
@@ -197,3 +203,17 @@ def test_a_run_reports_progress_as_it_goes(caplog):
     assert sum(m.startswith("Aves: Species ") for m in lines) == 11  # one line per scored species
     assert any(m.startswith("Aves: skipped Species ") and "no exact GBIF species match" in m for m in lines)
     assert any(m.startswith("Aves: pass (11 scored") for m in lines)
+
+
+def test_the_inaturalist_check_runs_before_hours_of_gbif_work():
+    # iNaturalist's API is the harness's only dependency on it; its downtime must cost seconds, not the run
+    from pipeline.geomodel_sources import SourceError
+
+    down = FakeSources(inat_down=True)
+    with pytest.raises(SourceError, match="downtime"):
+        gc.run(down, ["Aves", "Mammalia"], np.random.default_rng(1), species_per_group=12)
+    assert down.presence_calls == 0
+    # positive control in the same test: with iNaturalist up, the run goes on to score species
+    up = FakeSources()
+    gc.run(up, ["Aves", "Mammalia"], np.random.default_rng(1), species_per_group=12)
+    assert up.presence_calls >= 24
