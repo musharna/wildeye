@@ -34,8 +34,10 @@ GBIF = "https://api.gbif.org/v1/"
 TILES = "https://api.gbif.org/v2/map/occurrence/adhoc/{z}/{x}/{y}.mvt"
 INAT_DATASET = "50c9509d-22c7-4a22-a47d-8c48425ef4a7"  # iNaturalist Research-grade Observations on GBIF
 OPEN_LICENCES = ("CC0_1_0", "CC_BY_4_0")
-TILE_ZOOM = 3
-SQUARE = 64  # squareSize on GBIF's 4096 extent: 64 x 64 cells per tile, 512 across the world at z3
+# GBIF's adhoc tiles at z3 misplace records by more than a cell (6x6-cell blocks against occurrence search:
+# L1 error 1.6-2.6x the block's records, 2026-09-29); from z4 the error is 0.08-0.22 and does not shrink at z5.
+TILE_ZOOM = 4
+SQUARE = 128  # squareSize on GBIF's 4096 extent: 32 x 32 cells per tile, 512 across the world at z4
 
 # iNaturalist geomodel collection → GBIF backbone taxa whose records are its effort background. Checked by
 # name at the start of every run (verify_group_keys): the backbone moved Reptilia (358) to a pro parte
@@ -98,7 +100,9 @@ def fetch(url: str, *, attempts: int = 4, pause: float = 0.0) -> bytes:
             last = e
             if e.code != 429 and e.code < 500:
                 body = e.read().decode("utf-8", "replace").strip()
-                raise SourceError(f"{e.code} for {url}: {body[:200]}", e.code, body) from e
+                raise SourceError(
+                    f"{e.code} for {url}: {body[:200]}", e.code, body
+                ) from e
         except (urllib.error.URLError, TimeoutError) as e:
             last = e
         time.sleep(2**attempt * 5)
@@ -150,7 +154,9 @@ def _tile_url(z: int, x: int, y: int, keys, dataset: str | None) -> str:
     return TILES.format(z=z, x=x, y=y) + "?" + urllib.parse.urlencode(q)
 
 
-def effort_grid(group: str, get_tile: Callable[[str], bytes] = fetch_tile) -> np.ndarray:
+def effort_grid(
+    group: str, get_tile: Callable[[str], bytes] = fetch_tile
+) -> np.ndarray:
     """Non-iNaturalist CC0/CC BY record counts on a 512 x 512 web-mercator grid (row 0 = north)."""
     spec = GROUPS[group]
     n = 2**TILE_ZOOM
@@ -313,7 +319,9 @@ def species_ranges(path: Path) -> Iterator[Range]:
 
 
 def _features_table(con: sqlite3.Connection) -> str:
-    (table,) = con.execute("select table_name from gpkg_contents where data_type = 'features'").fetchone()
+    (table,) = con.execute(
+        "select table_name from gpkg_contents where data_type = 'features'"
+    ).fetchone()
     return table
 
 
@@ -325,7 +333,8 @@ def species_index(path: Path) -> list[tuple[int, str, str]]:
         return [
             (int(t), n, str(v))
             for t, n, v in con.execute(
-                f'select taxon_id, name, geomodel_version from "{table}" where rank = ?', ("species",)  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+                f'select taxon_id, name, geomodel_version from "{table}" where rank = ?',
+                ("species",),  # nosec B608 - table name read from the file's own gpkg_contents, not from input
             )
         ]
     finally:
@@ -336,7 +345,9 @@ def range_geometry(path: Path, taxon_id: int):
     con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         table = _features_table(con)
-        row = con.execute(f'select geom from "{table}" where taxon_id = ?', (taxon_id,)).fetchone()  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+        row = con.execute(
+            f'select geom from "{table}" where taxon_id = ?', (taxon_id,)
+        ).fetchone()  # nosec B608 - table name read from the file's own gpkg_contents, not from input
     finally:
         con.close()
     if row is None:
@@ -350,17 +361,26 @@ def download(url: str, dest: Path) -> Path:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")
-    with urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=600) as r, open(part, "wb") as fh:
+    with (
+        urlopen(
+            urllib.request.Request(url, headers={"User-Agent": UA}), timeout=600
+        ) as r,
+        open(part, "wb") as fh,
+    ):
         while chunk := r.read(1 << 20):
             fh.write(chunk)
     part.replace(dest)
     return dest
 
 
-INAT_TILE = "https://api.inaturalist.org/v2/geomodel/{taxon}/{z}/{x}/{y}.png?thresholded=true"
+INAT_TILE = (
+    "https://api.inaturalist.org/v2/geomodel/{taxon}/{z}/{x}/{y}.png?thresholded=true"
+)
 
 
-def thresholded_tile_mask(taxon_id: int, z: int, x: int, y: int, get: Callable[[str], bytes] = fetch) -> np.ndarray:
+def thresholded_tile_mask(
+    taxon_id: int, z: int, x: int, y: int, get: Callable[[str], bytes] = fetch
+) -> np.ndarray:
     """Pixels of iNaturalist's thresholded geomodel tile that are drawn (alpha > 0). ≤ 1 request/s."""
     import io
 

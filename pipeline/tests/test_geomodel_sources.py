@@ -53,19 +53,21 @@ def test_effort_grid_is_all_records_minus_inaturalist_and_minus_excluded_taxa():
         assert (
             q["license"] == ["CC0_1_0", "CC_BY_4_0"]
             and q["bin"] == ["square"]
-            and q["squareSize"] == ["64"]
+            and q["squareSize"] == ["128"]
         )
-        if not url.split("/adhoc/")[1].startswith("3/0/0."):
+        if not url.split("/adhoc/")[1].startswith("4/0/0."):
             return b""
         inat = "datasetKey" in q
         if q["taxonKey"] == ["1"]:  # Animalia
-            return _tile([(0, 0, 64, 40 if inat else 100)])
-        return _tile([(0, 0, 64, 10 if inat else 30)])  # the excluded classes together
+            return _tile([(0, 0, 128, 40 if inat else 100)])
+        return _tile([(0, 0, 128, 10 if inat else 30)])  # the excluded classes together
 
     grid = gs.effort_grid("OtherAnimalia", get_tile=tile)
     # (100 - 40) animals not from iNaturalist, minus (30 - 10) of those in the excluded classes
     assert grid[0, 0] == 40 and grid.sum() == 40
-    assert len(calls) == 4 * 64  # 4 terms per tile, 64 tiles at z3
+    # z4, not z3: GBIF's adhoc tiles at z3 misplace records by more than a cell (L1 error 1.6-2.6x the
+    # records in 6x6-cell blocks checked against occurrence search, 2026-09-29); z4 and z5 agree at 0.08-0.22
+    assert len(calls) == 4 * 256  # 4 terms per tile, 256 tiles at z4
     assert gs.effort_grid("Aves", get_tile=tile)[0, 0] == 20  # 30 - 10
 
 
