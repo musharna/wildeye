@@ -195,6 +195,66 @@ def sample_background(grid: np.ndarray, n: int, rng: np.random.Generator) -> np.
     return _mercator_to_lonlat(gx, gy)
 
 
+GRID = 2**TILE_ZOOM * (4096 // SQUARE)  # effort-grid cells across the world
+PLACEMENT_BLOCK = (
+    7.0,
+    47.5,
+    212,
+)  # lon, lat, taxon: birds around Switzerland, dense and mid-latitude
+
+
+def _lonlat_to_cell(lon: float, lat: float) -> tuple[int, int]:
+    gx = (lon + 180.0) / 360.0
+    gy = (1.0 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2.0
+    return int(gy * GRID), int(gx * GRID)
+
+
+def placement_error(
+    lon: float,
+    lat: float,
+    taxon: int,
+    *,
+    size: int = 6,
+    get_tile: Callable[[str], bytes] = fetch_tile,
+    get_json: Callable[[str], dict] = fetch_json,
+) -> float:
+    """How far the count tiles the effort grid is built from misplace records: the L1 distance between a
+    size x size block of grid cells at (lon, lat) and GBIF occurrence search over the same cells, as a share
+    of the records search finds there. 0 = every record in its cell; 2 = none are."""
+    r0, c0 = _lonlat_to_cell(lon, lat)
+    per = 4096 // SQUARE
+    tiles = {
+        (c // per, r // per) for r in range(r0, r0 + size) for c in range(c0, c0 + size)
+    }
+    ours = np.zeros((size, size), dtype=np.int64)
+    for x, y in tiles:
+        for c in mvt.cells(get_tile(_tile_url(TILE_ZOOM, x, y, {taxon}, None))):
+            r, cc = y * per + c.y0 // SQUARE - r0, x * per + c.x0 // SQUARE - c0
+            if 0 <= r < size and 0 <= cc < size:
+                ours[r, cc] += c.total
+    truth = np.zeros_like(ours)
+    for i in range(size):
+        for j in range(size):
+            (lo0, la1), (lo1, la0) = _mercator_to_lonlat(
+                np.array([(c0 + j) / GRID, (c0 + j + 1) / GRID]),
+                np.array([(r0 + i) / GRID, (r0 + i + 1) / GRID]),
+            )
+            q = [("limit", "0"), ("taxonKey", str(taxon)), ("hasCoordinate", "true")]
+            q += [("license", lic) for lic in OPEN_LICENCES]
+            q += [
+                ("decimalLatitude", f"{la0},{la1}"),
+                ("decimalLongitude", f"{lo0},{lo1}"),
+            ]
+            truth[i, j] = get_json(
+                GBIF + "occurrence/search?" + urllib.parse.urlencode(q)
+            )["count"]
+    if truth.sum() == 0:
+        raise SourceError(
+            f"occurrence search finds no records of {taxon} around {lon}, {lat}"
+        )
+    return float(np.abs(ours - truth).sum() / truth.sum())
+
+
 # ---- species records -------------------------------------------------------------------------------
 
 

@@ -155,6 +155,9 @@ POSITIVE_BUFFER_KM = 25.0
 SHUFFLE_TSS_MAX = 0.05
 TILE_AGREEMENT_SPECIES = 3
 TILE_ZOOM = 3
+# GBIF's count tiles against its own occurrence search, in a 6x6-cell block (geomodel_sources.placement_error):
+# 0.22 live at the z4 tiles the effort grid uses, 2.57 at the z3 tiles it first used (2026-09-29)
+PLACEMENT_ERROR_MAX = 0.4
 MAX_CANDIDATES = 3  # try up to 3 x SPECIES_PER_GROUP species to score SPECIES_PER_GROUP
 
 
@@ -199,7 +202,9 @@ def tile_agreement(geom, taxon_id: int, tile_mask, z: int = TILE_ZOOM) -> float:
     return inter / union if union else 0.0
 
 
-def score_group(group: str, sources, rng: np.random.Generator, species_per_group: int) -> tuple[GroupRun, dict]:
+def score_group(
+    group: str, sources, rng: np.random.Generator, species_per_group: int
+) -> tuple[GroupRun, dict]:
     """Score up to species_per_group sampled species; return the scores and this group's control values."""
     run = GroupRun()
     background = sources.background(group, BACKGROUND_POINTS, rng)
@@ -212,27 +217,56 @@ def score_group(group: str, sources, rng: np.random.Generator, species_per_group
         taxon_id, name = candidates[i]
         key = sources.match(name)
         if key is None:
-            run.skipped["no exact GBIF species match"] = run.skipped.get("no exact GBIF species match", 0) + 1
+            run.skipped["no exact GBIF species match"] = (
+                run.skipped.get("no exact GBIF species match", 0) + 1
+            )
             continue
         presences = sources.presences(key, rng)
         if len(presences) < MIN_PRESENCES:
-            run.skipped["fewer than 30 non-iNaturalist presences"] = run.skipped.get("fewer than 30 non-iNaturalist presences", 0) + 1
+            run.skipped["fewer than 30 non-iNaturalist presences"] = (
+                run.skipped.get("fewer than 30 non-iNaturalist presences", 0) + 1
+            )
             continue
         training = sources.training(key, rng)
         if not len(training):
-            run.skipped["no iNaturalist records on GBIF"] = run.skipped.get("no iNaturalist records on GBIF", 0) + 1
+            run.skipped["no iNaturalist records on GBIF"] = (
+                run.skipped.get("no iNaturalist records on GBIF", 0) + 1
+            )
             continue
         geom = sources.range_geom(group, taxon_id)
         baseline = equal_area_baseline(training, area_km2(geom))
-        result = SpeciesResult(taxon_id, name, len(presences), round(tss(geom, presences, background), 4), round(tss(baseline, presences, background), 4))
+        result = SpeciesResult(
+            taxon_id,
+            name,
+            len(presences),
+            round(tss(geom, presences, background), 4),
+            round(tss(baseline, presences, background), 4),
+        )
         run.results.append(result)
         if not controls:  # the run's controls, on this group's first scored species
-            positive = transform(_FROM_EA, unary_union([shapely.Point(_TO_EA(*p)).buffer(POSITIVE_BUFFER_KM * 1000) for p in presences]))
+            positive = transform(
+                _FROM_EA,
+                unary_union(
+                    [
+                        shapely.Point(_TO_EA(*p)).buffer(POSITIVE_BUFFER_KM * 1000)
+                        for p in presences
+                    ]
+                ),
+            )
             controls = {
                 "species": name,
-                "fake_tss": round(tss(geom, planted_fake_presences(background, len(presences), rng), background), 4),
+                "fake_tss": round(
+                    tss(
+                        geom,
+                        planted_fake_presences(background, len(presences), rng),
+                        background,
+                    ),
+                    4,
+                ),
                 "positive_tss": round(tss(positive, presences, background), 4),
-                "shuffle_tss": round(shuffle_null_tss(geom, presences, background, rng), 4),
+                "shuffle_tss": round(
+                    shuffle_null_tss(geom, presences, background, rng), 4
+                ),
                 "real_tss": result.model_tss,
                 "taxon_id": taxon_id,
             }
@@ -244,17 +278,34 @@ def check_controls(group: str, controls: dict) -> list[str]:
         return []  # no species scored: the group is insufficient, there is nothing to control
     failures = []
     if controls["fake_tss"] >= FAKE_TSS_MAX:
-        failures.append(f"{group}: planted fake scored {controls['fake_tss']} (must be < {FAKE_TSS_MAX})")
+        failures.append(
+            f"{group}: planted fake scored {controls['fake_tss']} (must be < {FAKE_TSS_MAX})"
+        )
     if controls["positive_tss"] < POSITIVE_TSS_MIN:
-        failures.append(f"{group}: positive control scored {controls['positive_tss']} (must be >= {POSITIVE_TSS_MIN})")
+        failures.append(
+            f"{group}: positive control scored {controls['positive_tss']} (must be >= {POSITIVE_TSS_MIN})"
+        )
     if abs(controls["shuffle_tss"]) >= SHUFFLE_TSS_MAX:
-        failures.append(f"{group}: label shuffle scored {controls['shuffle_tss']} (|TSS| must be < {SHUFFLE_TSS_MAX})")
+        failures.append(
+            f"{group}: label shuffle scored {controls['shuffle_tss']} (|TSS| must be < {SHUFFLE_TSS_MAX})"
+        )
     return failures
 
 
-def run(sources, groups: list[str], rng: np.random.Generator, species_per_group: int = SPECIES_PER_GROUP) -> dict:
+def run(
+    sources,
+    groups: list[str],
+    rng: np.random.Generator,
+    species_per_group: int = SPECIES_PER_GROUP,
+) -> dict:
     """Score every group, run the controls, and return the verdicts document; ControlFailure if any control fails."""
     sources.verify()
+    # before hours of scoring: a background built from tiles that misplace records is not effort
+    placement = round(sources.placement_error(), 3)
+    if placement > PLACEMENT_ERROR_MAX:
+        raise ControlFailure(
+            f"GBIF count tiles misplace records: L1 error {placement} against occurrence search (must be <= {PLACEMENT_ERROR_MAX})"
+        )
     out_groups, out_controls, failures, agreement = {}, {}, [], []
     for group in groups:
         scored, controls = score_group(group, sources, rng, species_per_group)
@@ -266,11 +317,19 @@ def run(sources, groups: list[str], rng: np.random.Generator, species_per_group:
         }
         if controls and len(agreement) < TILE_AGREEMENT_SPECIES:
             geom = sources.range_geom(group, controls["taxon_id"])
-            iou = round(tile_agreement(geom, controls["taxon_id"], sources.tile_mask), 4)
-            agreement.append({"group": group, "species": controls["species"], "iou": iou})
+            iou = round(
+                tile_agreement(geom, controls["taxon_id"], sources.tile_mask), 4
+            )
+            agreement.append(
+                {"group": group, "species": controls["species"], "iou": iou}
+            )
             if iou < TILE_IOU_MIN:
-                failures.append(f"{group}: {controls['species']} range and iNaturalist's thresholded tiles overlap {iou} (must be >= {TILE_IOU_MIN})")
-    if len(agreement) < min(TILE_AGREEMENT_SPECIES, sum(bool(c) for c in out_controls.values())):
+                failures.append(
+                    f"{group}: {controls['species']} range and iNaturalist's thresholded tiles overlap {iou} (must be >= {TILE_IOU_MIN})"
+                )
+    if len(agreement) < min(
+        TILE_AGREEMENT_SPECIES, sum(bool(c) for c in out_controls.values())
+    ):
         failures.append("tile agreement ran on fewer species than required")
     if failures:
         raise ControlFailure("; ".join(failures))
@@ -278,11 +337,18 @@ def run(sources, groups: list[str], rng: np.random.Generator, species_per_group:
         "geomodel_version": sources.version(),
         "spec": "docs/superpowers/specs/2026-09-29-geomodel-harness-design.md",
         "thresholds": {
-            "median_tss_min": MEDIAN_TSS_MIN, "sign_p_max": SIGN_P_MAX, "min_scored": MIN_SCORED,
-            "min_presences": MIN_PRESENCES, "species_per_group": species_per_group,
+            "median_tss_min": MEDIAN_TSS_MIN,
+            "sign_p_max": SIGN_P_MAX,
+            "min_scored": MIN_SCORED,
+            "min_presences": MIN_PRESENCES,
+            "species_per_group": species_per_group,
         },
         "groups": out_groups,
-        "controls": {"per_group": out_controls, "tile_agreement": agreement},
+        "controls": {
+            "per_group": out_controls,
+            "tile_agreement": agreement,
+            "effort_placement_error": placement,
+        },
     }
 
 
@@ -302,13 +368,20 @@ class LiveSources:
     def version(self) -> str:
         return str(self.meta["version"])
 
+    def placement_error(self) -> float:
+        return self.gs.placement_error(*self.gs.PLACEMENT_BLOCK)
+
     def species(self, group: str) -> list[tuple[int, str]]:
         out, where = [], {}
         for fname in self.gs.collection_files(group, self.meta):
-            path = self.gs.download(self.gs.RANGES + fname, self.work / self.version() / fname)
+            path = self.gs.download(
+                self.gs.RANGES + fname, self.work / self.version() / fname
+            )
             for taxon_id, name, version in self.gs.species_index(path):
                 if version != self.version():
-                    raise self.gs.SourceError(f"{fname} has geomodel {version}, metadata says {self.version()}")
+                    raise self.gs.SourceError(
+                        f"{fname} has geomodel {version}, metadata says {self.version()}"
+                    )
                 out.append((taxon_id, name))
                 where[taxon_id] = path
         self.files[group] = where
@@ -324,7 +397,9 @@ class LiveSources:
         return self.gs.match_species(name)
 
     def presences(self, key: int, rng):
-        return self.gs.occurrence_points(key, inat=False, want=PRESENCES_WANTED, rng=rng)
+        return self.gs.occurrence_points(
+            key, inat=False, want=PRESENCES_WANTED, rng=rng
+        )
 
     def training(self, key: int, rng):
         return self.gs.occurrence_points(key, inat=True, want=PRESENCES_WANTED, rng=rng)
@@ -344,17 +419,36 @@ def main(argv=None, *, sources=None) -> int:
     from .geomodel_sources import GROUPS
 
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out", type=Path, default=Path("public/data/geomodel_verdicts.json"))
-    ap.add_argument("--work", type=Path, default=Path(os.environ.get("WILDEYE_WORK", "/tmp/wildeye-geomodel")))
-    ap.add_argument("--groups", default=",".join(GROUPS), help="comma-separated collections (default: all 13)")
+    ap.add_argument(
+        "--out", type=Path, default=Path("public/data/geomodel_verdicts.json")
+    )
+    ap.add_argument(
+        "--work",
+        type=Path,
+        default=Path(os.environ.get("WILDEYE_WORK", "/tmp/wildeye-geomodel")),
+    )
+    ap.add_argument(
+        "--groups",
+        default=",".join(GROUPS),
+        help="comma-separated collections (default: all 13)",
+    )
     ap.add_argument("--species-per-group", type=int, default=SPECIES_PER_GROUP)
-    ap.add_argument("--seed", type=int, default=None, help="default: a fresh seed, recorded in the output")
-    ap.add_argument("--keep-ranges", action="store_true", help="keep the downloaded GeoPackages")
+    ap.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="default: a fresh seed, recorded in the output",
+    )
+    ap.add_argument(
+        "--keep-ranges", action="store_true", help="keep the downloaded GeoPackages"
+    )
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     log = logging.getLogger("geomodel")
 
-    seed = args.seed if args.seed is not None else int.from_bytes(os.urandom(4), "little")
+    seed = (
+        args.seed if args.seed is not None else int.from_bytes(os.urandom(4), "little")
+    )
     groups = [g for g in args.groups.split(",") if g]
     unknown = sorted(set(groups) - set(GROUPS))
     if unknown:
@@ -369,10 +463,20 @@ def main(argv=None, *, sources=None) -> int:
     finally:
         if live and not args.keep_ranges:
             shutil.rmtree(args.work, ignore_errors=True)
-    doc = {"generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), "seed": seed, **doc}
+    doc = {
+        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "seed": seed,
+        **doc,
+    }
     write_atomic(args.out, doc)
     for g, v in doc["groups"].items():
-        log.info("%s: %s (%s scored, median TSS %s)", g, v["verdict"], v["n_scored"], v.get("median_tss"))
+        log.info(
+            "%s: %s (%s scored, median TSS %s)",
+            g,
+            v["verdict"],
+            v["n_scored"],
+            v.get("median_tss"),
+        )
     return 0
 
 

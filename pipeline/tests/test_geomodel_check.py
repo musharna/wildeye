@@ -100,8 +100,8 @@ def test_planted_fake_scores_as_effort():
 class FakeSources:
     """A group 'Aves' of `n` species whose ranges are RANGE, with known right answers."""
 
-    def __init__(self, n=40, presence_share=0.85, tiles_agree=True, unmatched=0, sparse=0):
-        self.n, self.share, self.tiles_agree = n, presence_share, tiles_agree
+    def __init__(self, n=40, presence_share=0.85, tiles_agree=True, unmatched=0, sparse=0, placement=0.1):
+        self.n, self.share, self.tiles_agree, self.placement = n, presence_share, tiles_agree, placement
         self.unmatched, self.sparse = set(range(unmatched)), set(range(unmatched, unmatched + sparse))
         self.verified = False
 
@@ -110,6 +110,9 @@ class FakeSources:
 
     def version(self):
         return "2.34"
+
+    def placement_error(self):
+        return self.placement
 
     def species(self, group):
         return [(i, f"Species {i}") for i in range(self.n)]
@@ -153,6 +156,7 @@ def test_run_scores_a_group_and_writes_the_verdicts(tmp_path):
     c = doc["controls"]["per_group"]["Aves"]
     assert c["fake_tss"] < gc.FAKE_TSS_MAX and c["positive_tss"] >= gc.POSITIVE_TSS_MIN and abs(c["shuffle_tss"]) < 0.05
     assert doc["controls"]["tile_agreement"][0]["iou"] == 1.0
+    assert doc["controls"]["effort_placement_error"] == 0.1
 
 
 def test_a_failed_control_writes_nothing_and_exits_nonzero(tmp_path):
@@ -168,3 +172,14 @@ def test_a_failed_control_writes_nothing_and_exits_nonzero(tmp_path):
 def test_a_group_with_too_few_scorable_species_is_insufficient():
     doc = gc.run(FakeSources(n=8), ["Aves"], np.random.default_rng(2), species_per_group=30)
     assert doc["groups"]["Aves"]["verdict"] == "insufficient" and doc["groups"]["Aves"]["n_scored"] == 8
+
+
+def test_misplaced_effort_tiles_write_nothing(tmp_path):
+    out = tmp_path / "verdicts.json"
+    # the count tiles put records a cell or more away from GBIF's own search: the background is not effort
+    argv = ["--out", str(out), "--groups", "Aves", "--species-per-group", "12", "--seed", "5"]
+    assert gc.main(argv, sources=FakeSources(placement=0.9)) == 2
+    assert not out.exists()
+    # positive control in the same test: tiles within the bar write
+    assert gc.main(argv, sources=FakeSources(placement=0.39)) == 0
+    assert out.exists()
