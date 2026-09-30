@@ -19,6 +19,8 @@ import { createBioClient } from './bio/gbif.js';
 import { createWhatLivesHere } from './bio/whatLivesHere.js';
 import { createShortViewportRegions } from './bio/shortViewport.js';
 import { createSpeciesPanel } from './bio/speciesPanel.js';
+import { createModeledRangeControl } from './bio/modeledRangeControl.js';
+import { createModeledRangeLayer, loadModeledList } from './data/modeledRange.js';
 import { createDetailsCard } from './bio/detailsCard.js';
 import firesLayer from './data/fires.js';
 import h5n1Layer from './data/h5n1.js';
@@ -299,9 +301,13 @@ async function init() {
       setPanelCollapsed: (id, collapsed) => styleManager.setPanelCollapsed(id, collapsed, { persist: false, syncShare: false }),
     });
     // Stage 3 "What's here": a WHAT LIVES HERE click also reads every enabled GIBS layer (and forest loss, mangroves, GRIIS lists) at the spot (grill A14).
-    const readGibsLayers = ({ lat, lon }) => [...gibsLayers, hansenLossLayer, mangrovesLayer, invasivesLayer]
-      .filter((l) => dataManager.isEnabled(l.id))
-      .map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
+    // The chosen species' modeled range (docs/superpowers/specs/2026-09-30-modeled-range-design.md) is read there too while it is on.
+    const modeledRangeLayer = createModeledRangeLayer();
+    modeledRangeLayer.init(viewer);
+    const readGibsLayers = ({ lat, lon }) => [
+      ...[...gibsLayers, hansenLossLayer, mangrovesLayer, invasivesLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
+    ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
       viewer,
       client: bioClient,
@@ -314,6 +320,7 @@ async function init() {
       readLayers: readGibsLayers,
     });
     speciesPanel = createSpeciesPanel({ dataManager, speciesLayer, client: bioClient, whatLivesHere });
+    createModeledRangeControl({ dataManager, client: bioClient, layer: modeledRangeLayer, loadList: loadModeledList() });
 
     // Keep startup chrome truthful: a share is not restored until camera,
     // visual/map/panel lanes, and every requested layer have terminated.
@@ -362,6 +369,8 @@ async function init() {
     window.__godsEyeView = {
       // QA (scripts/qa-readout.mjs, qa-known-answer.mjs): every enabled GIBS layer's readout rows at a point.
       readoutAt: (lat, lon) => Promise.all(readGibsLayers({ lat, lon }).map((r) => r.result)),
+      // qa-species modeled-range: the switch's layer, its taxon and error
+      modeledRange: modeledRangeLayer,
       viewer,
       styleManager,
       dataManager,

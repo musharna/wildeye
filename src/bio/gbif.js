@@ -357,7 +357,12 @@ export function parseSpeciesName(json) {
   if (!json || !Number.isInteger(json.key)) throw new Error('GBIF species: response has no key');
   const scientificName = json.canonicalName || json.scientificName;
   if (typeof scientificName !== 'string' || !scientificName) throw new Error(`GBIF species: key ${json.key} has no name`);
-  return { key: json.key, scientificName, commonName: json.vernacularName || null, className: json.class || null };
+  // rank and lineage place the taxon in a geomodel collection (src/data/modeledRange.js, placeTaxon)
+  const lineage = ['kingdomKey', 'phylumKey', 'classKey', 'orderKey', 'familyKey', 'genusKey'].map((k) => json[k]).filter(Number.isInteger);
+  return {
+    key: json.key, scientificName, commonName: json.vernacularName || null, className: json.class || null,
+    rank: typeof json.rank === 'string' ? json.rank : null, lineage: [...lineage, json.key],
+  };
 }
 
 /** At most `maxPerWindow` acquisitions in any `windowMs` window. */
