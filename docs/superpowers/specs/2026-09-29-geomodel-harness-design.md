@@ -59,7 +59,8 @@ Sample size: 30 species per collection (fewer where the collection or the data r
   ≥ 0.60.
 - **Tile agreement**: for 3 species, rasterise the GeoPackage range and the live thresholded tiles at
   z3 over the same pixels; intersection-over-union must be ≥ 0.85, or what is tested is not what is
-  shown.
+  shown. Run first (random species from the first collections), so an iNaturalist outage stops the run
+  before any GBIF work (the first full run lost 25 minutes to a 503 "downtime" here).
 - **Planted-effect ladder** (unit tests, calling the harness's own `tss()` and `group_verdict()`):
   synthetic species whose true TSS is 0.0, 0.2, 0.4, 0.6 and 0.8 must come back within ±0.05, and the
   verdict must flip between 0.2 and 0.6 — the smallest effect the rule can see, so a `fail` is a bound.
