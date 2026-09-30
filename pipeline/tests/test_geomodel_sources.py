@@ -148,17 +148,33 @@ def test_verify_group_keys_stops_on_a_moved_key():
         for spec in gs.GROUPS.values()
         for k, n in {**spec["include"], **spec.get("exclude", {})}.items()
     }
-    ok = lambda url: {"canonicalName": names[int(url.rsplit("/", 1)[1])]}  # noqa: E731
-    gs.verify_group_keys(ok)
-    moved = lambda url: {
-        "canonicalName": "Reptilia"
-        if url.endswith("/11592253")
-        else names[int(url.rsplit("/", 1)[1])]
-    }  # noqa: E731
-    with pytest.raises(
-        gs.SourceError, match="11592253 is 'Reptilia', expected 'Squamata'"
-    ):
-        gs.verify_group_keys(moved)
+
+    def gbif(moved=None, empty=None):
+        def get(url):
+            if "/occurrence/search?" in url:
+                k = int(urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["taxonKey"][0])
+                return {"count": 0 if k == empty else 1000}
+            k = int(url.rsplit("/", 1)[1])
+            return {"canonicalName": "Reptilia" if k == moved else names[k]}
+
+        return get
+
+    gs.verify_group_keys(gbif())
+    with pytest.raises(gs.SourceError, match="11592253 is 'Reptilia', expected 'Squamata'"):
+        gs.verify_group_keys(gbif(moved=11592253))
+    # a key that still names its taxon but has nothing filed under it (GBIF's class 204 Actinopterygii,
+    # 2026-09-30: its fish now sit in orders directly under Chordata) empties the group without a word
+    empty = next(iter(gs.GROUPS["Mollusca"]["include"]))
+    with pytest.raises(gs.SourceError, match=f"{empty} .* no occurrences"):
+        gs.verify_group_keys(gbif(empty=empty))
+
+
+def test_fish_are_the_orders_gbif_files_without_a_class():
+    fish = gs.GROUPS["Actinopterygii"]["include"]
+    assert 204 not in fish and len(fish) == 46
+    assert {"Perciformes", "Cypriniformes", "Pleuronectiformes", "Siluriformes"} <= set(fish.values())
+    # OtherAnimalia excludes the same fish, or its background counts every fish record as other animals
+    assert set(fish) <= set(gs.GROUPS["OtherAnimalia"]["exclude"])
 
 
 def test_match_species_takes_only_exact_species_matches():
