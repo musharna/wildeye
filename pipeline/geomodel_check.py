@@ -358,10 +358,12 @@ def run(
             )
             + f" (must be >= {TILE_IOU_MIN})"
         )
-    out_groups, out_controls, failures = {}, {}, []
+    out_groups, out_controls = {}, {}
     for group in groups:
         scored, controls = score_group(group, sources, rng, species_per_group)
-        failures += check_controls(group, controls)
+        failures = check_controls(group, controls)
+        if failures:  # the run will write nothing: stop now, not after hours more of the other groups
+            raise ControlFailure("; ".join(failures))
         out_controls[group] = controls
         out_groups[group] = {
             **group_verdict(scored.results, scored.skipped),
@@ -375,8 +377,6 @@ def run(
             v["n_scored"],
             v.get("median_tss"),
         )
-    if failures:
-        raise ControlFailure("; ".join(failures))
     return {
         "geomodel_version": sources.version(),
         "spec": "docs/superpowers/specs/2026-09-29-geomodel-harness-design.md",
