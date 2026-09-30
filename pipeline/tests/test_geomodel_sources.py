@@ -222,3 +222,40 @@ def test_fetch_tile_reads_gbifs_filtered_empty_400_as_no_records(monkeypatch):
     assert gs.fetch_tile("https://api.gbif.org/empty") == b""
     with pytest.raises(gs.SourceError, match="400"):
         gs.fetch_tile("https://api.gbif.org/bad")
+
+
+def _block_sources(truth: dict, shift_rows: int):
+    """Fakes for placement_error: GBIF search answers `truth` (cell -> count); the tiles put each count
+    `shift_rows` cells south of where search has it."""
+    per = 4096 // gs.SQUARE
+
+    def get_tile(url):
+        z, x, y = (int(v) for v in url.split("/adhoc/")[1].split(".")[0].split("/"))
+        assert z == gs.TILE_ZOOM
+        feats = [
+            ((c - x * per) * gs.SQUARE, (r + shift_rows - y * per) * gs.SQUARE, gs.SQUARE, n)
+            for (r, c), n in truth.items()
+            if r + shift_rows in range(y * per, (y + 1) * per) and c in range(x * per, (x + 1) * per)
+        ]
+        return _tile(feats) if feats else b""
+
+    def get_json(url):
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        assert q["license"] == ["CC0_1_0", "CC_BY_4_0"] and q["limit"] == ["0"]
+        la0, la1 = (float(v) for v in q["decimalLatitude"][0].split(","))
+        lo0, lo1 = (float(v) for v in q["decimalLongitude"][0].split(","))
+        return {"count": truth.get(gs._lonlat_to_cell((lo0 + lo1) / 2, (la0 + la1) / 2), 0)}
+
+    return get_tile, get_json
+
+
+def test_placement_error_reads_misplaced_tiles():
+    r0, c0 = gs._lonlat_to_cell(7.0, 47.5)
+    rng = np.random.default_rng(4)
+    truth = {(r0 + i, c0 + j): int(rng.integers(1, 1000)) for i in range(6) for j in range(6)}
+    # tiles that put every record in its own cell agree with search exactly
+    get_tile, get_json = _block_sources(truth, 0)
+    assert gs.placement_error(7.0, 47.5, 212, get_tile=get_tile, get_json=get_json) == 0.0
+    # tiles that put every record one cell south, as GBIF's z3 adhoc tiles did, do not
+    get_tile, get_json = _block_sources(truth, 1)
+    assert gs.placement_error(7.0, 47.5, 212, get_tile=get_tile, get_json=get_json) > 0.4
