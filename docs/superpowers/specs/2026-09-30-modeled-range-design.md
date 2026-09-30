@@ -83,6 +83,9 @@ monthly check and a listing can overlap, and the check used to remove the whole 
   above; a bird shows "Aves failed validation"; a forced 429 shows the throttling line (not a blank);
   a new species resets the switch.
 - A realistic pan/zoom session with the field on draws 0 HTTP 429 (Q4 flip check).
+- `node scripts/qa-species.mjs` (all checks) still passes: the row adds to the SPECIES body, whose fold at
+  667x375 has about 5 px to spare. The row therefore sits under WHAT LIVES HERE, not in the chosen-species
+  block (inside it, the action fell below the fold; panel-fold, 2026-09-30).
 - The maintainer looks at it and says.
 
 ## Constraints

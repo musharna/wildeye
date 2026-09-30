@@ -149,10 +149,13 @@ test('iNaturalist throttling shows in the card while the range is on', async () 
   assert.equal(note.textContent, THROTTLED_MESSAGE);
 });
 
-test('markup: the switch row sits in the chosen-species block, a switch with a live note', () => {
+test('markup: the switch row follows WHAT LIVES HERE, outside the chosen block (phone-landscape fold), a switch with a live note', () => {
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const chosen = html.slice(html.indexOf('id="species-chosen"'), html.indexOf('id="species-what-lives-here"'));
-  assert.match(chosen, /<div id="species-modeled" class="species-modeled" hidden>/);
-  assert.match(chosen, /<button type="button" id="species-modeled-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Modeled range" hidden>MODELED RANGE OFF<\/button>/);
-  assert.match(chosen, /<span id="species-modeled-note" class="species-modeled-note" role="status" aria-live="polite"><\/span>/);
+  assert.doesNotMatch(chosen, /species-modeled/);
+  assert.match(chosen, /id="species-chosen-note"/); // positive control: the slice is the chosen block
+  const after = html.slice(html.indexOf('id="species-what-lives-here"'), html.indexOf('class="species-chip-group"'));
+  assert.match(after, /<div id="species-modeled" class="species-modeled" hidden>/);
+  assert.match(after, /<button type="button" id="species-modeled-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Modeled range" hidden>MODELED RANGE OFF<\/button>/);
+  assert.match(after, /<span id="species-modeled-note" class="species-modeled-note" role="status" aria-live="polite"><\/span>/);
 });
