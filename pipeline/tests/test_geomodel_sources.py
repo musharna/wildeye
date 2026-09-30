@@ -1,0 +1,222 @@
+"""pipeline.geomodel_sources: the harness's inputs, tested on real file bytes and on URL-checked fakes."""
+
+import urllib.parse
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from pipeline import geomodel_sources as gs
+from pipeline.tests.test_mvt import _tile
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def test_reads_species_ranges_from_a_real_geopackage():
+    # geomodel_amphibia_2rows.gpkg: three rows copied verbatim from iNaturalist_geomodel_Amphibia.gpkg (v2.34)
+    ranges = list(gs.species_ranges(FIXTURES / "geomodel_amphibia_2rows.gpkg"))
+    assert {r.name for r in ranges} == {
+        "Capensibufo rosei",
+        "Plethodon stormi",
+    }  # the genus row is not a species
+    by = {r.name: r for r in ranges}
+    assert all(r.version == "2.34" for r in ranges)
+    # Capensibufo rosei is a South African toad and Plethodon stormi an Oregon/California salamander
+    lon, lat = by["Capensibufo rosei"].geom.centroid.coords[0]
+    assert 17 < lon < 21 and -35 < lat < -32
+    lon, lat = by["Plethodon stormi"].geom.centroid.coords[0]
+    assert -125 < lon < -121 and 40 < lat < 43
+
+
+def test_rejects_a_blob_that_is_not_a_geopackage_geometry():
+    with pytest.raises(gs.SourceError, match="GeoPackage"):
+        gs.geometry_from_gpkg(b"\x01\x03\x00\x00\x00")
+
+
+def test_collection_files_follow_the_bucket_names():
+    meta = {"collections": {"Amphibia": {"archives": 1}, "Aves": {"archives": 2}}}
+    assert gs.collection_files("Amphibia", meta) == [
+        "iNaturalist_geomodel_Amphibia.gpkg"
+    ]
+    assert gs.collection_files("Aves", meta) == [
+        "iNaturalist_geomodel_Aves_1.gpkg",
+        "iNaturalist_geomodel_Aves_2.gpkg",
+    ]
+
+
+def test_effort_grid_is_all_records_minus_inaturalist_and_minus_excluded_taxa():
+    calls = []
+
+    def tile(url):
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        calls.append(q)
+        assert (
+            q["license"] == ["CC0_1_0", "CC_BY_4_0"]
+            and q["bin"] == ["square"]
+            and q["squareSize"] == ["64"]
+        )
+        if not url.split("/adhoc/")[1].startswith("3/0/0."):
+            return b""
+        inat = "datasetKey" in q
+        if q["taxonKey"] == ["1"]:  # Animalia
+            return _tile([(0, 0, 64, 40 if inat else 100)])
+        return _tile([(0, 0, 64, 10 if inat else 30)])  # the excluded classes together
+
+    grid = gs.effort_grid("OtherAnimalia", get_tile=tile)
+    # (100 - 40) animals not from iNaturalist, minus (30 - 10) of those in the excluded classes
+    assert grid[0, 0] == 40 and grid.sum() == 40
+    assert len(calls) == 4 * 64  # 4 terms per tile, 64 tiles at z3
+    assert gs.effort_grid("Aves", get_tile=tile)[0, 0] == 20  # 30 - 10
+
+
+def test_background_lands_where_the_counts_are():
+    rng = np.random.default_rng(1)
+    grid = np.zeros((512, 512), dtype=np.int64)
+    grid[0, 0] = 3  # north-west corner cell: lon -180..-179.30, lat ~85.05..85.01
+    grid[256, 256] = 1  # the cell just south-east of lon 0, lat 0
+    pts = gs.sample_background(grid, 4000, rng)
+    nw = (pts[:, 0] < -179) & (pts[:, 1] > 84.9)
+    centre = (
+        (pts[:, 0] >= 0) & (pts[:, 0] < 0.71) & (pts[:, 1] <= 0) & (pts[:, 1] > -0.71)
+    )
+    assert nw.sum() + centre.sum() == 4000
+    assert nw.mean() == pytest.approx(0.75, abs=0.03)
+    with pytest.raises(gs.SourceError, match="empty"):
+        gs.sample_background(np.zeros((512, 512)), 10, rng)
+
+
+def _fake_search(records, count):
+    urls = []
+
+    def get_json(url):
+        urls.append(url)
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        if q["limit"] == ["0"]:
+            return {"count": count}
+        return {"results": records}
+
+    return get_json, urls
+
+
+def test_presences_drop_inaturalist_records_and_ask_for_open_licences():
+    recs = [
+        {
+            "key": 1,
+            "datasetKey": "ebird",
+            "decimalLongitude": 1.0,
+            "decimalLatitude": 2.0,
+        },
+        {
+            "key": 2,
+            "datasetKey": gs.INAT_DATASET,
+            "decimalLongitude": 3.0,
+            "decimalLatitude": 4.0,
+        },
+        {
+            "key": 3,
+            "datasetKey": "museum",
+            "decimalLongitude": 5.0,
+            "decimalLatitude": 6.0,
+        },
+    ]
+    get_json, urls = _fake_search(recs, 3)
+    pts = gs.occurrence_points(
+        99, inat=False, want=500, rng=np.random.default_rng(0), get_json=get_json
+    )
+    assert sorted(map(tuple, pts)) == [(1.0, 2.0), (5.0, 6.0)]
+    q = urllib.parse.parse_qs(urllib.parse.urlsplit(urls[0]).query)
+    assert (
+        q["license"] == ["CC0_1_0", "CC_BY_4_0"]
+        and "datasetKey" not in q
+        and q["hasGeospatialIssue"] == ["false"]
+    )
+    # the model's own records: iNaturalist only, any licence
+    get_json, urls = _fake_search(recs[1:2], 1)
+    pts = gs.occurrence_points(
+        99, inat=True, want=500, rng=np.random.default_rng(0), get_json=get_json
+    )
+    assert pts.tolist() == [[3.0, 4.0]]
+    q = urllib.parse.parse_qs(urllib.parse.urlsplit(urls[0]).query)
+    assert q["datasetKey"] == [gs.INAT_DATASET] and "license" not in q
+
+
+def test_verify_group_keys_stops_on_a_moved_key():
+    names = {
+        k: n
+        for spec in gs.GROUPS.values()
+        for k, n in {**spec["include"], **spec.get("exclude", {})}.items()
+    }
+    ok = lambda url: {"canonicalName": names[int(url.rsplit("/", 1)[1])]}  # noqa: E731
+    gs.verify_group_keys(ok)
+    moved = lambda url: {
+        "canonicalName": "Reptilia"
+        if url.endswith("/11592253")
+        else names[int(url.rsplit("/", 1)[1])]
+    }  # noqa: E731
+    with pytest.raises(
+        gs.SourceError, match="11592253 is 'Reptilia', expected 'Squamata'"
+    ):
+        gs.verify_group_keys(moved)
+
+
+def test_match_species_takes_only_exact_species_matches():
+    answers = {
+        "Turdus migratorius": {
+            "matchType": "EXACT",
+            "rank": "SPECIES",
+            "usageKey": 9510564,
+        },
+        "Old name": {
+            "matchType": "EXACT",
+            "rank": "SPECIES",
+            "usageKey": 1,
+            "acceptedUsageKey": 2,
+        },
+        "Turdus": {"matchType": "EXACT", "rank": "GENUS", "usageKey": 5},
+        "Typo": {"matchType": "FUZZY", "rank": "SPECIES", "usageKey": 6},
+    }
+    get = lambda url: answers[
+        urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["name"][0]
+    ]  # noqa: E731
+    assert gs.match_species("Turdus migratorius", get) == 9510564
+    assert gs.match_species("Old name", get) == 2
+    assert gs.match_species("Turdus", get) is None
+    assert gs.match_species("Typo", get) is None
+
+
+def _http_error(code, body):
+    import io
+    import urllib.error
+
+    return urllib.error.HTTPError("https://api.gbif.org/x", code, "err", {}, io.BytesIO(body.encode()))
+
+
+def test_fetch_tile_reads_gbifs_filtered_empty_400_as_no_records(monkeypatch):
+    import urllib.request
+
+    answers = {
+        "empty": _http_error(400, gs.EMPTY_TILE_BODY),
+        "bad": _http_error(400, "Invalid taxonKey"),
+    }
+
+    class Ok:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"tile-bytes"
+
+    def fake_urlopen(req, timeout=None):
+        which = req.full_url.rsplit("/", 1)[1]
+        if which == "ok":
+            return Ok()
+        raise answers[which]
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    assert gs.fetch_tile("https://api.gbif.org/ok") == b"tile-bytes"
+    assert gs.fetch_tile("https://api.gbif.org/empty") == b""
+    with pytest.raises(gs.SourceError, match="400"):
+        gs.fetch_tile("https://api.gbif.org/bad")
