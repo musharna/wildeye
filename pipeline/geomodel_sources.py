@@ -310,3 +310,63 @@ def species_ranges(path: Path) -> Iterator[Range]:
             yield Range(int(taxon_id), name, str(version), geometry_from_gpkg(geom))
     finally:
         con.close()
+
+
+def _features_table(con: sqlite3.Connection) -> str:
+    (table,) = con.execute("select table_name from gpkg_contents where data_type = 'features'").fetchone()
+    return table
+
+
+def species_index(path: Path) -> list[tuple[int, str, str]]:
+    """(taxon_id, name, version) of every species-rank range in a GeoPackage, without loading geometry."""
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        table = _features_table(con)
+        return [
+            (int(t), n, str(v))
+            for t, n, v in con.execute(
+                f'select taxon_id, name, geomodel_version from "{table}" where rank = ?', ("species",)  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+            )
+        ]
+    finally:
+        con.close()
+
+
+def range_geometry(path: Path, taxon_id: int):
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        table = _features_table(con)
+        row = con.execute(f'select geom from "{table}" where taxon_id = ?', (taxon_id,)).fetchone()  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+    finally:
+        con.close()
+    if row is None:
+        raise SourceError(f"taxon {taxon_id} not in {path.name}")
+    return geometry_from_gpkg(row[0])
+
+
+def download(url: str, dest: Path) -> Path:
+    """Stream url to dest (via a .part file); an existing dest is reused."""
+    if dest.exists():
+        return dest
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    part = dest.with_suffix(dest.suffix + ".part")
+    with urlopen(urllib.request.Request(url, headers={"User-Agent": UA}), timeout=600) as r, open(part, "wb") as fh:
+        while chunk := r.read(1 << 20):
+            fh.write(chunk)
+    part.replace(dest)
+    return dest
+
+
+INAT_TILE = "https://api.inaturalist.org/v2/geomodel/{taxon}/{z}/{x}/{y}.png?thresholded=true"
+
+
+def thresholded_tile_mask(taxon_id: int, z: int, x: int, y: int, get: Callable[[str], bytes] = fetch) -> np.ndarray:
+    """Pixels of iNaturalist's thresholded geomodel tile that are drawn (alpha > 0). ≤ 1 request/s."""
+    import io
+
+    from PIL import Image
+
+    data = get(INAT_TILE.format(taxon=taxon_id, z=z, x=x, y=y))
+    time.sleep(1.0)
+    img = Image.open(io.BytesIO(data)).convert("RGBA")
+    return np.asarray(img)[..., 3] > 0
