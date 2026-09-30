@@ -371,9 +371,16 @@ test('name parsers keep the fields the panel shows', () => {
   assert.throws(() => parseGbifMatch({ usageKey: 5133088, matchType: 'FUZZY' }), /name/);
   assert.throws(() => parseGbifMatch(null), /matchType/);
   assert.deepEqual(
-    parseSpeciesName({ key: 5232437, scientificName: 'Branta canadensis (Linnaeus, 1758)', canonicalName: 'Branta canadensis', vernacularName: 'Canada Goose (canadensis Group)', class: 'Aves' }),
-    { key: 5232437, scientificName: 'Branta canadensis', commonName: 'Canada Goose (canadensis Group)', className: 'Aves' },
+    parseSpeciesName({
+      key: 5232437, scientificName: 'Branta canadensis (Linnaeus, 1758)', canonicalName: 'Branta canadensis', vernacularName: 'Canada Goose (canadensis Group)', class: 'Aves',
+      rank: 'SPECIES', kingdomKey: 1, phylumKey: 44, classKey: 212, orderKey: 1108, familyKey: 2986, genusKey: 2498205,
+    }),
+    // rank and lineage (ancestor keys, then its own) place the taxon in a geomodel collection (modeledRange.placeTaxon)
+    { key: 5232437, scientificName: 'Branta canadensis', commonName: 'Canada Goose (canadensis Group)', className: 'Aves', rank: 'SPECIES', lineage: [1, 44, 212, 1108, 2986, 2498205, 5232437] },
   );
+  // a record missing ranks (a kingdom, or an incomplete classification) keeps the keys it has
+  assert.deepEqual(parseSpeciesName({ key: 1, canonicalName: 'Animalia', rank: 'KINGDOM', kingdomKey: 1 }).lineage, [1, 1]);
+  assert.equal(parseSpeciesName({ key: 7, scientificName: 'A b' }).rank, null);
   assert.equal(parseSpeciesName({ key: 7, scientificName: 'A b' }).scientificName, 'A b');
   assert.throws(() => parseSpeciesName({}), /no key/);
   // R13-M3 nit: an answer with no name fails loud, not as scientificName undefined.
@@ -528,7 +535,7 @@ test('speciesName caches per key and forgets a failure so a retry can succeed', 
   const client = createBioClient({ fetchImpl: async () => { calls += 1; return fail ? httpError(503) : ok({ key: 7, canonicalName: 'A b', vernacularName: 'Ab' }); } });
   await assert.rejects(client.speciesName(7), /HTTP\u00a0503/);
   fail = false;
-  assert.deepEqual(await client.speciesName(7), { key: 7, scientificName: 'A b', commonName: 'Ab', className: null });
+  assert.deepEqual(await client.speciesName(7), { key: 7, scientificName: 'A b', commonName: 'Ab', className: null, rank: null, lineage: [7] });
   await client.speciesName(7);
   assert.equal(calls, 2);
 });
@@ -548,7 +555,7 @@ test('speciesName shares one lookup per key, but an abort rejects only the calle
   const client = createBioClient({ fetchImpl });
   const settle = (p) => p.then((value) => ({ value }), (error) => ({ error: error.name }));
   const ABORTED = { error: 'AbortError' };
-  const name = (key) => ({ value: { key, scientificName: `Name ${key}`, commonName: null, className: null } });
+  const name = (key) => ({ value: { key, scientificName: `Name ${key}`, commonName: null, className: null, rank: null, lineage: [key] } });
 
   // (a) caller A aborts, then caller B immediately asks for the same key with a live signal
   const callerA1 = new AbortController();

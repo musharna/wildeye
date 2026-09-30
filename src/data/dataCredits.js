@@ -129,6 +129,10 @@ export const DATA_CREDITS = [
     html: 'Species maps and "what lives here": <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF.org</a> occurrence search and maps (CC0 and CC BY records only); the top datasets behind each list and map are named with a DOI link where GBIF has one, and a gbif.org dataset page otherwise. Names: <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> and <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF</a>.',
   },
   {
+    key: 'modeled-range',
+    html: 'Modeled range: <a href="https://github.com/inaturalist/inatGeoModelTraining" target="_blank" rel="noopener">iNaturalist Geomodel</a>, CC BY 4.0. Shown only for species whose collection passed wildeye\'s monthly check against non-iNaturalist GBIF records, and whose map tiles match the range that was tested.',
+  },
+  {
     key: 'rivers',
     html: "River temperature and flow: <a href=\"https://waterdata.usgs.gov\" target=\"_blank\" rel=\"noopener\">U.S. Geological Survey</a> Water Data APIs (public domain; provisional data subject to revision). Any use of trade, firm, or product names is for descriptive purposes only and does not imply endorsement by the U.S. Government.",
   },

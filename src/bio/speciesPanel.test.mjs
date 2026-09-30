@@ -902,7 +902,9 @@ test('SPECIES panel markup, CSS, startup wiring and credits are in place', () =>
   // fold onto the chosen species; the fix is the view's size (phone accordion, style.css), which fits all four with a 2-line status.
   const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
   // The legend's content is rendered from SPECIES_MAP_LEGEND (speciesPanel.js), so the markup holds an empty container.
-  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<span id="species-chosen-note" class="species-chosen-note" hidden><\/span>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
+  // Modeled range (spec 2026-09-30-modeled-range-design.md): its row belongs to the chosen species, so it closes that block; qa-species
+  // panel-fold and phone-accordion measure that the controls still clear the fold.
+  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<span id="species-chosen-note" class="species-chosen-note" hidden><\/span>\s*<div id="species-modeled"[^>]*>\s*<button [^>]*id="species-modeled-toggle"[^>]*>MODELED RANGE OFF<\/button>\s*<span id="species-modeled-note"[^>]*><\/span>\s*<\/div>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
   // Brief B fix round 1: on a phone-width window an open SPECIES panel is the only panel the left stack shows (an accordion), so its body has
   // the view the collapsed DATA LAYERS and SCENES pills took (116 px at 375x667).
   assert.match(css, /@media \(max-width: 720px\) \{[^@]*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) > \[data-panel-id\]\.collapsed \{ display: none !important; \}/);
