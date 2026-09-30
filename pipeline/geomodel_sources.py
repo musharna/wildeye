@@ -41,8 +41,61 @@ TILE_ZOOM = 4
 SQUARE = 128  # squareSize on GBIF's 4096 extent: 32 x 32 cells per tile, 512 across the world at z4
 
 # iNaturalist geomodel collection → GBIF backbone taxa whose records are its effort background. Checked by
-# name at the start of every run (verify_group_keys): the backbone moved Reptilia (358) to a pro parte
-# synonym, so reptiles are the three classes GBIF now uses. Tuatara (no clean class) is left out.
+# name and occurrence count at the start of every run (verify_group_keys): the backbone moved Reptilia (358)
+# to a pro parte synonym, so reptiles are the three classes GBIF now uses. Tuatara (no clean class) is left out.
+# GBIF files no record under class Actinopterygii (204, 0 occurrences on 2026-09-30): its ray-finned fishes
+# are the 46 accepted orders directly under Chordata with no class (sharks, lampreys, hagfishes, chimaeras,
+# coelacanths and lungfishes all have classes). 35 are iNaturalist Actinopterygii orders by name; the other 11
+# (pikes, flatfishes, scorpionfishes, sticklebacks...) are fish orders iNaturalist has since split or merged.
+FISH_ORDERS: dict[int, str] = {
+    1103: "Acipenseriformes",
+    1104: "Albuliformes",
+    494: "Amiiformes",
+    495: "Anguilliformes",
+    1105: "Ateleopodiformes",
+    496: "Atheriniformes",
+    497: "Aulopiformes",
+    1106: "Batrachoidiformes",
+    498: "Beloniformes",
+    499: "Beryciformes",
+    1107: "Cetomimiformes",
+    537: "Characiformes",
+    538: "Clupeiformes",
+    1153: "Cypriniformes",
+    547: "Cyprinodontiformes",
+    1162: "Elopiformes",
+    548: "Esociformes",
+    549: "Gadiformes",
+    550: "Gasterosteiformes",
+    1163: "Gobiesociformes",
+    1164: "Gonorynchiformes",
+    1165: "Gymnotiformes",
+    1166: "Lampriformes",
+    1167: "Lepisosteiformes",
+    1305: "Lophiiformes",
+    1067: "Mugiliformes",
+    1306: "Myctophiformes",
+    1307: "Notacanthiformes",
+    1308: "Ophidiiformes",
+    1068: "Osmeriformes",
+    1069: "Osteoglossiformes",
+    587: "Perciformes",
+    1310: "Percopsiformes",
+    588: "Pleuronectiformes",
+    589: "Polymixiiformes",
+    1311: "Polypteriformes",
+    1312: "Saccopharyngiformes",
+    1313: "Salmoniformes",
+    590: "Scorpaeniformes",
+    708: "Siluriformes",
+    890: "Stephanoberyciformes",
+    774: "Stomiiformes",
+    889: "Synbranchiformes",
+    773: "Syngnathiformes",
+    772: "Tetraodontiformes",
+    888: "Zeiformes",
+}
+
 GROUPS: dict[str, dict] = {
     "Aves": {"include": {212: "Aves"}},
     "Mammalia": {"include": {359: "Mammalia"}},
@@ -54,7 +107,7 @@ GROUPS: dict[str, dict] = {
             11493978: "Crocodylia",
         }
     },
-    "Actinopterygii": {"include": {204: "Actinopterygii"}},
+    "Actinopterygii": {"include": dict(FISH_ORDERS)},
     "Insecta": {"include": {216: "Insecta"}},
     "Arachnida": {"include": {367: "Arachnida"}},
     "Mollusca": {"include": {52: "Mollusca"}},
@@ -71,7 +124,7 @@ GROUPS: dict[str, dict] = {
             11592253: "Squamata",
             11418114: "Testudines",
             11493978: "Crocodylia",
-            204: "Actinopterygii",
+            **FISH_ORDERS,
             216: "Insecta",
             367: "Arachnida",
             52: "Mollusca",
@@ -140,13 +193,16 @@ def fetch_tile(url: str) -> bytes:
 
 
 def verify_group_keys(get_json: Callable[[str], dict] = fetch_json) -> None:
-    """Every GBIF key in GROUPS still names the taxon it was chosen for, or the run stops."""
+    """Every GBIF key in GROUPS still names the taxon it was chosen for and has records filed under it,
+    or the run stops."""
     wrong = []
-    for group, spec in GROUPS.items():
-        for key, name in {**spec["include"], **spec.get("exclude", {})}.items():
-            got = get_json(f"{GBIF}species/{key}").get("canonicalName")
-            if got != name:
-                wrong.append(f"{group}: GBIF {key} is {got!r}, expected {name!r}")
+    keys = {k: n for spec in GROUPS.values() for k, n in {**spec["include"], **spec.get("exclude", {})}.items()}
+    for key, name in keys.items():
+        got = get_json(f"{GBIF}species/{key}").get("canonicalName")
+        if got != name:
+            wrong.append(f"GBIF {key} is {got!r}, expected {name!r}")
+        elif not get_json(f"{GBIF}occurrence/search?taxonKey={key}&limit=0")["count"]:
+            wrong.append(f"GBIF {key} {name} has no occurrences filed under it")
     if wrong:
         raise SourceError("GBIF backbone keys moved: " + "; ".join(sorted(set(wrong))))
 
