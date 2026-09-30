@@ -100,10 +100,11 @@ def test_planted_fake_scores_as_effort():
 class FakeSources:
     """A group 'Aves' of `n` species whose ranges are RANGE, with known right answers."""
 
-    def __init__(self, n=40, presence_share=0.85, tiles_agree=True, unmatched=0, sparse=0, placement=0.1, inat_down=False):
+    def __init__(self, n=40, presence_share=0.85, tiles_agree=True, unmatched=0, sparse=0, placement=0.1, inat_down=False, disagree=()):
         self.n, self.share, self.tiles_agree, self.placement = n, presence_share, tiles_agree, placement
         self.inat_down, self.presence_calls = inat_down, 0
         self.backgrounds = []  # groups whose effort background was drawn, in order
+        self.disagree, self.tiles_asked = set(disagree), set()  # taxa whose tiles draw nothing; taxa asked for
         self.unmatched, self.sparse = set(range(unmatched)), set(range(unmatched, unmatched + sparse))
         self.verified = False
 
@@ -144,7 +145,9 @@ class FakeSources:
 
             raise SourceError("503 for https://api.inaturalist.org/v2/geomodel/1/3/4/3.png: downtime", 503)
         size = 64
-        return gc.range_tile_mask(RANGE, z, x, y, size) if self.tiles_agree else np.zeros((size, size), bool)
+        self.tiles_asked.add(taxon_id)
+        agree = self.tiles_agree and taxon_id not in self.disagree
+        return gc.range_tile_mask(RANGE, z, x, y, size) if agree else np.zeros((size, size), bool)
 
 
 def test_run_scores_a_group_and_writes_the_verdicts(tmp_path):
@@ -238,3 +241,25 @@ def test_a_group_failing_its_controls_stops_the_run_before_the_next_group(monkey
     good = FakeSources()
     gc.run(good, ["Aves", "Mammalia", "Amphibia"], np.random.default_rng(1), species_per_group=12)
     assert good.backgrounds == ["Aves", "Mammalia", "Amphibia"]
+
+
+def test_tile_agreement_is_a_median_over_ten_species():
+    # Ruling 2026-09-30 (maintainer): every one of 3 species >= 0.85 failed when tiles and GeoPackage agree
+    # (5 of 20 random birds scored 0.80-0.83); a real single-species mismatch (Anser cygnoides, 0.03) is
+    # step 2's per-species check, not a reason to throw away the run
+    groups = ["Aves", "Mammalia"]
+    # 5 species in each of 2 groups: all 10 are checked. Taxon 0 draws nothing, in both groups.
+    two_off = FakeSources(n=5, disagree={0})
+    doc = gc.run(two_off, groups, np.random.default_rng(3), species_per_group=5)
+    checked = doc["controls"]["tile_agreement"]
+    assert len(checked) == 10 and len({(a["group"], a["species"]) for a in checked}) == 10
+    assert sorted(a["iou"] for a in checked)[:3] == [0.0, 0.0, 1.0]  # the two misses are recorded, and pass
+    # six of ten drawing nothing fails the run before any scoring
+    most_off = FakeSources(n=5, disagree={0, 1, 2})
+    with pytest.raises(gc.ControlFailure, match="median IoU"):
+        gc.run(most_off, groups, np.random.default_rng(3), species_per_group=5)
+    assert most_off.presence_calls == 0
+    # a one-group run still checks ten species
+    solo = FakeSources()
+    gc.run(solo, ["Aves"], np.random.default_rng(3), species_per_group=12)
+    assert len(solo.tiles_asked) == 10

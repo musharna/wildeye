@@ -35,7 +35,7 @@ SIGN_P_MAX = 0.05
 # Run controls (spec, "Controls").
 FAKE_TSS_MAX = 0.10
 POSITIVE_TSS_MIN = 0.60
-TILE_IOU_MIN = 0.85
+TILE_IOU_MIN = 0.85  # median over TILE_AGREEMENT_SPECIES (ruling 2026-09-30, spec)
 
 _TO_EA = Transformer.from_crs("EPSG:4326", "EPSG:6933", always_xy=True).transform
 _FROM_EA = Transformer.from_crs("EPSG:6933", "EPSG:4326", always_xy=True).transform
@@ -156,7 +156,7 @@ BACKGROUND_POINTS = 5000
 PRESENCES_WANTED = 500
 POSITIVE_BUFFER_KM = 25.0
 SHUFFLE_TSS_MAX = 0.05
-TILE_AGREEMENT_SPECIES = 3
+TILE_AGREEMENT_SPECIES = 10
 TILE_ZOOM = 3
 # GBIF's count tiles against its own occurrence search, in a 6x6-cell block (geomodel_sources.placement_error):
 # 0.22 live at the z4 tiles the effort grid uses, 2.57 at the z3 tiles it first used (2026-09-29)
@@ -330,33 +330,33 @@ def run(
         )
     # iNaturalist's API is the run's only call to iNaturalist: check it before hours of GBIF work, so its
     # downtime (503 "downtime", 2026-09-30 00:05 EDT) costs seconds rather than the run
+    # Species are drawn round-robin across the groups, each at most once, until TILE_AGREEMENT_SPECIES are
+    # checked or the groups run out. Every IoU is recorded; step 2 checks each species before display.
+    pools = {g: list(sources.species(g)) for g in groups}
+    need = min(TILE_AGREEMENT_SPECIES, sum(len(p) for p in pools.values()))
     agreement = []
-    for group in groups:
-        if len(agreement) >= TILE_AGREEMENT_SPECIES:
-            break
-        candidates = sources.species(group)
-        if not candidates:
-            continue
-        taxon_id, name = candidates[int(rng.integers(len(candidates)))]
-        iou = round(
-            tile_agreement(
-                sources.range_geom(group, taxon_id), taxon_id, sources.tile_mask
-            ),
-            4,
-        )
-        agreement.append({"group": group, "species": name, "iou": iou})
-        log.info(
-            "tile agreement %s (%s): IoU %s (min %s)", name, group, iou, TILE_IOU_MIN
-        )
-    bad = [a for a in agreement if a["iou"] < TILE_IOU_MIN]
-    if bad or len(agreement) < min(TILE_AGREEMENT_SPECIES, len(groups)):
+    while len(agreement) < need:
+        for group in groups:
+            pool = pools[group]
+            if not pool or len(agreement) >= need:
+                continue
+            taxon_id, name = pool.pop(int(rng.integers(len(pool))))
+            iou = round(
+                tile_agreement(
+                    sources.range_geom(group, taxon_id), taxon_id, sources.tile_mask
+                ),
+                4,
+            )
+            agreement.append({"group": group, "species": name, "iou": iou})
+            log.info("tile agreement %s (%s): IoU %s", name, group, iou)
+    median_iou = statistics.median(a["iou"] for a in agreement) if agreement else 0.0
+    log.info("tile agreement median IoU %s over %s species (min %s)", median_iou, len(agreement), TILE_IOU_MIN)
+    if not agreement or median_iou < TILE_IOU_MIN:
         raise ControlFailure(
             "iNaturalist's thresholded tiles do not show the GeoPackage ranges tested: "
-            + (
-                ", ".join(f"{a['species']} IoU {a['iou']}" for a in bad)
-                or f"only {len(agreement)} species checked"
-            )
-            + f" (must be >= {TILE_IOU_MIN})"
+            f"median IoU {median_iou} over {len(agreement)} species (must be >= {TILE_IOU_MIN} "
+            f"over up to {TILE_AGREEMENT_SPECIES}); "
+            + ", ".join(f"{a['species']} {a['iou']}" for a in agreement)
         )
     out_groups, out_controls = {}, {}
     for group in groups:
