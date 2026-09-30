@@ -304,3 +304,36 @@ def test_presences_are_a_spatial_random_sample_of_a_common_species():
     pts = gs.occurrence_points(99, inat=False, want=500, rng=np.random.default_rng(0), get_json=mid)
     assert len(pts) == 500 and (pts[:, 0] >= 0).mean() == pytest.approx(0.8, abs=0.06)
     assert sum(int(q["limit"][0]) for q in mid.requests) >= 2500  # every record was read
+
+
+def test_fetch_backs_off_for_minutes_when_gbif_says_too_many_requests(monkeypatch):
+    # GBIF's limit follows server load; a run of hours met 429 and the old 5-40 s backoff gave up
+    import urllib.request
+
+    waits, answers = [], [_http_error(429, "Too Many Requests"), _http_error(429, "Too Many Requests")]
+
+    class Ok:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"{}"
+
+    def fake_urlopen(req, timeout=None):
+        if answers:
+            raise answers.pop(0)
+        return Ok()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(gs.time, "sleep", waits.append)
+    assert gs.fetch("https://api.gbif.org/v1/occurrence/search?x") == b"{}"
+    assert len(waits) == 2 and waits[0] >= 60 and waits[1] > waits[0]
+    # positive control in the same test: a request GBIF rejects outright is not retried
+    waits.clear()
+    answers[:] = [_http_error(400, "Invalid taxonKey")]
+    with pytest.raises(gs.SourceError, match="400"):
+        gs.fetch("https://api.gbif.org/v1/occurrence/search?bad")
+    assert waits == []
