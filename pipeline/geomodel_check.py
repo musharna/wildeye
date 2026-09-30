@@ -313,30 +313,21 @@ def check_controls(group: str, controls: dict) -> list[str]:
     return failures
 
 
-def run(
-    sources,
-    groups: list[str],
-    rng: np.random.Generator,
-    species_per_group: int = SPECIES_PER_GROUP,
-) -> dict:
-    """Score every group, run the controls, and return the verdicts document; ControlFailure if any control fails."""
-    sources.verify()
-    # before hours of scoring: a background built from tiles that misplace records is not effort
-    placement = round(sources.placement_error(), 3)
-    log.info("effort placement error %s (max %s)", placement, PLACEMENT_ERROR_MAX)
-    if placement > PLACEMENT_ERROR_MAX:
-        raise ControlFailure(
-            f"GBIF count tiles misplace records: L1 error {placement} against occurrence search (must be <= {PLACEMENT_ERROR_MAX})"
-        )
+def check_tile_agreement(sources, groups: list[str], rng: np.random.Generator) -> list[dict]:
+    """IoU between GeoPackage ranges and iNaturalist's thresholded tiles for up to TILE_AGREEMENT_SPECIES
+    species; ControlFailure unless the median reaches TILE_IOU_MIN (spec, "Tile agreement")."""
     # iNaturalist's API is the run's only call to iNaturalist: check it before hours of GBIF work, so its
     # downtime (503 "downtime", 2026-09-30 00:05 EDT) costs seconds rather than the run
     # Species are drawn round-robin across the groups, each at most once, until TILE_AGREEMENT_SPECIES are
-    # checked or the groups run out. Every IoU is recorded; step 2 checks each species before display.
-    pools = {g: list(sources.species(g)) for g in groups}
+    # checked or the groups run out. The groups are walked in a fresh random order each run: with 13 groups
+    # and 10 species a fixed order checks the same first ten every month and never the last three.
+    # Every IoU is recorded; step 2 checks each species before display.
+    order = [groups[i] for i in rng.permutation(len(groups))]
+    pools = {g: list(sources.species(g)) for g in order}
     need = min(TILE_AGREEMENT_SPECIES, sum(len(p) for p in pools.values()))
     agreement = []
     while len(agreement) < need:
-        for group in groups:
+        for group in order:
             pool = pools[group]
             if not pool or len(agreement) >= need:
                 continue
@@ -358,6 +349,25 @@ def run(
             f"over up to {TILE_AGREEMENT_SPECIES}); "
             + ", ".join(f"{a['species']} {a['iou']}" for a in agreement)
         )
+    return agreement
+
+
+def run(
+    sources,
+    groups: list[str],
+    rng: np.random.Generator,
+    species_per_group: int = SPECIES_PER_GROUP,
+) -> dict:
+    """Score every group, run the controls, and return the verdicts document; ControlFailure if any control fails."""
+    sources.verify()
+    # before hours of scoring: a background built from tiles that misplace records is not effort
+    placement = round(sources.placement_error(), 3)
+    log.info("effort placement error %s (max %s)", placement, PLACEMENT_ERROR_MAX)
+    if placement > PLACEMENT_ERROR_MAX:
+        raise ControlFailure(
+            f"GBIF count tiles misplace records: L1 error {placement} against occurrence search (must be <= {PLACEMENT_ERROR_MAX})"
+        )
+    agreement = check_tile_agreement(sources, groups, rng)
     out_groups, out_controls = {}, {}
     for group in groups:
         scored, controls = score_group(group, sources, rng, species_per_group)

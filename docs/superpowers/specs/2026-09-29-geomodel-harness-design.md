@@ -57,7 +57,8 @@ Sample size: 30 species per collection (fewer where the collection or the data r
   species that is pure effort). Its TSS must be < 0.10.
 - **Positive control**: score a synthetic range made of the buffered presences themselves. TSS must be
   ≥ 0.60.
-- **Tile agreement**: for 10 species (drawn round-robin across the collections, or all of them if fewer),
+- **Tile agreement**: for 10 species (drawn round-robin across the collections in a fresh random order each
+  run, so no collection is always left out when there are more than 10; or all species if fewer),
   rasterise the GeoPackage range and the live thresholded tiles at z3 over the same pixels; the median
   intersection-over-union must be ≥ 0.85, or what is tested is not what is shown. Every species' IoU is
   recorded. Run first, so an iNaturalist outage stops the run before any GBIF work (the first full run
