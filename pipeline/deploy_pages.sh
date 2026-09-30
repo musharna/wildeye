@@ -46,16 +46,9 @@ if man.exists():
     print(f"birds archive: kept {len(m['frames'])} frames over {len(keep_nights)} nights, dropped {len(dropped)}")
 PYEOF
 touch dist/.nojekyll
-# vite-plugin-cesium 1.2.23 (latest on npm, 2024) copies Cesium to outDir + base + "cesium/", i.e.
-# dist/wildeye/cesium, while the page asks for /wildeye/cesium/ — which on a project Pages site is
-# dist/cesium. Every deploy before 2026-09-12 shipped a site whose Cesium.js 404'd ("Cesium is not
-# defined", stuck on the loader) while this script printed "pushed".
-REL="${BASE#/}"
-REL="${REL%/}"
-if [ -n "$REL" ] && [ -d "dist/$REL/cesium" ]; then
-	rm -rf dist/cesium && mv "dist/$REL/cesium" dist/cesium && rmdir "dist/$REL" 2>/dev/null || true
-fi
 # Every same-origin src/href in index.html must exist in dist, or the deploy fails before pushing.
+# (Every deploy before 2026-09-12 shipped a site whose Cesium 404'd — vite-plugin-cesium copied it to
+# dist/wildeye/cesium — while this script printed "pushed". scripts/viteCesium.mjs now writes dist/cesium.)
 "$PY" - "$BASE" <<'PYEOF'
 import pathlib, re, sys
 base = sys.argv[1]
