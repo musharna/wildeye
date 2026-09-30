@@ -58,6 +58,11 @@ Sample size: 30 species per collection (fewer where the collection or the data r
   verdict must flip between 0.2 and 0.6 — the smallest effect the rule can see, so a `fail` is a bound.
 - **Shuffle null**: swapping presence and background labels at random (the exchangeable unit is the
   point) must give |TSS| < 0.05 on real data from the first run; the real TSS must not.
+- **Effort placement** (added 2026-09-29, before the first full run): GBIF's count tiles rebuilt over a 6 x 6
+  block of grid cells (birds around Switzerland) must agree with GBIF occurrence search over the same cells to
+  an L1 error ≤ 0.40 of the block's records. The z3 tiles the grid was first built from scored 2.57 (records
+  a cell or more from where they are); z4 scores 0.22. Checked first, so a bad background stops the run
+  before any scoring.
 - **Exclusions are findings**: every skipped species and why (too few presences, no GBIF match) is
   counted in the verdicts file, never silently dropped.
 - **El-Gabbas cross-check** (once, recorded in the PR, not every run): Spearman correlation between our
