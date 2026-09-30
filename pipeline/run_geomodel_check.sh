@@ -6,4 +6,4 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # cron PATH has no miniconda; bare python3 there lacks the deps (2026-09-11 outage)
 PY="${WILDEYE_PYTHON:-$HOME/miniconda3/bin/python3}"
-exec timeout 14400 "$PY" -m pipeline.geomodel_check --out public/data/geomodel_verdicts.json "$@"
+exec timeout 36000 "$PY" -m pipeline.geomodel_check --out public/data/geomodel_verdicts.json "$@"
