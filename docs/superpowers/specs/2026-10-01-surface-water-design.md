@@ -36,6 +36,7 @@ few months is faint, permanent water (lakes, the open sea) solid blue. A WHAT LI
 
 - `npm test` green; new tests seen to fail first (decode table, readout statuses including 404, layer lifecycle).
 - `node scripts/qa-surface-water.mjs` against a local build exits 0. It checks that the layer draws (pixel
-  read-back) and reads Lake Victoria ≥ 95%, a seasonal Okavango point at 1–94%, and a Sahara control as no water.
+  read-back) and reads open Lake Victoria at 97–99%, Tonle Sap's flood plain at 83%, the open Atlantic at 100%, a Sahara control as no water and
+  80°N as outside (each the centre of a 5×5 block decoded by an independent Python probe).
   Every water pixel of the real z13 tiles it reads decodes (0 unrecognised). No page errors.
 - Perf gates unchanged, or a measured, explained acceptance.
