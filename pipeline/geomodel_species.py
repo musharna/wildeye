@@ -138,10 +138,14 @@ def check_tiles(
         return "iou_skim" not in s if include_full else "check" not in s
 
     missing = [
-        (g, t, n)
+        (g, t, n, sources.range_geom(g, t))
         for g, t, n in todo
         if wanted(species[n]) and (only is None or n in only)
     ]
+    if mode == "full":
+        # cheapest first: under a day's tile budget this fully checks the most species (compact ranges are ~4 tiles,
+        # globe-spanning ones up to 64); sorted() is stable, so equal costs keep the list's order
+        missing = sorted(missing, key=lambda m: full_tiles(m[3]))
     log.info(
         "%s check for %s of %s species in passing collections",
         mode,
@@ -150,9 +154,8 @@ def check_tiles(
     )
     write(species)
     failed = asked = 0
-    for i, (group, taxon_id, name) in enumerate(missing, 1):
+    for i, (group, taxon_id, name, geom) in enumerate(missing, 1):
         s = species[name]
-        geom = sources.range_geom(group, taxon_id)
         cost = 1 if mode == "skim" else full_tiles(geom)
         if max_tiles is not None and asked + cost > max_tiles:
             log.info(
