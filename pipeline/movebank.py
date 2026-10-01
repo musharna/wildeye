@@ -134,10 +134,10 @@ def fetch_events(study_id: int, since: dt.datetime, fetch_text=_get_text, end: d
     return out
 
 
-def process_study(source: dict, study: dict, fetch_text=_get_text, now: float | None = None) -> tuple[list[dict], dict]:
+def process_study(source: dict, study: dict, fetch_text=_get_text, now: float | None = None, land=None) -> tuple[list[dict], dict]:
     """Individuals of one curated study → features (via tracks.py helpers) + per-study stats.
     Refuses the study unless its live licence_type is CC_0 or CC_BY."""
-    from .tracks import clean, apply_publication_lag, downsample, segment, split_antimeridian, to_features
+    from .tracks import clean, apply_publication_lag, downsample, segment, split_antimeridian, split_marine, to_features
 
     sid = int(study["id"])
     now_s = now if now is not None else dt.datetime.now(dt.UTC).timestamp()
@@ -192,6 +192,8 @@ def process_study(source: dict, study: dict, fetch_text=_get_text, now: float | 
             "group": study.get("group"),
         }
         segs = [s for seg in segment(fixes, float(source.get("segment_gap_h", 24))) for s in split_antimeridian(seg)]
+        segs, land_splits = split_marine(segs, info["group"], land)
+        stats["land_splits"] = stats.get("land_splits", 0) + land_splits
         feats += to_features(f"mb:{sid}:{animal}", source, info, segs)
         stats["kept"] += len(fixes)
         stats["segments"] += len(segs)

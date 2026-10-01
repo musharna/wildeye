@@ -41,6 +41,9 @@ GROUPS = (
     "birds",
     "reptiles",
 )  # legend order
+# Animals that swim: a straight step between two of their at-sea fixes that crosses land is a break, not a path
+# (spec 2026-10-01-tracks-glide-design.md, Q12). Reptiles are land tortoises; birds fly over land.
+MARINE_GROUPS = ("whales & dolphins", "seals")
 CARRY_MAX_DAYS = 28
 # Wall-clock budget for the whole Movebank phase: per-request timeouts alone let a hanging outage
 # cost studies x 2 attempts x timeout (13 x 2 x 120 s > run_tracks.sh's 3000 s guard, measured).
@@ -222,6 +225,30 @@ def split_antimeridian(seg: list[dict]) -> list[list[dict]]:
     return out
 
 
+def split_land(seg: list[dict], crosses) -> list[list[dict]]:
+    """Split a segment between consecutive fixes p, f where crosses(p, f): a break, no point is invented."""
+    out, cur = [], []
+    for f in seg:
+        if cur and crosses(cur[-1], f):
+            out.append(cur)
+            cur = []
+        cur.append(f)
+    if cur:
+        out.append(cur)
+    return out
+
+
+def split_marine(segs: list[list[dict]], group: str | None, land) -> tuple[list[list[dict]], int]:
+    """A marine group's segments split wherever a step between two at-sea fixes crosses land (`land.crosses`);
+    any other group's unchanged. Returns (segments, splits). A marine track with no land is refused, not passed."""
+    if group not in MARINE_GROUPS:
+        return segs, 0
+    if land is None:
+        raise ValueError(f"group {group!r} is marine: its steps must be checked against land, and no land was given")
+    out = [part for seg in segs for part in split_land(seg, land.crosses)]
+    return out, len(out) - len(segs)
+
+
 def apply_publication_lag(
     fixes: list[dict], min_age_days: float, now: float | None = None
 ) -> list[dict]:
@@ -273,7 +300,7 @@ def to_features(
 
 
 def process_dataset(
-    source: dict, dataset_id: str, fetch=_get_json, now: float | None = None
+    source: dict, dataset_id: str, fetch=_get_json, now: float | None = None, land=None
 ) -> tuple[list[dict], dict]:
     info = fetch_info(source["base"], dataset_id, fetch)
     info["group"] = source.get("groups", {}).get(
@@ -295,7 +322,8 @@ def process_dataset(
         for seg in segment(fixes, float(source.get("segment_gap_h", 24)))
         for s in split_antimeridian(seg)
     ]
-    return to_features(dataset_id, source, info, segs), stats | {"segments": len(segs)}
+    segs, land_splits = split_marine(segs, info["group"], land)
+    return to_features(dataset_id, source, info, segs), stats | {"segments": len(segs), "land_splits": land_splits}
 
 
 def load_previous(path: Path) -> dict | None:
@@ -470,6 +498,10 @@ def main(argv=None):
         help="fail rather than write a larger file",
     )
     ap.add_argument(
+        "--cache", type=Path, default=Path.home() / ".cache" / "wildeye",
+        help="where the Natural Earth land zip is kept",
+    )
+    ap.add_argument(
         "--movebank-budget",
         type=float,
         default=MOVEBANK_BUDGET_S,
@@ -483,6 +515,10 @@ def main(argv=None):
     if a.sources:
         keep = set(a.sources.split(","))
         sources = [s for s in sources if s["id"] in keep]
+    from .land import load_land
+    from .movebank import process_study
+
+    land = load_land(a.cache)
     t0 = time.time()
     now = time.time()
     features, per_dataset, failures = [], {}, {}
@@ -492,6 +528,7 @@ def main(argv=None):
             feats, per, fails = collect_movebank(
                 src, studies, load_previous(a.out), now, sleep=a.sleep,
                 budget_s=a.movebank_budget,
+                process=lambda s, st, now: process_study(s, st, now=now, land=land),
             )
             features += feats
             per_dataset |= per
@@ -507,7 +544,7 @@ def main(argv=None):
         log.info("%s: %d deployments selected", src["id"], len(ids))
         for d in ids:  # strictly serial: one request in flight per host
             try:
-                feats, st = process_dataset(src, d)
+                feats, st = process_dataset(src, d, land=land)
                 features += feats
                 per_dataset[d] = st
                 log.info(

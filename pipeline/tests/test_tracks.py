@@ -14,7 +14,13 @@ from pipeline.tracks import (
     carry_forward,
     collect_movebank,
     build_collection,
+    split_land,
+    split_marine,
+    MARINE_GROUPS,
 )
+from pipeline.land import Land, fetch_land_zip, LAND_ZIP_SHA256
+from shapely.geometry import box
+import hashlib
 import pytest
 
 H = 3600.0
@@ -85,6 +91,53 @@ def test_segment_splits_on_long_gaps_and_antimeridian_is_split_with_crossing_poi
     assert split_antimeridian([fx(0, 0, 10), fx(H, 0, 11)]) == [
         [fx(0, 0, 10), fx(H, 0, 11)]
     ]
+
+
+def test_split_land_breaks_a_segment_only_at_the_steps_the_predicate_flags():
+    seg = [fx(0, 0, 0), fx(H, 0, 1), fx(2 * H, 0, 2), fx(3 * H, 0, 3)]
+    flagged = lambda p, f: p["lon"] == 1 and f["lon"] == 2  # noqa: E731
+    assert split_land(seg, flagged) == [seg[:2], seg[2:]], "a break: no crossing point is invented"
+    # positive control: nothing flagged, nothing split
+    assert split_land(seg, lambda p, f: False) == [seg]
+    assert split_land([], flagged) == []
+
+
+def test_land_flags_a_step_between_two_at_sea_fixes_that_crosses_land_and_nothing_else():
+    land = Land([box(0, 0, 1, 1)])  # a 1° island
+    sea_w, sea_e = {"lon": -1, "lat": 0.5}, {"lon": 2, "lat": 0.5}
+    assert land.crosses(sea_w, sea_e), "at sea, across the island, at sea"
+    assert not land.crosses(sea_w, {"lon": 0.5, "lat": 0.5}), "hauled out on the island: a real fix, kept"
+    assert not land.crosses({"lon": 0.5, "lat": 0.5}, sea_e), "leaving the island"
+    assert not land.crosses({"lon": -1, "lat": 2}, {"lon": 2, "lat": 2}), "passing north of it"
+    assert not Land([]).crosses(sea_w, sea_e)
+
+
+def test_split_marine_splits_seals_and_whales_never_birds_and_refuses_a_marine_track_without_land():
+    land = Land([box(0, 0, 1, 1)])
+    seg = [fx(0, 0.5, -1), fx(H, 0.5, 2), fx(2 * H, 0.5, 3)]
+    assert MARINE_GROUPS == ("whales & dolphins", "seals")
+    for group in MARINE_GROUPS:
+        assert split_marine([seg], group, land) == ([seg[:1], seg[1:]], 1)
+    assert split_marine([seg], "birds", land) == ([seg], 0), "a bird flies over the island"
+    assert split_marine([seg], "land mammals", None) == ([seg], 0), "no land needed for land animals"
+    with pytest.raises(ValueError, match="land"):
+        split_marine([seg], "seals", None)
+
+
+def test_fetch_land_zip_keeps_only_the_pinned_file(tmp_path):
+    blob = b"PK\x03\x04 a zip"
+    good = hashlib.sha256(blob).hexdigest()
+    path = tmp_path / "ne_10m_land.zip"
+    with pytest.raises(ValueError, match="sha256"):
+        fetch_land_zip(path, fetch_bytes=lambda url: blob, sha256="0" * 64)
+    assert not path.exists(), "a file that is not the pinned one is never written"
+    assert fetch_land_zip(path, fetch_bytes=lambda url: blob, sha256=good) == path
+    assert path.read_bytes() == blob
+    # cached: not fetched again, and still checked
+    assert fetch_land_zip(path, fetch_bytes=lambda url: pytest.fail("fetched again"), sha256=good) == path
+    with pytest.raises(ValueError, match="sha256"):
+        fetch_land_zip(path, fetch_bytes=lambda url: blob, sha256="1" * 64)
+    assert len(LAND_ZIP_SHA256) == 64
 
 
 def test_publication_lag_and_feature_validation():
@@ -168,10 +221,21 @@ def test_process_dataset_end_to_end_with_stubbed_erddap():
         }
 
     feats, st = process_dataset(
-        src | {"groups": {"spotted seal": "seals"}}, "atn_1_spotted-seal_trajectory_20180420-20180501", fetch, now=2e9
+        src | {"groups": {"spotted seal": "seals"}}, "atn_1_spotted-seal_trajectory_20180420-20180501", fetch, now=2e9,
+        land=Land([]),
     )
     assert {f["properties"]["group"] for f in feats} == {"seals"}
-    unmapped, _ = process_dataset(src, "atn_1_spotted-seal_trajectory_20180420-20180501", fetch, now=2e9)
+    assert st["land_splits"] == 0
+    # an island between the last two kept fixes (-179.7 and -179.0 at 60.1-60.2 N) splits the seal's second part
+    islanded, st_land = process_dataset(
+        src | {"groups": {"spotted seal": "seals"}}, "atn_1_spotted-seal_trajectory_20180420-20180501", fetch, now=2e9,
+        land=Land([box(-179.5, 59.0, -179.2, 61.0)]),
+    )
+    assert st_land["land_splits"] == 1 and st_land["segments"] == st["segments"] + 1
+    assert len(islanded) == len(feats), "the split-off single fix is no line, so it is dropped as before"
+    with pytest.raises(ValueError, match="land"):
+        process_dataset(src | {"groups": {"spotted seal": "seals"}}, "atn_1_spotted-seal_trajectory_20180420-20180501", fetch, now=2e9)
+    unmapped, _ = process_dataset(src, "atn_1_spotted-seal_trajectory_20180420-20180501", fetch, now=2e9, land=Land([]))
     assert {f["properties"]["group"] for f in unmapped} == {None}
     assert st["raw"] == 4 and st["kept"] == 3 and st["segments"] == 2
     assert [f["geometry"]["coordinates"][-1][0] for f in feats][0] == 180.0
@@ -180,7 +244,7 @@ def test_process_dataset_end_to_end_with_stubbed_erddap():
         and feats[0]["properties"]["license"] == "free"
     )
     few, st2 = process_dataset(
-        src,
+        src | {"groups": {"spotted seal": "seals"}},
         "atn_2_spotted-seal_trajectory_20180420-20180501",
         lambda u, timeout=90: (
             fetch(u)
@@ -199,6 +263,7 @@ def test_process_dataset_end_to_end_with_stubbed_erddap():
             }
         ),
         now=2e9,
+        land=Land([]),
     )
     assert few == [] and st2["dropped"] == "too few fixes"
 
