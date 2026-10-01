@@ -1,25 +1,39 @@
 {
-  "_vendor-cesium-BkxkeN5P.js": {
-    "file": "assets/vendor-cesium-BkxkeN5P.js",
+  "_vendor-cesium-frwsvwf6.js": {
+    "file": "assets/vendor-cesium-frwsvwf6.js",
     "name": "vendor-cesium"
   },
   "index.html": {
-    "file": "assets/index-D9mDcFe2.js",
+    "file": "assets/index-BuHjQafT.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_vendor-cesium-BkxkeN5P.js"
+      "_vendor-cesium-frwsvwf6.js"
     ],
     "dynamicImports": [
-      "src/data/egm96Grid.generated.js"
+      "src/data/egm96Grid.generated.js",
+      "node_modules/pbf/index.js",
+      "node_modules/@mapbox/vector-tile/index.js"
     ],
     "css": [
-      "assets/index-0GgvB-qA.css"
+      "assets/index-BS3uX1ta.css"
     ],
     "assets": [
       "assets/hansenLoss.worker-C__W5Y9m.js"
     ]
+  },
+  "node_modules/@mapbox/vector-tile/index.js": {
+    "file": "assets/vector-tile-d0HIQOX2.js",
+    "name": "vector-tile",
+    "src": "node_modules/@mapbox/vector-tile/index.js",
+    "isDynamicEntry": true
+  },
+  "node_modules/pbf/index.js": {
+    "file": "assets/pbf-BRIh7aUU.js",
+    "name": "pbf",
+    "src": "node_modules/pbf/index.js",
+    "isDynamicEntry": true
   },
   "src/data/egm96Grid.generated.js": {
     "file": "assets/egm96Grid.generated-wavK1IGt.js",

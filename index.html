@@ -11,9 +11,9 @@
   <link rel="preload" href="/wildeye/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/wildeye/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/wildeye/fonts/fonts.css" />
-  <script type="module" crossorigin src="/wildeye/assets/index-D9mDcFe2.js"></script>
-  <link rel="modulepreload" crossorigin href="/wildeye/assets/vendor-cesium-BkxkeN5P.js">
-  <link rel="stylesheet" crossorigin href="/wildeye/assets/index-0GgvB-qA.css">
+  <script type="module" crossorigin src="/wildeye/assets/index-BuHjQafT.js"></script>
+  <link rel="modulepreload" crossorigin href="/wildeye/assets/vendor-cesium-frwsvwf6.js">
+  <link rel="stylesheet" crossorigin href="/wildeye/assets/index-BS3uX1ta.css">
 </head>
 <body>
   <div id="cesiumContainer"></div>
@@ -147,6 +147,14 @@
           <span id="species-chosen-note" class="species-chosen-note" hidden></span>
         </div>
         <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">WHAT LIVES HERE</button>
+        <div id="species-modeled" class="species-modeled" hidden>
+          <button type="button" id="species-modeled-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Modeled range" hidden>MODELED RANGE OFF</button>
+          <span id="species-modeled-note" class="species-modeled-note" role="status" aria-live="polite"></span>
+        </div>
+        <div id="species-effort" class="species-modeled" hidden>
+          <button type="button" id="species-effort-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Recording effort" hidden>RECORDING EFFORT OFF</button>
+          <span id="species-effort-note" class="species-modeled-note" role="status" aria-live="polite"></span>
+        </div>
         <div class="species-chip-group">
           <span id="species-years-label" class="species-label">Years</span>
           <div id="species-years" class="species-chip-row" role="group" aria-labelledby="species-years-label">
