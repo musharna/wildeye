@@ -15,3 +15,18 @@
   (9,728 bytes, 388 features, 224,697 records). Used ONLY by
   `src/data/effort.test.mjs` to pin the recording-effort veil offline. Data
   from GBIF.org under CC0 / CC BY.
+- `jrc-occurrence-13-6462-3802.png`, `jrc-occurrence-8-103-120.png` — two real
+  JRC Global Surface Water occurrence tiles (Tonle Sap at z13, RGBA with
+  semi-transparent pixels; open Atlantic at z8, RGB), captured 2026-10-01 from
+  `storage.googleapis.com/global-surface-water/tiles2021/occurrence/{z}/{x}/{y}.png`.
+  Source: EC JRC/Google, free of charge, without restriction of use.
+- `gibs-evi-2024-06-09-4-4-6.png` — one real NASA GIBS palette tile with tRNS
+  (`MODIS_Terra_L3_EVI_16Day`, 2024-06-09, z4 x4 y6; ocean transparent),
+  captured 2026-10-01. NASA open data.
+- `png-filters-rgba-37x23.png`, `png-filters-rgb-37x23.png`,
+  `png-paeth-tie-rgb-2x2.png` — synthetic PNGs written 2026-10-01 by a Python
+  encoder, rows cycling through filter types None/Sub/Up/Average/Paeth (the
+  2×2 one is a Paeth tie, pa == pc < pb), each checked to decode to its source
+  pixels with PIL.
+- All PNGs are used ONLY by `src/data/pngDecode.test.mjs`, which pins each to
+  the sha256 of PIL's `.convert('RGBA').tobytes()` of the same file.

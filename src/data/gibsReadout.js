@@ -4,6 +4,8 @@
  * 2026-09-23), so a value is an exact lookup of one pixel of the raw tile — never of the rendered
  * globe, which is alpha-blended and filtered. An unknown colour is named, never snapped to a neighbour.
  */
+import { decodePng } from "./pngDecode.js";
+
 // atan(sinh(π)), not a truncated decimal: 85.0511287798 called a sliver of the map "outside"
 const MERCATOR_LIMIT = (Math.atan(Math.sinh(Math.PI)) * 180) / Math.PI;
 const WIDE = 10; // a bin wider than 10× the median is shown as a bound or a range, not a midpoint
@@ -94,20 +96,9 @@ export function decodePixel(entry, [r, g, b, a]) {
   return { kind: "unknown", rgb: [r, g, b] };
 }
 
-/** Browser default: exact pixels, no colour-space conversion or premultiplication. */
+/** Default: the PNG's own bytes, decoded exactly (a 2D canvas rounds every semi-transparent pixel's colour). */
 async function decodeImageDefault(blob) {
-  const bitmap = await createImageBitmap(blob, {
-    colorSpaceConversion: "none",
-    premultiplyAlpha: "none",
-  });
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(bitmap, 0, 0);
-  bitmap.close?.();
-  return {
-    width: canvas.width,
-    data: ctx.getImageData(0, 0, canvas.width, canvas.height).data,
-  };
+  return decodePng(new Uint8Array(await blob.arrayBuffer()));
 }
 
 /**
