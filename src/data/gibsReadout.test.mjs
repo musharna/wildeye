@@ -75,7 +75,8 @@ test('the tile reader fetches a tile once, returns the pixel and layer-time-actu
   assert.deepEqual(await read('good', 1, 0), { rgba: [9, 8, 7, 255], timeActual: '2024-01-01' });
   assert.deepEqual((await read('good', 0, 0)).rgba, [1, 2, 3, 4]);
   assert.equal(calls.filter((u) => u === 'good').length, 1);
-  await assert.rejects(read('bad', 0, 0), /GIBS tile HTTP 404/);
+  // the status rides on the error, so a caller can tell "no tile here" (404) from a failing server
+  await assert.rejects(read('bad', 0, 0), (e) => /GIBS tile HTTP 404/.test(e.message) && e.status === 404);
   await assert.rejects(read('bad', 0, 0), /GIBS tile HTTP 404/);
   assert.equal(calls.filter((u) => u === 'bad').length, 2);
 });

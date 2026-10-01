@@ -122,7 +122,7 @@ export function createTilePixelReader({
   const cache = new Map();
   const load = async (url) => {
     const res = await fetchImpl(url);
-    if (!res.ok) throw new Error(`GIBS tile HTTP ${res.status}`);
+    if (!res.ok) throw Object.assign(new Error(`GIBS tile HTTP ${res.status}`), { status: res.status });
     const image = await decodeImage(await res.blob());
     const actual = res.headers.get("layer-time-actual");
     return { image, timeActual: actual ? String(actual).slice(0, 10) : null };
