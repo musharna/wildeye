@@ -21,6 +21,8 @@ import { createShortViewportRegions } from './bio/shortViewport.js';
 import { createSpeciesPanel } from './bio/speciesPanel.js';
 import { createModeledRangeControl } from './bio/modeledRangeControl.js';
 import { createModeledRangeLayer, loadModeledList } from './data/modeledRange.js';
+import { createEffortControl } from './bio/effortControl.js';
+import { createEffortLayer } from './data/effort.js';
 import { createDetailsCard } from './bio/detailsCard.js';
 import firesLayer from './data/fires.js';
 import h5n1Layer from './data/h5n1.js';
@@ -321,6 +323,10 @@ async function init() {
     });
     speciesPanel = createSpeciesPanel({ dataManager, speciesLayer, client: bioClient, whatLivesHere });
     createModeledRangeControl({ dataManager, client: bioClient, layer: modeledRangeLayer, loadList: loadModeledList() });
+    // Recording effort for the chosen species' class (docs/superpowers/specs/2026-09-30-effort-layer-design.md).
+    const effortLayer = createEffortLayer();
+    effortLayer.init(viewer);
+    createEffortControl({ dataManager, client: bioClient, layer: effortLayer });
 
     // Keep startup chrome truthful: a share is not restored until camera,
     // visual/map/panel lanes, and every requested layer have terminated.
@@ -371,6 +377,8 @@ async function init() {
       readoutAt: (lat, lon) => Promise.all(readGibsLayers({ lat, lon }).map((r) => r.result)),
       // qa-species modeled-range: the switch's layer, its taxon and error
       modeledRange: modeledRangeLayer,
+      // qa-effort: the RECORDING EFFORT switch's layer, its class, years and error
+      effort: effortLayer,
       viewer,
       styleManager,
       dataManager,

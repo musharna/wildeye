@@ -168,6 +168,24 @@ export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
   return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
 }
 
+/**
+ * Recording effort (spec: docs/superpowers/specs/2026-09-30-effort-layer-design.md): every CC0 / CC BY record of one class, in the
+ * species map's years, as hexagons. GBIF's purpleWhite style runs purple (few records) to white (many); it stayed readable over forest,
+ * desert and sea where green, red and purpleYellow did not (2026-09-30). 60 hexagons across a 512 px tile: coarser than the species
+ * circles, so the two layers read apart.
+ */
+export const EFFORT_STYLE = 'purpleWhite.poly';
+export const EFFORT_HEX_PER_TILE = 60;
+
+export function effortTileTemplate({ classKey, years, now = new Date() }) {
+  if (!Number.isInteger(classKey) || classKey <= 0) throw new Error(`effortTileTemplate: bad classKey ${classKey}`);
+  const params = new URLSearchParams({ taxonKey: String(classKey), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, style: EFFORT_STYLE, srs: 'EPSG:3857' });
+  appendRecordFilters(params, years, now);
+  params.set('bin', 'hex');
+  params.set('hexPerTile', String(EFFORT_HEX_PER_TILE));
+  return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
+}
+
 /** Species rows in a what-lives-here list, dataset rows under it, and dataset rows under the species map legend (R-7u). */
 export const NEAR_SPECIES_LIMIT = 20;
 export const NEAR_DATASET_LIMIT = 5;
@@ -361,6 +379,8 @@ export function parseSpeciesName(json) {
   const lineage = ['kingdomKey', 'phylumKey', 'classKey', 'orderKey', 'familyKey', 'genusKey'].map((k) => json[k]).filter(Number.isInteger);
   return {
     key: json.key, scientificName, commonName: json.vernacularName || null, className: json.class || null,
+    // the effort map counts the records of this class (src/data/effort.js)
+    classKey: Number.isInteger(json.classKey) ? json.classKey : null,
     rank: typeof json.rank === 'string' ? json.rank : null, lineage: [...lineage, json.key],
   };
 }

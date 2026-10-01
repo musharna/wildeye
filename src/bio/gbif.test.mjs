@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  LICENSES, yearRange, yearLabel, densityTileTemplate, speciesNearUrl, gbifPortalUrl, parseSpeciesNear,
+  LICENSES, yearRange, yearLabel, densityTileTemplate, effortTileTemplate, EFFORT_HEX_PER_TILE, EFFORT_STYLE, speciesNearUrl, gbifPortalUrl, parseSpeciesNear,
   inatSuggestUrl, parseInatSuggest, gbifSuggestUrl, parseGbifSuggest, gbifMatchUrl, parseGbifMatch,
   speciesUrl, parseSpeciesName, createRateLimiter, createPool, fetchJson, RequestError, createBioClient, circlePolygonWkt, RADII_KM,
   polygonRefusal, gbifPortalAnyLocationUrl, SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX,
@@ -53,6 +53,28 @@ test('density tiles use the adhoc endpoint with both licence filters and the yea
   // species provider declares that size: at Cesium's default of 256 every GBIF pixel was drawn at about half size.
   assert.equal(SPECIES_TILE_SIZE_PX, 512);
   assert.throws(() => densityTileTemplate({ taxonKey: 0, years: 'all', now: NOW }), /taxonKey/);
+});
+
+test('effort tiles: adhoc hexagons of every CC0 / CC BY record of one class, in the species map\'s years', () => {
+  const tile = (years) => new URL(effortTileTemplate({ classKey: 367, years, now: NOW }).replace('{z}/{x}/{y}', '2/1/1'));
+  const recent = tile('recent');
+  // adhoc: the precomputed density tiles ignore license= and came back empty with no taxon (probed 2026-09-30)
+  assert.equal(recent.origin + recent.pathname, 'https://api.gbif.org/v2/map/occurrence/adhoc/2/1/1@1x.png');
+  assert.equal(recent.searchParams.get('taxonKey'), '367');
+  assert.equal(recent.searchParams.get('checklistKey'), GBIF_BACKBONE_CHECKLIST_KEY);
+  assert.deepEqual(recent.searchParams.getAll('license'), ['CC0_1_0', 'CC_BY_4_0']);
+  assert.equal(recent.searchParams.get('year'), '2017,2026');
+  assert.equal(recent.searchParams.get('srs'), 'EPSG:3857');
+  assert.equal(recent.searchParams.get('bin'), 'hex');
+  assert.equal(recent.searchParams.get('hexPerTile'), String(EFFORT_HEX_PER_TILE));
+  assert.equal(EFFORT_STYLE, 'purpleWhite.poly');
+  assert.equal(recent.searchParams.get('style'), EFFORT_STYLE);
+  // differs from the species map only where the spec says: the taxon, the bins and the style
+  const species = new URL(densityTileTemplate({ taxonKey: 367, years: 'recent', now: NOW }).replace('{z}/{x}/{y}', '2/1/1'));
+  for (const [key, value] of species.searchParams) if (!['style'].includes(key)) assert.deepEqual(recent.searchParams.getAll(key), species.searchParams.getAll(key), key);
+  assert.equal(tile('all').searchParams.has('year'), false);
+  assert.ok(effortTileTemplate({ classKey: 212, years: 'all', now: NOW }).includes('/{z}/{x}/{y}@1x.png?'));
+  for (const bad of [0, null, undefined, 3.5, '367']) assert.throws(() => effortTileTemplate({ classKey: bad, years: 'all', now: NOW }), /classKey/);
 });
 
 // R-7t: GBIF draws each unbinned cell as a circle whose size, fill, opacity and line are set by its record count, in the classes of the
@@ -376,8 +398,10 @@ test('name parsers keep the fields the panel shows', () => {
       rank: 'SPECIES', kingdomKey: 1, phylumKey: 44, classKey: 212, orderKey: 1108, familyKey: 2986, genusKey: 2498205,
     }),
     // rank and lineage (ancestor keys, then its own) place the taxon in a geomodel collection (modeledRange.placeTaxon)
-    { key: 5232437, scientificName: 'Branta canadensis', commonName: 'Canada Goose (canadensis Group)', className: 'Aves', rank: 'SPECIES', lineage: [1, 44, 212, 1108, 2986, 2498205, 5232437] },
+    // classKey: the effort map counts the records of the species' class (spec 2026-09-30-effort-layer-design.md)
+    { key: 5232437, scientificName: 'Branta canadensis', commonName: 'Canada Goose (canadensis Group)', className: 'Aves', classKey: 212, rank: 'SPECIES', lineage: [1, 44, 212, 1108, 2986, 2498205, 5232437] },
   );
+  assert.equal(parseSpeciesName({ key: 7, scientificName: 'A b' }).classKey, null, 'no class key: null, not undefined');
   // a record missing ranks (a kingdom, or an incomplete classification) keeps the keys it has
   assert.deepEqual(parseSpeciesName({ key: 1, canonicalName: 'Animalia', rank: 'KINGDOM', kingdomKey: 1 }).lineage, [1, 1]);
   assert.equal(parseSpeciesName({ key: 7, scientificName: 'A b' }).rank, null);
@@ -535,7 +559,7 @@ test('speciesName caches per key and forgets a failure so a retry can succeed', 
   const client = createBioClient({ fetchImpl: async () => { calls += 1; return fail ? httpError(503) : ok({ key: 7, canonicalName: 'A b', vernacularName: 'Ab' }); } });
   await assert.rejects(client.speciesName(7), /HTTP\u00a0503/);
   fail = false;
-  assert.deepEqual(await client.speciesName(7), { key: 7, scientificName: 'A b', commonName: 'Ab', className: null, rank: null, lineage: [7] });
+  assert.deepEqual(await client.speciesName(7), { key: 7, scientificName: 'A b', commonName: 'Ab', className: null, classKey: null, rank: null, lineage: [7] });
   await client.speciesName(7);
   assert.equal(calls, 2);
 });
@@ -555,7 +579,7 @@ test('speciesName shares one lookup per key, but an abort rejects only the calle
   const client = createBioClient({ fetchImpl });
   const settle = (p) => p.then((value) => ({ value }), (error) => ({ error: error.name }));
   const ABORTED = { error: 'AbortError' };
-  const name = (key) => ({ value: { key, scientificName: `Name ${key}`, commonName: null, className: null, rank: null, lineage: [key] } });
+  const name = (key) => ({ value: { key, scientificName: `Name ${key}`, commonName: null, className: null, classKey: null, rank: null, lineage: [key] } });
 
   // (a) caller A aborts, then caller B immediately asks for the same key with a live signal
   const callerA1 = new AbortController();
