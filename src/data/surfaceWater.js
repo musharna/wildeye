@@ -10,6 +10,9 @@ import { createTilePixelReader, gibsTileRequest } from "./gibsReadout.js";
  */
 export const SURFACE_WATER_URL = "https://storage.googleapis.com/global-surface-water/tiles2021/occurrence/{z}/{x}/{y}.png";
 export const MAX_LEVEL = 13; // z14 is 404 over land (probe 2026-10-01)
+// Tiles exist exactly where they overlap this band (probe 2026-10-01, z3–z13 at 20°E, 45°W and 120°E); the provider is
+// told so, because a 404 past the edge is no data and would otherwise count toward "map tiles failing".
+export const COVERAGE_DEGREES = Object.freeze({ south: -59, north: 78 });
 export const TILE_FAILURE_LIMIT = 8;
 export const PERIOD = "1984–2021";
 const SOURCE = "Source: EC JRC/Google";
@@ -65,7 +68,12 @@ export function createSurfaceWaterLayer({
     _tileFailures = 0;
     _lastError = null;
     const generation = _generation;
-    const provider = providerFor({ url: SURFACE_WATER_URL, maximumLevel: MAX_LEVEL, credit: SOURCE });
+    const provider = providerFor({
+      url: SURFACE_WATER_URL,
+      maximumLevel: MAX_LEVEL,
+      credit: SOURCE,
+      rectangle: Cesium.Rectangle.fromDegrees(-180, COVERAGE_DEGREES.south, 180, COVERAGE_DEGREES.north),
+    });
     provider.errorEvent.addEventListener((tileError) => {
       if (generation !== _generation) return;
       _tileFailures += 1;

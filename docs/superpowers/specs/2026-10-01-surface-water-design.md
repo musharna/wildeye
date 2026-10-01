@@ -17,7 +17,8 @@ few months is faint, permanent water (lakes, the open sea) solid blue. A WHAT LI
 - Licence (download page, read 2026-10-01): "provided free of charge, without restriction of use"; map credit
   "Source: EC JRC/Google". Cite Pekel, Cottam, Gorelick & Belward 2016, Nature 540:418–422,
   doi:10.1038/nature20584 (CrossRef-checked 2026-10-01).
-- Coverage: tiles beyond about 78°N and 59°S are 404. Inside it, dry land is a transparent pixel and the open sea
+- Coverage: tiles exist exactly where they overlap 59°S–78°N (z3–z13, three longitudes); the provider is given that
+  rectangle, so the globe never asks for a tile past the edge. Inside it, dry land is a transparent pixel and the open sea
   is opaque blue (100%).
 - Colour: one colour per occurrence percent k = 1–100. 14 places at z13 (456,433 water pixels) hold exactly 100
   distinct colours; `((25500−255k)//100, 0, 255k//100, round(2.55k))` gives 99 of them, and k = 80 is
