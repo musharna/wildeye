@@ -158,8 +158,9 @@ test('effort layer: off asks for nothing; on draws the class\'s tiles under the 
   assert.equal(url.searchParams.get('taxonKey'), '367');
   assert.equal(url.searchParams.get('year'), '2017,2026', 'the species map\'s default years');
   assert.equal(providers[0].options.credit, EFFORT_CREDIT);
-  // past level 7 Cesium enlarges level-7 tiles: cells stay about 20 km, coarse enough to read as effort rather than single records
-  assert.equal(EFFORT_MAX_LEVEL, 7);
+  // past level 5 Cesium enlarges level-5 tiles: cells stay about 78 km at the equator (63 km at 36° N). The maintainer's pick (2026-10-01)
+  // over level 7: at 16 km cells a well-recorded Appalachia read as a dark checkerboard from 700 km
+  assert.equal(EFFORT_MAX_LEVEL, 5);
   assert.equal(providers[0].options.maximumLevel, EFFORT_MAX_LEVEL);
   assert.equal(viewer.imageryLayers.list.length, 1);
   assert.equal(viewer.imageryLayers.list[0].alpha, EFFORT_ALPHA);

@@ -38,7 +38,9 @@ work separates absence from no effort.
   hexagons: `bin=hex` left places with 5 to 7,398 records empty (z3 x2 y3, arachnids, 2026-10-01; the vector
   tile's hexagons are missing there too, so it is the binning, not the drawing), and a veil read off drawn
   colours could not tell an empty hexagon from a dropped one.
-- Tiles stop at level 7 (cells about 20 km at the equator); Cesium enlarges level 7 beyond. The decoders (`pbf`,
+- Tiles stop at level 5 (cells about 78 km at the equator, 63 km at 36° N); Cesium enlarges level 5 beyond. Q11
+  (2026-10-01, the maintainer's pick over level 7): 20 km cells were truthful but read as a dark checkerboard over
+  well-recorded Appalachia from 700 km. The decoders (`pbf`,
   `@mapbox/vector-tile`) load with the first tile, not with the app.
 - Drawn under the species' records and the modeled range (z-rank 980 < 990 < 1000). Off means no layer at all,
   so a switched-off map asks GBIF for nothing.
