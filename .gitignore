@@ -85,3 +85,5 @@ public/data/geomodel_verdicts.json
 public/data/geomodel_species.json
 public/data/.geomodel_species.lock
 pipeline/cron_geomodel.log
+public/data/hfp/
+public/data/hfp.json
