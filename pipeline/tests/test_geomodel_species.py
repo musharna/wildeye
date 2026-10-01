@@ -320,3 +320,41 @@ def test_the_full_check_takes_the_cheapest_species_first_so_a_budget_covers_the_
     rest = Sized(n=3)
     assert _run(tmp_path, rest, verdicts, "--max-tiles", "6")[0] == 0
     assert {c[0] for c in rest.calls} == {0}  # positive control: the big one is checked when the budget allows
+
+
+def test_a_daily_budget_counts_the_tiles_runs_asked_in_the_last_24_hours(tmp_path):
+    import datetime as dt
+
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    t0 = dt.datetime(2026, 10, 1, 23, 0, tzinfo=dt.timezone.utc)
+
+    def run(fake, at):
+        out = tmp_path / "species.json"
+        args = ["--verdicts", str(verdicts), "--out", str(out), "--max-tiles-per-day", "6"]
+        return gsp.main(args, sources=fake, now=lambda: at)
+
+    first = TileLog(n=6)
+    assert run(first, t0) == 3 and len(first.calls) == 6  # 3 species of 2 tiles
+    log_ = json.loads((tmp_path / "species.json").read_text())["tile_log"]
+    assert log_ == [{"at": "2026-10-01T23:00:00+00:00", "tiles": 6}]
+    soon = TileLog(n=6)
+    assert run(soon, t0 + dt.timedelta(hours=23)) == 3
+    assert soon.calls == []  # the day's 6 are spent: a rerun or an early cron asks nothing
+    later = TileLog(n=6)
+    assert run(later, t0 + dt.timedelta(hours=24, minutes=1)) == 0
+    assert len(later.calls) == 6  # positive control: a day on, the budget is back
+    log_ = json.loads((tmp_path / "species.json").read_text())["tile_log"]
+    assert [e["tiles"] for e in log_] == [6, 0, 6]
+
+
+def test_the_tile_log_survives_a_new_model_version(tmp_path):
+    import datetime as dt
+
+    # requests count against iNaturalist's day whatever model they were for
+    out = tmp_path / "species.json"
+    at = dt.datetime(2026, 10, 1, 12, 0, tzinfo=dt.timezone.utc)
+    out.write_text(json.dumps({"geomodel_version": "2.33", "species": {}, "tile_log": [{"at": at.isoformat(), "tiles": 5}]}))
+    fake = TileLog(n=3)
+    args = ["--verdicts", str(_verdicts(tmp_path, Arachnida="pass")), "--out", str(out), "--max-tiles-per-day", "6"]
+    assert gsp.main(args, sources=fake, now=lambda: at + dt.timedelta(hours=1)) == 3
+    assert fake.calls == []  # 1 tile left: no 2-tile species fits

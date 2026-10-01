@@ -71,7 +71,9 @@ and differs elsewhere. So the one-tile skim is not used, as fixed above.
 only compact ranges fits that data, but it is a rule drawn from the data that failed the gate, resting on one
 compact failure, so it is not used. Instead `--mode full` checks the cheapest species first (compact
 Arachnida: 2,251 species, 9,889 tiles; globe-spanning: 280 species, 6,272 tiles, still to check on 09-30), so a
-day's budget fully checks the most species. `pipeline/run_geomodel_full.sh` runs it daily (8,000 tiles); the
+day's budget fully checks the most species. `pipeline/run_geomodel_full.sh` runs it daily: at most 8,000
+tiles in any 24 h, counted from the list's `tile_log` (every run appends when and how many it asked, whatever
+model version), so an early cron or a rerun asks nothing more; a lock refuses a second concurrent run (exit 75). The
 monthly `run_geomodel_check.sh` writes only the verdicts. Arachnida: about 1,000 species more on 09-30 (2,500
 tiles, to stay under the day's 10,000 with 4992's 4,700 and the 01:30 check), the rest by about 2026-10-03.
 

@@ -78,6 +78,14 @@ def previous_entries(path: Path, version: str) -> dict[str, dict]:
     return entries
 
 
+def previous_tile_log(path: Path) -> list[dict]:
+    """The tile_log of the list at `path` (any model version: requests count against iNaturalist's day all the same)."""
+    try:
+        return json.loads(path.read_text()).get("tile_log", [])
+    except FileNotFoundError:
+        return []
+
+
 def skim_tile(geom, z: int = TILE_ZOOM) -> tuple[int, int]:
     """The tile (x, y) at zoom z holding the most of the range; the first in row order on a tie."""
     xs, ys = _tile_range(*geom.bounds, z)
@@ -152,8 +160,8 @@ def check_tiles(
         len(missing),
         len(todo),
     )
-    write(species)
     failed = asked = 0
+    write(species, asked)
     for i, (group, taxon_id, name, geom) in enumerate(missing, 1):
         s = species[name]
         cost = 1 if mode == "skim" else full_tiles(geom)
@@ -182,7 +190,7 @@ def check_tiles(
             )
             failed += 1
         if i % CHECKPOINT_EVERY == 0:
-            write(species)
+            write(species, asked)
         if i % 100 == 0 or i == len(missing):
             log.info(
                 "%s/%s species checked, %s failed, %s tiles",
@@ -191,11 +199,11 @@ def check_tiles(
                 failed,
                 asked,
             )
-    write(species)
+    write(species, asked)
     return sum(1 for s in species.values() if s["iou"] is None)
 
 
-def main(argv=None, *, sources=None) -> int:
+def main(argv=None, *, sources=None, now=None) -> int:
     import argparse
     import datetime as dt
 
@@ -228,6 +236,12 @@ def main(argv=None, *, sources=None) -> int:
         default=None,
         help="stop before asking more tiles than this",
     )
+    ap.add_argument(
+        "--max-tiles-per-day",
+        type=int,
+        default=None,
+        help="stop before the tiles asked in the last 24 h (this file's tile_log, all runs) pass this",
+    )
     args = ap.parse_args(argv)
     if args.include_full and args.mode != "skim":
         ap.error("--include-full is for --mode skim")
@@ -243,7 +257,20 @@ def main(argv=None, *, sources=None) -> int:
         for g, v in verdicts["groups"].items()
     }
 
-    def write(species: dict) -> None:
+    # iNaturalist asks for under 10,000 requests a day: every run logs what it asked, and a daily budget is what the
+    # last 24 h of runs left, whatever model version they checked
+    started = (now or (lambda: dt.datetime.now(dt.timezone.utc)))()
+    prior_log = previous_tile_log(args.out)
+    max_tiles = args.max_tiles
+    if args.max_tiles_per_day is not None:
+        day = dt.timedelta(hours=24)
+        used = sum(e["tiles"] for e in prior_log if started - dt.datetime.fromisoformat(e["at"]) < day)
+        left = max(0, args.max_tiles_per_day - used)
+        log.info("daily tile budget %s: %s asked in the last 24 h, %s left", args.max_tiles_per_day, used, left)
+        max_tiles = left if max_tiles is None else min(max_tiles, left)
+    kept_log = [e for e in prior_log if started - dt.datetime.fromisoformat(e["at"]) < dt.timedelta(hours=48)]
+
+    def write(species: dict, asked: int) -> None:
         unchecked = sum(1 for s in species.values() if s["iou"] is None)
         write_atomic(
             args.out,
@@ -257,6 +284,7 @@ def main(argv=None, *, sources=None) -> int:
                 "species_iou_min": SPECIES_IOU_MIN,
                 "unchecked": unchecked,
                 "groups": groups,
+                "tile_log": kept_log + [{"at": started.isoformat(timespec="seconds"), "tiles": asked}],
                 "species": species,
             },
         )
@@ -284,7 +312,7 @@ def main(argv=None, *, sources=None) -> int:
             write,
             mode=args.mode,
             include_full=args.include_full,
-            max_tiles=args.max_tiles,
+            max_tiles=max_tiles,
             only=only,
         )
     log.info("wrote %s (%s species, %s unchecked)", args.out, len(todo), unchecked)
