@@ -8,7 +8,7 @@
     "src/data/egm96Grid.generated.js"
   ],
   "vendorBytes": {
-    "chunk:vendor-cesium": 4136582,
+    "chunk:vendor-cesium": 4136598,
     "/cesium/Assets/approximateTerrainHeights.json": 299471,
     "/cesium/Assets/IAU2006_XYS/IAU2006_XYS_18.json": 65310
   }
