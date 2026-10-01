@@ -35,6 +35,7 @@ import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLaye
 import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer } from './data/gibsLayer.js';
 import { hansenLossLayer } from './data/hansenLoss.js';
 import { mangrovesLayer } from './data/mangroves.js';
+import { surfaceWaterLayer } from './data/surfaceWater.js';
 import { invasivesLayer } from './data/invasives.js';
 import { installDrapeExclusivity } from './data/drapeExclusive.js';
 import { createCompare, encodeCompareParam, decodeCompareParam } from './compare.js';
@@ -197,8 +198,9 @@ async function init() {
     const gibsLayers = [gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer];
     for (const layer of gibsLayers) dataManager.register(layer);
     dataManager.register(hansenLossLayer);
+    dataManager.register(surfaceWaterLayer);
     // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
-    const drapeLayers = [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer];
+    const drapeLayers = [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer];
     const drapeIds = drapeLayers.map((l) => l.id);
     const compare = createCompare({
       dataManager,
@@ -302,12 +304,12 @@ async function init() {
       dismissCard: () => bioCard.element.querySelector('.bio-card-close')?.click(),
       setPanelCollapsed: (id, collapsed) => styleManager.setPanelCollapsed(id, collapsed, { persist: false, syncShare: false }),
     });
-    // Stage 3 "What's here": a WHAT LIVES HERE click also reads every enabled GIBS layer (and forest loss, mangroves, GRIIS lists) at the spot (grill A14).
+    // Stage 3 "What's here": a WHAT LIVES HERE click also reads every enabled GIBS layer (and forest loss, surface water, mangroves, GRIIS lists) at the spot (grill A14).
     // The chosen species' modeled range (docs/superpowers/specs/2026-09-30-modeled-range-design.md) is read there too while it is on.
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[...gibsLayers, hansenLossLayer, mangrovesLayer, invasivesLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, mangrovesLayer, invasivesLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
