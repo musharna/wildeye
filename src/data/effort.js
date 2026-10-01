@@ -27,8 +27,11 @@ export const EFFORT_SPARSE_PER_KM2 = 1e-4;
 export const EFFORT_CLEAR_PER_KM2 = 1;
 /** Cells across a tile: 32 px of a 512 px tile. */
 export const EFFORT_CELLS = 16;
-/** The finest level asked of GBIF; Cesium enlarges it beyond. 16 cells on a level-7 tile are about 20 km at the equator. */
-export const EFFORT_MAX_LEVEL = 7;
+/**
+ * The finest level asked of GBIF; Cesium enlarges it beyond. 16 cells on a level-5 tile are about 78 km at the equator. Level 7 (about 20 km)
+ * was truthful but read as a dark checkerboard over well-recorded Appalachia from 700 km; the maintainer picked 5 (2026-10-01).
+ */
+export const EFFORT_MAX_LEVEL = 5;
 const EARTH_CIRCUMFERENCE_KM = 40075.016686;
 
 /**
