@@ -297,3 +297,26 @@ def test_only_limits_which_species_are_checked_and_the_list_still_names_all(tmp_
     names.write_text("Species 9\n")  # a name not in the passing collections is an error, not a silent no-op
     with pytest.raises(SystemExit):
         _run(tmp_path, TileLog(n=4), verdicts, "--mode", "skim", "--only", str(names))
+
+
+def test_the_full_check_takes_the_cheapest_species_first_so_a_budget_covers_the_most(tmp_path):
+    big = box(0.0, -5.0, 100.0, 30.0)  # 3 x 2 = 6 z3 tiles; SKIM_RANGE is 2
+
+    class Sized(TileLog):
+        def range_geom(self, group, taxon_id):
+            return big if taxon_id == 0 else SKIM_RANGE
+
+        def tile_mask(self, taxon_id, z, x, y):
+            self.calls.append((taxon_id, z, x, y))
+            return gc.range_tile_mask(self.range_geom(None, taxon_id), z, x, y, 64)
+
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    fake = Sized(n=3)
+    code, out = _run(tmp_path, fake, verdicts, "--max-tiles", "4")
+    assert code == 3
+    assert sorted({c[0] for c in fake.calls}) == [1, 2]  # the two 2-tile species, not the 6-tile one listed first
+    doc = json.loads(out.read_text())["species"]
+    assert doc["Species 0"]["iou"] is None and doc["Species 1"]["check"] == "full"
+    rest = Sized(n=3)
+    assert _run(tmp_path, rest, verdicts, "--max-tiles", "6")[0] == 0
+    assert {c[0] for c in rest.calls} == {0}  # positive control: the big one is checked when the budget allows

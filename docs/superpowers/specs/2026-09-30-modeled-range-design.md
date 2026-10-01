@@ -60,6 +60,21 @@ drawn at random (seed 20260930) from the 380 at ≥ 0.80. The skim is used only 
 IoU below 0.2 skim below 0.70, and (2) at least 95 of the 100 skim at ≥ 0.70. If either fails, no skim scores
 are shown and the list fills in by full checks only.
 
+**Calibration result (job 5021, 2026-09-30 20:57 EDT): FAIL.** (2) passed, 100/100. (1) failed: only
+Tetragnatha extensa (full 0.02) skimmed below 0.70 (0.30); Cheiracanthium inclusum 0.98, Steatoda grossa
+0.99, Neomolgus littoralis 0.96 and Varroa destructor 0.91 all skimmed as agreeing. All five are ranges whose
+bounds span the globe (-180 to 180, 1-4% of the box filled): the served map agrees where most of the range is
+and differs elsewhere. So the one-tile skim is not used, as fixed above.
+
+**What replaced it: full checks only, cheapest first.** Of the 400 fully checked, the 322 compact ranges had
+1 failure (Nephila comorana 0.63, which the skim did flag) and the 78 globe-spanning ranges had 6. Skimming
+only compact ranges fits that data, but it is a rule drawn from the data that failed the gate, resting on one
+compact failure, so it is not used. Instead `--mode full` checks the cheapest species first (compact
+Arachnida: 2,251 species, 9,889 tiles; globe-spanning: 280 species, 6,272 tiles, still to check on 09-30), so a
+day's budget fully checks the most species. `pipeline/run_geomodel_full.sh` runs it daily (8,000 tiles); the
+monthly `run_geomodel_check.sh` writes only the verdicts. Arachnida: about 1,000 species more on 09-30 (2,500
+tiles, to stay under the day's 10,000 with 4992's 4,700 and the 01:30 check), the rest by about 2026-10-03.
+
 ## Browser
 
 - `src/data/modeledRange.js`: loads the list lazily (first species pick), and places a chosen GBIF taxon
