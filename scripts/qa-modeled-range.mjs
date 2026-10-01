@@ -74,7 +74,8 @@ const card = () => page.evaluate(() => {
   for (let i = 0; i < layers.length; i += 1) drawn.push({ index: i, url: String(layers.get(i).imageryProvider?.url ?? ''), alpha: layers.get(i).alpha, show: layers.get(i).show });
   return {
     rowShown: !document.getElementById('species-modeled').hidden,
-    toggleShown: Boolean(toggle && !toggle.hidden && toggle.getBoundingClientRect().height > 0),
+    // drawn, whatever its hidden attribute says: a later display rule of equal specificity once drew a hidden switch (09-30)
+    toggleShown: Boolean(toggle && toggle.getBoundingClientRect().height > 0 && getComputedStyle(toggle).display !== 'none'),
     toggleText: toggle?.textContent ?? null,
     // the label stays inside its pill: in a flex row the switch shrank to 133 px under 148 px of text (09-30 screenshot)
     toggleFits: Boolean(toggle) && toggle.scrollWidth <= toggle.clientWidth,
