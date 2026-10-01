@@ -91,7 +91,7 @@ test('a bird of a failed collection gets no switch and the reason; picking it tu
   assert.equal(viewer.imageryLayers.list.length, 0, 'a new species removes the old range at once');
   await settle();
   assert.equal(toggle.hidden, true);
-  assert.equal(note.textContent, 'No modeled range: Aves failed validation (September 2026)');
+  assert.equal(note.textContent, "No modeled range: iNaturalist's range maps for birds failed our accuracy check");
   assert.equal(layer.isEnabled(), false);
   // re-arming the old key does not resurrect it: the switch starts off again
   dataManager.pick(2148457);
@@ -107,10 +107,10 @@ test('a slow lookup for an earlier pick never overwrites the later one', async (
   dataManager.pick(2148457);
   dataManager.pick(2498205);
   await settle();
-  assert.equal(note.textContent, 'No modeled range: Aves failed validation (September 2026)');
+  assert.equal(note.textContent, "No modeled range: iNaturalist's range maps for birds failed our accuracy check");
   releaseSpider();
   await settle();
-  assert.equal(note.textContent, 'No modeled range: Aves failed validation (September 2026)');
+  assert.equal(note.textContent, "No modeled range: iNaturalist's range maps for birds failed our accuracy check");
   assert.equal(toggle.hidden, true);
   assert.equal(layer.getStatus().taxon, null);
 });

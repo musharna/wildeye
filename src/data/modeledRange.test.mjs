@@ -5,8 +5,9 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import {
   placeTaxon, modeledNote, validationMonth, modeledTileTemplate, loadModeledList, createModeledRangeLayer,
-  MODELED_ZRANK, MODELED_ALPHA, MODELED_MAX_LEVEL, INAT_TILE_SERVER, INAT_MAX_IN_FLIGHT, THROTTLED_MESSAGE, MODELED_CREDIT,
+  MODELED_ZRANK, MODELED_ALPHA, MODELED_MAX_LEVEL, INAT_TILE_SERVER, INAT_MAX_IN_FLIGHT, THROTTLED_MESSAGE, MODELED_CREDIT, GROUP_PLAIN_NAMES,
 } from './modeledRange.js';
+import { readFileSync } from 'node:fs';
 import { SPECIES_ZRANK, TILE_FAILURE_LIMIT } from './species.js';
 
 const LIST = {
@@ -67,9 +68,9 @@ test('modeledNote: every state reads as a reason, never blank; the shown note na
   const place = (state, extra = {}) => ({ state, group: 'Aves', month: 'September 2026', ...extra });
   assert.equal(modeledNote(place('shown', { group: 'Arachnida', check: 'full' })), 'iNaturalist Geomodel · Arachnida passed validation September 2026');
   assert.equal(modeledNote(place('shown', { group: 'Arachnida', check: 'skim' })), 'iNaturalist Geomodel · Arachnida passed validation September 2026 · map spot-checked');
-  assert.equal(modeledNote(place('group-failed')), 'No modeled range: Aves failed validation (September 2026)');
-  assert.equal(modeledNote(place('group-insufficient', { group: 'Fungi' })), 'No modeled range: too few Fungi species could be tested (September 2026)');
-  assert.equal(modeledNote(place('tiles-disagree', { group: 'Arachnida', iou: 0.14 })), "No modeled range: iNaturalist's map tiles differ from the range that was tested (overlap 0.14)");
+  assert.equal(modeledNote(place('group-failed')), "No modeled range: iNaturalist's range maps for birds failed our accuracy check");
+  assert.equal(modeledNote(place('group-insufficient', { group: 'Fungi' })), 'No modeled range: too few fungi species could be tested (September 2026)');
+  assert.equal(modeledNote(place('tiles-disagree', { group: 'Arachnida', iou: 0.14 })), "No modeled range: iNaturalist's map for this species doesn't match its tested range");
   assert.equal(modeledNote(place('unchecked')), "No modeled range: its map tiles couldn't be checked this month");
   assert.equal(modeledNote(place('not-in-model')), "No modeled range: not in iNaturalist's geomodel under this name");
   assert.equal(modeledNote(place('not-species')), 'No modeled range: only species have one');
@@ -77,6 +78,19 @@ test('modeledNote: every state reads as a reason, never blank; the shown note na
   assert.equal(modeledNote({ state: 'loading' }), 'Checking for a modeled range…');
   assert.equal(modeledNote({ state: 'lookup-failed', error: 'HTTP 503' }), 'No modeled range: GBIF lookup failed (HTTP 503)');
   assert.throws(() => modeledNote({ state: 'bogus' }), /unknown modeled-range state bogus/);
+});
+
+test('modeledNote: a reason names a collection in plain words, for every collection the check knows; an unnamed one throws', () => {
+  // the collections are the pipeline's (pipeline/geomodel_sources.py GROUPS), as listed in the tracked seed verdicts
+  const seed = JSON.parse(readFileSync(new URL('../../public/data/seed/geomodel_verdicts.json', import.meta.url), 'utf8'));
+  const groups = Object.keys(seed.groups);
+  assert.equal(groups.length, 13);
+  for (const group of groups) {
+    const note = modeledNote({ state: 'group-failed', group, month: 'September 2026' });
+    assert.ok(!note.includes(group), `${group} shown by its Latin name: ${note}`);
+    assert.match(note, new RegExp(`range maps for ${GROUP_PLAIN_NAMES[group]} failed`));
+  }
+  assert.throws(() => modeledNote({ state: 'group-failed', group: 'Bacteria', month: 'September 2026' }), /no plain name for collection Bacteria/);
 });
 
 test('validationMonth reads the UTC month of the verdicts', () => {

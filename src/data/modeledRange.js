@@ -18,6 +18,12 @@ export const INAT_TILE_SERVER = 'api.inaturalist.org:443';
 export const INAT_MAX_IN_FLIGHT = 2;
 export const THROTTLED_MESSAGE = 'iNaturalist is limiting map requests — try again in a minute';
 export const MODELED_CREDIT = 'Modeled range: iNaturalist Geomodel, CC BY 4.0';
+/** The card names a collection (pipeline/geomodel_sources.py GROUPS) in plain words, never by its Latin name. */
+export const GROUP_PLAIN_NAMES = {
+  Aves: 'birds', Mammalia: 'mammals', Amphibia: 'amphibians', Reptilia: 'reptiles', Actinopterygii: 'ray-finned fish',
+  Insecta: 'insects', Arachnida: 'spiders and other arachnids', Mollusca: 'molluscs', Plantae: 'plants', Fungi: 'fungi',
+  Protozoa: 'protozoa', Chromista: 'kelp, diatoms and other chromists', OtherAnimalia: 'other animals',
+};
 
 export function modeledTileTemplate(taxonId) {
   return `https://api.inaturalist.org/v2/geomodel/${taxonId}/{z}/{x}/{y}.png?thresholded=true`;
@@ -63,15 +69,21 @@ export function placeTaxon(taxon, list) {
   return { state: 'not-in-model', group, month };
 }
 
+function plainName(group) {
+  const name = GROUP_PLAIN_NAMES[group];
+  if (!name) throw new Error(`modeled range: no plain name for collection ${group}`);
+  return name;
+}
+
 /** The card's line for a placement: why there is no switch, or what the switch shows. */
 export function modeledNote(place) {
   const { state, group, month } = place;
   switch (state) {
     case 'loading': return 'Checking for a modeled range…';
     case 'shown': return `iNaturalist Geomodel · ${group} passed validation ${month}${place.check === 'skim' ? ' · map spot-checked' : ''}`;
-    case 'group-failed': return `No modeled range: ${group} failed validation (${month})`;
-    case 'group-insufficient': return `No modeled range: too few ${group} species could be tested (${month})`;
-    case 'tiles-disagree': return `No modeled range: iNaturalist's map tiles differ from the range that was tested (overlap ${place.iou})`;
+    case 'group-failed': return `No modeled range: iNaturalist's range maps for ${plainName(group)} failed our accuracy check`;
+    case 'group-insufficient': return `No modeled range: too few ${plainName(group)} species could be tested (${month})`;
+    case 'tiles-disagree': return "No modeled range: iNaturalist's map for this species doesn't match its tested range";
     case 'unchecked': return "No modeled range: its map tiles couldn't be checked this month";
     case 'not-in-model': return "No modeled range: not in iNaturalist's geomodel under this name";
     case 'not-species': return 'No modeled range: only species have one';
