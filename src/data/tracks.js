@@ -10,6 +10,9 @@ import { extentFromTimes, pluck } from "./observedExtent.js";
  * track's span, the track is drawn only up to that instant with a head marker
  * interpolated inside the segment; tracks that do not span the instant are shown
  * faded. Never interpolates across a gap (segments are already split there).
+ * While the time bar plays, the in-span set glides from each tick's instant to the next over the tick
+ * (docs/superpowers/specs/2026-10-01-tracks-glide-design.md): its positions and shows are callbacks of an
+ * animated instant, through the same clipSegmentMs, so every frame draws what a paused bar at that instant draws.
  */
 const DATA_URL = "data/tracks.geojson";
 
@@ -76,7 +79,8 @@ export function clipSegmentMs(coords, ts, tMs) {
   return { coords: [...coords.slice(0, i + 1), head], head, complete: false };
 }
 
-export function createTracksLayer() {
+/** `clock` (ms, monotonic) drives the glide between play ticks; tests pass their own. */
+export function createTracksLayer({ clock = () => performance.now() } = {}) {
   let _dataSource = null;
   let _features = [];
   let _groups = []; // groups present, legend order
@@ -87,6 +91,7 @@ export function createTracksLayer() {
   let _lastUpdate = null;
   let _lastError = null;
   let _observedMs = null;
+  let _motion = null; // { stepMs, tickMs } while the time bar plays, else null
   let _rowControlsListener = null;
   // Built once per load (and again only when the time bar is switched on or off): one base line per segment,
   // full length, bright with no observed time and faded with one. A time step then touches only the segments in
@@ -96,6 +101,8 @@ export function createTracksLayer() {
   let _ts = []; // feature → fix times in epoch ms, parsed once per load
   let _base = []; // feature → base line entity (null when the segment has < 2 fixes)
   let _live = new Map(); // feature → { line, head } while the observed time is inside its span
+  // Base lines whose segment enters or leaves its span inside the playing tick: their show is a callback.
+  let _baseDyn = new Set();
 
   const isShown = (i) => _visible[_features[i].properties.group] !== false;
 
@@ -108,16 +115,33 @@ export function createTracksLayer() {
   });
   const toCartesians = (coords) => coords.map(([lon, lat]) => Cesium.Cartesian3.fromDegrees(lon, lat, 0));
 
-  /** Bring the in-span set up to _observedMs: add, move or drop only the segments whose state changed. */
+  const inSpan = (i, a) => {
+    const ts = _ts[i];
+    const n = Math.min(_features[i].geometry.coordinates.length, ts.length);
+    return ts[0] <= a && a < ts[n - 1];
+  };
+  const resetShow = (graphics) => {
+    if (graphics.show !== undefined) graphics.show = undefined;
+  };
+
+  /**
+   * Bring the in-span set up to _observedMs: add, move or drop only the segments whose state changed. While playing,
+   * the set is every segment that covers some moment of the tick [t0, t0 + step], drawn by callbacks of the animated
+   * instant `at()`, which runs from t0 to the next tick's instant over one tick and then holds.
+   */
   const step = () => {
     if (!_dataSource || _observedMs === null) return;
     const es = _dataSource.entities;
-    const t = _observedMs;
-    const now = new Map();
+    const m = _motion;
+    const t0 = _observedMs;
+    const t1 = m ? t0 + m.stepMs : t0;
+    const c0 = m ? clock() : 0;
+    const at = m ? () => t0 + (t1 - t0) * Math.min(1, Math.max(0, (clock() - c0) / m.tickMs)) : () => t0;
+    const now = new Set();
     _features.forEach((f, i) => {
       const ts = _ts[i];
       const n = Math.min(f.geometry.coordinates.length, ts.length);
-      if (_base[i] && n >= 2 && ts[0] <= t && t < ts[n - 1]) now.set(i, clipSegmentMs(f.geometry.coordinates, ts, t));
+      if (_base[i] && n >= 2 && ts[0] <= t1 && t0 < ts[n - 1]) now.add(i);
     });
     es.suspendEvents();
     for (const [i, { line, head }] of _live) {
@@ -125,38 +149,84 @@ export function createTracksLayer() {
       es.remove(line);
       es.remove(head);
       _base[i].show = isShown(i);
+      if (_baseDyn.delete(i)) resetShow(_base[i].polyline);
       _live.delete(i);
     }
-    for (const [i, c] of now) {
-      const positions = toCartesians(c.coords);
-      const headPos = Cesium.Cartesian3.fromDegrees(c.head[0], c.head[1], 0);
-      const had = _live.get(i);
-      if (had) {
+    for (const i of now) {
+      const coords = _features[i].geometry.coordinates;
+      const ts = _ts[i];
+      let positions, headPos;
+      if (m) {
+        const cart = toCartesians(coords);
+        let lastA = NaN;
+        let last = null;
+        const clipNow = () => {
+          const a = at();
+          if (a !== lastA) [lastA, last] = [a, clipSegmentMs(coords, ts, a)];
+          return last;
+        };
+        positions = new Cesium.CallbackProperty(() => {
+          const c = clipNow();
+          if (!c) return [];
+          if (c.complete) return cart;
+          return [...cart.slice(0, c.coords.length - 1), Cesium.Cartesian3.fromDegrees(c.head[0], c.head[1], 0)];
+        }, false);
+        headPos = new Cesium.CallbackPositionProperty(() => {
+          const h = clipNow()?.head ?? coords[0];
+          return Cesium.Cartesian3.fromDegrees(h[0], h[1], 0);
+        }, false);
+      } else {
+        const c = clipSegmentMs(coords, ts, t0);
+        positions = toCartesians(c.coords);
+        headPos = Cesium.Cartesian3.fromDegrees(c.head[0], c.head[1], 0);
+      }
+      let had = _live.get(i);
+      if (!had) {
+        const p = _features[i].properties;
+        const color = groupColor(p.group);
+        const show = isShown(i);
+        const id = _base[i].id;
+        const line = es.add({
+          id: `${id}:live`,
+          show,
+          polyline: { positions, width: 3, material: color, clampToGround: false, arcType: Cesium.ArcType.GEODESIC },
+          description: describeTrack(p),
+          properties: { ...p, kind: "track" },
+        });
+        const head = es.add({
+          id: `${id}:head`,
+          show,
+          position: headPos,
+          point: pointGraphics(color, 1),
+          description: describeTrack(p),
+          properties: { ...p, kind: "head" },
+        });
+        had = { line, head, dyn: false }; // dyn: its shows are callbacks of the playing tick
+        _live.set(i, had);
+      } else {
         had.line.polyline.positions = positions;
         had.head.position = headPos;
-        continue;
       }
-      const p = _features[i].properties;
-      const color = groupColor(p.group);
-      const show = isShown(i);
-      const id = _base[i].id;
-      const line = es.add({
-        id: `${id}:live`,
-        show,
-        polyline: { positions, width: 3, material: color, clampToGround: false, arcType: Cesium.ArcType.GEODESIC },
-        description: describeTrack(p),
-        properties: { ...p, kind: "track" },
-      });
-      const head = es.add({
-        id: `${id}:head`,
-        show,
-        position: headPos,
-        point: pointGraphics(color, 1),
-        description: describeTrack(p),
-        properties: { ...p, kind: "head" },
-      });
-      _base[i].show = false;
-      _live.set(i, { line, head });
+      const n = Math.min(coords.length, ts.length);
+      if (m && !(ts[0] <= t0 && t1 < ts[n - 1])) {
+        // enters or leaves its span inside this tick: the live line and head show while it is in span, the faded
+        // base line while it is not
+        const live = new Cesium.CallbackProperty(() => inSpan(i, at()), false);
+        had.line.polyline.show = live;
+        had.head.point.show = live;
+        had.dyn = true;
+        _base[i].polyline.show = new Cesium.CallbackProperty(() => !inSpan(i, at()), false);
+        _base[i].show = isShown(i);
+        _baseDyn.add(i);
+      } else {
+        if (had.dyn) {
+          resetShow(had.line.polyline);
+          resetShow(had.head.point);
+          had.dyn = false;
+        }
+        if (_baseDyn.delete(i)) resetShow(_base[i].polyline);
+        _base[i].show = false;
+      }
     }
     es.resumeEvents();
   };
@@ -168,6 +238,7 @@ export function createTracksLayer() {
     es.suspendEvents();
     es.removeAll();
     _live = new Map();
+    _baseDyn = new Set();
     _base = [];
     const timed = _observedMs !== null;
     const lastSeg = {}; // dataset → highest segment index: the head dot marks the last fix once per deployment
@@ -216,7 +287,8 @@ export function createTracksLayer() {
       const g = e.properties?.group?.getValue?.();
       e.show = _visible[g] !== false;
     }
-    for (const i of _live.keys()) _base[i].show = false; // an in-span segment is drawn by its live line
+    // an in-span segment is drawn by its live line; one entering or leaving its span mid-tick shows its base by callback
+    for (const i of _live.keys()) if (!_baseDyn.has(i)) _base[i].show = false;
   };
 
   const layer = {
@@ -311,12 +383,18 @@ export function createTracksLayer() {
       return extentFromTimes([...pluck(_features, "start"), ...pluck(_features, "end")]);
     },
 
-    setObservedTime(iso) {
+    /** `motion` is the time bar's play state (observedTime.playState()): while playing, glide to the next step over one tick. */
+    setObservedTime(iso, motion) {
       const ms = iso ? Date.parse(iso) : null;
       if (iso && !Number.isFinite(ms)) return false;
-      if (ms === _observedMs) return true;
+      const playing = !!motion?.playing && ms !== null;
+      if (playing && !(Number.isFinite(motion.stepMs) && motion.stepMs > 0 && Number.isFinite(motion.tickMs) && motion.tickMs > 0))
+        throw new Error(`tracks: play needs a positive finite step and tick, got ${JSON.stringify(motion)}`);
+      const m = playing ? { stepMs: motion.stepMs, tickMs: motion.tickMs } : null;
+      if (ms === _observedMs && m?.stepMs === _motion?.stepMs && m?.tickMs === _motion?.tickMs) return true;
       const wasTimed = _observedMs !== null;
       _observedMs = ms;
+      _motion = m;
       if (wasTimed !== (ms !== null)) rebuild();
       else step();
       return true;
@@ -371,7 +449,7 @@ export function createTracksLayer() {
       if (!_dataSource || !_dataSource.show) return [];
       const now = Cesium.JulianDate.now();
       return _dataSource.entities.values
-        .filter((e) => e.show && e.properties?.kind?.getValue?.(now) === "head")
+        .filter((e) => e.show && e.point?.show?.getValue?.(now) !== false && e.properties?.kind?.getValue?.(now) === "head")
         .slice(0, maxCount)
         .map((e) => {
           const g = (k) => e.properties?.[k]?.getValue(now);

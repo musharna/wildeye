@@ -172,3 +172,69 @@ test('tracks: stepping through time draws exactly what a fresh load at that time
   l.setObservedTime(H(3)); const a = drawn(ds); l.setObservedTime(H(3.5));
   assert.notDeepEqual(a, drawn(ds));
 });
+
+// ---- glide (spec 2026-10-01-tracks-glide-design.md): while the time bar plays, heads move between ticks.
+const HOUR = 3600000;
+async function loadedWithClock(gj) {
+  const clock = { now: 0 };
+  const saved = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => gj });
+  try {
+    const l = createTracksLayer({ clock: () => clock.now });
+    let ds; l.init({ dataSources: { add(d) { ds = d; }, remove() {} } });
+    assert.equal(await l.update(), true);
+    l.enable();
+    return { l, ds, clock };
+  } finally { globalThis.fetch = saved; }
+}
+const shownNow = (p) => p === undefined || p.getValue(NOW) !== false;
+/** drawn(), counting only what Cesium would draw this frame: a callback may hide a line or a head. */
+function drawnNow(ds) {
+  return drawn({ entities: { values: ds.entities.values.filter((e) => shownNow(e.polyline?.show) && shownNow(e.point?.show)) } });
+}
+const isDynamic = (e) => [e.position, e.polyline?.positions, e.point?.show, e.polyline?.show].some((p) => p && !p.isConstant);
+const playing = (stepMs = 2 * HOUR, tickMs = 1000) => ({ playing: true, stepMs, tickMs });
+
+test('tracks glide: at every moment of a playing tick the layer draws exactly what a paused layer draws at that moment', async () => {
+  const { l, ds, clock } = await loadedWithClock(shelf());
+  // ticks of 2 h cross every boundary of the shelf: A ends at 4, C enters at 6, C's gap from 9 to 12, the old lions never
+  for (const k of [-1, 1, 3, 5, 6, 8, 9, 11, 13]) {
+    clock.now = 50_000 * (k + 2);
+    l.setObservedTime(H(k), playing());
+    for (const f of [0, 0.25, 0.5, 0.9, 1, 1.4]) {
+      clock.now = 50_000 * (k + 2) + f * 1000;
+      const fresh = await loaded(shelf());
+      fresh.l.setObservedTime(H(k + 2 * Math.min(f, 1)));
+      assert.deepEqual(drawnNow(ds), drawn(fresh.ds), `tick at ${k} h, ${f} of the way (past the tick: held at the next step)`);
+    }
+  }
+  // positive control: the head really moves inside one tick (B between its fixes at 3 and 6)
+  clock.now = 0; l.setObservedTime(H(3), playing());
+  const headB = () => drawnNow(ds).find((x) => x.startsWith('head trk:B'));
+  clock.now = 200; const early = headB(); clock.now = 700; const late = headB();
+  assert.ok(early && late && early !== late, `${early} vs ${late}`);
+});
+
+test('tracks glide: between ticks nothing is added, removed or redefined; only the in-span set moves, and pausing stills it', async () => {
+  const { l, ds, clock } = await loadedWithClock(shelf());
+  l.setObservedTime(H(3), playing());
+  const events = [];
+  for (const e of ds.entities.values) e.definitionChanged.addEventListener((ent, prop) => events.push(`${ent.id} ${prop}`));
+  let adds = 0, removes = 0;
+  const { add, remove } = ds.entities;
+  ds.entities.add = function (...a) { adds++; return add.apply(this, a); };
+  ds.entities.remove = function (...a) { removes++; return remove.apply(this, a); };
+  for (const t of [100, 400, 800, 1200]) { clock.now = t; drawnNow(ds); }
+  assert.deepEqual([adds, removes, events], [0, 0, []], 'the motion is all in callbacks');
+  // in the tick from 3 h to 5 h: A (to 4), B (to 8) and the lion L (2..7) cover some moment; nothing else. A also
+  // leaves its span inside the tick, so its faded base line shows by callback from 4 h
+  const dynamic = ds.entities.values.filter(isDynamic).map((e) => e.id.replace(/:\d+(:live|:head)?$/, '$1')).sort();
+  assert.deepEqual(dynamic, ['trk:A:0', 'trk:A:0:head', 'trk:A:0:live', 'trk:B:0:head', 'trk:B:0:live', 'trk:L:0:head', 'trk:L:0:live']);
+  assert.ok(ds.entities.values.filter((e) => e.id.startsWith('trk:old')).every((e) => !isDynamic(e)), 'the 40 old lions cost nothing a frame');
+  // paused at the same instant: a still, drawn as a fresh paused load
+  l.setObservedTime(H(3), { playing: false, stepMs: 2 * HOUR, tickMs: null });
+  assert.equal(ds.entities.values.filter(isDynamic).length, 0, 'paused: nothing evaluated a frame');
+  const fresh = await loaded(shelf()); fresh.l.setObservedTime(H(3));
+  assert.deepEqual(drawnNow(ds), drawn(fresh.ds));
+  assert.throws(() => l.setObservedTime(H(3), { playing: true, stepMs: null, tickMs: 1000 }), /step/);
+});

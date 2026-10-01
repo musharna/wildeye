@@ -63,6 +63,7 @@ export function createObservedTime(opts = {}) {
   const extents = new Map();
   let instant = null; // ms since epoch, or null = live
   let timer = null;
+  let tickMs = null; // the play tick while playing
 
   // A rolling declaration resolves against the clock on every read, so a layer whose pipeline refreshes
   // daily never has to re-declare. A concrete one is taken as given: if a layer's data ends 2026-09-10,
@@ -157,23 +158,32 @@ export function createObservedTime(opts = {}) {
       const base = instant === null ? d.end : instant;
       return store.set(base + n * d.stepMs);
     },
-    play(tickMs = 1000) {
+    play(tick = 1000) {
       if (timer) return;
       const d = domain();
       if (!d) return;
       if (instant === null) store.set(d.start);
+      tickMs = tick;
       timer = setI(() => {
         const cur = domain();
         if (!store.step(1) || !cur || instant >= cur.end) store.pause();
-      }, tickMs);
+      }, tick);
       notify();
     },
     pause() {
       if (timer) {
         clearI(timer);
         timer = null;
+        tickMs = null;
         notify();
       }
+    },
+    /**
+     * Whether play is running, the step it takes and how often: a layer that moves between ticks (tracks glide, spec
+     * 2026-10-01-tracks-glide-design.md) animates from the instant to the next step over one tick.
+     */
+    playState() {
+      return { playing: timer !== null, stepMs: domain()?.stepMs ?? null, tickMs };
     },
     isPlaying() {
       return timer !== null;
@@ -202,7 +212,7 @@ export function attachObservedTime(store, dataManager, layers) {
   const told = new Map();
   const push = (layer, iso) => {
     told.set(layer.id, iso ?? null);
-    return Promise.resolve(layer.setObservedTime(iso)).catch((e) =>
+    return Promise.resolve(layer.setObservedTime(iso, store.playState())).catch((e) =>
       console.warn(`[observedTime] ${layer.id}:`, e),
     );
   };
