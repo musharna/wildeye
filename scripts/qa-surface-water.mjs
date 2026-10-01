@@ -111,17 +111,20 @@ try {
     { before: before.toFixed(4), after: after.toFixed(4), stats: state.stats, tiles200: tiles.ok, tilesBad: tiles.bad.slice(0, 3) });
   report('one-drape-at-a-time', state.otherOn === true && state.otherAfter === false, { landcoverBefore: state.otherOn, landcoverAfter: state.otherAfter });
 
-  // The data stop at 78°N: over Svalbard the globe loads JRC tiles south of the edge and asks for none past it
-  // (a 404 there is no data, and enough of them used to mark a working layer "map tiles failing").
-  const atEdge = { ok: tiles.ok, notFound: tiles.notFound };
-  await page.evaluate(async () => {
-    const v = window.__godsEyeView.viewer;
-    v.camera.setView({ destination: v.camera.position.constructor.fromDegrees(16, 78.5, 900000), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
-  });
-  await settle();
-  const edgeStats = await page.evaluate((id) => window.__godsEyeView.dataManager.getAll().find((l) => l.id === id)?.stats ?? null, ID);
-  report('polar-edge-no-404', tiles.ok - atEdge.ok > 0 && tiles.notFound === atEdge.notFound && !edgeStats?.error,
-    { tiles200: tiles.ok - atEdge.ok, tiles404: tiles.notFound - atEdge.notFound, error: edgeStats?.error ?? null });
+  // The data stop at 78°N and 59°S: looking across each edge (Svalbard; the open Southern Ocean) the globe loads JRC
+  // tiles on the data side and asks for none past it (a 404 there is no data, and enough of them used to mark a
+  // working layer "map tiles failing").
+  for (const [edge, lon, lat] of [['north', 16, 78.5], ['south', -45, -59.3]]) {
+    const atEdge = { ok: tiles.ok, notFound: tiles.notFound };
+    await page.evaluate(async ([lon, lat]) => {
+      const v = window.__godsEyeView.viewer;
+      v.camera.setView({ destination: v.camera.position.constructor.fromDegrees(lon, lat, 900000), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
+    }, [lon, lat]);
+    await settle();
+    const edgeStats = await page.evaluate((id) => window.__godsEyeView.dataManager.getAll().find((l) => l.id === id)?.stats ?? null, ID);
+    report(`${edge}-edge-no-404`, tiles.ok - atEdge.ok > 0 && tiles.notFound === atEdge.notFound && !edgeStats?.error,
+      { tiles200: tiles.ok - atEdge.ok, tiles404: tiles.notFound - atEdge.notFound, error: edgeStats?.error ?? null });
+  }
 
   const live = await page.evaluate(async (id, points) => {
     const out = {};
