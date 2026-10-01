@@ -76,6 +76,8 @@ const card = () => page.evaluate(() => {
     rowShown: !document.getElementById('species-modeled').hidden,
     toggleShown: Boolean(toggle && !toggle.hidden && toggle.getBoundingClientRect().height > 0),
     toggleText: toggle?.textContent ?? null,
+    // the label stays inside its pill: in a flex row the switch shrank to 133 px under 148 px of text (09-30 screenshot)
+    toggleFits: Boolean(toggle) && toggle.scrollWidth <= toggle.clientWidth,
     ariaChecked: toggle?.getAttribute('aria-checked') ?? null,
     note: document.getElementById('species-modeled-note')?.textContent ?? null,
     enabled: layer.isEnabled(),
@@ -145,6 +147,7 @@ if (CHECKS.has('shown')) {
     styledApart: after.modeled[0]?.alpha === MODELED_ALPHA && after.species.length === 1 && after.species[0].alpha === 1,
     underRecords: after.modeled.length === 1 && after.species.length === 1 && after.modeled[0].index < after.species[0].index,
     credited: credits.includes('iNaturalist Geomodel'),
+    labelFits: before.toggleFits && after.toggleFits,
   };
   await shot('modeled-shown');
   report('shown', !waited && !on && settled.settled && Object.values(checks).every(Boolean), { ...checks, waited, on, settled, before, after: { ...after, modeled: after.modeled, species: after.species }, tiles: asked.length, zooms: [...new Set(asked.map((t) => t.z))].sort(), statuses: [...new Set(asked.map((t) => t.status))] });
@@ -195,6 +198,12 @@ if (CHECKS.has('readout')) {
     inside: inside?.status === 'class' && inside.text === 'Inside modeled range — expected nearby' && inside.date === `${shown.group} passed validation ${MONTH}` && inside.name.includes('iNaturalist Geomodel'),
     outside: outside?.status === 'class' && outside.text === 'Outside modeled range',
   };
+  if (points.inside) {
+    // a picture of the range itself (the shown check's view is the whole globe from over Africa)
+    await view(points.inside.lon, points.inside.lat, 7_000_000);
+    await settle();
+    await shot('modeled-on-range');
+  }
   report('readout', Object.values(checks).every(Boolean), { ...checks, points, inside, outside });
 }
 

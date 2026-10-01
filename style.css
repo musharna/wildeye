@@ -2642,6 +2642,8 @@ body.recording-mode #bio-card { display: none !important; }
 /* Under WHAT LIVES HERE, not in the chosen row: there it pushed the action below the fold on a phone held landscape (qa-species panel-fold). */
 .species-modeled { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .species-modeled[hidden], .species-modeled [hidden] { display: none; }
+/* The switch keeps its label's width; the note wraps under it. Shrinking it to share the row clipped "ON" out of the pill (148 px of text in 133). */
+.species-modeled > .species-switch { flex: 0 0 auto; }
 .species-modeled-note { flex: 1; min-width: 12em; color: rgba(232, 234, 237, 0.8); font-size: 11px; }
 /* The record-count legend: a caption over five circles with their bounds, each circle bottom-aligned above its label. Sizes, colours and
    labels come from SPECIES_MAP_LEGEND (src/bio/gbif.js): GBIF's scaled.circles classes as the globe draws them (spec: Implementation notes). */
