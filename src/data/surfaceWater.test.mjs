@@ -1,7 +1,9 @@
 // src/data/surfaceWater.test.mjs — the JRC surface-water layer: colour table, drape lifecycle, readout, loud failures.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as Cesium from 'cesium';
 import {
+  COVERAGE_DEGREES,
   createSurfaceWaterLayer,
   decodeOccurrence,
   occurrenceColour,
@@ -60,6 +62,9 @@ test('the drape: one provider on the 2021 occurrence tiles to z13, built once, s
   assert.equal(providers[0].options.url, SURFACE_WATER_URL);
   assert.equal(providers[0].options.maximumLevel, 13);
   assert.match(providers[0].options.credit, /EC JRC\/Google/);
+  // tiles exist only where they overlap 59°S–78°N (probe 2026-10-01): outside it Cesium must not ask
+  assert.deepEqual(COVERAGE_DEGREES, { south: -59, north: 78 });
+  assert.ok(Cesium.Rectangle.equalsEpsilon(providers[0].options.rectangle, Cesium.Rectangle.fromDegrees(-180, -59, 180, 78), 1e-12));
   assert.equal(list.length, 1);
   assert.equal(list[0].show, false, 'registered off');
   assert.equal(stacked.at(-1).id, 'surface-water');
