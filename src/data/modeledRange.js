@@ -51,7 +51,8 @@ export function placeTaxon(taxon, list) {
     const { id, group, iou } = entry;
     if (iou === null) return { state: 'unchecked', group, month };
     if (iou < list.species_iou_min) return { state: 'tiles-disagree', group, iou, month };
-    return { state: 'shown', id, group, iou, month };
+    // skim = one tile checked, full = every tile; an entry without a kind predates skims, when only full checks were written
+    return { state: 'shown', id, group, iou, check: entry.check ?? 'full', month };
   }
   const found = collectionsOf(taxon.lineage, list.groups);
   if (found.length > 1) console.error('[modeled-range] taxon in more than one collection', { taxon, found });
@@ -67,7 +68,7 @@ export function modeledNote(place) {
   const { state, group, month } = place;
   switch (state) {
     case 'loading': return 'Checking for a modeled range…';
-    case 'shown': return `iNaturalist Geomodel · ${group} passed validation ${month}`;
+    case 'shown': return `iNaturalist Geomodel · ${group} passed validation ${month}${place.check === 'skim' ? ' · map spot-checked' : ''}`;
     case 'group-failed': return `No modeled range: ${group} failed validation (${month})`;
     case 'group-insufficient': return `No modeled range: too few ${group} species could be tested (${month})`;
     case 'tiles-disagree': return `No modeled range: iNaturalist's map tiles differ from the range that was tested (overlap ${place.iou})`;

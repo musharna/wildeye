@@ -37,6 +37,29 @@ collection too big for one month fills in over several. Groups that fail add not
 Each run downloads into its own directory under the work root and removes only that (`run_workdir`): the
 monthly check and a listing can overlap, and the check used to remove the whole shared root.
 
+### Skim first, then full (decided with the maintainer 2026-09-30)
+
+iNaturalist's API docs (`api.inaturalist.org/v1/swagger.json`, read 2026-09-30): "we throttle API usage to a
+max of 100 requests per minute, though we ask that you try to keep it to 60 requests per minute or lower, and
+to keep under 10,000 requests per day". A full check of Arachnida is 20,861 tiles: two days at least. So:
+
+- **Skim** (`--mode skim`): one tile per species, the z3 tile holding most of its tested range (about 2,900
+  requests for Arachnida). Its IoU becomes the species' `iou` with `check: "skim"`, and `iou_skim` keeps it.
+  It catches a served map that is mostly a different shape; it cannot settle a species near the 0.70 line.
+- **Full** (`--mode full`, default): every tile, at most `--max-tiles` a run (9,000 a day), replacing skim
+  scores with `check: "full"` and keeping `iou_skim`. Full checks are never redone or overwritten by a skim.
+- The card shows a skim-checked species like any other, with "map spot-checked" in its note.
+- Why it matters: of the first 400 Arachnida species fully checked, 5 scored below 0.2 (the served map is
+  another shape: Cheiracanthium inclusum 0.03, Steatoda grossa 0.09, two very common spiders), 2 scored
+  0.2–0.7, 13 scored 0.7–0.8, and 380 scored ≥ 0.8. Without a per-species check about 1 species in 70 would
+  show a map that was not the one validated.
+
+**Calibration gate, fixed before the run** (`--mode skim --include-full` records `iou_skim` beside a full
+check without changing it). Sample: the 7 fully checked species below 0.70, the 13 in 0.70–0.80, and 100
+drawn at random (seed 20260930) from the 380 at ≥ 0.80. The skim is used only if (1) all 5 species with a full
+IoU below 0.2 skim below 0.70, and (2) at least 95 of the 100 skim at ≥ 0.70. If either fails, no skim scores
+are shown and the list fills in by full checks only.
+
 ## Browser
 
 - `src/data/modeledRange.js`: loads the list lazily (first species pick), and places a chosen GBIF taxon
