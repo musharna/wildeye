@@ -25,13 +25,19 @@ const LIST = {
     'Edgeus below': { id: 12, group: 'Arachnida', iou: 0.6999 },
     'Stemonitis fusca': { id: 13, group: 'Arachnida', iou: 0.14 },
     'Uncheckus nullus': { id: 14, group: 'Arachnida', iou: null },
+    'Skimmus unus': { id: 15, group: 'Arachnida', iou: 0.88, check: 'skim', iou_skim: 0.88 },
   },
 };
 const SPIDER = { key: 2148457, scientificName: 'Trachelas pacificus', rank: 'SPECIES', lineage: [1, 54, 367, 1496, 8342328, 2148457] };
 const record = (scientificName, lineage, rank = 'SPECIES') => ({ key: 9, scientificName, rank, lineage });
 
 test('placeTaxon: a species of a passing collection whose tiles agree is shown, with its collection and validation month', () => {
-  assert.deepEqual(placeTaxon(SPIDER, LIST), { state: 'shown', id: 298342, group: 'Arachnida', iou: 0.9316, month: 'September 2026' });
+  // an entry without a check kind predates skims: only full checks were written then
+  assert.deepEqual(placeTaxon(SPIDER, LIST), { state: 'shown', id: 298342, group: 'Arachnida', iou: 0.9316, check: 'full', month: 'September 2026' });
+});
+
+test('placeTaxon: a species checked on one tile (skim) is shown too, and says which check it passed', () => {
+  assert.deepEqual(placeTaxon(record('Skimmus unus', [1, 54, 367, 15]), LIST), { state: 'shown', id: 15, group: 'Arachnida', iou: 0.88, check: 'skim', month: 'September 2026' });
 });
 
 test('placeTaxon: the IoU floor is inclusive at species_iou_min and hides anything below it', () => {
@@ -59,7 +65,8 @@ test('placeTaxon: above species rank there is no range; with no list the card sa
 
 test('modeledNote: every state reads as a reason, never blank; the shown note names source and validation', () => {
   const place = (state, extra = {}) => ({ state, group: 'Aves', month: 'September 2026', ...extra });
-  assert.equal(modeledNote(place('shown', { group: 'Arachnida' })), 'iNaturalist Geomodel · Arachnida passed validation September 2026');
+  assert.equal(modeledNote(place('shown', { group: 'Arachnida', check: 'full' })), 'iNaturalist Geomodel · Arachnida passed validation September 2026');
+  assert.equal(modeledNote(place('shown', { group: 'Arachnida', check: 'skim' })), 'iNaturalist Geomodel · Arachnida passed validation September 2026 · map spot-checked');
   assert.equal(modeledNote(place('group-failed')), 'No modeled range: Aves failed validation (September 2026)');
   assert.equal(modeledNote(place('group-insufficient', { group: 'Fungi' })), 'No modeled range: too few Fungi species could be tested (September 2026)');
   assert.equal(modeledNote(place('tiles-disagree', { group: 'Arachnida', iou: 0.14 })), "No modeled range: iNaturalist's map tiles differ from the range that was tested (overlap 0.14)");

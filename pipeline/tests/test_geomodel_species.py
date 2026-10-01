@@ -2,10 +2,13 @@
 
 import json
 
+import numpy as np
 import pytest
+from shapely.geometry import box
 
 from pipeline import geomodel_species as gsp
 from pipeline.geomodel_sources import GROUPS, SourceError
+from pipeline import geomodel_check as gc
 from pipeline.tests.test_geomodel_check import FakeSources
 
 
@@ -40,9 +43,9 @@ def _verdicts(tmp_path, version="2.34", **verdicts):
     return path
 
 
-def _run(tmp_path, fake, verdicts):
+def _run(tmp_path, fake, verdicts, *args):
     out = tmp_path / "species.json"
-    code = gsp.main(["--verdicts", str(verdicts), "--out", str(out)], sources=fake)
+    code = gsp.main(["--verdicts", str(verdicts), "--out", str(out), *args], sources=fake)
     return code, out
 
 
@@ -56,7 +59,7 @@ def test_every_species_of_a_passing_collection_is_listed_with_its_tile_iou(tmp_p
     assert code == 0
     doc = json.loads(out.read_text())
     assert fake.listed == ["Arachnida"]  # a failing collection costs no tile requests
-    assert doc["species"]["Species 0"] == {"id": 0, "group": "Arachnida", "iou": 1.0}
+    assert doc["species"]["Species 0"] == {"id": 0, "group": "Arachnida", "iou": 1.0, "check": "full"}
     assert (
         doc["species"]["Species 1"]["iou"] == 0.0
     )  # tiles that draw nothing where the range is
@@ -177,3 +180,120 @@ def test_a_run_killed_on_its_first_species_already_names_them_all(tmp_path):
     doc = json.loads((tmp_path / "species.json").read_text())
     assert {n: s["iou"] for n, s in doc["species"].items()} == {"Species 0": None, "Species 1": None, "Species 2": None}
     assert doc["unchecked"] == 3
+
+
+# Skim, then full (spec: "Skim first"): one tile per species tonight, every tile over the following days.
+SKIM_RANGE = box(0.0, -5.0, 20.0, 30.0)  # z3 tiles 4/3 (lat 0-41, most of the range) and 4/4 (lat -41-0, the 5-degree sliver)
+
+
+class TileLog(ListingFakes):
+    """Every tile asked, in order; `wrong_tile` draws nothing there (a served map that differs only in part)."""
+
+    def __init__(self, *, wrong_tile=None, **kw):
+        super().__init__(**kw)
+        self.calls, self.wrong_tile = [], wrong_tile
+
+    def range_geom(self, group, taxon_id):
+        return SKIM_RANGE
+
+    def tile_mask(self, taxon_id, z, x, y):
+        self.calls.append((taxon_id, z, x, y))
+        if taxon_id in self.failing_tiles:
+            raise SourceError(f"HTTP 500 for tile {taxon_id}/{z}/{x}/{y}", 500)
+        if taxon_id in self.disagree or (x, y) == self.wrong_tile:
+            return np.zeros((64, 64), bool)
+        return gc.range_tile_mask(SKIM_RANGE, z, x, y, 64)
+
+
+def test_skim_asks_one_tile_per_species_the_one_holding_most_of_the_range(tmp_path):
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    fake = TileLog(n=3, disagree={1})
+    code, out = _run(tmp_path, fake, verdicts, "--mode", "skim")
+    assert code == 0
+    assert fake.calls == [(0, 3, 4, 3), (1, 3, 4, 3), (2, 3, 4, 3)]
+    doc = json.loads(out.read_text())
+    assert doc["species"]["Species 0"] == {"id": 0, "group": "Arachnida", "iou": 1.0, "check": "skim", "iou_skim": 1.0}
+    assert doc["species"]["Species 1"]["iou"] == 0.0  # a served map that misses the range fails on its one tile
+    # positive control: the full check asks both tiles of the range
+    full = TileLog(n=1)
+    gsp.main(["--verdicts", str(verdicts), "--out", str(tmp_path / "full.json")], sources=full)
+    assert full.calls == [(0, 3, 4, 3), (0, 3, 4, 4)]
+
+
+def test_the_full_pass_upgrades_skims_keeps_the_skim_score_and_skips_full_checks(tmp_path):
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    _run(tmp_path, TileLog(n=2, wrong_tile=(4, 4)), verdicts, "--mode", "skim")
+    full = TileLog(n=2, wrong_tile=(4, 4))
+    code, out = _run(tmp_path, full, verdicts)
+    assert code == 0
+    assert full.calls == [(0, 3, 4, 3), (0, 3, 4, 4), (1, 3, 4, 3), (1, 3, 4, 4)]
+    s0 = json.loads(out.read_text())["species"]["Species 0"]
+    # the skim saw only the agreeing tile; the full check sees the part that differs
+    assert s0["check"] == "full" and s0["iou_skim"] == 1.0 and s0["iou"] < 1.0
+    again = TileLog(n=2)
+    assert _run(tmp_path, again, verdicts)[0] == 0
+    assert again.calls == []  # nothing left to check in full
+    skim = TileLog(n=2)
+    _run(tmp_path, skim, verdicts, "--mode", "skim")
+    assert skim.calls == []  # a skim never re-checks, or overwrites, a full check
+    assert json.loads(out.read_text())["species"]["Species 0"] == s0
+
+
+def test_entries_written_before_check_kinds_count_as_full(tmp_path):
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    out = tmp_path / "species.json"
+    out.write_text(json.dumps({"geomodel_version": "2.34", "species": {
+        "Species 0": {"id": 0, "group": "Arachnida", "iou": 0.91},
+        "Species 1": {"id": 1, "group": "Arachnida", "iou": None},
+    }}))
+    fake = TileLog(n=2)
+    assert _run(tmp_path, fake, verdicts)[0] == 0
+    assert [c[0] for c in fake.calls] == [1, 1]  # only the unchecked one
+    doc = json.loads(out.read_text())["species"]
+    assert doc["Species 0"] == {"id": 0, "group": "Arachnida", "iou": 0.91, "check": "full"}
+    assert doc["Species 1"]["check"] == "full"
+
+
+def test_calibration_skims_fully_checked_species_without_changing_their_verdict(tmp_path):
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    _run(tmp_path, TileLog(n=2, wrong_tile=(4, 4)), verdicts)
+    before = json.loads((tmp_path / "species.json").read_text())["species"]
+    cal = TileLog(n=2, wrong_tile=(4, 4))
+    assert _run(tmp_path, cal, verdicts, "--mode", "skim", "--include-full")[0] == 0
+    assert cal.calls == [(0, 3, 4, 3), (1, 3, 4, 3)]
+    after = json.loads((tmp_path / "species.json").read_text())["species"]
+    for name in before:
+        assert after[name]["iou"] == before[name]["iou"] and after[name]["check"] == "full"
+        assert after[name]["iou_skim"] == 1.0
+
+
+def test_a_tile_budget_stops_before_going_over_and_the_next_run_goes_on(tmp_path):
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    first = TileLog(n=5)
+    code, out = _run(tmp_path, first, verdicts, "--max-tiles", "5")
+    assert code == 3  # species left unchecked
+    assert len(first.calls) == 4  # two species of two tiles; a third would make 6
+    doc = json.loads(out.read_text())
+    assert [doc["species"][f"Species {i}"]["iou"] for i in range(5)] == [1.0, 1.0, None, None, None]
+    second = TileLog(n=5)
+    assert _run(tmp_path, second, verdicts, "--max-tiles", "100")[0] == 0
+    assert sorted({c[0] for c in second.calls}) == [2, 3, 4]
+    skim = TileLog(n=5)
+    code = gsp.main(["--verdicts", str(verdicts), "--out", str(tmp_path / "skim.json"), "--mode", "skim", "--max-tiles", "2"], sources=skim)
+    assert code == 3 and len(skim.calls) == 2
+
+
+def test_only_limits_which_species_are_checked_and_the_list_still_names_all(tmp_path):
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    names = tmp_path / "names.txt"
+    names.write_text("Species 1\nSpecies 3\n")
+    fake = TileLog(n=4)
+    code, out = _run(tmp_path, fake, verdicts, "--mode", "skim", "--only", str(names))
+    assert code == 3  # species 0 and 2 are still unchecked
+    assert [c[0] for c in fake.calls] == [1, 3]
+    doc = json.loads(out.read_text())["species"]
+    assert set(doc) == {f"Species {i}" for i in range(4)}
+    assert doc["Species 0"]["iou"] is None and doc["Species 1"]["check"] == "skim"
+    names.write_text("Species 9\n")  # a name not in the passing collections is an error, not a silent no-op
+    with pytest.raises(SystemExit):
+        _run(tmp_path, TileLog(n=4), verdicts, "--mode", "skim", "--only", str(names))

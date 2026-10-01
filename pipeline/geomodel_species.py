@@ -2,11 +2,14 @@
 
 Spec: docs/superpowers/specs/2026-09-30-modeled-range-design.md. Reads the verdicts file the check wrote and writes
 public/data/geomodel_species.json, which the species card reads to decide whether to offer the modeled range.
-At one tile a second the list is slow (Arachnida: 20,861 z3 tiles, about 8 h), so it names every species from its first write
-(iou null until checked), rewrites itself every CHECKPOINT_EVERY species, and a later run of the same model version checks only
-what is still null.
+iNaturalist asks for under 10,000 requests a day, and a full check of Arachnida is 20,861 z3 tiles, so the list is built in
+two passes (spec: "Skim first"): `--mode skim` checks one tile per species, the z3 tile holding most of its range, which catches
+a served map that is mostly a different shape; `--mode full` (the default) then checks every tile, a day's budget at a time
+(`--max-tiles`), replacing skim scores as it goes. Each entry says which check its `iou` comes from (`check`: skim or full).
+The list names every species from its first write (iou null until checked), rewrites itself every CHECKPOINT_EVERY species,
+and a later run of the same model version picks up what is left.
 Exit 2 = nothing written (the ranges are not the model that was checked, or a name is listed twice); exit 3 =
-written, but some species' tiles could not be fetched (listed with iou null, never shown).
+written, but some species are still unchecked (iou null, never shown): tiles failed, or the budget ran out.
 """
 
 from __future__ import annotations
@@ -16,7 +19,14 @@ import logging
 from contextlib import nullcontext
 from pathlib import Path
 
-from .geomodel_check import LiveSources, run_workdir, tile_agreement
+from .geomodel_check import (
+    TILE_ZOOM,
+    LiveSources,
+    _tile_range,
+    range_tile_mask,
+    run_workdir,
+    tile_agreement,
+)
 from .geomodel_sources import GROUPS, SourceError
 
 SPECIES_IOU_MIN = 0.70  # spec ruling 1, fixed before the first per-species run
@@ -50,46 +60,119 @@ def passing_species(sources, verdicts: dict) -> list[tuple[str, int, str]]:
     return todo
 
 
-def previous_ious(path: Path, version: str) -> dict[str, tuple[int, float]]:
-    """{name: (taxon id, iou)} already checked in the list at `path`, if it is of the same model version."""
+def previous_entries(path: Path, version: str) -> dict[str, dict]:
+    """{name: entry} from the list at `path`, if it is of the same model version. Entries written before check kinds
+    existed came from the full check only, so a scored one without `check` is a full check."""
     try:
         doc = json.loads(path.read_text())
     except FileNotFoundError:
         return {}
     if doc.get("geomodel_version") != version:
         return {}
-    return {
-        n: (s["id"], s["iou"])
-        for n, s in doc["species"].items()
-        if s["iou"] is not None
-    }
+    entries = {}
+    for name, s in doc["species"].items():
+        entry = dict(s)
+        if entry["iou"] is not None and "check" not in entry:
+            entry["check"] = "full"
+        entries[name] = entry
+    return entries
 
 
-def check_tiles(sources, todo, known, write) -> int:
-    """Fill each species' IoU (reusing `known`), calling write(species) from the start and every CHECKPOINT_EVERY checks; returns unchecked."""
+def skim_tile(geom, z: int = TILE_ZOOM) -> tuple[int, int]:
+    """The tile (x, y) at zoom z holding the most of the range; the first in row order on a tie."""
+    xs, ys = _tile_range(*geom.bounds, z)
+    best = None
+    for x in xs:
+        for y in ys:
+            n = int(range_tile_mask(geom, z, x, y, 64).sum())
+            if best is None or n > best[0]:
+                best = (n, x, y)
+    return best[1], best[2]
+
+
+def skim_agreement(geom, taxon_id: int, tile_mask, z: int = TILE_ZOOM) -> float:
+    """Intersection over union on the one tile holding most of the range (one request)."""
+    x, y = skim_tile(geom, z)
+    theirs = tile_mask(taxon_id, z, x, y)
+    ours = range_tile_mask(geom, z, x, y, theirs.shape[0])
+    union = int((ours | theirs).sum())
+    return int((ours & theirs).sum()) / union if union else 0.0
+
+
+def full_tiles(geom, z: int = TILE_ZOOM) -> int:
+    """How many tile requests tile_agreement() makes for this range."""
+    xs, ys = _tile_range(*geom.bounds, z)
+    return len(xs) * len(ys)
+
+
+def check_tiles(
+    sources,
+    todo,
+    known,
+    write,
+    *,
+    mode: str = "full",
+    include_full: bool = False,
+    max_tiles: int | None = None,
+    only: set[str] | None = None,
+) -> int:
+    """Score each species in `mode`, reusing `known`; write(species) from the start and every CHECKPOINT_EVERY checks.
+    A skim scores species with no check yet (with include_full, every species without a skim score, recording it beside a
+    full check without changing that check); a full check scores every species not yet fully checked. Stops before a
+    species would take the tiles asked past max_tiles. Returns how many species are unchecked."""
     species = {}
     for group, taxon_id, name in todo:
         prev = known.get(name)
-        species[name] = {
-            "id": taxon_id,
-            "group": group,
-            "iou": prev[1] if prev and prev[0] == taxon_id else None,
-        }
-    missing = [(g, t, n) for g, t, n in todo if species[n]["iou"] is None]
+        if prev and prev["id"] == taxon_id:
+            species[name] = {
+                "id": taxon_id,
+                "group": group,
+                **{k: v for k, v in prev.items() if k in ("iou", "check", "iou_skim")},
+            }
+        else:
+            species[name] = {"id": taxon_id, "group": group, "iou": None}
+
+    def wanted(s):
+        if mode == "full":
+            return s.get("check") != "full"
+        return "iou_skim" not in s if include_full else "check" not in s
+
+    missing = [
+        (g, t, n)
+        for g, t, n in todo
+        if wanted(species[n]) and (only is None or n in only)
+    ]
     log.info(
-        "tile agreement for %s of %s species in passing collections (%s reused)",
+        "%s check for %s of %s species in passing collections",
+        mode,
         len(missing),
         len(todo),
-        len(todo) - len(missing),
     )
     write(species)
-    failed = 0
+    failed = asked = 0
     for i, (group, taxon_id, name) in enumerate(missing, 1):
-        try:
-            geom = sources.range_geom(group, taxon_id)
-            species[name]["iou"] = round(
-                tile_agreement(geom, taxon_id, sources.tile_mask), 4
+        s = species[name]
+        geom = sources.range_geom(group, taxon_id)
+        cost = 1 if mode == "skim" else full_tiles(geom)
+        if max_tiles is not None and asked + cost > max_tiles:
+            log.info(
+                "tile budget %s reached after %s tiles: %s species left for the next run",
+                max_tiles,
+                asked,
+                len(missing) - i + 1,
             )
+            break
+        asked += cost
+        try:
+            if mode == "skim":
+                s["iou_skim"] = round(
+                    skim_agreement(geom, taxon_id, sources.tile_mask), 4
+                )
+                if s.get("check") != "full":
+                    s["iou"], s["check"] = s["iou_skim"], "skim"
+            else:
+                s["iou"] = round(tile_agreement(geom, taxon_id, sources.tile_mask), 4)
+                s["check"] = "full"
         except SourceError as e:
             log.error(
                 "tiles for %s (%s, taxon %s) failed: %s", name, group, taxon_id, e
@@ -98,7 +181,13 @@ def check_tiles(sources, todo, known, write) -> int:
         if i % CHECKPOINT_EVERY == 0:
             write(species)
         if i % 100 == 0 or i == len(missing):
-            log.info("%s/%s species checked, %s failed", i, len(missing), failed)
+            log.info(
+                "%s/%s species checked, %s failed, %s tiles",
+                i,
+                len(missing),
+                failed,
+                asked,
+            )
     write(species)
     return sum(1 for s in species.values() if s["iou"] is None)
 
@@ -121,7 +210,24 @@ def main(argv=None, *, sources=None) -> int:
     ap.add_argument(
         "--keep-ranges", action="store_true", help="keep the downloaded GeoPackages"
     )
+    ap.add_argument("--mode", choices=("skim", "full"), default="full")
+    ap.add_argument(
+        "--only", type=Path, default=None, help="check only the species named in this file, one per line"
+    )
+    ap.add_argument(
+        "--include-full",
+        action="store_true",
+        help="skim fully checked species too, recording the skim score only (calibration)",
+    )
+    ap.add_argument(
+        "--max-tiles",
+        type=int,
+        default=None,
+        help="stop before asking more tiles than this",
+    )
     args = ap.parse_args(argv)
+    if args.include_full and args.mode != "skim":
+        ap.error("--include-full is for --mode skim")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
     verdicts = json.loads(args.verdicts.read_text())
@@ -162,8 +268,21 @@ def main(argv=None, *, sources=None) -> int:
         except ListingError as e:
             log.error("no species list written: %s", e)
             return 2
+        only = None
+        if args.only is not None:
+            only = {line.strip() for line in args.only.read_text().splitlines() if line.strip()}
+            unknown = sorted(only - {n for _, _, n in todo})
+            if unknown:
+                ap.error(f"--only names species not in a passing collection: {unknown[:5]}")
         unchecked = check_tiles(
-            sources, todo, previous_ious(args.out, verdicts["geomodel_version"]), write
+            sources,
+            todo,
+            previous_entries(args.out, verdicts["geomodel_version"]),
+            write,
+            mode=args.mode,
+            include_full=args.include_full,
+            max_tiles=args.max_tiles,
+            only=only,
         )
     log.info("wrote %s (%s species, %s unchecked)", args.out, len(todo), unchecked)
     return 3 if unchecked else 0
