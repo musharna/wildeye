@@ -39,9 +39,9 @@ const NOW = new Date();
 
 const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--disable-dev-shm-usage'], defaultViewport: { width: 1400, height: 900 } });
 const page = await browser.newPage();
-// Every GBIF effort tile the page asks for (adhoc, binned in hexagons), with its answer (status null while pending).
+// Every GBIF effort tile the page asks for (adhoc vector tiles: the only .mvt the app asks GBIF for), with its answer (null while pending).
 const tiles = new Map();
-const isEffort = (url) => url.startsWith('https://api.gbif.org/v2/map/occurrence/adhoc/') && new URL(url).searchParams.get('bin') === 'hex';
+const isEffort = (url) => url.startsWith('https://api.gbif.org/v2/map/occurrence/adhoc/') && new URL(url).pathname.endsWith('.mvt');
 page.on('request', (r) => { if (isEffort(r.url())) tiles.set(r.url(), tiles.get(r.url()) ?? null); });
 page.on('response', (r) => { if (isEffort(r.url())) tiles.set(r.url(), r.status()); });
 page.on('requestfailed', (r) => { if (isEffort(r.url())) tiles.set(r.url(), `failed: ${r.failure()?.errorText}`); });
@@ -51,6 +51,31 @@ const asked = () => [...tiles.entries()].map(([url, status]) => {
   return { taxonKey: u.searchParams.get('taxonKey'), year: u.searchParams.get('year'), licenses: u.searchParams.getAll('license'), style: u.searchParams.get('style'), status };
 });
 const shot = async (name) => { if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` }); };
+// Mean brightness (0-255) of the screen in a 15 px box around each [lon, lat], read from a real screenshot: what the visitor sees.
+const brightnessAt = async (points) => {
+  const png = await page.screenshot({ encoding: 'base64' });
+  return page.evaluate(async (png, points) => {
+    const viewer = window.__godsEyeView.viewer;
+    const Cesium = { Cartesian3: viewer.camera.position.constructor };
+    const bitmap = await createImageBitmap(await (await fetch(`data:image/png;base64,${png}`)).blob());
+    const ctx = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d');
+    ctx.drawImage(bitmap, 0, 0);
+    const scale = bitmap.width / viewer.canvas.clientWidth;
+    return points.map(([lon, lat]) => {
+      const at = viewer.scene.cartesianToCanvasCoordinates(Cesium.Cartesian3.fromDegrees(lon, lat));
+      if (!at) return null;
+      const box = ctx.getImageData(Math.round(at.x * scale) - 7, Math.round(at.y * scale) - 7, 15, 15).data;
+      let sum = 0;
+      for (let i = 0; i < box.length; i += 4) sum += (box[i] + box[i + 1] + box[i + 2]) / 3;
+      return +(sum / (box.length / 4)).toFixed(1);
+    });
+  }, png, points);
+};
+// Where nobody records arachnids and where many do (Washington, DC), fixed before the first veil run. The unrecorded point is bright
+// tundra (64° N 100° W: 1 CC0 / CC BY arachnid record 2017-2026 in 62-66° N, 96-104° W, GBIF 2026-10-01): open sea, tried first, is
+// near black on the imagery (brightness 22 of 255), where no veil can show.
+const UNRECORDED = [-100, 64];
+const RECORDED = [-77.03, 38.9];
 
 await page.goto(SITE, { waitUntil: 'domcontentloaded', timeout: 120000 });
 await bootSettled(page);
@@ -93,8 +118,8 @@ const card = () => page.evaluate(() => {
     note: document.getElementById('species-effort-note')?.textContent ?? null,
     enabled: window.__godsEyeView.effort.isEnabled(),
     status: { error: status.error, taxon: status.taxon, years: status.years },
-    effort: list.filter((l) => l.url.includes('bin=hex')),
-    species: list.filter((l) => l.url.includes('/v2/map/occurrence/adhoc/') && !l.url.includes('bin=hex')),
+    effort: list.filter((l) => l.url.includes('/v2/map/occurrence/adhoc/') && l.url.includes('.mvt')),
+    species: list.filter((l) => l.url.includes('/v2/map/occurrence/adhoc/') && !l.url.includes('.mvt')),
   };
 });
 const waitFor = (predicate, arg, timeout = 45000) => page.waitForFunction(predicate, { timeout, polling: 250 }, arg).then(() => null, (error) => String(error).slice(0, 160));
@@ -124,7 +149,8 @@ const tileChecks = (taxon, year) => {
     thisClass: list.every((t) => t.taxonKey === String(taxon.classKey)),
     bothLicences: list.every((t) => JSON.stringify(t.licenses) === JSON.stringify(LICENSES)),
     years: list.every((t) => t.year === year),
-    allServed: list.every((t) => t.status === 200),
+    // GBIF answers a tile with no records 204, no body; at least one tile in view has records (positive control for the 200 path)
+    allServed: list.every((t) => t.status === 200 || t.status === 204) && list.some((t) => t.status === 200),
   };
 };
 
@@ -142,10 +168,17 @@ if (CHECKS.has('off') || CHECKS.has('on')) {
   report('off', !waited && Object.values(offChecks).every(Boolean), { ...offChecks, waited, spider: SPIDER, before });
 
   if (CHECKS.has('on')) {
-    const on = await switchOn();
     await view(-95, 40, 9_000_000);
+    const settledOff = await settle();
+    const [darkOff, clearOff] = await brightnessAt([UNRECORDED, RECORDED]);
+    const on = await switchOn();
     const settled = await settle();
     const after = await card();
+    const [darkOn, clearOn] = await brightnessAt([UNRECORDED, RECORDED]);
+    // The veil darkens where nobody recorded at least 20 points more than where many did, and leaves the recorded place within 25%. The
+    // first gate (unrecorded at least 40% darker) assumed no haze: from 9,000 km the globe's ground atmosphere adds about 33 of 255 over
+    // the veil (tundra 100.6 with it, 67.6 without), and with it off the veil darkened the tundra 45% as computed (2026-10-01).
+    const veil = { darkOff, darkOn, clearOff, clearOn, darkDrop: +(1 - darkOn / darkOff).toFixed(3), clearDrop: +(1 - clearOn / clearOff).toFixed(3) };
     const recent = `${NOW.getUTCFullYear() - 9},${NOW.getUTCFullYear()}`;
     const checks = {
       ...tileChecks(SPIDER, recent),
@@ -154,9 +187,11 @@ if (CHECKS.has('off') || CHECKS.has('on')) {
       underRecords: after.effort.length === 1 && after.species.length === 1 && after.effort[0].index < after.species[0].index,
       noError: after.status.error === null,
       labelFits: after.toggleFits,
+      unrecordedDarkened: veil.darkDrop - veil.clearDrop >= 0.2,
+      recordedKept: veil.clearDrop <= 0.25,
     };
     await shot('effort-on');
-    report('on', !on && settled.settled && Object.values(checks).every(Boolean), { ...checks, on, settled, tiles: tiles.size, after, asked: asked().slice(0, 3) });
+    report('on', !on && settledOff.settled && settled.settled && Object.values(checks).every(Boolean), { ...checks, veil, on, settled, tiles: tiles.size, after, asked: asked().slice(0, 3) });
   }
 }
 

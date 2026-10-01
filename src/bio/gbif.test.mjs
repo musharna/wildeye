@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  LICENSES, yearRange, yearLabel, densityTileTemplate, effortTileTemplate, EFFORT_HEX_PER_TILE, EFFORT_STYLE, speciesNearUrl, gbifPortalUrl, parseSpeciesNear,
+  LICENSES, yearRange, yearLabel, densityTileTemplate, effortTileTemplate, speciesNearUrl, gbifPortalUrl, parseSpeciesNear,
   inatSuggestUrl, parseInatSuggest, gbifSuggestUrl, parseGbifSuggest, gbifMatchUrl, parseGbifMatch,
   speciesUrl, parseSpeciesName, createRateLimiter, createPool, fetchJson, RequestError, createBioClient, circlePolygonWkt, RADII_KM,
   polygonRefusal, gbifPortalAnyLocationUrl, SPECIES_MAP_LEGEND, SPECIES_TILE_SIZE_PX,
@@ -55,25 +55,23 @@ test('density tiles use the adhoc endpoint with both licence filters and the yea
   assert.throws(() => densityTileTemplate({ taxonKey: 0, years: 'all', now: NOW }), /taxonKey/);
 });
 
-test('effort tiles: adhoc hexagons of every CC0 / CC BY record of one class, in the species map\'s years', () => {
+test('effort tiles: adhoc vector tiles of every CC0 / CC BY record of one class, in the species map\'s years, unbinned', () => {
   const tile = (years) => new URL(effortTileTemplate({ classKey: 367, years, now: NOW }).replace('{z}/{x}/{y}', '2/1/1'));
   const recent = tile('recent');
-  // adhoc: the precomputed density tiles ignore license= and came back empty with no taxon (probed 2026-09-30)
-  assert.equal(recent.origin + recent.pathname, 'https://api.gbif.org/v2/map/occurrence/adhoc/2/1/1@1x.png');
+  // adhoc: the precomputed density tiles ignore license= and came back empty with no taxon (probed 2026-09-30). A vector tile carries each
+  // feature's record count, so the veil counts records rather than reading colours; GBIF's hexagons (bin=hex) left recorded places empty.
+  assert.equal(recent.origin + recent.pathname, 'https://api.gbif.org/v2/map/occurrence/adhoc/2/1/1.mvt');
   assert.equal(recent.searchParams.get('taxonKey'), '367');
   assert.equal(recent.searchParams.get('checklistKey'), GBIF_BACKBONE_CHECKLIST_KEY);
   assert.deepEqual(recent.searchParams.getAll('license'), ['CC0_1_0', 'CC_BY_4_0']);
   assert.equal(recent.searchParams.get('year'), '2017,2026');
   assert.equal(recent.searchParams.get('srs'), 'EPSG:3857');
-  assert.equal(recent.searchParams.get('bin'), 'hex');
-  assert.equal(recent.searchParams.get('hexPerTile'), String(EFFORT_HEX_PER_TILE));
-  assert.equal(EFFORT_STYLE, 'purpleWhite.poly');
-  assert.equal(recent.searchParams.get('style'), EFFORT_STYLE);
-  // differs from the species map only where the spec says: the taxon, the bins and the style
+  for (const key of ['bin', 'hexPerTile', 'squareSize', 'style']) assert.equal(recent.searchParams.has(key), false, key);
+  // differs from the species map only where the spec says: the taxon and the format (no style: nothing is drawn by GBIF)
   const species = new URL(densityTileTemplate({ taxonKey: 367, years: 'recent', now: NOW }).replace('{z}/{x}/{y}', '2/1/1'));
   for (const [key, value] of species.searchParams) if (!['style'].includes(key)) assert.deepEqual(recent.searchParams.getAll(key), species.searchParams.getAll(key), key);
   assert.equal(tile('all').searchParams.has('year'), false);
-  assert.ok(effortTileTemplate({ classKey: 212, years: 'all', now: NOW }).includes('/{z}/{x}/{y}@1x.png?'));
+  assert.ok(effortTileTemplate({ classKey: 212, years: 'all', now: NOW }).includes('/{z}/{x}/{y}.mvt?'));
   for (const bad of [0, null, undefined, 3.5, '367']) assert.throws(() => effortTileTemplate({ classKey: bad, years: 'all', now: NOW }), /classKey/);
 });
 

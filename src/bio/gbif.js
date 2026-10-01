@@ -170,20 +170,15 @@ export function densityTileTemplate({ taxonKey, years, now = new Date() }) {
 
 /**
  * Recording effort (spec: docs/superpowers/specs/2026-09-30-effort-layer-design.md): every CC0 / CC BY record of one class, in the
- * species map's years, as hexagons. GBIF's purpleWhite style runs purple (few records) to white (many); it stayed readable over forest,
- * desert and sea where green, red and purpleYellow did not (2026-09-30). 60 hexagons across a 512 px tile: coarser than the species
- * circles, so the two layers read apart.
+ * species map's years, as an unbinned vector tile: each feature carries its record count (`total`), which src/data/effort.js sums into an
+ * even grid of cells. Not GBIF's hexagons: bin=hex left places with hundreds of records empty (z3 x2 y3, arachnids, 2026-10-01), and a
+ * veil read off drawn colours could not tell an empty hexagon from a dropped one.
  */
-export const EFFORT_STYLE = 'purpleWhite.poly';
-export const EFFORT_HEX_PER_TILE = 60;
-
 export function effortTileTemplate({ classKey, years, now = new Date() }) {
   if (!Number.isInteger(classKey) || classKey <= 0) throw new Error(`effortTileTemplate: bad classKey ${classKey}`);
-  const params = new URLSearchParams({ taxonKey: String(classKey), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, style: EFFORT_STYLE, srs: 'EPSG:3857' });
+  const params = new URLSearchParams({ taxonKey: String(classKey), checklistKey: GBIF_BACKBONE_CHECKLIST_KEY, srs: 'EPSG:3857' });
   appendRecordFilters(params, years, now);
-  params.set('bin', 'hex');
-  params.set('hexPerTile', String(EFFORT_HEX_PER_TILE));
-  return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}@1x.png?${params}`;
+  return `${GBIF_API}/v2/map/occurrence/adhoc/{z}/{x}/{y}.mvt?${params}`;
 }
 
 /** Species rows in a what-lives-here list, dataset rows under it, and dataset rows under the species map legend (R-7u). */
