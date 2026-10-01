@@ -40,6 +40,7 @@ function rig({ speciesName = async (key) => RECORDS[key] } = {}) {
     },
     imageryLayerFor: (provider, options) => ({ provider, ...options }),
     stack: () => {},
+    veil: (provider) => provider,
     now: () => NOW,
   });
   layer.init({ imageryLayers: { add() {}, remove() {} } });
@@ -58,7 +59,7 @@ test('effort row: hidden with no species; a species with a class gets the switch
   assert.equal(r.toggle.hidden, false);
   assert.equal(r.toggle.textContent, 'RECORDING EFFORT OFF');
   assert.equal(r.toggle.attrs['aria-checked'], 'false');
-  assert.equal(r.note.textContent, 'Where anyone recorded spiders and other arachnids · GBIF CC0/CC BY, 2017–2026 · purple few, white many');
+  assert.equal(r.note.textContent, 'Darker = fewer records of spiders and other arachnids, darkest = none · GBIF CC0/CC BY, 2017–2026');
   assert.equal(r.providers.length, 0, 'off: no tiles asked');
   r.toggle.listeners.click();
   assert.equal(r.toggle.textContent, 'RECORDING EFFORT ON');
@@ -78,7 +79,7 @@ test('effort row: ALL YEARS redraws in all years and the note follows; another c
   assert.equal(r.layer.isEnabled(), false, 'a new species starts off');
   await settle();
   assert.equal(r.toggle.textContent, 'RECORDING EFFORT OFF');
-  assert.match(r.note.textContent, /^Where anyone recorded birds · GBIF CC0\/CC BY, all years/);
+  assert.match(r.note.textContent, /^Darker = fewer records of birds, darkest = none · GBIF CC0\/CC BY, all years/);
 });
 
 test('effort row: no class, no switch; a failed lookup says so; a slow answer for an old pick is dropped', async () => {
@@ -101,7 +102,7 @@ test('effort row: no class, no switch; a failed lookup says so; a slow answer fo
   await settle();
   release();
   await settle();
-  assert.match(slow.note.textContent, /recorded birds/, 'the newer pick owns the row');
+  assert.match(slow.note.textContent, /records of birds/, 'the newer pick owns the row');
   slow.dataManager.set({ taxonKey: null });
   assert.equal(slow.box.hidden, true);
 });
