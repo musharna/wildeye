@@ -120,6 +120,32 @@ test('store: play steps one step per tick from the domain start and stops at the
   s.set(null); assert.equal(s.isPlaying(), false, 'returning to live pauses');
 });
 
+test('bridge: a layer is told whether play is running, with the step and the tick, so it can move between ticks', async () => {
+  // spec 2026-10-01-tracks-glide-design.md: tracks glide between the ticks of play; a paused or scrubbed time is a still
+  const t = fakeTimers();
+  const s = createObservedTime({ now: () => NOW, ...t });
+  const told = [];
+  const tracks = { id: 'tracks', setObservedTime: (iso, motion) => { told.push([iso, motion]); }, getObservedExtent: () => ({ rollingDays: 1 }) };
+  const dm = { isEnabled: () => true, subscribe: () => () => {} };
+  const off = attachObservedTime(s, dm, [tracks]);
+  await Promise.resolve(); await Promise.resolve();
+  s.set('2026-09-11T10:00:00Z');
+  await Promise.resolve();
+  assert.deepEqual(told.at(-1), ['2026-09-11T10:00:00Z', { playing: false, stepMs: s.domain().stepMs, tickMs: null }], 'scrubbed: a still');
+  s.play(750);
+  await Promise.resolve();
+  assert.deepEqual(told.at(-1), ['2026-09-11T10:00:00Z', { playing: true, stepMs: s.domain().stepMs, tickMs: 750 }], 'play: the same instant, now moving');
+  t.tick();
+  await Promise.resolve();
+  assert.equal(told.at(-1)[0], '2026-09-11T11:00:00Z');
+  assert.equal(told.at(-1)[1].playing, true, 'each tick says play is still running');
+  s.pause();
+  await Promise.resolve();
+  assert.deepEqual(told.at(-1), ['2026-09-11T11:00:00Z', { playing: false, stepMs: s.domain().stepMs, tickMs: null }], 'paused: a still again');
+  assert.deepEqual(s.playState(), { playing: false, stepMs: s.domain().stepMs, tickMs: null });
+  off();
+});
+
 test('bridge: only enabled sampling layers receive the time; a layer enabled later is caught up', async () => {
   const s = createObservedTime({ now: () => NOW });
   const calls = [];
