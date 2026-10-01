@@ -120,7 +120,7 @@ tiles, to stay under the day's 10,000 with 4992's 4,700 and the 01:30 check), th
   flow, and these checks need request interception):
   an arachnid shows the switch; on, tiles come from api.inaturalist.org at z ≤ 3 and nothing else;
   the field is styled apart from records; the credit is present; a readout inside and outside reads as
-  above; a bird shows "Aves failed validation"; a forced 429 shows the throttling line (not a blank);
+  above; a bird shows "iNaturalist's range maps for birds failed our accuracy check"; a forced 429 shows the throttling line (not a blank);
   a new species resets the switch.
 - A realistic pan/zoom session with the field on draws 0 HTTP 429 (Q4 flip check).
 - `node scripts/qa-species.mjs` (all checks) still passes: the row adds to the SPECIES body, whose fold at
