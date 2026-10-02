@@ -87,3 +87,5 @@ public/data/.geomodel_species.lock
 pipeline/cron_geomodel.log
 public/data/hfp/
 public/data/hfp.json
+public/data/glwd/
+public/data/glwd.json
