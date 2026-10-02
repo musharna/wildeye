@@ -150,14 +150,47 @@ LICENCES = {
 _MOJIBAKE = ("Ã", "Â", "â€")
 
 
+def _cp1252_bytes(text: str) -> bytes:
+    """Bytes of text as cp1252 wrote them; the five bytes cp1252 leaves undefined were read through as U+0081 etc."""
+    out = bytearray()
+    for ch in text:
+        try:
+            out += ch.encode("cp1252")
+        except UnicodeEncodeError:
+            if ord(ch) not in (0x81, 0x8D, 0x8F, 0x90, 0x9D):
+                raise
+            out.append(ord(ch))
+    return bytes(out)
+
+
 def repair(text: str) -> str:
     """Undo UTF-8 read as cp1252 (the metadata holds 'australiaâ€™s'), then collapse whitespace; clean text is kept."""
     if any(m in text for m in _MOJIBAKE):
         try:
-            text = text.encode("cp1252").decode("utf-8")
+            text = _cp1252_bytes(text).decode("utf-8")
         except UnicodeError:
             pass  # not mojibake after all: keep the text as written
     return re.sub(r"\s+", " ", text).strip()
+
+
+# Every WEB_LINK spelling in the 2025-04-15 metadata that means "no link", after repair() and lower-casing.
+_NO_LINK = {"", "none", "na", "http://", "http://springer", "data supplied directly"}
+_URL = re.compile(r"https?://[^\s/]+\.[^\s]+")
+_DOI = re.compile(r"10\.\d{4,9}/\S+")
+
+
+def study_link(text: str) -> str:
+    """The study's data link as a URL, or "" when the metadata says there is none; any other string is refused."""
+    link = repair(text)
+    if link.lower() in _NO_LINK:
+        return ""
+    if link.startswith("doi.org/"):
+        link = "https://" + link
+    elif _DOI.fullmatch(link):
+        link = "https://doi.org/" + link
+    if not _URL.fullmatch(link):
+        raise ValueError(f"study link {link!r} is neither a URL nor a known no-link spelling")
+    return link
 
 
 def licence_class(text: str) -> str:
@@ -378,7 +411,7 @@ def main(argv=None, *, fetch_to=_fetch_to, source=SOURCE, extract=run_extract):
                 "areaKm2": float(r["AREA_SQ_KM"] or 0),
                 "wide": sid in wide,
                 "licence": repair(r["PERMISSIONS"]),
-                "link": r["WEB_LINK"].strip(),
+                "link": study_link(r["WEB_LINK"]),
                 "citations": citations.get(sid, []),
                 "years": {str(y): list(v) for y, v in sorted(years[sid].items())},
             }
