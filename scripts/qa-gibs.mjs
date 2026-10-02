@@ -22,7 +22,17 @@ const IDS = [
   "gibs-lst",
   "gibs-nightlights",
   "gibs-biomass",
+  "gibs-amphibians",
+  "gibs-mammals",
 ];
+// Known answers decoded independently (Python + Pillow on the live level-7 tile, 2026-10-02): 81 amphibian
+// species at 3°S 60°W; the open Atlantic at 0° 30°W is GIBS's empty tile, opaque black, which must read no data.
+const KNOWN = {
+  "gibs-amphibians": [
+    { lat: -3, lon: -60, status: "value", text: "81", date: "2013" },
+    { lat: 0, lon: -30, status: "nodata" },
+  ],
+};
 const results = [];
 const report = (check, ok, detail) => {
   const row = { check, ...detail, ok };
@@ -115,11 +125,26 @@ try {
         bad: mine.filter((t) => t.status !== 200).slice(0, 3),
       },
     );
-    report(`${id}:date`, dates.length === 1 && dates[0] === want && !!want, {
+    // an undated layer (SEDAC) has no date segment: the tile matrix set follows /default/, and it shows asOf
+    const undated = expectLatest.length === 0;
+    const urlWant = undated ? manifest.layers?.[id]?.tileMatrixSet : want;
+    const shownOk = undated ? want === manifest.layers?.[id]?.asOf : true;
+    report(`${id}:date`, dates.length === 1 && dates[0] === urlWant && !!want && shownOk, {
       urlDates: dates,
       shown: want,
       intervals: expectLatest.slice(-1),
+      asOf: manifest.layers?.[id]?.asOf ?? null,
     });
+    for (const k of KNOWN[id] ?? []) {
+      const r = await page.evaluate(
+        (id, lat, lon) => window.__godsEyeView.dataManager.layers.get(id).module.readoutAt(lat, lon),
+        id,
+        k.lat,
+        k.lon,
+      );
+      const ok = r?.status === k.status && (k.text === undefined || r.text === k.text) && (k.date === undefined || r.date === k.date);
+      report(`${id}:readout ${k.lat},${k.lon}`, ok, { want: k, got: r });
+    }
     report(`${id}:legend`, (stats.legendRows ?? 0) > 0, {
       legendRows: stats.legendRows,
     });

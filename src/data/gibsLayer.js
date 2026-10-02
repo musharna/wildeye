@@ -12,8 +12,25 @@ export const GIBS_WMTS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best";
 export const MANIFEST_URL = "data/gibs.json";
 export const TILE_FAILURE_LIMIT = 8;
 
+/** An undated layer (no time dimension in GIBS, e.g. the SEDAC grids): one snapshot, its year in entry.asOf. */
+const isUndated = (entry) => !entry.times?.length;
+
+const BLACK_THRESHOLD = 0.004; // Cesium's colorToAlphaThreshold default: RGB distance, 0-1 per channel
+/**
+ * Black to transparent, when the colour map only ever declares black transparent (entry.noData, pipeline/gibs.py)
+ * and no data colour is within Cesium's threshold of it: GIBS's empty SEDAC tile in EPSG:3857 is opaque black with
+ * no tRNS chunk (probe 2026-10-02). GEDI draws black as data, and EVI draws 0,0,1, so theirs stays.
+ */
+function blackIsNoData(entry) {
+  if (!(entry.noData || []).some((c) => c.join(",") === "0,0,0")) return false;
+  const data = [...(entry.decode || []).map((e) => e.slice(0, 3)), ...(entry.classes || []).map((c) => c.rgb)];
+  return !data.some((c) => Math.hypot(...c) / 255 < BLACK_THRESHOLD);
+}
+
 export function gibsTileUrl(entry, date) {
-  return `${GIBS_WMTS}/${entry.gibsId}/default/${date}/${entry.tileMatrixSet}/{z}/{y}/{x}.${entry.format}`;
+  // GIBS serves an undated layer at a URL with no date segment
+  const when = isUndated(entry) ? "" : `${date}/`;
+  return `${GIBS_WMTS}/${entry.gibsId}/default/${when}${entry.tileMatrixSet}/{z}/{y}/{x}.${entry.format}`;
 }
 
 async function fetchJsonDefault(url) {
@@ -64,6 +81,10 @@ export function createGibsLayer({
   };
 
   const targetDate = () => {
+    if (isUndated(_entry)) {
+      if (!_entry.asOf) throw new Error(`${id}: GIBS serves no dates and gibs.json gives no asOf`);
+      return _entry.asOf;
+    }
     if (timeless || !_observed) return latestDate(_entry.times);
     return dateAtOrBefore(_entry.times, _observed);
   };
@@ -94,7 +115,10 @@ export function createGibsLayer({
     });
     // In a class map the colour is the datum, so it is drawn opaque to match its legend swatch; only a
     // continuous overlay may let the basemap through.
-    _imagery = imageryLayerFor(provider, { alpha: _entry.classes?.length ? 1 : alpha });
+    _imagery = imageryLayerFor(provider, {
+      alpha: _entry.classes?.length ? 1 : alpha,
+      ...(blackIsNoData(_entry) ? { colorToAlpha: Cesium.Color.BLACK, colorToAlphaThreshold: BLACK_THRESHOLD } : {}),
+    });
     _imagery.show = _enabled;
     _viewer.imageryLayers.add(_imagery);
     stack(_viewer.imageryLayers, id, _imagery, zrank);
@@ -199,7 +223,8 @@ export function createGibsLayer({
         return row("error", { date, error: e?.message || String(e) });
       }
       let shown = date;
-      if (pixel.timeActual && pixel.timeActual !== date) {
+      // an undated layer's tiles carry GIBS's placeholder layer-time-actual (2899-12-31): its date is asOf
+      if (!isUndated(_entry) && pixel.timeActual && pixel.timeActual !== date) {
         console.error(`[Data:${id}] layer-time-actual ${pixel.timeActual} differs from the date shown ${date}`, { url: req.url });
         shown = pixel.timeActual;
       }
@@ -257,4 +282,19 @@ export const gibsBiomassLayer = createGibsLayer({
   source: "NASA GIBS · GEDI L4B",
   zrank: 19,
   timeless: true,
+});
+// SEDAC grids of IUCN 2013 ranges (spec 2026-10-02-sedac-richness-design.md): undated in GIBS, so drawn at any time
+export const gibsAmphibianLayer = createGibsLayer({
+  id: "gibs-amphibians",
+  name: "Amphibian species (SEDAC, IUCN 2013)",
+  icon: "🐸",
+  source: "NASA GIBS · SEDAC amphibian richness",
+  zrank: 22,
+});
+export const gibsMammalLayer = createGibsLayer({
+  id: "gibs-mammals",
+  name: "Mammal species (SEDAC, IUCN 2013)",
+  icon: "🦊",
+  source: "NASA GIBS · SEDAC mammal richness",
+  zrank: 23,
 });

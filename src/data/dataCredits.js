@@ -43,10 +43,17 @@ export const DATA_CREDITS = [
   },
   {
     key: 'nasa-gibs',
-    html: 'Land cover, vegetation (EVI), land surface temperature, night lights and forest biomass: '
+    html: 'Land cover, vegetation (EVI), land surface temperature, night lights, forest biomass and species richness: '
       + 'We acknowledge the use of imagery provided by services from NASA\'s '
       + '<a href="https://nasa-gibs.github.io/gibs-api-docs/" target="_blank" rel="noopener">Global Imagery Browse Services (GIBS)</a>, '
       + 'part of NASA\'s Earth Science Data and Information System (ESDIS).',
+  },
+  {
+    key: 'sedac-richness',
+    html: 'Amphibian and mammal species richness: CIESIN, Columbia University, and NatureServe (2015), Gridded Species Distribution: '
+      + '<a href="https://doi.org/10.7927/H4RR1W66" target="_blank" rel="noopener">Global Amphibian Richness Grids</a> and '
+      + '<a href="https://doi.org/10.7927/H4N014G5" target="_blank" rel="noopener">Global Mammal Richness Grids</a>, 2015 Release, '
+      + 'NASA SEDAC, from IUCN Red List ranges (April 2013); non-commercial use, share-alike; tiles load from NASA GIBS and are not re-hosted',
   },
   {
     key: 'ioos-atn',

@@ -47,14 +47,17 @@ function tableOf(entry) {
   );
   const decode = entry.decode || [];
   const values = new Map(decode.map((e, i) => [e.slice(0, 3).join(","), i]));
+  // an exact value ([v], lo = hi) has no width: it sets no precision and is printed as itself
   const widths = decode
-    .filter((e) => e[3] !== null && e[4] !== null)
+    .filter((e) => e[3] !== null && e[4] !== null && e[4] > e[3])
     .map((e) => e[4] - e[3])
     .sort((a, b) => a - b);
   const median = widths.length ? widths[Math.floor(widths.length / 2)] : 1;
   t = {
     classes,
     values,
+    // colours the colour map only ever declares transparent (pipeline/gibs.py): no data even when a tile is opaque
+    noData: new Set((entry.noData || []).map((c) => c.join(","))),
     median,
     // from the half-width, so the midpoint of every bin prints inside it (review I1: [12,13) printed as 13)
     decimals: Math.max(0, Math.ceil(-Math.log10(median / 2))),
@@ -76,7 +79,8 @@ export function formatValue(entry, lo, hi) {
     last = decode[decode.length - 1];
   const wide = hi === null || lo === null || hi - lo > WIDE * t.median;
   let text;
-  if (!wide) text = show((lo + hi) / 2);
+  if (lo !== null && lo === hi) text = String(k ? lo - 273.15 : lo);
+  else if (!wide) text = show((lo + hi) / 2);
   else if (hi === null || (last && last[3] === lo)) text = `≥ ${show(lo)}`;
   else if (lo === null || (first && first[4] === hi)) text = `< ${show(hi)}`;
   else text = `${show(lo)} – ${show(hi)}`;
@@ -93,6 +97,7 @@ export function decodePixel(entry, [r, g, b, a]) {
     const [, , , lo, hi] = entry.decode[t.values.get(key)];
     return { kind: "value", lo, hi, text: formatValue(entry, lo, hi) };
   }
+  if (t.noData.has(key)) return { kind: "nodata" };
   return { kind: "unknown", rgb: [r, g, b] };
 }
 

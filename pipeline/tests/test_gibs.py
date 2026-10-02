@@ -226,3 +226,20 @@ def test_an_undated_layer_carries_the_year_of_its_data():
             _sedac_fetch,
             {"gibs-landcover": {**layers["gibs-landcover"], "asOf": "2013"}},
         )
+
+
+def test_no_data_colours_are_those_only_ever_transparent():
+    # GIBS's empty SEDAC tile in EPSG:3857 is an all-black palette PNG with no tRNS chunk (probe 2026-10-02),
+    # so the colour map's "No Data" black arrives opaque. A colour the map only ever declares transparent is
+    # no data whatever its alpha; GEDI also draws black as data, so its black is not no data.
+    def nodata(name):
+        return g.parse_colormap((FIX / f"gibs_colormap_{name}.xml").read_bytes()).get(
+            "noData"
+        )
+
+    assert nodata("sedac") == [[0, 0, 0], [255, 255, 255]]
+    assert nodata("classes") == [[0, 0, 0]]
+    assert nodata("ramp") == [[64, 64, 64]]
+    assert (
+        nodata("gedi") is None
+    )  # black is a GEDI data colour as well as its no-data colour
