@@ -244,7 +244,7 @@ def count_years(records, *, keep: set, wide: set):
         if key is None or key[0] not in keep:
             return
         years.setdefault(key[0], {})[key[1]] = (len(taxa), len(samples))
-        if key[0] in wide:
+        if cells:  # only wide studies collect cells
             locs.setdefault(key[0], {})[key[1]] = sorted(
                 cells, key=lambda c: (c[1], c[0]), reverse=True
             )

@@ -187,6 +187,11 @@ def test_records_out_of_order_or_with_a_missing_field_are_refused():
         biotime.count_years(
             biotime.iter_records(io.BytesIO(shuffled)), keep={10}, wide=set()
         )
+    renamed = gzip.compress(
+        b"STUDY_ID,YEAR,SAMPLE,LATITUDE,LONGITUDE,valid_name\n10,1990,s,1.0,2.0,A a\n"
+    )
+    with pytest.raises(ValueError, match="extract columns"):
+        list(biotime.iter_records(io.BytesIO(renamed)))
     holed = records_csv(
         [(10, 1990, "s", 1.0, 2.0, "A a"), (10, "NA", "s", 1.0, 2.0, "A a")]
     )
