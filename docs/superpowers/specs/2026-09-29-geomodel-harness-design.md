@@ -49,6 +49,28 @@ For a random sample of species (rank `species`) in the collection, uniform over 
   loses (ties dropped) with a one-sided sign test p < 0.05; the run's controls passed.
 - `fail` otherwise. Thresholds change only in a commit that says why, never after reading a run.
 
+*Ruling 2026-10-02, maintainer, after the Oct 2 run (5213) flipped four collections fail→pass:* the rule
+above is now each run's `month_verdict`; the published `verdict` carries evidence across months. Sept and
+Oct win shares differ beyond a permutation test in 0 of 13 collections, so the flips were sampling noise,
+and a collection judged on one month at a time is listed with no real edge in 20-48% of years
+(`analysis/verdict_stability.py`, 2000 simulated years on the two runs' 60 species per collection; 60
+species a month, two passes in a row and a three-month pool each failed a ≤ 5% budget for false listings or
+for dropping a collection with an edge). Instead, a sequential probability ratio test on species wins and
+losses (ties dropped): H0 the model beats the baseline on half the species, H1 on 60%, alpha 0.05, beta
+0.10. Each run adds wins·ln(0.6/0.5) + losses·ln(0.4/0.5) to the collection's evidence.
+- Listed (`pass`) once evidence ≥ ln(0.9/0.05) = 2.89 on a month whose median model TSS ≥ 0.40.
+- Dropped at evidence ≤ ln(0.1/0.95) = −2.25, and the evidence starts again at 0.
+- Evidence is capped at 5.89 (2.89 + 3), so a listed collection that stops beating circles drops within
+  months, and floored at −2.25 while not listed, so months of losses cannot bank unrepayable doubt.
+- A month with too few species (`insufficient`) adds nothing and keeps a listing.
+- The evidence lives in the verdicts file (`evidence: {llr, months}`) and carries only between runs of the
+  same geomodel version; a new version starts at 0. A file from before this ruling counts as one month.
+Simulated, a no-edge collection lists in ≤ 3.5% of years and none of the 8 collections with a pooled
+edge ≥ 58% drops (H1 0.60 picked over 0.65 and 0.70 and caps 3 and 6 in
+`analysis/verdict_stability_sweep.py`, after the budgets were set). On the real runs it lists Arachnida,
+Insecta and Mollusca, and holds Actinopterygii (evidence 1.21) and Plantae (2.02) that October's own sign
+test passed. `--rejudge FILE` judges a saved run again against `--prior` without network work.
+
 Sample size: 30 species per collection (fewer where the collection or the data run out).
 
 ## Controls (a run with a failed control writes no verdicts and exits non-zero)

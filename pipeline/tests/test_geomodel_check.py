@@ -4,6 +4,10 @@ Every control here calls the harness's own estimator and decision rule on plante
 planted SIZE comes back, not only that something was detected.
 """
 
+import datetime as dt
+import json
+import math
+
 import numpy as np
 import pytest
 from shapely.geometry import box
@@ -160,7 +164,17 @@ def test_run_scores_a_group_and_writes_the_verdicts(tmp_path):
     doc = json.loads(out.read_text())
     aves = doc["groups"]["Aves"]
     assert fake.verified and doc["geomodel_version"] == "2.34" and doc["seed"] == 5
-    assert aves["verdict"] == "pass" and aves["n_scored"] == 12
+    assert aves["month_verdict"] == "pass" and aves["n_scored"] == 12
+    # one month of 12 species is not enough evidence to list a collection (ruling 2026-10-02); a second month,
+    # read back from the file the first run wrote, is
+    w, l = aves["beats_baseline"]["wins"], aves["beats_baseline"]["losses"]
+    assert aves["verdict"] == "fail"
+    assert aves["evidence"] == {"llr": round(w * math.log(1.2) + l * math.log(0.8), 4), "months": 1}
+    argv = ["--out", str(out), "--groups", "Aves", "--species-per-group", "13", "--seed", "6"]
+    month_later = lambda: dt.datetime.fromisoformat(doc["generated_at"]) + dt.timedelta(days=31)  # noqa: E731
+    assert gc.main(argv, sources=FakeSources(n=17, unmatched=2, sparse=3), now=month_later) == 0
+    again = json.loads(out.read_text())["groups"]["Aves"]
+    assert again["verdict"] == "pass" and again["evidence"]["months"] == 2
     assert aves["median_tss"] == pytest.approx(0.70, abs=0.06)
     # unscored species are findings with their reason, not silently dropped
     assert aves["skipped"] == {"no exact GBIF species match": 2, "fewer than 30 non-iNaturalist presences": 3}
@@ -293,3 +307,133 @@ def test_each_run_gets_its_own_work_dir_and_removes_only_that(tmp_path):
     with gc.run_workdir(tmp_path, keep=True) as kept:
         pass
     assert kept.exists()
+
+
+# ---- evidence across months (spec, ruling 2026-10-02) ----------------------------------------------
+
+
+def _rows(wins, losses, median=0.7, ties=0):
+    """Species with model TSS `median` that beat the baseline `wins` times and lose `losses` times."""
+    gaps = [-0.1] * wins + [0.1] * losses + [0.0] * ties
+    return [gc.SpeciesResult(i, f"s{i}", 100, median, round(median + d, 4)) for i, d in enumerate(gaps)]
+
+
+def _month(wins, losses, median=0.7):
+    return gc.group_verdict(_rows(wins, losses, median), skipped={})
+
+
+def test_evidence_on_the_real_september_and_october_counts():
+    # wins-losses of the Sept 30 run and the held Oct 2 run (jobd 5213). One month's sign test listed four new
+    # collections in October; evidence carried from September lists two of them and holds fish and plants
+    real = {
+        "Arachnida": ((22, 6), (22, 8)),
+        "Insecta": ((19, 11), (22, 8)),
+        "Mollusca": ((18, 12), (23, 7)),
+        "Actinopterygii": ((14, 16), (22, 8)),
+        "Plantae": ((18, 12), (20, 10)),
+        "Mammalia": ((18, 11), (18, 11)),
+        "Aves": ((17, 13), (13, 17)),
+    }
+    listed, month_passed = set(), set()
+    for group, (sep, octo) in real.items():
+        first = gc.carry_evidence(_month(*sep), None)
+        assert first["verdict"] == "fail", group  # September alone lists nothing (Arachnida 22-6: 2.67 < 2.89)
+        second = gc.carry_evidence(_month(*octo), first)
+        listed |= {group} if second["verdict"] == "pass" else set()
+        month_passed |= {group} if second["month_verdict"] == "pass" else set()
+    assert listed == {"Arachnida", "Insecta", "Mollusca"}
+    assert month_passed == {"Arachnida", "Insecta", "Mollusca", "Actinopterygii", "Plantae"}
+
+
+def test_evidence_lists_only_on_a_month_whose_median_tss_clears_the_bar():
+    weak = gc.carry_evidence(_month(28, 2, median=0.3), None)
+    assert weak["verdict"] == "fail" and weak["evidence"]["llr"] >= gc.LIST_AT
+    # positive control in the same test: the same wins at a median of 0.7 list in one month
+    strong = gc.carry_evidence(_month(28, 2, median=0.7), None)
+    assert strong["verdict"] == "pass" and strong["evidence"]["llr"] >= gc.LIST_AT
+
+
+def test_a_listed_group_survives_a_losing_month_and_drops_on_sustained_losses():
+    group = None
+    for _ in range(4):
+        group = gc.carry_evidence(_month(28, 2), group)
+    assert group["evidence"]["llr"] == pytest.approx(gc.EVIDENCE_CAP, abs=1e-4)  # capped, so it can still drop
+    group = gc.carry_evidence(_month(10, 20), group)
+    # one losing month: the month's own sign test fails, the group stays listed
+    assert group["month_verdict"] == "fail" and group["verdict"] == "pass"
+    months = 1
+    while group["verdict"] == "pass":
+        group = gc.carry_evidence(_month(10, 20), group)
+        months += 1
+        assert months < 10
+    # 5.89 → 3.25 → 0.61 → -2.03 → -4.67: dropped on the fourth losing month, evidence starts over
+    assert months == 4 and group["evidence"]["llr"] == 0.0
+
+
+def test_doubt_is_floored_so_a_collection_that_improves_can_still_list():
+    group = None
+    for _ in range(6):
+        group = gc.carry_evidence(_month(5, 25), group)
+    assert group["verdict"] == "fail"
+    assert group["evidence"]["llr"] == pytest.approx(gc.DROP_AT, abs=1e-4)  # not 6 months of banked doubt
+    group = gc.carry_evidence(_month(24, 6), group)
+    assert group["verdict"] == "fail"
+    group = gc.carry_evidence(_month(24, 6), group)
+    assert group["verdict"] == "pass"
+
+
+def test_an_insufficient_month_leaves_the_evidence_alone():
+    listed = gc.carry_evidence(_month(28, 2), None)
+    thin = gc.carry_evidence(gc.group_verdict(_rows(9, 0), skipped={}), listed)
+    assert thin["month_verdict"] == "insufficient"
+    assert thin["verdict"] == "pass" and thin["evidence"] == listed["evidence"]
+    # positive control in the same test: with no listing to keep, an insufficient month is insufficient
+    assert gc.carry_evidence(gc.group_verdict(_rows(9, 0), skipped={}), None)["verdict"] == "insufficient"
+
+
+def _doc(generated_at, version="2.34", **groups):
+    out = {}
+    for name, (wins, losses) in groups.items():
+        rows = _rows(wins, losses)
+        out[name] = {**gc.group_verdict(rows, skipped={}), "species": [r.__dict__ for r in rows]}
+    return {
+        "generated_at": generated_at,
+        "seed": 1,
+        "geomodel_version": version,
+        "spec": "x",
+        "thresholds": {},
+        "groups": out,
+        "controls": {},
+    }
+
+
+def test_prior_evidence_comes_only_from_an_earlier_file_on_the_same_model():
+    sep = _doc("2026-09-30T17:32:03+00:00", Insecta=(22, 8))
+    # a file from before the evidence rule counts as one month: its own species rows are replayed
+    got = gc.prior_evidence(sep, "2.34", "2026-10-02T18:48:00+00:00")
+    assert got["Insecta"]["evidence"] == {"llr": round(22 * math.log(1.2) + 8 * math.log(0.8), 4), "months": 1}
+    # another model version: what was learnt about the old ranges does not carry
+    assert gc.prior_evidence(sep, "2.35", "2026-10-02T18:48:00+00:00") == {}
+    assert gc.prior_evidence(None, "2.34", "2026-10-02T18:48:00+00:00") == {}
+    # the same run as its own prior would count one month twice
+    with pytest.raises(gc.EvidenceError, match="not earlier"):
+        gc.prior_evidence(sep, "2.34", "2026-09-30T17:32:03+00:00")
+
+
+def test_rejudge_judges_a_saved_run_against_an_earlier_file_without_gbif_work(tmp_path):
+    # the October run was held when the rule changed: its saved species rows are judged again
+    sep, octo = tmp_path / "sep.json", tmp_path / "oct.json"
+    sep.write_text(json.dumps(_doc("2026-09-30T17:32:03+00:00", Insecta=(19, 11), Plantae=(18, 12))))
+    octo.write_text(json.dumps(_doc("2026-10-02T18:48:00+00:00", Insecta=(22, 8), Plantae=(20, 10))))
+    out = tmp_path / "verdicts.json"
+    assert gc.main(["--rejudge", str(octo), "--prior", str(sep), "--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    assert doc["generated_at"] == "2026-10-02T18:48:00+00:00" and doc["seed"] == 1
+    assert doc["groups"]["Insecta"]["verdict"] == "pass" and doc["groups"]["Plantae"]["verdict"] == "fail"
+    assert doc["groups"]["Plantae"]["month_verdict"] == "pass"
+    assert doc["thresholds"]["evidence"]["edge"] == 0.6
+    # a run judged against itself is refused, and nothing is written
+    twice = tmp_path / "twice.json"
+    with pytest.raises(gc.EvidenceError, match="not earlier"):
+        gc.main(["--rejudge", str(octo), "--prior", str(octo), "--out", str(twice)])
+    assert not twice.exists()

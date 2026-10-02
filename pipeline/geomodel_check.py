@@ -146,6 +146,107 @@ def group_verdict(results: list[SpeciesResult], skipped: dict[str, int]) -> dict
     }
 
 
+# Across months (spec, ruling 2026-10-02): one month's sign test flipped four collections Sept→Oct on sampling noise
+# alone, and re-tested every month it lists a collection with no edge in up to ~48% of years. Evidence carries
+# instead: a sequential probability ratio test on species wins and losses, H0 "beats the baseline on half the
+# species" against H1 "on 60%", alpha 0.05, beta 0.10. Simulated on the two runs' 60 species per collection,
+# a no-edge collection lists in <= 3.5% of years and none of the 8 with an edge drops (analysis/verdict_stability).
+EVIDENCE_EDGE = 0.60
+EVIDENCE_ALPHA, EVIDENCE_BETA = 0.05, 0.10
+LIST_AT = math.log((1 - EVIDENCE_BETA) / EVIDENCE_ALPHA)  # 2.89
+DROP_AT = math.log(EVIDENCE_BETA / (1 - EVIDENCE_ALPHA))  # -2.25, also the floor while not listed
+EVIDENCE_CAP = LIST_AT + 3.0  # a listed collection that stops beating the baseline drops within months, not years
+
+
+class EvidenceError(ValueError):
+    """The prior verdicts file cannot carry evidence into this run."""
+
+
+def carry_evidence(month: dict, prior: dict | None) -> dict:
+    """A group's published verdict: `month` (group_verdict of this run) on top of its entry in the last verdicts file.
+
+    `verdict` is pass while the group is listed; `month_verdict` is this run's own sign test."""
+    llr, listed, months = 0.0, False, 0
+    if prior is not None:
+        llr, months = prior["evidence"]["llr"], prior["evidence"]["months"]
+        listed = prior["verdict"] == "pass"
+    if month["verdict"] == "insufficient":  # too few species scored: no evidence either way
+        verdict = "pass" if listed else "insufficient"
+        return {**month, "month_verdict": "insufficient", "verdict": verdict, "evidence": {"llr": llr, "months": months}}
+    b = month["beats_baseline"]
+    step = b["wins"] * math.log(EVIDENCE_EDGE / 0.5) + b["losses"] * math.log((1 - EVIDENCE_EDGE) / 0.5)
+    llr = min(llr + step, EVIDENCE_CAP)
+    if listed and llr <= DROP_AT:
+        listed, llr = False, 0.0
+    elif not listed and llr >= LIST_AT and month["median_tss"] >= MEDIAN_TSS_MIN:
+        listed = True
+    if not listed:  # months of losses must not bank doubt a collection that improves can never repay
+        llr = max(llr, DROP_AT)
+    return {
+        **month,
+        "month_verdict": month["verdict"],
+        "verdict": "pass" if listed else "fail",
+        "evidence": {"llr": round(llr, 4), "months": months + 1},
+    }
+
+
+def prior_evidence(prior_doc: dict | None, version: str, generated_at: str) -> dict:
+    """Each group's entry in the last verdicts file, to carry into a run of geomodel `version` made at `generated_at`.
+
+    Empty when there is no file or it checked another geomodel version. A file from before the evidence rule counts
+    as one month: its own species rows are judged again."""
+    import datetime as dt
+
+    if prior_doc is None:
+        return {}
+    if prior_doc["geomodel_version"] != version:
+        log.info("last verdicts checked geomodel %s, this run %s: evidence starts over", prior_doc["geomodel_version"], version)
+        return {}
+    if dt.datetime.fromisoformat(prior_doc["generated_at"]) >= dt.datetime.fromisoformat(generated_at):
+        raise EvidenceError(
+            f"the last verdicts ({prior_doc['generated_at']}) are not earlier than this run ({generated_at}): "
+            "one run would be counted twice"
+        )
+    out = {}
+    for group, v in prior_doc["groups"].items():
+        if "evidence" in v:
+            out[group] = v
+        else:
+            rows = [SpeciesResult(**r) for r in v.get("species", [])]
+            out[group] = carry_evidence(group_verdict(rows, v.get("skipped", {})), None)
+    return out
+
+
+def judge(doc: dict, prior_doc: dict | None) -> dict:
+    """The verdicts document with every group's verdict carried from `prior_doc` (spec, ruling 2026-10-02)."""
+    prior = prior_evidence(prior_doc, doc["geomodel_version"], doc["generated_at"])
+    groups = {}
+    for group, v in doc["groups"].items():
+        rows = [SpeciesResult(**r) for r in v["species"]]
+        judged = carry_evidence(group_verdict(rows, v["skipped"]), prior.get(group))
+        groups[group] = {**judged, "species": v["species"]}
+        log.info(
+            "%s: %s (evidence %s over %s months; this month %s)",
+            group,
+            judged["verdict"],
+            judged["evidence"]["llr"],
+            judged["evidence"]["months"],
+            judged["month_verdict"],
+        )
+    thresholds = {
+        **doc["thresholds"],
+        "evidence": {
+            "edge": EVIDENCE_EDGE,
+            "alpha": EVIDENCE_ALPHA,
+            "beta": EVIDENCE_BETA,
+            "list_at": round(LIST_AT, 4),
+            "drop_at": round(DROP_AT, 4),
+            "cap": round(EVIDENCE_CAP, 4),
+        },
+    }
+    return {**doc, "thresholds": thresholds, "groups": groups}
+
+
 def planted_fake_presences(
     background: np.ndarray, n: int, rng: np.random.Generator
 ) -> np.ndarray:
@@ -498,9 +599,10 @@ def run_workdir(root: Path, keep: bool = False):
             shutil.rmtree(work, ignore_errors=True)
 
 
-def main(argv=None, *, sources=None) -> int:
+def main(argv=None, *, sources=None, now=None) -> int:
     import argparse
     import datetime as dt
+    import json
     import logging
     import os
 
@@ -527,6 +629,18 @@ def main(argv=None, *, sources=None) -> int:
     ap.add_argument(
         "--keep-ranges", action="store_true", help="keep the downloaded GeoPackages"
     )
+    ap.add_argument(
+        "--prior",
+        type=Path,
+        default=None,
+        help="the last verdicts file, whose evidence carries into this run (default: --out, if it exists)",
+    )
+    ap.add_argument(
+        "--rejudge",
+        type=Path,
+        default=None,
+        help="judge a saved run's species rows again, against --prior, instead of running (no network)",
+    )
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     log = logging.getLogger("geomodel")
@@ -538,23 +652,31 @@ def main(argv=None, *, sources=None) -> int:
     unknown = sorted(set(groups) - set(GROUPS))
     if unknown:
         ap.error(f"unknown collections: {unknown}")
-    live = sources is None
-    with (
-        run_workdir(args.work, keep=args.keep_ranges) if live else nullcontext() as work
-    ):
-        sources = sources or LiveSources(work)
-        try:
-            doc = run(
-                sources, groups, np.random.default_rng(seed), args.species_per_group
-            )
-        except ControlFailure as e:
-            log.error("controls failed, no verdicts written: %s", e)
-            return 2
-    doc = {
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "seed": seed,
-        **doc,
-    }
+    # read before hours of GBIF work: an unreadable prior must stop the run, not lose its evidence after it
+    prior_path = args.prior or args.out
+    prior = json.loads(prior_path.read_text()) if prior_path.exists() else None
+    if args.rejudge:
+        doc = json.loads(args.rejudge.read_text())
+        log.info("judging %s (%s) again against %s", args.rejudge, doc["generated_at"], prior_path)
+    else:
+        live = sources is None
+        with (
+            run_workdir(args.work, keep=args.keep_ranges) if live else nullcontext() as work
+        ):
+            sources = sources or LiveSources(work)
+            try:
+                doc = run(
+                    sources, groups, np.random.default_rng(seed), args.species_per_group
+                )
+            except ControlFailure as e:
+                log.error("controls failed, no verdicts written: %s", e)
+                return 2
+        doc = {
+            "generated_at": (now or (lambda: dt.datetime.now(dt.timezone.utc)))().isoformat(timespec="seconds"),
+            "seed": seed,
+            **doc,
+        }
+    doc = judge(doc, prior)
     write_atomic(args.out, doc)
     log.info("wrote %s", args.out)
     return 0
