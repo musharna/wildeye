@@ -23,6 +23,8 @@ const KNOWN = [
 ];
 const DROPPED = 166;
 // independent of the pipeline's table: any of these in a shown study's licence means a non-open study got through
+// a study's data link is a web address or absent, never a placeholder ('None', 'http://', 'NA') or mojibake
+const LINK_OK = (l) => l === '' || /^https?:\/\/[^\s/]+\.[^\s]*[^\sÂ]$/.test(l);
 const NOT_OPEN = /non-?commercial|\bnc\b|odbl|share-?alike|\bsa\b|citation required|^\s*$|^public\s*$|^public - full access$/i;
 
 const results = [];
@@ -159,6 +161,9 @@ try {
   report('dropped-non-commercial-absent', seen.length === 0 && !studies.some((s) => s.id === DROPPED), { seenAt: seen });
   const notOpen = studies.filter((s) => NOT_OPEN.test(s.licence ?? ''));
   report('every-study-open-licence', studies.length > 0 && notOpen.length === 0, { notOpen: notOpen.slice(0, 5).map((s) => [s.id, s.licence]) });
+  const badLinks = studies.filter((s) => typeof s.link !== 'string' || !LINK_OK(s.link));
+  report('every-link-a-url-or-none', studies.length > 0 && studies.some((s) => s.link) && badLinks.length === 0,
+    { links: studies.filter((s) => s.link).length, bad: badLinks.slice(0, 5).map((s) => [s.id, s.link]) });
   const domain = await page.evaluate(() => window.__godsEyeView.observedTime.domain()?.start ?? null);
   const first = Math.min(...studies.flatMap((s) => Object.keys(s.years).map(Number)));
   report('time-bar-reaches-first-year', domain !== null && domain <= Date.UTC(first, 0, 1), { first, domainStart: domain && new Date(domain).toISOString() });
