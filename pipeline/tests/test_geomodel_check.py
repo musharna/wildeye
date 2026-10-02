@@ -437,3 +437,22 @@ def test_rejudge_judges_a_saved_run_against_an_earlier_file_without_gbif_work(tm
     with pytest.raises(gc.EvidenceError, match="not earlier"):
         gc.main(["--rejudge", str(octo), "--prior", str(octo), "--out", str(twice)])
     assert not twice.exists()
+
+
+@pytest.mark.parametrize(
+    "flag", [["--groups", "Aves"], ["--seed", "3"], ["--species-per-group", "12"]]
+)
+def test_rejudge_refuses_the_flags_of_a_run(tmp_path, capsys, flag):
+    # review of PR #36: `--rejudge FILE --groups Aves` judged and wrote every collection in FILE, the flag silently
+    # unused; a re-judge takes its collections, seed and species from the saved run, so a run flag is an error
+    sep, octo = tmp_path / "sep.json", tmp_path / "oct.json"
+    sep.write_text(json.dumps(_doc("2026-09-30T17:32:03+00:00", Insecta=(19, 11))))
+    octo.write_text(json.dumps(_doc("2026-10-02T18:48:00+00:00", Insecta=(22, 8))))
+    out = tmp_path / "verdicts.json"
+    with pytest.raises(SystemExit) as exc:
+        gc.main(["--rejudge", str(octo), "--prior", str(sep), "--out", str(out), *flag])
+    assert exc.value.code == 2 and f"{flag[0]} does not apply to --rejudge" in capsys.readouterr().err
+    assert not out.exists()
+    # positive control in the same test: without the run flag the re-judge writes
+    assert gc.main(["--rejudge", str(octo), "--prior", str(sep), "--out", str(out)]) == 0
+    assert out.exists()
