@@ -97,6 +97,10 @@ export const DATA_CREDITS = [
     html: 'Human footprint: <a href="https://doi.org/10.6084/m9.figshare.16571064.v8" target="_blank" rel="noopener">Global annual Human Footprint 2000–2024</a> (figshare v8), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Mu, Li, Wen, Huang et al. 2022, <i>Scientific Data</i> 9:176, <a href="https://doi.org/10.1038/s41597-022-01284-8" target="_blank" rel="noopener">doi:10.1038/s41597-022-01284-8</a>. Five snapshots (2000, 2006, 2012, 2018, 2024), area-averaged from 1 km to ~5 km and binned for display.',
   },
   {
+    key: 'wetlands',
+    html: 'Wetlands: <a href="https://www.hydrosheds.org/products/glwd" target="_blank" rel="noopener">Global Lakes and Wetlands Database (GLWD) v2</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Lehner, Anand, Fluet-Chouinard, Tan et al. 2025, <i>Earth System Science Data</i> 17:2277–2329, <a href="https://doi.org/10.5194/essd-17-2277-2025" target="_blank" rel="noopener">doi:10.5194/essd-17-2277-2025</a>. Dominant wetland type where wetland covers more than half the cell, shown at ~1.2 km.',
+  },
+  {
     key: 'cmems',
     html: 'Ocean oxygen and pH: Generated using E.U. Copernicus Marine Service Information; <a href="https://doi.org/10.48670/moi-00015" target="_blank" rel="noopener">Global Ocean Biogeochemistry Analysis and Forecast</a> (daily 0.25° surface analysis)',
   },
