@@ -315,9 +315,9 @@ def run_extract(rds: Path, dest: Path) -> None:
     rscript = shutil.which("Rscript")
     if not rscript:
         raise RuntimeError(
-            "Rscript not found: the .rds extract needs R with data.table"
+            "Rscript not found: the .rds extract needs R"
         )
-    subprocess.run([rscript, str(EXTRACT_SCRIPT), str(rds), str(dest)], check=True)  # nosec B603 — fixed argv, no shell
+    subprocess.run([rscript, "--vanilla", str(EXTRACT_SCRIPT), str(rds), str(dest)], check=True)  # nosec B603 — fixed argv, no shell
 
 
 def main(argv=None, *, fetch_to=_fetch_to, source=SOURCE, extract=run_extract):
