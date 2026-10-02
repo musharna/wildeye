@@ -1,0 +1,21 @@
+H1 0.6 cap 3.0: worst false 3.5% | churn of edge>=58% groups: Actinopt c0%, Arachnid c0%, Chromist c0%, Insecta c0%, Mammalia c0%, Mollusca c0%, OtherAni c0%, Plantae c0%
+H1 0.6 cap 6.0: worst false 4.1% | churn of edge>=58% groups: Actinopt c0%, Arachnid c0%, Chromist c0%, Insecta c0%, Mammalia c0%, Mollusca c0%, OtherAni c0%, Plantae c0%
+H1 0.65 cap 3.0: worst false 4.2% | churn of edge>=58% groups: Actinopt c4%, Arachnid c0%, Chromist c12%, Insecta c0%, Mammalia c1%, Mollusca c0%, OtherAni c12%, Plantae c0%
+H1 0.65 cap 6.0: worst false 4.0% | churn of edge>=58% groups: Actinopt c1%, Arachnid c0%, Chromist c3%, Insecta c0%, Mammalia c0%, Mollusca c0%, OtherAni c4%, Plantae c0%
+H1 0.7 cap 3.0: worst false 3.3% | churn of edge>=58% groups: Actinopt c40%, Arachnid c0%, Chromist c59%, Insecta c0%, Mammalia c16%, Mollusca c0%, OtherAni c61%, Plantae c8%
+H1 0.7 cap 6.0: worst false 3.4% | churn of edge>=58% groups: Actinopt c21%, Arachnid c0%, Chromist c41%, Insecta c0%, Mammalia c5%, Mollusca c0%, OtherAni c38%, Plantae c3%
+
+Replay, LLR from 0 in Sep, H1 0.65 cap 3 (Arachnida treated like the rest):
+Actinopterygii   after Sep (np.float64(-2.03), False)  after Oct (np.float64(0.88), False)
+Amphibia         after Sep (np.float64(-2.25), False)  after Oct (np.float64(-2.25), False)
+Arachnida        after Sep (np.float64(3.63), True)  after Oct (np.float64(5.89), True)
+Aves             after Sep (np.float64(-0.18), False)  after Oct (np.float64(-2.25), False)
+Chromista        after Sep (np.float64(0.44), False)  after Oct (np.float64(0.27), False)
+Fungi            after Sep (np.float64(-1.68), False)  after Oct (np.float64(-1.23), False)
+Insecta          after Sep (np.float64(1.06), False)  after Oct (np.float64(3.98), True)
+Mammalia         after Sep (np.float64(0.8), False)  after Oct (np.float64(1.6), False)
+Mollusca         after Sep (np.float64(0.44), False)  after Oct (np.float64(3.98), True)
+OtherAnimalia    after Sep (np.float64(-0.8), False)  after Oct (np.float64(0.27), False)
+Plantae          after Sep (np.float64(0.44), False)  after Oct (np.float64(2.12), False)
+Protozoa         after Sep (np.float64(-2.25), False)  after Oct (np.float64(-2.25), False)
+Reptilia         after Sep (np.float64(-1.94), False)  after Oct (np.float64(-2.12), False)

@@ -1,0 +1,138 @@
+== (b) Sep vs Oct win share, permutation p (two-sided, 4000 splits)
+Actinopterygii   Sep (14, 16) Oct (22, 8) pooled (36, 24) p=0.059  pooled-60 verdict=fail
+Amphibia         Sep (11, 17) Oct (11, 19) pooled (22, 36) p=0.894  pooled-60 verdict=fail
+Arachnida        Sep (22, 6) Oct (22, 8) pooled (44, 14) p=0.763  pooled-60 verdict=pass
+Aves             Sep (17, 13) Oct (13, 17) pooled (30, 30) p=0.441  pooled-60 verdict=fail
+Chromista        Sep (18, 12) Oct (17, 13) pooled (35, 25) p=1.000  pooled-60 verdict=fail
+Fungi            Sep (14, 15) Oct (18, 12) pooled (32, 27) p=0.446  pooled-60 verdict=fail
+Insecta          Sep (19, 11) Oct (22, 8) pooled (41, 19) p=0.587  pooled-60 verdict=pass
+Mammalia         Sep (18, 11) Oct (18, 11) pooled (36, 22) p=1.000  pooled-60 verdict=pass
+Mollusca         Sep (18, 12) Oct (23, 7) pooled (41, 19) p=0.268  pooled-60 verdict=pass
+OtherAnimalia    Sep (16, 14) Oct (19, 11) pooled (35, 25) p=0.594  pooled-60 verdict=fail
+Plantae          Sep (18, 12) Oct (20, 10) pooled (38, 22) p=0.775  pooled-60 verdict=pass
+Protozoa         Sep (11, 19) Oct (16, 14) pooled (27, 33) p=0.294  pooled-60 verdict=fail
+Reptilia         Sep (13, 15) Oct (17, 13) pooled (30, 28) p=0.528  pooled-60 verdict=fail
+groups with p<0.05: 0 of 13 (chance ~0.7)
+
+== yearly rates, 2000 simulated years per cell
+false = null group listed in any month (start unlisted); churn = alt group dropped in any month (start listed);
+reach = alt group listed by month 12 (start unlisted). Budgets: false <= 5%, churn <= 5%.
+Actinopterygii pooled (36, 24)
+   now        cost x1  false  45.9%  churn 100.0%  reach  29.5%
+   n60        cost x2  false  43.2%  churn 100.0%  reach  44.0%
+   hyst2      cost x1  false   2.6%  churn  99.5%  reach  18.3%
+   n60_hyst   cost x2  false   2.2%  churn  94.0%  reach  42.5%
+   pool3      cost x1  false  27.8%  churn  97.5%  reach  54.9%
+   pool3_rev  cost x1  false  28.4%  churn  26.4%  reach  91.5%
+   sprt       cost x1  false   3.5%  churn   4.7%  reach  81.0%
+Amphibia pooled (22, 36)
+   now        cost x1  false  37.5%  churn 100.0%  reach   0.1%
+   n60        cost x2  false  37.5%  churn 100.0%  reach   0.0%
+   hyst2      cost x1  false   2.1%  churn 100.0%  reach   0.0%
+   n60_hyst   cost x2  false   1.2%  churn 100.0%  reach   0.0%
+   pool3      cost x1  false  27.8%  churn 100.0%  reach   0.0%
+   pool3_rev  cost x1  false  29.0%  churn 100.0%  reach   0.0%
+   sprt       cost x1  false   2.4%  churn 100.0%  reach   0.0%
+Arachnida pooled (44, 14)
+   now        cost x1  false  38.6%  churn  79.3%  reach  88.3%
+   n60        cost x2  false  38.0%  churn   9.2%  reach  99.1%
+   hyst2      cost x1  false   1.5%  churn  12.2%  reach  96.9%
+   n60_hyst   cost x2  false   1.6%  churn   0.0%  reach 100.0%
+   pool3      cost x1  false  28.7%  churn   0.4%  reach  99.9%
+   pool3_rev  cost x1  false  27.6%  churn   0.0%  reach 100.0%
+   sprt       cost x1  false   3.0%  churn   0.0%  reach 100.0%
+Aves pooled (30, 30)
+   now        cost x1  false  46.8%  churn 100.0%  reach   4.0%
+   n60        cost x2  false  42.4%  churn 100.0%  reach   5.5%
+   hyst2      cost x1  false   3.3%  churn 100.0%  reach   0.6%
+   n60_hyst   cost x2  false   2.2%  churn 100.0%  reach   0.5%
+   pool3      cost x1  false  27.9%  churn 100.0%  reach   2.8%
+   pool3_rev  cost x1  false  28.3%  churn  99.2%  reach   8.9%
+   sprt       cost x1  false   3.4%  churn  95.9%  reach   0.7%
+Chromista pooled (35, 25)
+   now        cost x1  false  46.2%  churn 100.0%  reach  23.0%
+   n60        cost x2  false  43.4%  churn 100.0%  reach  35.4%
+   hyst2      cost x1  false   2.4%  churn  99.9%  reach  10.7%
+   n60_hyst   cost x2  false   2.5%  churn  99.1%  reach  26.8%
+   pool3      cost x1  false  27.0%  churn  99.2%  reach  39.9%
+   pool3_rev  cost x1  false  27.2%  churn  43.7%  reach  80.4%
+   sprt       cost x1  false   3.5%  churn  11.7%  reach  62.9%
+Fungi pooled (32, 27)
+   now        cost x1  false  20.0%  churn 100.0%  reach   8.2%
+   n60        cost x2  false  15.9%  churn 100.0%  reach  11.4%
+   hyst2      cost x1  false   0.6%  churn 100.0%  reach   1.6%
+   n60_hyst   cost x2  false   0.4%  churn 100.0%  reach   3.4%
+   pool3      cost x1  false  12.5%  churn 100.0%  reach  14.8%
+   pool3_rev  cost x1  false  11.7%  churn  98.5%  reach  24.7%
+   sprt       cost x1  false   1.4%  churn  60.4%  reach  12.6%
+Insecta pooled (41, 19)
+   now        cost x1  false  45.6%  churn  99.3%  reach  64.0%
+   n60        cost x2  false  43.0%  churn  73.2%  reach  88.7%
+   hyst2      cost x1  false   3.1%  churn  65.7%  reach  76.2%
+   n60_hyst   cost x2  false   2.1%  churn  10.4%  reach  97.8%
+   pool3      cost x1  false  28.0%  churn  27.3%  reach  96.2%
+   pool3_rev  cost x1  false  27.9%  churn   0.4%  reach 100.0%
+   sprt       cost x1  false   3.6%  churn   0.0%  reach 100.0%
+Mammalia pooled (36, 22)
+   now        cost x1  false  38.9%  churn 100.0%  reach  35.0%
+   n60        cost x2  false  37.0%  churn 100.0%  reach  52.7%
+   hyst2      cost x1  false   1.8%  churn  99.1%  reach  23.5%
+   n60_hyst   cost x2  false   1.5%  churn  87.7%  reach  55.4%
+   pool3      cost x1  false  28.0%  churn  91.3%  reach  70.2%
+   pool3_rev  cost x1  false  27.6%  churn  10.2%  reach  97.1%
+   sprt       cost x1  false   3.0%  churn   0.8%  reach  94.8%
+Mollusca pooled (41, 19)
+   now        cost x1  false  44.4%  churn  99.0%  reach  65.1%
+   n60        cost x2  false  43.9%  churn  75.2%  reach  89.8%
+   hyst2      cost x1  false   2.5%  churn  67.5%  reach  75.4%
+   n60_hyst   cost x2  false   2.4%  churn  12.2%  reach  98.0%
+   pool3      cost x1  false  28.3%  churn  27.7%  reach  96.4%
+   pool3_rev  cost x1  false  27.9%  churn   0.3%  reach 100.0%
+   sprt       cost x1  false   3.5%  churn   0.0%  reach 100.0%
+OtherAnimalia pooled (35, 25)
+   now        cost x1  false  48.3%  churn 100.0%  reach  22.6%
+   n60        cost x2  false  43.2%  churn 100.0%  reach  34.2%
+   hyst2      cost x1  false   2.3%  churn  99.8%  reach  12.7%
+   n60_hyst   cost x2  false   2.1%  churn  98.4%  reach  27.9%
+   pool3      cost x1  false  27.3%  churn  99.6%  reach  41.8%
+   pool3_rev  cost x1  false  27.5%  churn  44.9%  reach  82.1%
+   sprt       cost x1  false   3.8%  churn  12.4%  reach  65.3%
+Plantae pooled (38, 22)
+   now        cost x1  false  45.5%  churn 100.0%  reach  42.4%
+   n60        cost x2  false  44.8%  churn  99.4%  reach  65.5%
+   hyst2      cost x1  false   2.4%  churn  95.5%  reach  40.1%
+   n60_hyst   cost x2  false   1.8%  churn  67.2%  reach  76.2%
+   pool3      cost x1  false  27.9%  churn  81.6%  reach  76.6%
+   pool3_rev  cost x1  false  25.6%  churn   7.0%  reach  98.7%
+   sprt       cost x1  false   3.2%  churn   0.2%  reach  98.0%
+Protozoa pooled (27, 33)
+   now        cost x1  false   0.1%  churn 100.0%  reach   0.1%
+   n60        cost x2  false   0.0%  churn 100.0%  reach   0.0%
+   hyst2      cost x1  false   0.0%  churn 100.0%  reach   0.0%
+   n60_hyst   cost x2  false   0.0%  churn 100.0%  reach   0.0%
+   pool3      cost x1  false   0.0%  churn 100.0%  reach   0.0%
+   pool3_rev  cost x1  false   0.0%  churn 100.0%  reach   0.0%
+   sprt       cost x1  false   0.0%  churn 100.0%  reach   0.1%
+Reptilia pooled (30, 28)
+   now        cost x1  false  36.7%  churn 100.0%  reach   5.8%
+   n60        cost x2  false  37.1%  churn 100.0%  reach   6.5%
+   hyst2      cost x1  false   2.2%  churn 100.0%  reach   0.5%
+   n60_hyst   cost x2  false   1.3%  churn 100.0%  reach   1.1%
+   pool3      cost x1  false  29.1%  churn 100.0%  reach   7.1%
+   pool3_rev  cost x1  false  26.5%  churn  96.4%  reach  20.2%
+   sprt       cost x1  false   3.0%  churn  86.2%  reach   2.9%
+
+== (c) real history: Sep verdict -> Oct verdict under each rule (Sep state = Sep's own pass)
+Actinopterygii   now False->True   hyst2 False->False   pool(Sep+Oct) False
+Amphibia         now False->False   hyst2 False->False   pool(Sep+Oct) False
+Arachnida        now True->True   hyst2 True->True   pool(Sep+Oct) True
+Aves             now False->False   hyst2 False->False   pool(Sep+Oct) False
+Chromista        now False->False   hyst2 False->False   pool(Sep+Oct) False
+Fungi            now False->False   hyst2 False->False   pool(Sep+Oct) False
+Insecta          now False->True   hyst2 False->False   pool(Sep+Oct) True
+Mammalia         now False->False   hyst2 False->False   pool(Sep+Oct) True
+Mollusca         now False->True   hyst2 False->False   pool(Sep+Oct) True
+OtherAnimalia    now False->False   hyst2 False->False   pool(Sep+Oct) False
+Plantae          now False->True   hyst2 False->False   pool(Sep+Oct) True
+Protozoa         now False->False   hyst2 False->False   pool(Sep+Oct) False
+Reptilia         now False->False   hyst2 False->False   pool(Sep+Oct) False
