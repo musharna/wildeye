@@ -169,14 +169,17 @@ def test_counts_per_study_year_are_distinct_taxa_and_distinct_samples():
         (30, 2001, "t1", -30.123, 150.456, "Gadus morhua"),
         (30, 2001, "t2", -30.124, 150.456, "Gadus morhua"),  # the same 0.01° cell as t1
         (30, 2001, "t3", -31.5, 151.0, "Merluccius merluccius"),
+        # a tie for rounding (R gives -139.02, Python -139.03) but one grid cell in both: cells are floor(x * 100)
+        (30, 2001, "t4", 69.5533, -139.025, "Gadus morhua"),
+        (30, 2001, "t5", 69.5533, -139.027, "Gadus morhua"),
     ]
     years, locs = biotime.count_years(
         biotime.iter_records(io.BytesIO(records_csv(rows))), keep={10, 30}, wide={30}
     )
-    assert years == {10: {1990: (2, 2), 1992: (1, 1)}, 30: {2001: (2, 3)}}
-    assert locs == {30: {2001: [(150.46, -30.12), (151.0, -31.5)]}}, (
-        "wide studies only, 0.01° cells, deduplicated"
-    )
+    assert years == {10: {1990: (2, 2), 1992: (1, 1)}, 30: {2001: (2, 5)}}
+    assert locs == {
+        30: {2001: [(-139.025, 69.555), (150.455, -30.125), (151.005, -31.495)]}
+    }, "wide studies only, 0.01° grid cells drawn at their centres, deduplicated"
 
 
 def test_records_out_of_order_or_with_a_missing_field_are_refused():
@@ -309,4 +312,4 @@ def test_main_writes_open_studies_only_with_counts_citations_and_no_contacts(tmp
         and "CC BY 4.0" in m["source"]["licence"]
     )
     locs = json.loads((out / biotime.LOCATIONS).read_text())
-    assert locs == {"30": {"2001": [[150.0, -30.0]]}}
+    assert locs == {"30": {"2001": [[150.005, -29.995]]}}
