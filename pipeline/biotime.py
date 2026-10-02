@@ -7,7 +7,7 @@ fetched, is refused. pipeline/biotime_extract.R only converts the .rds to a gzip
 and year; everything else happens here. Each study carries its own licence as free text: only open-attribution studies
 are kept, by an explicit table, and a string the table does not know stops the run. Counts are raw (distinct taxa and
 distinct samples per study-year), published beside each other so a reader sees the effort behind a count. A study
-spanning more than WIDE_KM2 also gets the 0.01° cells it sampled each year, drawn instead of a misleading centroid.
+spanning more than WIDE_KM2 also gets the 0.01° grid cells it sampled each year, drawn instead of a misleading centroid.
 No contact fields and no raw records are published.
 """
 
@@ -20,6 +20,7 @@ import gzip
 import hashlib
 import io
 import logging
+import math
 import os
 import re
 import shutil
@@ -235,7 +236,9 @@ def iter_records(fh):
 
 
 def count_years(records, *, keep: set, wide: set):
-    """Distinct taxa and distinct samples per kept study-year, and each wide study's sampled 0.01° cells per year.
+    """Distinct taxa and distinct samples per kept study-year, and each wide study's sampled 0.01° grid cells per year,
+    as cell centres. A cell is floor(x * 100): rounding a coordinate has ties that languages break differently (R and
+    Python split -139.025 two ways), a grid index has none, so an independent count in R gives the same cells.
     Records must come sorted by study then year (the extract sorts them), so only one group is held at a time."""
     years, locs = {}, {}
     key, taxa, samples, cells, last = None, set(), set(), set(), (-1, -1)
@@ -245,8 +248,9 @@ def count_years(records, *, keep: set, wide: set):
             return
         years.setdefault(key[0], {})[key[1]] = (len(taxa), len(samples))
         if cells:  # only wide studies collect cells
+            centres = {(round((i + 0.5) / 100, 3), round((j + 0.5) / 100, 3)) for i, j in cells}
             locs.setdefault(key[0], {})[key[1]] = sorted(
-                cells, key=lambda c: (c[1], c[0]), reverse=True
+                centres, key=lambda c: (c[1], c[0]), reverse=True
             )
 
     for sid, year, sample, lat, lon, name in records:
@@ -262,7 +266,7 @@ def count_years(records, *, keep: set, wide: set):
             taxa.add(name)
             samples.add(sample)
             if sid in wide:
-                cells.add((round(lon, 2), round(lat, 2)))
+                cells.add((math.floor(lon * 100), math.floor(lat * 100)))
     flush()
     return years, locs
 

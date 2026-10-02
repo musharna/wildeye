@@ -39,7 +39,7 @@ per-study change analysis (rarefaction) was rejected for this step (Q15 (c)).
   and for each kept study and year count distinct `valid_name` (taxa) and distinct `SAMPLE_DESC` (samples). Writes
   `public/data/biotime.json` (studies with id, title, organisms, taxon group, realm, centroid, area, licence,
   citation, link and per-year [taxa, samples]; the source; the dropped counts by reason) and, for wide studies,
-  their per-year sampled locations rounded to 0.01°. No contact fields and no raw records are published.
+  the 0.01° grid cells (floor(x × 100), tie-free in any language) they sampled each year, drawn at cell centres. No contact fields and no raw records are published.
 - **Layer** `src/data/biotime.js`: the site-series contract (as OTN): a Cesium data source, `getObservedExtent` from
   the sampled years, `setObservedTime` picks the year; live shows every study at its latest sampled year. Chips per
   taxon group. Share token `bt`.
