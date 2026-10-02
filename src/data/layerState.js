@@ -141,6 +141,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'surface-water', token: 'sw', disposition: 'enabled-only' }),
   Object.freeze({ id: 'tracks', token: '1', disposition: 'enabled-only' }),
   Object.freeze({ id: 'wastewater', token: '2', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'wetlands', token: 'wl', disposition: 'enabled-only' }),
   Object.freeze({ id: 'whispers', token: '9', disposition: 'enabled-only' }),
 ]);
 
