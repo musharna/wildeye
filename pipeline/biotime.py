@@ -167,9 +167,12 @@ def repair(text: str) -> str:
     """Undo UTF-8 read as cp1252 (the metadata holds 'australiaâ€™s'), then collapse whitespace; clean text is kept."""
     if any(m in text for m in _MOJIBAKE):
         try:
-            text = _cp1252_bytes(text).decode("utf-8")
+            fixed = _cp1252_bytes(text).decode("utf-8")
         except UnicodeError:
-            pass  # not mojibake after all: keep the text as written
+            fixed = text  # not mojibake after all: keep the text as written
+        # a decode that lands on a C1 control (U+0080-U+009F) read clean text such as 'Â—' as bytes: keep it
+        if not any("\x80" <= ch <= "\x9f" for ch in fixed):
+            text = fixed
     return re.sub(r"\s+", " ", text).strip()
 
 
