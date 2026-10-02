@@ -109,6 +109,10 @@ export const DATA_CREDITS = [
     html: "Arboviral disease cases: <a href=\"https://data.cdc.gov/NNDSS/NNDSS-Weekly-Data/x9gk-5huc\" target=\"_blank\" rel=\"noopener\">CDC NNDSS Weekly Data</a> (ArboNET-fed), Public Domain U.S. Government; state boundaries from the U.S. Census Bureau. Reference to CDC data does not imply endorsement by CDC, HHS or the U.S. Government.",
   },
   {
+    key: 'biotime',
+    html: 'Assemblage time series: <a href="https://doi.org/10.5281/zenodo.15222193" target="_blank" rel="noopener">BioTIME 2.0</a> (Zenodo 15222193, CC BY 4.0); Dornelas et al. 2025, <i>Global Ecology and Biogeography</i> 34(5): e70003, <a href="https://doi.org/10.1111/geb.70003" target="_blank" rel="noopener">doi:10.1111/geb.70003</a>. Only studies under open-attribution licences are shown; each study\'s own citation and licence are in its info box. Counts are raw taxa and samples per study-year.',
+  },
+  {
     key: 'phenology',
     html: "Phenology: Data were provided by the <a href=\"https://www.usanpn.org/data/observational\" target=\"_blank\" rel=\"noopener\">USA National Phenology Network</a> and the many participants who contribute to its Nature's Notebook program (CC BY 4.0, doi:10.5066/F78S4N1V).",
   },
