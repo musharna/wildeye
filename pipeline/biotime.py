@@ -24,7 +24,7 @@ import math
 import os
 import re
 import shutil
-import subprocess  # nosec B404 — runs the repo's own Rscript extract with a fixed argument list, no shell
+import subprocess  # nosec B404 - runs the repo's own Rscript extract with a fixed argument list, no shell
 import time
 import urllib.request
 from pathlib import Path
@@ -321,7 +321,7 @@ def run_extract(rds: Path, dest: Path) -> None:
         raise RuntimeError(
             "Rscript not found: the .rds extract needs R"
         )
-    subprocess.run([rscript, "--vanilla", str(EXTRACT_SCRIPT), str(rds), str(dest)], check=True)  # nosec B603 — fixed argv, no shell
+    subprocess.run([rscript, "--vanilla", str(EXTRACT_SCRIPT), str(rds), str(dest)], check=True)  # nosec B603 - fixed argv, no shell
 
 
 def main(argv=None, *, fetch_to=_fetch_to, source=SOURCE, extract=run_extract):
