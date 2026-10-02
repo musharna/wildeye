@@ -124,8 +124,11 @@ def test_mojibake_is_repaired_and_clean_text_is_left_alone():
     # a re-decode that "succeeds" into a C1 control character was not mojibake (Â then an em dash, cp1252 0x97)
     assert biotime.repair("Â—") == "Â—"
     assert biotime.repair("Grand Â“Bay”") == "Grand Â“Bay”"
-    # ambiguous by construction: 'Ã€' is exactly what 'À' becomes when misread, so it is read as mojibake
+    # ambiguous by construction: 'Ã' + a byte 0x80-0xBF is exactly what 'À'-'ÿ' become when misread ('Ó' is C3 93,
+    # and 0x93 is '“'), so no check on the bytes can tell them apart; they are read as mojibake (0 such clean strings
+    # in the real metadata, whose 18 repaired published strings were each read)
     assert biotime.repair("Ã€ la carte") == "À la carte"
+    assert biotime.repair("CÃ“RDOBA") == "CÓRDOBA"
 
 
 def test_study_link_is_a_url_or_empty_and_an_unknown_string_fails_loud():
@@ -335,7 +338,9 @@ def test_main_writes_open_studies_only_with_counts_citations_and_no_contacts(tmp
         and s10["lon"] == -95.12
     )
     assert m["studies"][1]["wide"] is True and m["studies"][1]["citations"] == []
-    assert [s["link"] for s in m["studies"]] == ["http://x.org/s", ""], "'None' is no link, not a link to None"
+    assert [s["link"] for s in m["studies"]] == ["http://x.org/s", ""], (
+        "'None' is no link, not a link to None"
+    )
     text = (out / "biotime.json").read_text()
     assert "person@example.org" not in text and "A Person" not in text, (
         "contacts are not published"
