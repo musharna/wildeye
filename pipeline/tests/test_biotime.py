@@ -121,6 +121,11 @@ def test_mojibake_is_repaired_and_clean_text_is_left_alone():
     assert biotime.repair("SÃO PAULO") == "SÃO PAULO"
     assert biotime.repair("ÂGE moyen") == "ÂGE moyen"
     assert biotime.repair("Ãngel – Łódź") == "Ãngel – Łódź"
+    # a re-decode that "succeeds" into a C1 control character was not mojibake (Â then an em dash, cp1252 0x97)
+    assert biotime.repair("Â—") == "Â—"
+    assert biotime.repair("Grand Â“Bay”") == "Grand Â“Bay”"
+    # ambiguous by construction: 'Ã€' is exactly what 'À' becomes when misread, so it is read as mojibake
+    assert biotime.repair("Ã€ la carte") == "À la carte"
 
 
 def test_study_link_is_a_url_or_empty_and_an_unknown_string_fails_loud():
