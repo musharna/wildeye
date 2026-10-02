@@ -103,3 +103,28 @@ TSS values are not comparable and are not reported side by side.
   passing.
 - The verdicts are reported as they come out. A `fail` everywhere is a valid result and closes approach
   B for these groups.
+
+## Result (2026-10-02): approach B closed, negative
+
+Two jobd runs on the laptop (5180, then 5183 for the other 12 groups) stopped at the first failed control, so
+no verdicts file was written and 10 groups never ran. Per-species scores from both runs:
+`analysis/own_surface_runs_2026-10-02.tsv` (83 species).
+
+| Group | Controls | Scored | Median TSS, ours / circles | Ours beats circles | Sign test p |
+|---|---|---|---|---|---|
+| Aves | positive control 0.4954 < 0.60 | 30 | 0.754 / 0.964 | 5 of 30 | 1.000 |
+| Mammalia | all passed | 29 | 0.812 / 0.824 | 10 of 29 | 0.969 (`fail`) |
+| Amphibia | positive control 0.5499 < 0.60 | 24 | 0.583 / 0.802 | 4 of 22 untied | 1.000 |
+
+Mammalia is the only verdict the design allows, and it is `fail`. In the two groups whose controls failed, our
+surface also loses to the circles species by species. Fixing the control would not change that comparison, so
+approach B is closed rather than rerun (user, 2026-10-02).
+
+Why the positive control failed, measured on Aves: the box rule (the 20° box with the most background at
+most a tenth of it) picked 100–80°W, 40–60°N. 222 of the 300 planted records fell in two 5° blocks on its
+southern edge, and the 5° strip just south of the box holds 46% as much effort as the box. A held-out edge
+block's neighbourhood is mostly out-of-box effort with no records, so its rate falls below the training
+threshold: recall 0.00–0.15 in those folds, about 1.0 elsewhere; 8 layouts scored 0.26–0.56. Holding the
+held-out blocks' effort out of the denominator as well moved it only to 0.32–0.57, so that was not the cause.
+The synthetic worlds behind the 5-layout ruling had no effort peak beside the box. A reuse of this control
+should place the box away from the effort peak.
