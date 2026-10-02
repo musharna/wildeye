@@ -159,7 +159,8 @@ BACKGROUND_POINTS = 5000
 PRESENCES_WANTED = 500
 POSITIVE_BUFFER_KM = 25.0
 SHUFFLE_TSS_MAX = 0.05
-TILE_AGREEMENT_SPECIES = 10
+# two in each of the 13 collections (ruling 2026-10-02, spec)
+TILE_AGREEMENT_SPECIES = 26
 TILE_ZOOM = 3
 # GBIF's count tiles against its own occurrence search, in a 6x6-cell block (geomodel_sources.placement_error):
 # 0.22 live at the z4 tiles the effort grid uses, 2.57 at the z3 tiles it first used (2026-09-29)
@@ -324,8 +325,8 @@ def check_tile_agreement(
     # iNaturalist's API is the run's only call to iNaturalist: check it before hours of GBIF work, so its
     # downtime (503 "downtime", 2026-09-30 00:05 EDT) costs seconds rather than the run
     # Species are drawn round-robin across the groups, each at most once, until TILE_AGREEMENT_SPECIES are
-    # checked or the groups run out. The groups are walked in a fresh random order each run: with 13 groups
-    # and 10 species a fixed order checks the same first ten every month and never the last three.
+    # checked or the groups run out. The groups are walked in a fresh random order each run, so a run with
+    # fewer species than two per group does not always leave out the same groups.
     # Every IoU is recorded; step 2 checks each species before display.
     order = [groups[i] for i in rng.permutation(len(groups))]
     pools = {g: list(sources.species(g)) for g in order}

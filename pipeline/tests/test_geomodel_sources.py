@@ -28,6 +28,20 @@ def test_reads_species_ranges_from_a_real_geopackage():
     assert -125 < lon < -121 and 40 < lat < 43
 
 
+def test_a_species_whose_range_is_empty_is_not_listed():
+    # geomodel_protozoa_empty.gpkg: two rows copied verbatim from iNaturalist_geomodel_Protozoa.gpkg (v2.34).
+    # Comatricha nigra's range is an empty MultiPolygon (GeoPackage header flag 0x10); drawn by the monthly
+    # tile check it crashed the run on NaN bounds instead of failing a control (found 2026-10-02)
+    path = FIXTURES / "geomodel_protozoa_empty.gpkg"
+    assert [n for _, n, _ in gs.species_index(path)] == ["Tasmaniomyxa umbilicata"]
+    assert [r.name for r in gs.species_ranges(path)] == ["Tasmaniomyxa umbilicata"]
+    # positive control in the same test: the species that is listed has a real range
+    assert gs.range_geometry(path, 1514585).area > 0
+    # and an empty range asked for by id fails loudly, not as NaN downstream
+    with pytest.raises(gs.SourceError, match="empty range"):
+        gs.range_geometry(path, 56565)
+
+
 def test_rejects_a_blob_that_is_not_a_geopackage_geometry():
     with pytest.raises(gs.SourceError, match="GeoPackage"):
         gs.geometry_from_gpkg(b"\x01\x03\x00\x00\x00")

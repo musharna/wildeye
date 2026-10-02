@@ -243,7 +243,7 @@ def test_a_group_failing_its_controls_stops_the_run_before_the_next_group(monkey
     assert good.backgrounds == ["Aves", "Mammalia", "Amphibia"]
 
 
-def test_tile_agreement_is_a_median_over_ten_species():
+def test_tile_agreement_is_a_median_over_the_species_checked():
     # Ruling 2026-09-30 (maintainer): every one of 3 species >= 0.85 failed when tiles and GeoPackage agree
     # (5 of 20 random birds scored 0.80-0.83); a real single-species mismatch (Anser cygnoides, 0.03) is
     # step 2's per-species check, not a reason to throw away the run
@@ -259,22 +259,22 @@ def test_tile_agreement_is_a_median_over_ten_species():
     with pytest.raises(gc.ControlFailure, match="median IoU"):
         gc.run(most_off, groups, np.random.default_rng(3), species_per_group=5)
     assert most_off.presence_calls == 0
-    # a one-group run still checks ten species
+    # a one-group run still checks the full count (26), as its only group has the species for it
     solo = FakeSources()
     gc.run(solo, ["Aves"], np.random.default_rng(3), species_per_group=12)
-    assert len(solo.tiles_asked) == 10
+    assert len(solo.tiles_asked) == gc.TILE_AGREEMENT_SPECIES == 26
 
 
-def test_tile_agreement_reaches_every_collection_when_there_are_more_than_ten():
-    # 13 collections, 10 species: a draw that always walks the collections in the same order checks the
-    # first ten every month and never the last three (PR #25 review: Protozoa, Chromista, OtherAnimalia)
+def test_tile_agreement_checks_two_species_in_every_collection():
+    # Ruling 2026-10-02 (maintainer): 10 species, one in each of 10 collections, failed a healthy month about
+    # 2.7% of the time (Oct 1: median 0.8247, reproduced exactly with that day's tiles); measured on 129
+    # random species over all 13 collections, 26 species (two in each) fail 0.85 about 0.15% of the time
     groups = [f"Group{i:02d}" for i in range(13)]
-    reached = set()
     for seed in range(20):
         checked = gc.check_tile_agreement(FakeSources(n=40), groups, np.random.default_rng(seed))
-        assert len(checked) == 10 and len({a["group"] for a in checked}) == 10  # one per collection
-        reached |= {a["group"] for a in checked}
-    assert reached == set(groups)
+        per = {g: sum(a["group"] == g for a in checked) for g in groups}
+        assert len(checked) == 26 and set(per.values()) == {2}
+        assert len({(a["group"], a["species"]) for a in checked}) == 26  # never the same species twice
     # positive control in the same test: a failing median still stops the run
     with pytest.raises(gc.ControlFailure, match="median IoU"):
         gc.check_tile_agreement(FakeSources(n=40, tiles_agree=False), groups, np.random.default_rng(0))

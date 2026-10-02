@@ -478,6 +478,12 @@ def geometry_from_gpkg(blob: bytes):
     return shapely.from_wkb(blob[8 + envelope :])
 
 
+def _empty_geometry(header: bytes) -> bool:
+    """The GeoPackage header's empty-geometry flag (bit 4 of the flags byte). Comatricha nigra's range in
+    iNaturalist_geomodel_Protozoa.gpkg (v2.34) is an empty MultiPolygon so flagged: a species with no range."""
+    return bool(header[3] & 0x10)
+
+
 def collection_files(collection: str, metadata: dict) -> list[str]:
     archives = metadata["collections"][collection]["archives"]
     if archives == 1:
@@ -499,6 +505,8 @@ def species_ranges(path: Path) -> Iterator[Range]:
             ("species",),
         )
         for taxon_id, name, version, geom in rows:
+            if _empty_geometry(geom):
+                continue
             yield Range(int(taxon_id), name, str(version), geometry_from_gpkg(geom))
     finally:
         con.close()
@@ -512,16 +520,18 @@ def _features_table(con: sqlite3.Connection) -> str:
 
 
 def species_index(path: Path) -> list[tuple[int, str, str]]:
-    """(taxon_id, name, version) of every species-rank range in a GeoPackage, without loading geometry."""
+    """(taxon_id, name, version) of every species-rank range in a GeoPackage, without loading geometry; a
+    species whose range is empty is not listed, so no draw from the list can reach it."""
     con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         table = _features_table(con)
         return [
             (int(t), n, str(v))
-            for t, n, v in con.execute(
-                f'select taxon_id, name, geomodel_version from "{table}" where rank = ?',  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+            for t, n, v, header in con.execute(
+                f'select taxon_id, name, geomodel_version, substr(geom, 1, 4) from "{table}" where rank = ?',  # nosec B608 - table name read from the file's own gpkg_contents, not from input
                 ("species",),
             )
+            if not _empty_geometry(header)
         ]
     finally:
         con.close()
@@ -539,7 +549,10 @@ def range_geometry(path: Path, taxon_id: int):
         con.close()
     if row is None:
         raise SourceError(f"taxon {taxon_id} not in {path.name}")
-    return geometry_from_gpkg(row[0])
+    geom = geometry_from_gpkg(row[0])
+    if geom.is_empty:
+        raise SourceError(f"taxon {taxon_id} has an empty range in {path.name}")
+    return geom
 
 
 def download(url: str, dest: Path) -> Path:
