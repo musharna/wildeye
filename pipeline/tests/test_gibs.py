@@ -136,7 +136,9 @@ def test_evi_decode_table_from_the_real_colormap():
     d = cm["decode"]
     assert len(d) == 134
     assert d[-1] == [0, 0, 1, 0.9751, 1.0001]
-    assert not any(e[3] < -0.2 for e in d)  # the nodata "Classifications" map is not in it
+    assert not any(
+        e[3] < -0.2 for e in d
+    )  # the nodata "Classifications" map is not in it
 
 
 def test_class_layers_carry_no_decode_table():
@@ -150,7 +152,77 @@ def test_an_open_ended_bin_is_stored_with_a_null_end():
     cm = g.parse_colormap((FIX / "gibs_colormap_gedi.xml").read_bytes())
     d = cm["decode"]
     assert d[-1][3:] == [250.0, None]
-    assert all(e[4] is not None and e[3] < e[4] for e in d[:-1])  # every closed bin still parses
+    assert all(
+        e[4] is not None and e[3] < e[4] for e in d[:-1]
+    )  # every closed bin still parses
     json.dumps(cm, allow_nan=False)  # and the manifest stays strict JSON
     with pytest.raises(ValueError, match="unparseable colour-map value 'x'"):
         g._interval("x")
+
+
+def test_the_data_map_is_the_opaque_one_even_beside_a_two_entry_no_data_map():
+    # SEDAC's real colour map (2026-10-02): its No Data map lists "No Species" and "No Data", two legend
+    # entries, both transparent; "more than one legend entry" picked both and raised.
+    cm = g.parse_colormap((FIX / "gibs_colormap_sedac.xml").read_bytes())
+    r = cm["ramp"]
+    assert (r["min"], r["max"], r["unit"]) == (1.0, 255.0, "")
+    d = cm["decode"]
+    assert (
+        len(d) == 254
+        and d[0] == [210, 255, 210, 1.0, 1.0]
+        and d[-1] == [0, 128, 0, 255.0, 255.0]
+    )
+    assert len({tuple(e[:3]) for e in d}) == len(d)
+    # the layers that passed before still find the same data map
+    assert (
+        len(g.parse_colormap((FIX / "gibs_colormap_evi.xml").read_bytes())["decode"])
+        == 134
+    )
+    assert (
+        len(
+            g.parse_colormap((FIX / "gibs_colormap_classes.xml").read_bytes())[
+                "classes"
+            ]
+        )
+        == 18
+    )
+
+
+def test_a_single_value_is_an_exact_interval():
+    assert g._interval("[12]") == (12.0, 12.0)
+    assert g._interval("[12,13)") == (12.0, 13.0)
+    for bad in ("[12", "12]", "[]"):
+        with pytest.raises(ValueError, match="unparseable colour-map value"):
+            g._interval(bad)
+
+
+def _sedac_fetch(url):
+    if "Amphibian" in url:
+        return (FIX / "gibs_colormap_sedac.xml").read_bytes()
+    if "IGBP" in url:
+        return (FIX / "gibs_colormap_classes.xml").read_bytes()
+    return CAP
+
+
+def test_an_undated_layer_carries_the_year_of_its_data():
+    layers = {
+        "gibs-amphibians": g.LAYERS["gibs-amphibians"],
+        "gibs-landcover": g.LAYERS["gibs-landcover"],
+    }
+    doc = g.build(_sedac_fetch, layers)
+    am = doc["layers"]["gibs-amphibians"]
+    assert am["times"] == [] and am["asOf"] == "2013" and am["maximumLevel"] == 7
+    assert (
+        "asOf" not in doc["layers"]["gibs-landcover"]
+    )  # a dated layer keeps its served dates only
+    undated = {k: v for k, v in layers["gibs-amphibians"].items() if k != "asOf"}
+    with pytest.raises(
+        LookupError,
+        match="gibs-amphibians: GIBS serves no dates and LAYERS gives no asOf",
+    ):
+        g.build(_sedac_fetch, {"gibs-amphibians": undated})
+    with pytest.raises(LookupError, match="gibs-landcover: GIBS serves dates, so asOf"):
+        g.build(
+            _sedac_fetch,
+            {"gibs-landcover": {**layers["gibs-landcover"], "asOf": "2013"}},
+        )
