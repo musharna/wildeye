@@ -616,10 +616,15 @@ def main(argv=None, *, sources=None, now=None) -> int:
     ap.add_argument("--work", type=Path, default=default_work())
     ap.add_argument(
         "--groups",
-        default=",".join(GROUPS),
+        default=None,
         help="comma-separated collections (default: all 13)",
     )
-    ap.add_argument("--species-per-group", type=int, default=SPECIES_PER_GROUP)
+    ap.add_argument(
+        "--species-per-group",
+        type=int,
+        default=None,
+        help=f"default: {SPECIES_PER_GROUP}",
+    )
     ap.add_argument(
         "--seed",
         type=int,
@@ -645,10 +650,15 @@ def main(argv=None, *, sources=None, now=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     log = logging.getLogger("geomodel")
 
+    if args.rejudge:  # the saved run fixed its collections, seed and species: a run flag here would go unused
+        for flag, value in [("--groups", args.groups), ("--seed", args.seed), ("--species-per-group", args.species_per_group), ("--keep-ranges", args.keep_ranges or None)]:
+            if value is not None:
+                ap.error(f"{flag} does not apply to --rejudge: the saved run's own is used")
+    species_per_group = SPECIES_PER_GROUP if args.species_per_group is None else args.species_per_group
     seed = (
         args.seed if args.seed is not None else int.from_bytes(os.urandom(4), "little")
     )
-    groups = [g for g in args.groups.split(",") if g]
+    groups = [g for g in (args.groups or ",".join(GROUPS)).split(",") if g]
     unknown = sorted(set(groups) - set(GROUPS))
     if unknown:
         ap.error(f"unknown collections: {unknown}")
@@ -666,7 +676,7 @@ def main(argv=None, *, sources=None, now=None) -> int:
             sources = sources or LiveSources(work)
             try:
                 doc = run(
-                    sources, groups, np.random.default_rng(seed), args.species_per_group
+                    sources, groups, np.random.default_rng(seed), species_per_group
                 )
             except ControlFailure as e:
                 log.error("controls failed, no verdicts written: %s", e)
