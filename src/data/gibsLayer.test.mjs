@@ -52,6 +52,7 @@ function harness({ entry = ENTRY, timeless = false } = {}) {
     imageryLayerFor: (provider, options) => ({
       provider,
       alpha: options.alpha,
+      colorToAlpha: options.colorToAlpha,
       show: true,
     }),
     stack: (_layers, id, il, zrank) => stacked.push({ id, il, zrank }),
@@ -211,4 +212,51 @@ test("a class layer draws opaque so its colours match the legend; a value layer 
   value.layer.enable();
   await value.layer.update();
   assert.equal(value.list.at(-1).alpha, 0.7);
+});
+
+test("an undated layer (SEDAC: no time dimension) draws GIBS's dateless tiles at any time and is labelled with its year", async () => {
+  // GIBS lists the SEDAC grids with no time dimension; a dated URL would need a date nothing serves, and an
+  // empty date list read as a gap hid the layer for ever (probe 2026-10-02).
+  const entry = { ...ENTRY, gibsId: "Amphibian_Richness_All_Species_2013", tileMatrixSet: "GoogleMapsCompatible_Level7", maximumLevel: 7, times: [], asOf: "2013" };
+  const { layer, providers, list } = harness({ entry });
+  layer.enable();
+  assert.equal(await layer.update(), true);
+  assert.match(
+    providers[0].url,
+    /\/Amphibian_Richness_All_Species_2013\/default\/GoogleMapsCompatible_Level7\/\{z\}\/\{y\}\/\{x\}\.png$/,
+  );
+  await layer.setObservedTime("1990-06-01T00:00:00Z");
+  assert.equal(list.at(-1).show, true);
+  assert.equal(providers.length, 1);
+  assert.deepEqual([layer.getStats().error, layer.getStats().time, layer.getObservedExtent()], [null, "2013", null]);
+  const noYear = harness({ entry: { ...entry, asOf: undefined } });
+  assert.equal(await noYear.layer.update(), false);
+  assert.match(noYear.layer.getStats().error, /gibs-nightlights load error/);
+  // positive control: a dated layer still puts its date in the URL
+  const dated = harness();
+  await dated.layer.update();
+  assert.match(dated.providers[0].url, /\/default\/2016-01-01\//);
+});
+
+test("black that is only ever no data is drawn transparent; black that is also data is drawn", async () => {
+  // GIBS's empty SEDAC tile in EPSG:3857 is opaque black (no tRNS chunk, probe 2026-10-02): drawn as is, every
+  // ocean tile paints black. GEDI and EVI draw black (or 0,0,1) as data, so it must stay.
+  const sedac = harness({ entry: { ...ENTRY, noData: [[0, 0, 0], [255, 255, 255]], decode: [[0, 128, 0, 255, 255]] } });
+  sedac.layer.enable();
+  await sedac.layer.update();
+  assert.ok(Cesium.Color.BLACK.equals(sedac.list.at(-1).colorToAlpha));
+  const gedi = harness({ entry: { ...ENTRY, decode: [[0, 0, 0, 0, 1], [0, 0, 43, 1, 2]] } });
+  gedi.layer.enable();
+  await gedi.layer.update();
+  assert.equal(gedi.list.at(-1).colorToAlpha, undefined);
+  // no-data black next to a data colour Cesium's threshold cannot tell from black (EVI's 0,0,1) stays drawn
+  const near = harness({ entry: { ...ENTRY, noData: [[0, 0, 0]], decode: [[0, 0, 1, 0.97, 1.0]] } });
+  near.layer.enable();
+  await near.layer.update();
+  assert.equal(near.list.at(-1).colorToAlpha, undefined);
+  // no-data that is not black (LST's 64,64,64) leaves black alone: Cesium can key out one colour, and it is black
+  const lst = harness({ entry: { ...ENTRY, noData: [[64, 64, 64]], decode: [[255, 1, 0, 350, 652]] } });
+  lst.layer.enable();
+  await lst.layer.update();
+  assert.equal(lst.list.at(-1).colorToAlpha, undefined);
 });

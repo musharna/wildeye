@@ -88,6 +88,18 @@ test('an unknown colour, a failed fetch and a point off the map each say so', as
   assert.equal((await failed.layer.readoutAt(89, 0)).status, 'outside');
 });
 
+test("an undated layer reads its count dated with the data's year; GIBS's 2899-12-31 placeholder is not a date", async (t) => {
+  const errors = [];
+  t.mock.method(console, 'error', (...a) => errors.push(a));
+  const AM = JSON.parse(readFileSync(new URL('./fixtures/gibs-sedac.json', import.meta.url))).layers['gibs-amphibians'];
+  const twelve = AM.decode.find((e) => e[3] === 12).slice(0, 3);
+  const { layer, reads } = await harness('gibs-amphibians', AM, { pixel: [...twelve, 255], timeActual: '2899-12-31T00:00:00Z' });
+  const r = await layer.readoutAt(-3, -60);
+  assert.match(reads[0].url, /\/Amphibian_Richness_All_Species_2013\/default\/GoogleMapsCompatible_Level7\/7\/\d+\/\d+\.png$/);
+  assert.deepEqual([r.status, r.text, r.date], ['value', '12', '2013']);
+  assert.equal(errors.length, 0);
+});
+
 test('a disabled layer reads nothing', async () => {
   const { layer, reads } = await harness('gibs-lst', LST, { pixel: [...lstRgb(298.4), 255] });
   layer.disable();

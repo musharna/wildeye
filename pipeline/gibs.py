@@ -143,11 +143,26 @@ def parse_colormap(xml: bytes) -> dict:
     entries = [
         ([int(c) for c in e.get("rgb").split(",")], e.get("tooltip")) for e in legend
     ]
+
+    # A colour the map only ever declares transparent is no data whatever alpha a tile gives it: GIBS's empty
+    # SEDAC tile in EPSG:3857 is opaque black, with no tRNS chunk (probe 2026-10-02). A colour that is also
+    # drawn opaque somewhere (GEDI's black) is data.
+    def rgbs(transparent):
+        return {
+            tuple(int(c) for c in e.get("rgb").split(","))
+            for e in root.iter("ColorMapEntry")
+            if (e.get("transparent") == "true") == transparent
+        }
+
+    no_data = sorted(rgbs(True) - rgbs(False))
+    extra = {"noData": [list(c) for c in no_data]} if no_data else {}
     if legend.get("type") == "classification":
-        return {"classes": [{"label": label, "rgb": rgb} for rgb, label in entries]}
+        return {
+            "classes": [{"label": label, "rgb": rgb} for rgb, label in entries]
+        } | extra
     idx = [round(i * (len(entries) - 1) / (RAMP_STOPS - 1)) for i in range(RAMP_STOPS)]
     unit = cm.get("units")
-    return {
+    return extra | {
         "ramp": {
             "stops": [entries[i][0] for i in idx],
             "min": _num(legend.get("minLabel")),

@@ -21,8 +21,14 @@ GIBS layers, drawn straight from GIBS like the five GIBS layers already on the s
    entry". SEDAC's No Data map has two ("No Species", "No Data"). The data map is the one with an opaque entry.
 2. `_interval` read only `[lo,hi)`. SEDAC's entries are single counts, `[12]`; they decode to `lo = hi = 12`.
 3. `formatValue` printed a bin's midpoint; an exact value (`lo === hi`) prints as itself, `12`, not `12.0`.
-4. `gibsLayer.js`: a manifest entry with no served times is an undated layer. Its URL date is `default`. Its
-   readout date is the entry's `asOf` (`2013`), written by `pipeline/gibs.py` from its `LAYERS` table.
+4. `gibsLayer.js`: a manifest entry with no served times is an undated layer. Its URL has no date segment
+   (GIBS serves it at `/default/{TileMatrixSet}/…`). Its readout date is the entry's `asOf` (`2013`), written by
+   `pipeline/gibs.py` from its `LAYERS` table.
+5. GIBS's empty SEDAC tile in EPSG:3857 is an all-black palette PNG with no tRNS chunk (EPSG:4326's has one), so
+   the colour map's transparent "No Data" black arrives opaque. `parse_colormap` writes `noData`: the colours the
+   map only ever declares transparent. The readout reads an opaque pixel of such a colour as no data, and the
+   layer keys black out (Cesium `colorToAlpha`) only when black is in `noData` and no data colour is within
+   Cesium's threshold of it. GEDI draws black as data and EVI draws 0,0,1, so theirs stays.
 
 ## Licence (read live 2026-10-02, NASA CMR UseConstraints for both DOIs)
 
@@ -48,5 +54,6 @@ names IUCN and CIESIN as creators instead; the DOI registry's creators are used.
 
 ## Constraints
 
-No change to the five existing GIBS entries in `gibs.json`: the regenerated file is byte-compared for them. No
+No change to the five existing GIBS entries in `gibs.json` except the new `noData` list (land cover [0,0,0], EVI
+three, LST [64,64,64], none for GEDI and night lights): the regenerated file is compared for them. No
 threatened-only variants (later, if wanted). No re-hosting. Share tokens `am` and `mm` are unused today.

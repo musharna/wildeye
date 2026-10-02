@@ -56,6 +56,29 @@ test('a transparent pixel is no data; an unknown colour is named, never snapped'
   assert.equal(decodePixel(evi, [0, 0, 1, 255]).kind, 'value'); // positive control
 });
 
+test('an exact value (a SEDAC species count) reads as itself, not a midpoint', () => {
+  const sedac = JSON.parse(readFileSync(new URL('./fixtures/gibs-sedac.json', import.meta.url))).layers;
+  for (const e of [sedac['gibs-amphibians'], sedac['gibs-mammals']])
+    for (const [r, g, b, lo, hi] of e.decode) {
+      assert.equal(lo, hi);
+      assert.deepEqual(decodePixel(e, [r, g, b, 255]), { kind: 'value', lo, hi, text: String(lo) });
+    }
+  const twelve = sedac['gibs-amphibians'].decode.find((e) => e[3] === 12).slice(0, 3);
+  assert.equal(decodePixel(sedac['gibs-amphibians'], [...twelve, 255]).text, '12');
+  const g = gedi.decode.find((e) => e[3] === 12).slice(0, 3);
+  assert.equal(decodePixel(gedi, [...g, 255]).text, '12.5 Mg ha-1'); // positive control: a bin is still a midpoint
+});
+
+test('an opaque pixel in a no-data colour is no data (GIBS ships the empty SEDAC tile opaque black)', () => {
+  const am = JSON.parse(readFileSync(new URL('./fixtures/gibs-sedac.json', import.meta.url))).layers['gibs-amphibians'];
+  assert.deepEqual(am.noData, [[0, 0, 0], [255, 255, 255]]);
+  assert.equal(decodePixel(am, [0, 0, 0, 255]).kind, 'nodata');
+  assert.equal(decodePixel(am, [255, 255, 255, 255]).kind, 'nodata');
+  // positive control: GEDI draws black as data and lists no no-data colour, so its black is still a value
+  assert.equal(gedi.noData, undefined);
+  assert.equal(decodePixel(gedi, [0, 0, 0, 255]).kind, 'value');
+});
+
 test('a tile request fills the template at the layer\'s maximum level', () => {
   const r = gibsTileRequest('https://g/L/default/2024-01-01/M/{z}/{y}/{x}.png', 8, 41.88, -87.63);
   assert.deepEqual(r, { url: 'https://g/L/default/2024-01-01/M/8/95/65.png', px: 175, py: 37 });
