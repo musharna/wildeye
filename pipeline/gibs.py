@@ -56,6 +56,17 @@ LAYERS = {
         "gibsId": "GEDI_ISS_L4B_Aboveground_Biomass_Density_Mean_201904-202303",
         "legend": "Aboveground biomass density, 2019–2023 composite",
     },
+    # SEDAC grids of IUCN 2013 ranges: GIBS serves them with no time dimension, so the year comes from here
+    "gibs-amphibians": {
+        "gibsId": "Amphibian_Richness_All_Species_2013",
+        "legend": "Amphibian species per ~1 km cell (IUCN ranges, 2013); none or no data not drawn",
+        "asOf": "2013",
+    },
+    "gibs-mammals": {
+        "gibsId": "Mammal_Richness_Grids_All_Species_2013",
+        "legend": "Mammal species per ~1 km cell (IUCN ranges, 2013); none or no data not drawn",
+        "asOf": "2013",
+    },
 }
 
 
@@ -116,12 +127,14 @@ def _num(label: str) -> float:
 
 def parse_colormap(xml: bytes) -> dict:
     """{'classes': [...]} for a classification legend, {'ramp': {...}} for a continuous one.
-    The data map is the one whose legend has more than one entry; 'No Data'/'Fill' maps have one."""
+    The data map is the one with an opaque entry: a 'No Data'/'Fill' map draws nothing, however many legend
+    entries it has (SEDAC's has two, "No Species" and "No Data")."""
     root = ET.fromstring(xml)  # nosec B314 - NASA GIBS over HTTPS; expat 2.7.1 (>= 2.4.1 bounds entity expansion), see module docstring
     data = [
         cm
         for cm in root.iter("ColorMap")
-        if cm.find("Legend") is not None and len(cm.find("Legend")) > 1
+        if cm.find("Legend") is not None
+        and any(e.get("transparent") != "true" for e in cm.iter("ColorMapEntry"))
     ]
     if len(data) != 1:
         raise ValueError(f"expected one data colour map, found {len(data)}")
@@ -153,6 +166,11 @@ def parse_colormap(xml: bytes) -> dict:
 
 
 def _interval(value: str) -> tuple[float | None, float | None]:
+    exact = re.fullmatch(
+        r"\[(-?[\d.]+)\]", value or ""
+    )  # one value, e.g. a species count "[12]"
+    if exact:
+        return float(exact.group(1)), float(exact.group(1))
     m = re.fullmatch(r"\[(-?[\d.]+|-INF),(-?[\d.]+|\+INF)\)", value or "")
     if not m:
         raise ValueError(f"unparseable colour-map value {value!r}")
@@ -176,6 +194,16 @@ def build(fetch=_get, layers=LAYERS) -> dict:
                     f"{key}: GIBS lists no v1.3 colour map for {cfg['gibsId']}"
                 )
             entry |= parse_colormap(fetch(c["colormapUrl"]))
+        if not c["times"] and "asOf" not in cfg:
+            raise LookupError(
+                f"{key}: GIBS serves no dates and LAYERS gives no asOf for {cfg['gibsId']}"
+            )
+        if c["times"] and "asOf" in cfg:
+            raise LookupError(
+                f"{key}: GIBS serves dates, so asOf would hide them for {cfg['gibsId']}"
+            )
+        if "asOf" in cfg:
+            entry["asOf"] = cfg["asOf"]
         out[key] = entry
     return {
         "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
