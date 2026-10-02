@@ -115,6 +115,33 @@ def test_mojibake_is_repaired_and_clean_text_is_left_alone():
     assert biotime.repair("Australiaâ€™s IMOS â€“ NCRIS") == "Australia’s IMOS – NCRIS"
     assert biotime.repair("CC BYÂ ") == "CC BY"
     assert biotime.repair("Zürich, Université – fine") == "Zürich, Université – fine"
+    # cp1252 leaves 0x81/0x8D/0x8F/0x90/0x9D undefined; a reader passes them through as U+0081... (BioTIME title 'Longâ€\x90term')
+    assert biotime.repair("Longâ€\x90term fish counts") == "Long\u2010term fish counts"
+    # clean text that holds a trigger character is not mojibake and is kept as written
+    assert biotime.repair("SÃO PAULO") == "SÃO PAULO"
+    assert biotime.repair("ÂGE moyen") == "ÂGE moyen"
+    assert biotime.repair("Ãngel – Łódź") == "Ãngel – Łódź"
+
+
+def test_study_link_is_a_url_or_empty_and_an_unknown_string_fails_loud():
+    cases = {
+        "http://x.org/s": "http://x.org/s",
+        "Â\xa0https://datadryad.org/stash/dataset/doi:10.5061/dryad.tmpg4f4vt": "https://datadryad.org/stash/dataset/doi:10.5061/dryad.tmpg4f4vt",
+        "https://www.sciencedirect.com/science/article/abs/pii/037811279290003RÂ\xa0": "https://www.sciencedirect.com/science/article/abs/pii/037811279290003R",
+        "doi.org/10.23728/b2share.562cd87f87ec4ea381ef8b01a9d6ac8a": "https://doi.org/10.23728/b2share.562cd87f87ec4ea381ef8b01a9d6ac8a",
+        "None": "",
+        "none": "",
+        "NA": "",
+        "http://": "",
+        "Data supplied directly": "",
+        "http://springer": "",
+        "10.6073/pasta/f0776c1574808b08c484c1f7645a7357": "https://doi.org/10.6073/pasta/f0776c1574808b08c484c1f7645a7357",
+        "": "",
+    }
+    for text, want in cases.items():
+        assert biotime.study_link(text) == want, text
+    with pytest.raises(ValueError, match="see the paper"):
+        biotime.study_link("see the paper")
 
 
 def test_citations_are_formatted_from_the_bibtex_in_citation_order():
@@ -247,7 +274,7 @@ def test_main_writes_open_studies_only_with_counts_citations_and_no_contacts(tmp
             meta_row(12, "ODbL (CC-by-NC)"),
             meta_row(13, "ODbL"),
             meta_row(14, "Citation required"),
-            meta_row(30, "CC0", area="250000", taxa="Fish"),
+            {**meta_row(30, "CC0", area="250000", taxa="Fish"), "WEB_LINK": "None"},
         ],
     )
     write_csv(
@@ -303,6 +330,7 @@ def test_main_writes_open_studies_only_with_counts_citations_and_no_contacts(tmp
         and s10["lon"] == -95.12
     )
     assert m["studies"][1]["wide"] is True and m["studies"][1]["citations"] == []
+    assert [s["link"] for s in m["studies"]] == ["http://x.org/s", ""], "'None' is no link, not a link to None"
     text = (out / "biotime.json").read_text()
     assert "person@example.org" not in text and "A Person" not in text, (
         "contacts are not published"
