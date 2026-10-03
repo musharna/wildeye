@@ -30,7 +30,27 @@ test('the card body fades at the bottom while more of the list is below', () => 
   assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-body \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-body-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
 });
 
-/** Every CustomDataSource in src/data by name (a literal, or a `const id = "…"` it is built from), with its file's text. */
+/**
+ * The id a variable passed to CustomDataSource holds: the file must bind that name exactly once, to a string literal.
+ * A second binding of the name, or one that is not a literal, is an error rather than a guess (review of #40: the first
+ * `const id = "…"` in the file was taken, whichever one fed the call).
+ */
+function boundId(src, variable) {
+  const bindings = [...src.matchAll(new RegExp(`\\b(?:const|let|var)\\s+${variable}\\s*=\\s*([^;\\n]*)`, 'g'))].map((m) => m[1].trim());
+  if (bindings.length !== 1) throw new Error(`${variable} is bound ${bindings.length} times`);
+  const literal = bindings[0].match(/^["']([a-z0-9-]+)["']$/);
+  if (!literal) throw new Error(`${variable} is bound to ${bindings[0]}, not an id literal`);
+  return literal[1];
+}
+
+test('a data source named by a variable resolves only through one literal binding', () => {
+  assert.equal(boundId('const id = "griis";\nnew Cesium.CustomDataSource(id);', 'id'), 'griis'); // positive control
+  assert.throws(() => boundId('const id = "a";\nfunction f() { const id = "b"; }', 'id'), /bound 2 times/);
+  assert.throws(() => boundId('let id = prefix + "x";', 'id'), /not an id literal/);
+  assert.throws(() => boundId('new Cesium.CustomDataSource(id);', 'id'), /bound 0 times/);
+});
+
+/** Every CustomDataSource in src/data by name (a literal, or the one literal its variable is bound to), with its file's text. */
 function dataSources() {
   const dir = new URL('../data/', import.meta.url);
   const out = new Map();
@@ -38,8 +58,10 @@ function dataSources() {
     if (!file.endsWith('.js') || file.includes('.test.')) continue;
     const src = readFileSync(new URL(file, dir), 'utf8');
     for (const [, literal, variable] of src.matchAll(/new Cesium\.CustomDataSource\((?:["']([a-z0-9-]+)["']|([A-Za-z_]\w*))\)/g)) {
-      const name = literal ?? src.match(new RegExp(`const ${variable} = ["']([a-z0-9-]+)["']`))?.[1];
-      assert.ok(name, `${file}: CustomDataSource(${variable}) names no literal id`);
+      let name = literal;
+      if (!name) {
+        try { name = boundId(src, variable); } catch (e) { assert.fail(`${file}: CustomDataSource(${variable}): ${e.message}`); }
+      }
       out.set(name, { file, src });
     }
   }
