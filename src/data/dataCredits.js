@@ -164,6 +164,10 @@ export const DATA_CREDITS = [
     html: "Ecoregions and biomes: <a href=\"https://ecoregions.appspot.com/\" target=\"_blank\" rel=\"noopener\">RESOLVE Ecoregions 2017</a> (CC BY 4.0), Dinerstein et al. 2017, <i>BioScience</i> 67(6):534\u2013545, <a href=\"https://doi.org/10.1093/biosci/bix014\" target=\"_blank\" rel=\"noopener\">doi:10.1093/biosci/bix014</a>. Boundaries simplified for display.",
   },
   {
+    key: 'marine-realms',
+    html: "Marine realms: <a href=\"https://doi.org/10.17608/k6.auckland.5596840\" target=\"_blank\" rel=\"noopener\">GIS shape files of realm maps</a> (Mark Costello, figshare, <a href=\"https://creativecommons.org/licenses/by/4.0/\" target=\"_blank\" rel=\"noopener\">CC BY 4.0</a>); Costello, Tsai, Wong, Cheung, Basher &amp; Chaudhary 2017, <i>Nature Communications</i> 8:1057, <a href=\"https://doi.org/10.1038/s41467-017-01121-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41467-017-01121-2</a>. Changed: land removed (<a href=\"https://www.naturalearthdata.com/\" target=\"_blank\" rel=\"noopener\">Natural Earth</a> 10 m, public domain) and boundaries simplified for display; realm names, groups and species counts from the paper's Fig. 1.",
+  },
+  {
     key: 'species',
     html: 'Species maps and "what lives here": <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF.org</a> occurrence search and maps (CC0 and CC BY records only); the top datasets behind each list and map are named with a DOI link where GBIF has one, and a gbif.org dataset page otherwise. Names: <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> and <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF</a>.',
   },

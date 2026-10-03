@@ -88,8 +88,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 48);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 48);
+  assert.equal(REGISTERED_LAYER_IDS.length, 49);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 49);
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   for (const [id, token] of [
     ['biotime', 'bt'],
@@ -105,6 +105,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     ['griis', 'gr'],
     ['surface-water', 'sw'],
     ['human-footprint', 'hf'],
+    ['marine-realms', 'mr'],
     ['bii', 'bi'],
     ['wetlands', 'wl'],
     ['obis-grid', 'ob'],

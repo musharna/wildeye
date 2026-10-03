@@ -14,6 +14,7 @@ import gfwLayer from './data/gfw.js';
 import whispersLayer from './data/whispers.js';
 import riversLayer from './data/rivers.js';
 import ecoregionsLayer from './data/ecoregions.js';
+import { marineRealmsLayer } from './data/marineRealms.js';
 import speciesLayer, { DEFAULT_SPECIES_PARAMS } from './data/species.js';
 import { createBioClient } from './bio/gbif.js';
 import { createWhatLivesHere } from './bio/whatLivesHere.js';
@@ -250,6 +251,7 @@ async function init() {
     dataManager.register(whispersLayer);
     dataManager.register(riversLayer);
     dataManager.register(ecoregionsLayer);
+    dataManager.register(marineRealmsLayer);
     dataManager.register(firesLayer);
     dataManager.register(h5n1Layer);
     dataManager.register(droughtLayer);
@@ -324,7 +326,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
