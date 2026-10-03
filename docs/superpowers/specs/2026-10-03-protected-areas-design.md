@@ -10,8 +10,9 @@ one of three greens: strict reserve or wilderness (IUCN Ia/Ib), national park (I
 habitat areas, protected landscapes, nature reserves, state parks, protected forests). Zoomed in to a park you know, its
 boundary sits where it belongs (to about 600 m, the finest tile's pixel). A WHAT LIVES HERE click lists the protected
 areas at the point, most protective and smallest first: name, kind, designation and operator, and its OpenStreetMap id;
-a point in none reads "no protected area mapped here". The legend says what the colours are and that OpenStreetMap's
-coverage is uneven and it is not an official registry. A fixed snapshot (its Overture release shown): not on the time
+a point in none reads "no protected area mapped here". The legend says what the colours are, how many areas are too
+small to show at about 600 m (a click still finds them; 51,866 of 174,337 in the first build), and that
+OpenStreetMap's coverage is uneven and it is not an official registry. A fixed snapshot (its Overture release shown): not on the time
 bar.
 
 It is not WDPA: Protected Planet's licence forbids redistribution, and OSM is the only redistributable source found
@@ -51,11 +52,13 @@ protection.
   protective wins a shared pixel; coarser levels take the 2 × 2 maximum, so any protection painted at a fine level shows
   at every coarser one. Only tiles with a painted pixel are written; the manifest lists them and the layer serves a
   blank tile for the rest (no 404s). Palette PNG, transparent where unprotected.
-- **Lookup shards**: per 5° cell (south-west corner, 90°N and 180°E folded in, as the OBIS grid), every area clipped to
-  the cell: name, class, designation, operator, OSM id, Wikidata id, approximate area, polygons as rings of 4-decimal
-  coordinates. Only cells holding an area are written and listed.
+- **Lookup shards**: per 1° cell (south-west corner, 90°N and 180°E folded in, as the OBIS grid), every area clipped to
+  the cell: name, class, designation, operator, OSM id, Wikidata id, approximate area, polygons as rings of integers in
+  1e-4° (~11 m), the first pair absolute and each later one the difference from the one before. Only cells holding an
+  area are written and listed. (First full build, 5° cells of decimal coordinates: 132.5 MB, over the 100 MB budget, and
+  7.8 MB for one click in the north-eastern US; the same build re-encoded measured 75.9 MB.)
 - **Manifest** `protected_areas.json`, written last: release, date, maxLevel, tile template, palette, groups, class
-  table, tile list per level, shard template and list, counts (areas, per group, unnamed, left out, painting no pixel at
+  table, tile list per level, shard size, coordinate scale, shard template and list, counts (areas, per group, unnamed, left out, painting no pixel at
   level 7), source and licence.
 - **Layer** `src/data/protectedAreas.js`, token `pa`, modelled on humanFootprint.js: a `UrlTemplateImageryProvider` whose
   `requestImage` serves a blank canvas for tiles not listed; one drape at a time; the readout fetches the point's shard
