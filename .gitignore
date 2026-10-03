@@ -54,7 +54,8 @@ public/data/arbonet.geojson
 public/data/neon-vectors.geojson
 public/data/h5n1.geojson
 public/data/ecoregions.geojson
-public/data/protected-areas.geojson
+public/data/protected_areas.json
+public/data/protected/
 public/data/fishing.geojson
 public/data/phenology.geojson
 public/data/fires.geojson
