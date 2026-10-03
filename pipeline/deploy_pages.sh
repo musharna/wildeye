@@ -123,8 +123,10 @@ publish() { # commit what is staged, push it
 # frames: every tip the uplink leaves behind is a site whose manifest names only files it has. The
 # manifest and everything else go last. The protected-areas tiles and shards (~90 MB on first deploy)
 # go up the same way; their manifest, data/protected_areas.json, is outside data/protected/ and goes last.
+# Changed files count as well as new ones: a protected-areas rebuild rewrites its tiles and shards in
+# place (archive frames are never rewritten). Pinned by pipeline/tests/test_deploy_batching.py.
 BATCH_MB="${BATCH_MB:-40}"
-mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=A -- data/birds_archive data/protected ':(exclude)data/birds_archive/manifest.json')
+mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=AM -- data/birds_archive data/protected ':(exclude)data/birds_archive/manifest.json')
 NEW_BYTES=0
 [ "${#NEW[@]}" -gt 0 ] && NEW_BYTES="$(cd "$WT" && printf '%s\0' "${NEW[@]}" | du -cb --files0-from=- | tail -1 | cut -f1)"
 if [ "$NEW_BYTES" -gt $((BATCH_MB * 1000000)) ]; then
