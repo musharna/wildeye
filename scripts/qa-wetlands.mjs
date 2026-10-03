@@ -129,16 +129,35 @@ try {
   }
   report('negative-open-pacific', live.pacific?.status === 'nodata' && live.pacific.date === 'GLWD v2', { got: row(live.pacific) });
 
-  // A fixed map: moving the time bar neither redraws it nor changes what it reads.
-  const seen = new Set(tiles.urls);
-  await page.evaluate(() => window.__godsEyeView.observedTime.set('2010-06-01T00:00:00Z'));
+  // A fixed map: moving the time bar neither redraws it nor changes what it reads. A redraw is told by the imagery
+  // layer object, which a redraw replaces: it re-requests the same tile URLs, so counting new URLs cannot see it.
+  const imagery = () => page.evaluate(() => {
+    const layers = window.__godsEyeView.viewer.imageryLayers;
+    const ours = [];
+    for (let i = 0; i < layers.length; i += 1) if (/data\/glwd\//.test(String(layers.get(i).imageryProvider?.url ?? ''))) ours.push(layers.get(i));
+    if (ours.length !== 1) return `imagery layers drawing GLWD tiles: ${ours.length}`;
+    if (!window.__qaWetlandsImagery) window.__qaWetlandsImagery = ours[0];
+    return window.__qaWetlandsImagery === ours[0] ? 'same' : 'replaced';
+  });
+  const imageryBefore = await imagery();
+  // With no time-aware layer on, the bar has no domain and set() is a no-op: a probe extent gives it one, and the
+  // check requires the instant to have moved, so a bar that never moved cannot pass it.
+  const moved = await page.evaluate(() => {
+    const t = window.__godsEyeView.observedTime;
+    t.setLayerExtent('qa-probe', { startMs: Date.parse('2000-01-01T00:00:00Z'), endMs: Date.parse('2026-01-01T00:00:00Z') });
+    t.set('2010-06-01T00:00:00Z');
+    return t.get();
+  });
   await sleep(3000);
   const s2 = await stats();
   const past = await readAll({ sundarbans: KNOWN.sundarbans.at });
-  const fresh = [...tiles.urls].filter((u) => !seen.has(u));
-  report('ignores-the-time-bar', s2?.time === 'GLWD v2' && !s2?.error && fresh.length === 0 && past.sundarbans?.text === 'Mangrove',
-    { stats: s2, newTiles: fresh.length, sundarbans: row(past.sundarbans) });
-  await page.evaluate(() => window.__godsEyeView.observedTime.set(null));
+  const imageryAfter = await imagery();
+  report('ignores-the-time-bar', moved?.startsWith('2010-06-01') && imageryBefore === 'same' && imageryAfter === 'same' && s2?.time === 'GLWD v2' && !s2?.error && past.sundarbans?.text === 'Mangrove',
+    { moved, imageryBefore, imageryAfter, stats: s2, sundarbans: row(past.sundarbans) });
+  await page.evaluate(() => {
+    window.__godsEyeView.observedTime.set(null);
+    window.__godsEyeView.observedTime.setLayerExtent('qa-probe', null);
+  });
 
   // Every pixel of the real level-6 tiles the readouts used, decoded from the file's bytes by the site's own table.
   const urls = [...tiles.urls].filter((u) => /\/glwd\/6\/\d+\/\d+\.png$/.test(u));
