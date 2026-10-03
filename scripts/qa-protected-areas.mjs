@@ -15,7 +15,7 @@
  */
 import puppeteer from 'puppeteer';
 import { bootSettled } from './bootSettled.mjs';
-import { NONE_TEXT, areasAt, inPolygon, shardKey } from '../src/data/protectedAreas.js';
+import { NONE_TEXT, areasAt, decodeShard, inPolygon, shardKey } from '../src/data/protectedAreas.js';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -110,11 +110,12 @@ try {
   const shardSet = new Set(served.shards.map(([la, lo]) => `${la}_${lo}`));
   const shards = new Map();
   const shardAt = async (lat, lon) => {
-    const key = shardKey(lat, lon);
+    const key = shardKey(lat, lon, served.shard_degrees);
     if (!shardSet.has(key)) return null;
     if (!shards.has(key)) {
       const [la, lo] = key.split('_');
-      shards.set(key, await page.evaluate(async (u) => (await fetch(u)).json(), served.shard.replace('{lat}', la).replace('{lon}', lo)));
+      const raw = await page.evaluate(async (u) => (await fetch(u)).json(), served.shard.replace('{lat}', la).replace('{lon}', lo));
+      shards.set(key, decodeShard(raw, served.coord_scale));
     }
     return shards.get(key);
   };
@@ -132,22 +133,28 @@ try {
     for (const dy of [-0.05, 0, 0.05]) for (const dx of [-0.05, 0, 0.05]) around.push(await found(lat + dy, lon + dx));
     if (around.every((f) => f.length === 0)) { empty = [lat, lon]; break; }
   }
-  // Yellowstone's west boundary on EDGE_LAT, from its polygon in the shard: the westmost crossing of that latitude
-  const ys = (await shardAt(EDGE_LAT, -110.6))?.areas.find((a) => a.osm === 'r1453306');
+  // Yellowstone's west boundary on EDGE_LAT, from its pieces in the shards either side of 111°W (each piece is clipped to
+  // its cell, so a crossing on a cell line is the clip, not the boundary): the westmost real crossing of that latitude
+  const ysParts = [];
+  for (const lon of [-111.5, -110.5]) ysParts.push(...((await shardAt(EDGE_LAT, lon))?.areas ?? []).filter((a) => a.osm === 'r1453306'));
+  const onCellLine = (x) => Math.abs(x / served.shard_degrees - Math.round(x / served.shard_degrees)) < 1e-6;
   let westEdge = null;
-  for (const rings of ys?.polygons ?? []) {
-    const r = rings[0];
-    for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
-      const [xi, yi, xj, yj] = [r[i], r[i + 1], r[j], r[j + 1]];
-      if ((yi > EDGE_LAT) !== (yj > EDGE_LAT)) {
-        const x = xi + ((EDGE_LAT - yi) * (xj - xi)) / (yj - yi);
-        if (westEdge === null || x < westEdge) westEdge = x;
+  for (const part of ysParts) {
+    for (const rings of part.polygons) {
+      const r = rings[0];
+      for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+        const [xi, yi, xj, yj] = [r[i], r[i + 1], r[j], r[j + 1]];
+        if ((yi > EDGE_LAT) !== (yj > EDGE_LAT)) {
+          const x = xi + ((EDGE_LAT - yi) * (xj - xi)) / (yj - yi);
+          if (!onCellLine(x) && (westEdge === null || x < westEdge)) westEdge = x;
+        }
       }
     }
   }
   if (!empty || westEdge === null) throw new Error(`nothing to check: unprotected ${JSON.stringify(empty)}, Yellowstone west edge ${westEdge}`);
   const inside = [EDGE_LAT, westEdge + EDGE_STEP], outside = [EDGE_LAT, westEdge - EDGE_STEP];
-  const ysInside = ys.polygons.some((rings) => inPolygon(rings, inside[1], inside[0])) && !ys.polygons.some((rings) => inPolygon(rings, outside[1], outside[0]));
+  const inYs = ([lat, lon]) => ysParts.some((part) => part.polygons.some((rings) => inPolygon(rings, lon, lat)));
+  const ysInside = inYs(inside) && !inYs(outside);
 
   const parkGroups = [];
   for (const p of PARKS) parkGroups.push(await topGroup(p[2], p[3]));

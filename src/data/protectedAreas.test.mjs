@@ -10,6 +10,8 @@ import {
   areaText,
   areasAt,
   createProtectedAreasLayer,
+  decodeRing,
+  decodeShard,
   inPolygon,
   listedTilesOnly,
   readoutText,
@@ -29,7 +31,10 @@ const sq = (w, s, e, n) => [w, s, e, s, e, n, w, n]; // a closed-by-wrap ring, c
 const YS = { name: 'Yellowstone National Park', class: 'national_park', title: 'National Park', operator: 'National Park Service', osm: 'r1453306', wikidata: 'Q351', km2: 8896.61, polygons: [[sq(-111.1, 44.1, -109.9, 45.1)]] };
 const WILD = { name: 'Teton Wilderness', class: 'wilderness_area', title: 'Wilderness Area', operator: 'United States Forest Service', osm: 'r6000828', wikidata: null, km2: 2364.65, polygons: [[sq(-110.5, 44.0, -110.0, 44.3)]] };
 const FOREST = { name: 'Custer Gallatin National Forest', class: 'forest', title: 'National Forest', operator: 'United States Forest Service', osm: 'r2146884', wikidata: null, km2: 13436.61, polygons: [[sq(-112, 44.0, -109, 46)]] };
-const SHARD = { cell: [40, -115], areas: [FOREST, YS, WILD] };
+const SHARD = { cell: [44, -111], areas: [FOREST, YS, WILD] };
+// as the pipeline writes it (pipeline/protected_areas.py _rings): integers of 1e-4°, first pair absolute, then differences
+const encodeRing = (r) => r.map((v, i) => Math.round(v * 1e4) - (i >= 2 ? Math.round(r[i - 2] * 1e4) : 0));
+const ENCODED = { ...SHARD, areas: SHARD.areas.map((a) => ({ ...a, polygons: a.polygons.map((rings) => rings.map(encodeRing)) })) };
 const MANIFEST = Object.freeze({
   release: '2026-09-23.1',
   generated_at: '2026-10-03T06:00:00Z',
@@ -39,10 +44,11 @@ const MANIFEST = Object.freeze({
   palette: [[0, 0, 0], [161, 217, 155], [65, 171, 93], [0, 90, 50]],
   groups: [{ index: 3, key: 'strict', label: 'Strict reserve or wilderness (IUCN Ia/Ib)' }, { index: 2, key: 'national_park', label: 'National park (IUCN II)' }, { index: 1, key: 'other', label: 'Other protection' }],
   classes: CLASSES,
-  shard_degrees: 5,
+  shard_degrees: 1,
+  coord_scale: 10000,
   shard: 'data/protected/shards/{lat}_{lon}.json',
-  shards: [[40, -115]],
-  counts: { areas: 3, by_group: { strict: 1, national_park: 1, other: 1 } },
+  shards: [[44, -111]],
+  counts: { areas: 3, by_group: { strict: 1, national_park: 1, other: 1 }, unpainted_at_max_level: 1 },
 });
 
 function harness({ manifest = MANIFEST, shardStatus = 200 } = {}) {
@@ -52,7 +58,7 @@ function harness({ manifest = MANIFEST, shardStatus = 200 } = {}) {
     fetchImpl: async (url) => {
       fetches.push(url);
       if (url === MANIFEST_URL) return { ok: true, status: 200, json: async () => structuredClone(manifest) };
-      return { ok: shardStatus === 200, status: shardStatus, json: async () => structuredClone(SHARD) };
+      return { ok: shardStatus === 200, status: shardStatus, json: async () => structuredClone(ENCODED) };
     },
     providerFor: (options) => {
       const listeners = [], requested = [];
@@ -83,8 +89,11 @@ test('manifest: the shape the pipeline writes passes; each broken part is named'
   assert.match(bad({ tiles: { ...MANIFEST.tiles, 1: [[0, 2]] } }), /not on level 1/); // and 2 rows, 0–1
   assert.match(bad({ palette: MANIFEST.palette.slice(1) }), /palette/);
   assert.match(bad({ classes: { x: { group: 4, label: 'x' } } }), /classes/);
-  assert.match(bad({ shards: [[42, -115]] }), /south-west corner/);
+  assert.match(bad({ shards: [[44.5, -111]] }), /south-west corner/);
   assert.match(bad({ shards: [[90, 0]] }), /south-west corner/);
+  assert.match(bad({ shard_degrees: 7 }), /does not divide 180/);
+  assert.match(bad({ shard_degrees: 5 }), /not a 5° cell/, 'the shards listed must be cells of the size declared');
+  assert.match(bad({ coord_scale: 0 }), /coord_scale/);
   assert.match(bad({ shard: 'data/x.json' }), /lacks/);
   assert.match(bad({ counts: {} }), /counts/);
 });
@@ -100,14 +109,26 @@ test("tile keys: the pipeline's tile (x, y, level), y from the north, is the rec
   }
 });
 
-test('shard key: the 5° cell the pipeline writes (pipeline shard_key), the north and east edges folded in', () => {
-  assert.equal(shardKey(44.6, -110.5), '40_-115');
-  assert.equal(shardKey(90, 180), '85_175');
-  assert.equal(shardKey(-90, -180), '-90_-180');
-  assert.equal(shardKey(-0.1, -0.1), '-5_-5');
-  assert.equal(shardKey(44.6, 249.5), '40_-115', 'a longitude past 180 wraps');
-  assert.equal(shardKey(91, 0), null);
-  assert.equal(shardKey(Number.NaN, 0), null);
+test('shard key: the cell the pipeline writes (pipeline shard_key), the north and east edges folded in', () => {
+  assert.equal(shardKey(44.6, -110.5, 1), '44_-111');
+  assert.equal(shardKey(90, 180, 1), '89_179');
+  assert.equal(shardKey(-90, -180, 1), '-90_-180');
+  assert.equal(shardKey(-0.1, -0.1, 1), '-1_-1');
+  assert.equal(shardKey(44.6, 249.5, 1), '44_-111', 'a longitude past 180 wraps');
+  assert.equal(shardKey(44.6, -110.5, 5), '40_-115');
+  assert.equal(shardKey(90, 180, 5), '85_175');
+  assert.equal(shardKey(91, 0, 1), null);
+  assert.equal(shardKey(Number.NaN, 0, 1), null);
+});
+
+test('rings: the literal the pipeline test writes for box(1, 2, 3, 4) decodes to its corners; decoding never drifts', () => {
+  assert.deepEqual(decodeRing([30000, 20000, 0, 20000, -20000, 0, 0, -20000], 10000), [3, 2, 3, 4, 1, 4, 1, 2]);
+  const long = Array.from({ length: 2000 }, (_, i) => (i % 2 ? 0.0001 : 0.0003)); // 1,000 small steps
+  const end = decodeRing([1234567, -456789, ...long.slice(2).map((v) => Math.round(v * 1e4))], 10000).slice(-2);
+  assert.deepEqual(end, [(1234567 + 999 * 3) / 1e4, (-456789 + 999) / 1e4]);
+  const d = decodeShard(ENCODED, 10000);
+  assert.deepEqual(d.areas[1].polygons, YS.polygons);
+  assert.deepEqual(ENCODED.areas[1].polygons[0][0].slice(0, 4), [-1111000, 441000, 12000, 0], 'the fixture is encoded, not degrees');
 });
 
 test('point in polygon: inside the exterior and outside its hole; even–odd over flat rings', () => {
@@ -178,7 +199,7 @@ test('readout: off is null; a cell without a shard reads none without a fetch; a
   assert.deepEqual([r.status, r.date], ['value', date]);
   assert.match(r.text, /^Yellowstone National Park \(national park\).*; Custer Gallatin/);
   await h.layer.readoutAt(44.2, -110.2);
-  assert.deepEqual(h.fetches.filter((u) => u !== MANIFEST_URL), ['data/protected/shards/40_-115.json?v=2026-09-23.1'], 'one fetch for two reads');
+  assert.deepEqual(h.fetches.filter((u) => u !== MANIFEST_URL), ['data/protected/shards/44_-111.json?v=2026-09-23.1'], 'one fetch for two reads');
   const none = await h.layer.readoutAt(10, 10);
   assert.deepEqual([none.status, none.text, none.date], ['value', NONE_TEXT, date]);
   assert.equal(h.fetches.length, 2, 'no fetch for a cell the manifest has no shard for');
@@ -188,13 +209,13 @@ test('readout: off is null; a cell without a shard reads none without a fetch; a
   await f.layer.update();
   f.layer.enable();
   const err = await f.layer.readoutAt(44.8, -110.5);
-  assert.deepEqual([err.status, err.error], ['error', 'shard 40_-115 HTTP 503']);
+  assert.deepEqual([err.status, err.error], ['error', 'shard 44_-111 HTTP 503']);
   await f.layer.readoutAt(44.8, -110.5);
   assert.equal(f.fetches.filter((u) => u.includes('shards')).length, 2, 'a failed shard is fetched again');
 });
 
 test('a malformed manifest draws nothing and says why', async () => {
-  const h = harness({ manifest: { ...MANIFEST, shard_degrees: 1 } });
+  const h = harness({ manifest: { ...MANIFEST, shard_degrees: 7 } });
   assert.equal(await h.layer.update(), false);
   assert.equal(h.providers.length, 0);
   assert.match(h.layer.getStats().error, /Malformed protected_areas.json: shard_degrees/);
@@ -207,7 +228,10 @@ test('legend: the three groups with their counts and the coverage caveat with th
   await h.layer.update();
   const { legend } = h.layer.getRowControls();
   assert.deepEqual(legend.slice(0, 3).map((l) => [l.color, l.count]), [['rgb(0,90,50)', 1], ['rgb(65,171,93)', 1], ['rgb(161,217,155)', 1]]);
-  assert.match(legend[3].label, /3 protected areas mapped in OpenStreetMap \(Overture 2026-09-23\.1\); OpenStreetMap's coverage is uneven and it is not an official registry · © OpenStreetMap contributors, ODbL/);
+  assert.match(legend[3].label, /^3 protected areas mapped in OpenStreetMap \(Overture 2026-09-23\.1\), 1 of them too small to show at about 600 m \(a WHAT LIVES HERE click still finds them\); OpenStreetMap's coverage is uneven and it is not an official registry · © OpenStreetMap contributors, ODbL$/);
+  const all = harness({ manifest: { ...MANIFEST, counts: { ...MANIFEST.counts, unpainted_at_max_level: 0 } } });
+  await all.layer.update();
+  assert.doesNotMatch(all.layer.getRowControls().legend[3].label, /too small/);
 });
 
 test('the built manifest and a shard it lists, when present, pass and read (real file)', (t) => {
@@ -218,9 +242,14 @@ test('the built manifest and a shard it lists, when present, pass and read (real
   }
   const m = JSON.parse(readFileSync(path, 'utf8'));
   assert.equal(validateProtectedManifest(m), null);
-  const [lat, lon] = m.shards.find(([la, lo]) => la === 40 && lo === -115) ?? m.shards[0];
-  const s = JSON.parse(readFileSync(new URL(`../../public/${m.shard.replace('{lat}', lat).replace('{lon}', lon)}`, import.meta.url), 'utf8'));
-  assert.deepEqual(s.cell, [lat, lon]);
+  const [lat, lon] = m.shards.find(([la, lo]) => la === 44 && lo === -111) ?? m.shards[0];
+  const raw = JSON.parse(readFileSync(new URL(`../../public/${m.shard.replace('{lat}', lat).replace('{lon}', lon)}`, import.meta.url), 'utf8'));
+  assert.deepEqual(raw.cell, [lat, lon]);
+  const s = decodeShard(raw, m.coord_scale);
   assert.ok(s.areas.length > 0 && s.areas.every((a) => m.classes[a.class]?.group));
-  if (lat === 40 && lon === -115) assert.ok(areasAt(s, 44.6, -110.5, m.classes).some((a) => a.osm === 'r1453306'), 'Yellowstone at its centre');
+  // every decoded vertex lies in its cell: the clip and the encoding agree
+  for (const a of s.areas) for (const rings of a.polygons) for (const r of rings) for (let i = 0; i < r.length; i += 2) {
+    assert.ok(r[i] >= lon - 1e-4 && r[i] <= lon + m.shard_degrees + 1e-4 && r[i + 1] >= lat - 1e-4 && r[i + 1] <= lat + m.shard_degrees + 1e-4, `${a.osm} vertex ${r[i]},${r[i + 1]}`);
+  }
+  if (lat === 44 && lon === -111) assert.ok(areasAt(s, 44.6, -110.5, m.classes).some((a) => a.osm === 'r1453306'), 'Yellowstone at its centre');
 });
