@@ -122,22 +122,60 @@ test('a missing or malformed manifest, or an image that will not load, is loud a
   assert.equal(png.providers.length, 2, 'retried, not given up on');
 });
 
-test('a drape still loading when the layer is destroyed never lands', async () => {
-  let release;
-  const list = [];
+function slowImage() {
+  const releases = [], list = [];
+  const viewer = { imageryLayers: { add: (l) => list.push(l), remove: (l) => { list.splice(list.indexOf(l), 1); return true; } } };
   const layer = createObisGridLayer({
     fetchImpl: async () => ({ ok: true, status: 200, json: async () => structuredClone(MANIFEST) }),
-    providerFor: () => new Promise((r) => { release = r; }),
+    providerFor: (url) => new Promise((r) => { releases.push(() => r({ url })); }),
     imageryLayerFor: (provider) => ({ provider, show: true }),
     stack: () => {},
   });
-  layer.init({ imageryLayers: { add: (l) => list.push(l), remove: () => true } });
-  const pending = layer.update();
-  while (!release) await new Promise((r) => setImmediate(r));
-  layer.destroy();
-  release({});
+  layer.init(viewer);
+  const requested = async (n) => {
+    for (let turn = 0; releases.length < n; turn++) {
+      if (turn === 200) throw new Error(`the image was requested ${releases.length} times, never ${n}`);
+      await new Promise((r) => setImmediate(r));
+    }
+  };
+  return { layer, viewer, releases, list, requested };
+}
+
+test('a drape still loading when the layer is destroyed never lands, nor after the layer is set up again', async () => {
+  const gone = slowImage();
+  const pending = gone.layer.update();
+  await gone.requested(1);
+  gone.layer.destroy();
+  gone.releases[0]();
   assert.equal(await pending, false);
-  assert.equal(list.length, 0);
+  assert.equal(gone.list.length, 0);
+
+  const again = slowImage();
+  const stale = again.layer.update();
+  await again.requested(1);
+  again.layer.destroy();
+  again.layer.init(again.viewer);
+  const fresh = again.layer.update();
+  await again.requested(2);
+  again.releases[0](); // the stale load lands while the fresh one is still in flight
+  assert.equal(await stale, false);
+  const third = again.layer.update();
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+  assert.equal(again.releases.length, 2, 'a third update joins the fresh load, not a new one');
+  again.releases[1]();
+  assert.deepEqual([await fresh, await third], [true, true]);
+  assert.deepEqual(again.list.map((l) => l.provider.url), ['data/obis_grid.png?v=2026-10-02'], 'one drape, the fresh one');
+});
+
+test('two updates racing while the image loads share one load and land one drape', async () => {
+  const { layer, releases, list, requested } = slowImage();
+  const a = layer.update(), b = layer.update();
+  await requested(1);
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+  assert.equal(releases.length, 1, 'the image is requested once');
+  releases[0]();
+  assert.deepEqual([await a, await b], [true, true]);
+  assert.equal(list.length, 1);
 });
 
 test('readout: the cell under the point from the manifest; an empty cell reads no records; off and unloaded are distinct', async () => {
