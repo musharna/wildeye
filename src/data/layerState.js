@@ -105,6 +105,7 @@ const OPTION_GROUPS = Object.freeze({
 export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'aloft', token: 'k', disposition: 'enabled-only' }),
   Object.freeze({ id: 'arbonet', token: 'ar', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'bii', token: 'bi', disposition: 'enabled-only' }),
   Object.freeze({ id: 'biotime', token: 'bt', disposition: 'enabled-only' }),
   Object.freeze({ id: 'birds', token: 'n', disposition: 'enabled+options', optionOwner: 'birds' }),
   Object.freeze({ id: 'camera-traps', token: 'ct', disposition: 'enabled-only' }),
