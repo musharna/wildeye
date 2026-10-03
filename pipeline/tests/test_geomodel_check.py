@@ -127,6 +127,9 @@ class FakeSources:
     def range_geom(self, group, taxon_id):
         return RANGE
 
+    def range_bounds(self, group, taxon_id):
+        return self.range_geom(group, taxon_id).bounds  # LiveSources reads these from the file's headers
+
     def background(self, group, n, rng):
         self.backgrounds.append(group)
         return _points_with_share_inside(rng, n, 0.15)

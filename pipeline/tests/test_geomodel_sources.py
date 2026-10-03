@@ -42,6 +42,19 @@ def test_a_species_whose_range_is_empty_is_not_listed():
         gs.range_geometry(path, 56565)
 
 
+def test_range_bounds_read_from_the_headers_equal_the_decoded_ranges_bounds():
+    # real bytes: the amphibian rows and the protozoan file whose Comatricha nigra range is empty
+    for name in ("geomodel_amphibia_2rows.gpkg", "geomodel_protozoa_empty.gpkg"):
+        path = FIXTURES / name
+        bounds = gs.range_bounds(path)
+        listed = [t for t, _, _ in gs.species_index(path)]
+        assert listed and all(t in bounds for t in listed)
+        for t in listed:
+            assert bounds[t] == gs.range_geometry(path, t).bounds, (name, t)
+    # the empty range has no bounds, where its geometry fails loudly
+    assert gs.range_bounds(FIXTURES / "geomodel_protozoa_empty.gpkg")[56565] is None
+
+
 def test_rejects_a_blob_that_is_not_a_geopackage_geometry():
     with pytest.raises(gs.SourceError, match="GeoPackage"):
         gs.geometry_from_gpkg(b"\x01\x03\x00\x00\x00")
