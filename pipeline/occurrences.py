@@ -3,7 +3,9 @@
 Only records whose per-record licence is CC0 or CC-BY are kept (GBIF filters
 server-side; OBIS is filtered here). NC / SA / all-rights-reserved records are
 dropped, so the output can be redistributed under the app's own terms with
-attribution. Taxa come from pipeline/taxa.json.
+attribution. One exception to the label, not the filter: Happywhale records are
+shown under their datasets' CC BY-NC 4.0 (see DATASET_LICENCES). Taxa come from
+pipeline/taxa.json.
 """
 
 from __future__ import annotations
@@ -31,6 +33,19 @@ GBIF_BACKBONE_CHECKLIST_KEY = "d7dddbf4-2cf0-4f39-9b2a-bb099caae36c"
 OBIS = "https://api.obis.org/v3/occurrence"
 GBIF_LICENCES = ("CC0_1_0", "CC_BY_4_0")
 PAGE = 300
+BY_NC_4 = "http://creativecommons.org/licenses/by-nc/4.0/legalcode"
+# Datasets whose own licence is shown instead of the record's, by title prefix (GBIF and OBIS give the same titles).
+# Every Happywhale dataset on GBIF is CC BY-NC 4.0 while most of its records say CC0 (largest dataset, 2026-10-03:
+# 172,909 CC0 of 211,278). iNaturalist is not here: its observers choose a licence per record.
+DATASET_LICENCES = (("Happywhale - ", BY_NC_4),)
+
+
+def shown_licence(dataset: str | None, licence: str | None) -> str | None:
+    """The licence a record is shown under: its dataset's for DATASET_LICENCES, its own otherwise."""
+    for prefix, lic in DATASET_LICENCES:
+        if str(dataset or "").startswith(prefix):
+            return lic
+    return licence
 
 
 def licence_ok(text: str | None) -> bool:
@@ -52,6 +67,8 @@ def licence_label(text: str | None) -> str:
         return "CC BY 4.0"
     if "licenses/by/" in s or s in ("cc-by",):
         return "CC BY"
+    if "licenses/by-nc/4.0" in s:
+        return "CC BY-NC 4.0"
     return text or "unknown"
 
 
@@ -446,8 +463,8 @@ def to_feature(r: dict, taxon: dict) -> dict:
             "source": r["source"],
             "dataset": r["dataset"],
             "dataset_key": r.get("dataset_key"),
-            "license": r["license"],
-            "license_label": licence_label(r["license"]),
+            "license": shown_licence(r["dataset"], r["license"]),
+            "license_label": licence_label(shown_licence(r["dataset"], r["license"])),
             "uncertainty_m": r.get("uncertainty_m"),
             "basis": r["basis"],
             "url": r["url"],

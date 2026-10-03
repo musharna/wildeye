@@ -248,3 +248,27 @@ def test_gbif_records_names_the_backbone_checklist_for_its_taxon_key(monkeypatch
     q = urllib.parse.parse_qs(urllib.parse.urlparse(urls[0]).query)
     assert q["taxonKey"] == ["5220086"]  # positive control: the taxon is still filtered
     assert q.get("checklistKey") == ["d7dddbf4-2cf0-4f39-9b2a-bb099caae36c"]
+
+
+def test_happywhale_records_carry_the_datasets_nc_licence():
+    rec = {"taxon": "humpback", "date": "2026-08-02", "lat": 1.0, "lon": 2.0, "source": "obis",
+           "dataset": "Happywhale - Humpback whale in North Pacific Ocean", "dataset_key": "hw",
+           "license": "https://creativecommons.org/publicdomain/zero/1.0", "basis": "HumanObservation", "url": None}
+    p = to_feature(rec, TAXON)["properties"]
+    assert p["license"] == "http://creativecommons.org/licenses/by-nc/4.0/legalcode"
+    assert p["license_label"] == "CC BY-NC 4.0"
+    # positive controls: another CC0 dataset and iNaturalist's per-observer CC BY keep the record's own licence
+    other = to_feature({**rec, "dataset": "Ocean Tracking Network"}, TAXON)["properties"]
+    assert other["license"] == rec["license"] and other["license_label"] == "CC0 1.0"
+    inat = to_feature({**rec, "source": "gbif", "dataset": "iNaturalist research-grade observations",
+                       "license": "http://creativecommons.org/licenses/by/4.0/legalcode"}, TAXON)["properties"]
+    assert inat["license_label"] == "CC BY 4.0"
+    # the prefix is the title's start, not a mention of Happywhale anywhere in it
+    mention = to_feature({**rec, "dataset": "Whales seen on Happywhale - a review"}, TAXON)["properties"]
+    assert mention["license_label"] == "CC0 1.0"
+
+
+def test_licence_label_names_by_nc():
+    from pipeline.occurrences import licence_label
+    assert licence_label("http://creativecommons.org/licenses/by-nc/4.0/legalcode") == "CC BY-NC 4.0"
+    assert licence_label("http://creativecommons.org/licenses/by/4.0/legalcode") == "CC BY 4.0"
