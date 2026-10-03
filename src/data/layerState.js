@@ -135,6 +135,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'ndvi', token: '0', disposition: 'enabled-only' }),
   Object.freeze({ id: 'neon', token: '5', disposition: 'enabled-only' }),
   Object.freeze({ id: 'neon-vectors', token: 'nv', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'obis-grid', token: 'ob', disposition: 'enabled-only' }),
   Object.freeze({ id: 'occurrences', token: 'o', disposition: 'enabled-only' }),
   Object.freeze({ id: 'oisst', token: 'j', disposition: 'enabled-only' }),
   Object.freeze({ id: 'otn', token: '3', disposition: 'enabled-only' }),

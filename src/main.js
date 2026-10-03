@@ -39,6 +39,7 @@ import { mangrovesLayer } from './data/mangroves.js';
 import { surfaceWaterLayer } from './data/surfaceWater.js';
 import { humanFootprintLayer } from './data/humanFootprint.js';
 import { wetlandsLayer } from './data/wetlands.js';
+import { obisGridLayer } from './data/obisGrid.js';
 import { invasivesLayer } from './data/invasives.js';
 import { installDrapeExclusivity } from './data/drapeExclusive.js';
 import { createCompare, encodeCompareParam, decodeCompareParam } from './compare.js';
@@ -204,8 +205,9 @@ async function init() {
     dataManager.register(surfaceWaterLayer);
     dataManager.register(humanFootprintLayer);
     dataManager.register(wetlandsLayer);
+    dataManager.register(obisGridLayer);
     // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
-    const drapeLayers = [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, wetlandsLayer];
+    const drapeLayers = [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, wetlandsLayer, obisGridLayer];
     const drapeIds = drapeLayers.map((l) => l.id);
     const compare = createCompare({
       dataManager,
@@ -315,7 +317,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, wetlandsLayer, mangrovesLayer, invasivesLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, wetlandsLayer, obisGridLayer, mangrovesLayer, invasivesLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
