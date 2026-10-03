@@ -53,6 +53,26 @@ def test_range_bounds_read_from_the_headers_equal_the_decoded_ranges_bounds():
             assert bounds[t] == gs.range_geometry(path, t).bounds, (name, t)
     # the empty range has no bounds, where its geometry fails loudly
     assert gs.range_bounds(FIXTURES / "geomodel_protozoa_empty.gpkg")[56565] is None
+    # species rank only, as species_index lists (review of #39): the amphibian file's genus row is not read
+    amphibia = FIXTURES / "geomodel_amphibia_2rows.gpkg"
+    assert sorted(gs.range_bounds(amphibia)) == sorted(t for t, _, _ in gs.species_index(amphibia))
+
+
+def test_header_bounds_refuses_a_header_it_cannot_read_bounds_from():
+    import struct
+
+    def head(flags=0b0011, srs=4326, env=(1.0, 2.0, 3.0, 4.0)):  # little-endian, XY envelope
+        return b"GP\x00" + bytes([flags]) + struct.pack("<i", srs) + struct.pack("<4d", *env)
+
+    # positive control: the envelope is minx, maxx, miny, maxy; the bounds are min lon, min lat, max lon, max lat
+    assert gs.header_bounds(head()) == (1.0, 3.0, 2.0, 4.0)
+    assert gs.header_bounds(head(flags=0b10011)) is None  # empty geometry
+    with pytest.raises(gs.SourceError, match="not a GeoPackage geometry"):
+        gs.header_bounds(b"XX" + head()[2:])
+    with pytest.raises(gs.SourceError, match="SRS 3857"):
+        gs.header_bounds(head(srs=3857))
+    with pytest.raises(gs.SourceError, match="no envelope"):
+        gs.header_bounds(head(flags=0b0001))
 
 
 def test_rejects_a_blob_that_is_not_a_geopackage_geometry():
