@@ -116,7 +116,7 @@ def query(bbox: tuple[float, float, float, float] | None = None) -> str:
         ]
     cell = "FLOOR(decimallatitude), FLOOR(decimallongitude)"
     return (
-        f"SELECT {kind} AS kind, FLOOR(decimallatitude) AS lat, FLOOR(decimallongitude) AS lon, datasetkey, species, "
+        f"SELECT {kind} AS kind, FLOOR(decimallatitude) AS lat, FLOOR(decimallongitude) AS lon, datasetkey, species, "  # nosec B608 - only constants are interpolated (METHODS phrases asserted [a-z \-]+ at import, LICENCES, ANIMALIA) and the bbox, forced through float(); the SQL is sent to GBIF, which parses it (test_the_bbox_narrows_the_query_and_records_group_by_cell_dataset_and_species)
         f"COUNT(*) AS n FROM occurrence WHERE {' AND '.join(where)} GROUP BY {kind}, {cell}, datasetkey, species"
     )
 
