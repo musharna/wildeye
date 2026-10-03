@@ -91,3 +91,6 @@ public/data/glwd/
 public/data/glwd.json
 public/data/biotime.json
 public/data/biotime_locations.json
+public/data/obis_grid.json
+public/data/obis_grid.png
+public/data/obis_grid_datasets.json
