@@ -11,8 +11,8 @@ import { createDatasetList } from './datasetList.js';
 import { observeEndWithIntersectionObserver, watchMoreBelow } from './moreCue.js';
 
 export const BIO_CARD_LAYER_IDS = new Set([
-  'arbonet', 'birds', 'cetaceans', 'drought', 'ecoregions', 'fires', 'fishing', 'gfw', 'h5n1', 'hpai',
-  'neon', 'neon-vectors', 'occurrences', 'otn', 'phenology', 'rivers', 'tracks', 'wastewater', 'whispers',
+  'arbonet', 'biotime', 'birds', 'cetaceans', 'drought', 'ecoregions', 'fires', 'fishing', 'gfw', 'gmw', 'griis', 'h5n1',
+  'hpai', 'neon', 'neon-vectors', 'occurrences', 'otn', 'phenology', 'rivers', 'tracks', 'wastewater', 'whispers',
 ]);
 
 export function cardDecision(entity, time = undefined) {
