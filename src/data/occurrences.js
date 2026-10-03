@@ -3,7 +3,7 @@ import { loadIucn, iucnBadge } from "./iucn.js";
 import { extentFromDays, pluck } from "./observedExtent.js";
 
 /**
- * Recent wildlife sightings from GBIF + OBIS (CC0 / CC-BY records only),
+ * Recent wildlife sightings from GBIF + OBIS (CC0 / CC-BY records only; Happywhale's under its datasets' CC BY-NC 4.0),
  * written daily by pipeline/occurrences.py. One point per record; colour by
  * taxon group, alpha fades with record age. Group chips toggle visibility.
  */
@@ -56,6 +56,7 @@ export function licenceLabel(text) {
   if (s.includes("publicdomain/zero") || s.startsWith("cc0")) return "CC0 1.0";
   if (s.includes("licenses/by/4.0") || s === "cc_by_4_0") return "CC BY 4.0";
   if (s.includes("licenses/by/")) return "CC BY";
+  if (s.includes("licenses/by-nc/4.0")) return "CC BY-NC 4.0";
   return text || "licence unknown";
 }
 
@@ -152,7 +153,7 @@ export function createOccurrencesLayer() {
     id: "occurrences",
     name: "Wildlife sightings (GBIF + OBIS + USA-NPN)",
     icon: "🐋",
-    source: "GBIF + OBIS occurrences (CC0 / CC-BY records only) + USA-NPN phenology (CC BY 4.0)",
+    source: "GBIF + OBIS occurrences (CC0 / CC-BY records; Happywhale CC BY-NC 4.0) + USA-NPN phenology (CC BY 4.0)",
     updateInterval: 3600000,
 
     init(viewer) {

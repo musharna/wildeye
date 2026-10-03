@@ -34,6 +34,9 @@ test('pointEntity: id is stable, colour by group, age drives alpha', () => {
   assert.match(html, /Whale survey — Acme Inst<br><a href="https:\/\/doi\.org\/10\.1\/abc"[^>]*>doi:10\.1\/abc<\/a><br>/);
   assert.doesNotMatch(html, /· <a href="https:\/\/doi\.org/);
   assert.equal(licenceLabel('https://example.org/weird'), 'https://example.org/weird');
+  // Happywhale records carry their datasets' CC BY-NC 4.0 (pipeline/occurrences.py): named, never shown as a raw URL
+  assert.equal(licenceLabel('http://creativecommons.org/licenses/by-nc/4.0/legalcode'), 'CC BY-NC 4.0');
+  assert.equal(licenceLabel('http://creativecommons.org/licenses/by/4.0/legalcode'), 'CC BY 4.0');
   assert.match(describeOccurrence({ ...by, name: '<img src=x>' }), /&lt;img/);
 });
 
