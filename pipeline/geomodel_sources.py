@@ -555,33 +555,43 @@ def range_geometry(path: Path, taxon_id: int):
     return geom
 
 
+def header_bounds(head: bytes) -> tuple[float, float, float, float] | None:
+    """(min lon, min lat, max lon, max lat) from a GeoPackage geometry header's envelope (its first 40 bytes), None for an
+    empty geometry. Not a GeoPackage geometry, an SRS other than 4326, or no envelope (the bounds would need the geometry)
+    is an error."""
+    if head[:2] != b"GP":
+        raise SourceError("not a GeoPackage geometry")
+    order = "<" if head[3] & 1 else ">"
+    srs = struct.unpack(order + "i", head[4:8])[0]
+    if srs != 4326:
+        raise SourceError(f"range in SRS {srs}, expected 4326")
+    if _empty_geometry(head):
+        return None
+    if not (head[3] >> 1) & 7:
+        raise SourceError("geometry header has no envelope")
+    minx, maxx, miny, maxy = struct.unpack(order + "4d", head[8:40])
+    return (minx, miny, maxx, maxy)
+
+
 def range_bounds(path: Path) -> dict[int, tuple[float, float, float, float] | None]:
-    """(min lon, min lat, max lon, max lat) of every range in a GeoPackage, from the envelopes in the geometry headers, in
-    one query and without decoding a polygon (Arachnida v2.34: 0.06 s for all 3,544 headers, 32.7 ms per decoded range).
-    An empty range maps to None. A range whose header has no envelope is an error: its bounds would need the geometry."""
+    """header_bounds of every species-rank range in a GeoPackage, in one query and without decoding a polygon
+    (Arachnida v2.34: 0.06 s for all its headers, 32.7 ms per decoded range). Species rank only, as species_index lists:
+    the file's genus and family rows are never checked, so they are not read."""
     con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         table = _features_table(con)
         rows = con.execute(
-            f'select taxon_id, substr(geom, 1, 40) from "{table}"'  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+            f'select taxon_id, substr(geom, 1, 40) from "{table}" where rank = ?',  # nosec B608 - table name read from the file's own gpkg_contents, not from input
+            ("species",),
         ).fetchall()
     finally:
         con.close()
     out: dict[int, tuple[float, float, float, float] | None] = {}
     for taxon_id, head in rows:
-        if head[:2] != b"GP":
-            raise SourceError(f"taxon {taxon_id} in {path.name}: not a GeoPackage geometry")
-        order = "<" if head[3] & 1 else ">"
-        srs = struct.unpack(order + "i", head[4:8])[0]
-        if srs != 4326:
-            raise SourceError(f"range in SRS {srs}, expected 4326")
-        if _empty_geometry(head):
-            out[taxon_id] = None
-            continue
-        if not (head[3] >> 1) & 7:
-            raise SourceError(f"taxon {taxon_id} in {path.name}: geometry header has no envelope")
-        minx, maxx, miny, maxy = struct.unpack(order + "4d", head[8:40])
-        out[taxon_id] = (minx, miny, maxx, maxy)
+        try:
+            out[taxon_id] = header_bounds(head)
+        except SourceError as e:
+            raise SourceError(f"taxon {taxon_id} in {path.name}: {e}") from e
     return out
 
 
