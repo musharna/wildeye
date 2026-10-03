@@ -107,9 +107,9 @@ def skim_agreement(geom, taxon_id: int, tile_mask, z: int = TILE_ZOOM) -> float:
     return int((ours & theirs).sum()) / union if union else 0.0
 
 
-def full_tiles(geom, z: int = TILE_ZOOM) -> int:
-    """How many tile requests tile_agreement() makes for this range."""
-    xs, ys = _tile_range(*geom.bounds, z)
+def full_tiles(bounds, z: int = TILE_ZOOM) -> int:
+    """How many tile requests tile_agreement() makes for a range with these (min lon, min lat, max lon, max lat) bounds."""
+    xs, ys = _tile_range(*bounds, z)
     return len(xs) * len(ys)
 
 
@@ -145,15 +145,19 @@ def check_tiles(
             return s.get("check") != "full"
         return "iou_skim" not in s if include_full else "check" not in s
 
+    # a range is decoded only when its species is checked: decoding every one up front to rank them took ~25 silent
+    # minutes for the passing collections before the first log line (32.7 ms each); the bounds come from the headers
     missing = [
-        (g, t, n, sources.range_geom(g, t))
+        (g, t, n)
         for g, t, n in todo
         if wanted(species[n]) and (only is None or n in only)
     ]
+    cost = {}
     if mode == "full":
         # cheapest first: under a day's tile budget this fully checks the most species (compact ranges are ~4 tiles,
         # globe-spanning ones up to 64); sorted() is stable, so equal costs keep the list's order
-        missing = sorted(missing, key=lambda m: full_tiles(m[3]))
+        cost = {n: full_tiles(sources.range_bounds(g, t)) for g, t, n in missing}
+        missing = sorted(missing, key=lambda m: cost[m[2]])
     log.info(
         "%s check for %s of %s species in passing collections",
         mode,
@@ -162,10 +166,10 @@ def check_tiles(
     )
     failed = asked = 0
     write(species, asked)
-    for i, (group, taxon_id, name, geom) in enumerate(missing, 1):
+    for i, (group, taxon_id, name) in enumerate(missing, 1):
         s = species[name]
-        cost = 1 if mode == "skim" else full_tiles(geom)
-        if max_tiles is not None and asked + cost > max_tiles:
+        tiles = 1 if mode == "skim" else cost[name]
+        if max_tiles is not None and asked + tiles > max_tiles:
             log.info(
                 "tile budget %s reached after %s tiles: %s species left for the next run",
                 max_tiles,
@@ -173,7 +177,8 @@ def check_tiles(
                 len(missing) - i + 1,
             )
             break
-        asked += cost
+        asked += tiles
+        geom = sources.range_geom(group, taxon_id)
         try:
             if mode == "skim":
                 s["iou_skim"] = round(

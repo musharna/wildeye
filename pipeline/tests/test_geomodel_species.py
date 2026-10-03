@@ -358,3 +358,38 @@ def test_the_tile_log_survives_a_new_model_version(tmp_path):
     args = ["--verdicts", str(_verdicts(tmp_path, Arachnida="pass")), "--out", str(out), "--max-tiles-per-day", "6"]
     assert gsp.main(args, sources=fake, now=lambda: at + dt.timedelta(hours=1)) == 3
     assert fake.calls == []  # 1 tile left: no 2-tile species fits
+
+
+def test_the_full_check_decodes_only_the_ranges_it_checks(tmp_path):
+    # Ranking by tile cost reads the ranges' bounds; decoding every range first took ~25 silent minutes for the passing
+    # collections before the first log line (Arachnida v2.34: 32.7 ms per range, 0.06 s for all 3,544 headers)
+    big = box(0.0, -5.0, 100.0, 30.0)  # 6 z3 tiles; SKIM_RANGE is 2
+
+    class Counted(TileLog):
+        def __init__(self, **kw):
+            super().__init__(**kw)
+            self.decoded = []
+
+        def _range(self, taxon_id):
+            return big if taxon_id == 0 else SKIM_RANGE
+
+        def range_geom(self, group, taxon_id):
+            self.decoded.append(taxon_id)
+            return self._range(taxon_id)
+
+        def range_bounds(self, group, taxon_id):
+            return self._range(taxon_id).bounds
+
+        def tile_mask(self, taxon_id, z, x, y):
+            self.calls.append((taxon_id, z, x, y))
+            return gc.range_tile_mask(self._range(taxon_id), z, x, y, 64)
+
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    fake = Counted(n=3)
+    code, out = _run(tmp_path, fake, verdicts, "--max-tiles", "4")
+    assert code == 3
+    assert sorted(fake.decoded) == [1, 2], "the 6-tile species past the budget is never decoded"
+    assert sorted({c[0] for c in fake.calls}) == [1, 2]  # and the cheap two are still checked first
+    rest = Counted(n=3)
+    assert _run(tmp_path, rest, verdicts, "--max-tiles", "6")[0] == 0
+    assert rest.decoded == [0]  # positive control: the big one is decoded when its turn comes

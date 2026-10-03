@@ -526,6 +526,7 @@ class LiveSources:
 
         self.gs, self.work, self.meta = gs, work, None
         self.files: dict[str, dict[int, Path]] = {}
+        self._bounds: dict[Path, dict] = {}  # each file's range bounds, read once from its geometry headers
 
     def verify(self):
         self.gs.verify_group_keys()
@@ -555,6 +556,17 @@ class LiveSources:
 
     def range_geom(self, group: str, taxon_id: int):
         return self.gs.range_geometry(self.files[group][taxon_id], taxon_id)
+
+    def range_bounds(self, group: str, taxon_id: int):
+        """A range's bounds without decoding it: every range's, read once per file from the geometry headers."""
+        path = self.files[group][taxon_id]
+        if path not in self._bounds:
+            self._bounds[path] = self.gs.range_bounds(path)
+        if taxon_id not in self._bounds[path]:
+            raise self.gs.SourceError(f"taxon {taxon_id} not in {path.name}")
+        if self._bounds[path][taxon_id] is None:
+            raise self.gs.SourceError(f"taxon {taxon_id} has an empty range in {path.name}")
+        return self._bounds[path][taxon_id]
 
     def background(self, group: str, n: int, rng):
         return self.gs.sample_background(self.gs.effort_grid(group), n, rng)
