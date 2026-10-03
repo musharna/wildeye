@@ -329,14 +329,25 @@ def finest_tiles(
 def coarser(
     tiles: dict[tuple[int, int], np.ndarray],
 ) -> dict[tuple[int, int], np.ndarray]:
-    """The next coarser level: each tile the 2 × 2 maximum of its four children (absent children are empty)."""
+    """The next coarser level from its four children (absent children are empty): each pixel the group most of the 2 × 2
+    block's protected pixels hold, a tie to the more protective, empty only where all four are. Any protection still shows
+    at every coarser level, and a strict reserve does not recolour the parks beside it (the 2 × 2 maximum painted the
+    Everest region strict from Qomolangma, over the border from Sagarmatha, at every coarse level)."""
     parents: dict[tuple[int, int], np.ndarray] = {}
     for (x, y), arr in tiles.items():
         px, py = x // 2, y // 2
         big = parents.setdefault((px, py), np.zeros((2 * TILE, 2 * TILE), np.uint8))
         oy, ox = (y % 2) * TILE, (x % 2) * TILE
         big[oy : oy + TILE, ox : ox + TILE] = arr
-    return {k: v.reshape(TILE, 2, TILE, 2).max(axis=(1, 3)) for k, v in parents.items()}
+    return {k: _majority(v.reshape(TILE, 2, TILE, 2)) for k, v in parents.items()}
+
+
+def _majority(blocks: np.ndarray) -> np.ndarray:
+    """(TILE, 2, TILE, 2) blocks → (TILE, TILE): the most frequent non-zero group per block, ties to the higher, else 0."""
+    groups = (OTHER, NATIONAL_PARK, STRICT)
+    score = np.stack([(blocks == g).sum(axis=(1, 3)) * 4 + g for g in groups])  # count first, group breaks a tie
+    best = np.array(groups, np.uint8)[score.argmax(axis=0)]
+    return np.where(blocks.max(axis=(1, 3)) > 0, best, 0).astype(np.uint8)
 
 
 def pyramid(finest: dict, max_level: int = MAX_LEVEL):
