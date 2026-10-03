@@ -162,13 +162,23 @@ try {
 
   // A fixed snapshot: moving the time bar neither reloads the image nor changes what it reads.
   const seen = image.ok + image.bad.length;
-  await page.evaluate(() => window.__godsEyeView.observedTime.set('2010-06-01T00:00:00Z'));
+  // With no time-aware layer on, the bar has no domain and set() is a no-op: a probe extent gives it one, and the
+  // check requires the instant to have moved, so a bar that never moved cannot pass it.
+  const moved = await page.evaluate(() => {
+    const t = window.__godsEyeView.observedTime;
+    t.setLayerExtent('qa-probe', { startMs: Date.parse('2000-01-01T00:00:00Z'), endMs: Date.parse('2026-01-01T00:00:00Z') });
+    t.set('2010-06-01T00:00:00Z');
+    return t.get();
+  });
   await sleep(3000);
   const s2 = await stats();
   const past = await readAll({ lone: mid(lone) });
-  report('ignores-the-time-bar', s2?.time === served.asOf && !s2?.error && image.ok + image.bad.length === seen && past.lone?.text === cellText(lone),
-    { stats: s2, newImages: image.ok + image.bad.length - seen, lone: row(past.lone) });
-  await page.evaluate(() => window.__godsEyeView.observedTime.set(null));
+  report('ignores-the-time-bar', moved?.startsWith('2010-06-01') && s2?.time === served.asOf && !s2?.error && image.ok + image.bad.length === seen && past.lone?.text === cellText(lone),
+    { moved, stats: s2, newImages: image.ok + image.bad.length - seen, lone: row(past.lone) });
+  await page.evaluate(() => {
+    window.__godsEyeView.observedTime.set(null);
+    window.__godsEyeView.observedTime.setLayerExtent('qa-probe', null);
+  });
 
   const legend = await page.evaluate(() => document.body.textContent.includes('records track survey effort, not richness'));
   report('legend-names-the-share', legend);
