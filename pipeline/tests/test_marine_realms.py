@@ -232,13 +232,12 @@ LAND = {
 }
 
 
-@pytest.mark.skipif(
-    not (REAL_ZIP.exists() and LAND_ZIP.exists()),
-    reason="real zips absent from the cache",
-)
+# Not skipped when the cache is empty: main downloads both inputs through the pinned fetchers (figshare md5, Natural
+# Earth sha256), so a fresh CI runner checks the published shapes against the real source too (review of PR #45).
 def test_real_release_points_read_the_papers_realm_and_land_reads_none(tmp_path):
     out = tmp_path / "marine_realms.geojson"
-    assert mr.main(["--out", str(out)]) == 0
+    assert mr.main(["--cache", str(CACHE), "--out", str(out)]) == 0
+    assert REAL_ZIP.exists() and LAND_ZIP.exists()
     d = json.loads(out.read_text())
     assert out.stat().st_size <= mr.BUDGET_BYTES
     geoms = {f["properties"]["realm"]: shape(f["geometry"]) for f in d["features"]}
