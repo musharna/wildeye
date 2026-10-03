@@ -116,6 +116,10 @@ export const DATA_CREDITS = [
     html: 'Protected areas: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, available under the <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">Open Database License</a>, read from <a href="https://docs.overturemaps.org/guides/base/" target="_blank" rel="noopener">Overture Maps</a> (base theme, land_use, protected). The lookup files (<a href="data/protected_areas.json" target="_blank" rel="noopener">protected_areas.json</a> and its shards) are a derivative database, published under the ODbL. OpenStreetMap\'s coverage is uneven and it is not an official registry.',
   },
   {
+    key: 'camera-traps-edna',
+    html: 'Camera traps and eDNA: <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF.org</a> occurrence download (SQL), CC0 1.0 and CC BY 4.0 animal records whose sampling protocol names a camera trap or environmental DNA, counted per 1° cell; the download\'s DOI is in each layer\'s legend and in <a href="data/camera_traps.json" target="_blank" rel="noopener">camera_traps.json</a>, the datasets in <a href="data/camera_traps_datasets.json" target="_blank" rel="noopener">camera_traps_datasets.json</a>. Where the method was used and published, not where animals are.',
+  },
+  {
     key: 'cmems',
     html: 'Ocean oxygen and pH: Generated using E.U. Copernicus Marine Service Information; <a href="https://doi.org/10.48670/moi-00015" target="_blank" rel="noopener">Global Ocean Biogeochemistry Analysis and Forecast</a> (daily 0.25° surface analysis)',
   },
