@@ -176,18 +176,20 @@ def record_bin(records: int) -> int:
     return min(len(str(int(records))) - 1, len(RAMP) - 1)
 
 
-def render(cells: list[list]) -> bytes:
-    """A 360 × 180 palette PNG, one pixel per 1° cell, north up: row 0 is 89–90°N, column 0 is 180–179°W."""
+def render(cells: list[list], ramp: list[tuple] = RAMP) -> bytes:
+    """A 360 × 180 palette PNG, one pixel per 1° cell, north up: row 0 is 89–90°N, column 0 is 180–179°W (`ramp`: 7 colours)."""
     import io
 
     import numpy as np
     from PIL import Image
 
+    if len(ramp) != len(RAMP):
+        raise ValueError(f"a ramp has {len(RAMP)} colours, one per decade, not {len(ramp)}")
     px = np.full((180, 360), NODATA, dtype=np.uint8)
     for lat, lon, records, *_ in cells:
         px[89 - lat, lon + 180] = record_bin(records)
     im = Image.fromarray(px, "P")
-    im.putpalette(bytes(c for rgb in RAMP for c in rgb) + bytes(3))
+    im.putpalette(bytes(c for rgb in ramp for c in rgb) + bytes(3))
     buf = io.BytesIO()
     im.save(buf, "PNG", optimize=True, transparency=bytes([255] * len(RAMP) + [0]))
     return buf.getvalue()
