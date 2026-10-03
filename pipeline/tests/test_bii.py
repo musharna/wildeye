@@ -16,6 +16,10 @@ from rasterio.transform import Affine, from_origin, rowcol
 from pipeline import bii
 
 GLOBAL_5MIN = from_origin(-180, 90, 1 / 12, 1 / 12)
+# the release's own transform, float noise included (read from bii-2000_v2-1-1.tif)
+RELEASE_TRANSFORM = Affine(
+    0.08333333333333869, 0.0, -180.0, 0.0, -0.08333333333333869, 90.00000000001157
+)
 REAL_ZIP = (
     Path(os.environ.get("WILDEYE_CACHE", Path.home() / ".cache" / "wildeye"))
     / "bii"
@@ -82,10 +86,7 @@ def test_palette_is_100_distinct_colours_pale_to_dark_and_bins_are_floor_with_99
 
 
 def test_the_grid_check_takes_the_release_transform_and_refuses_any_other():
-    # the release's own transform, float noise included (read from bii-2000_v2-1-1.tif)
-    real = Affine(
-        0.08333333333333869, 0.0, -180.0, 0.0, -0.08333333333333869, 90.00000000001157
-    )
+    real = RELEASE_TRANSFORM
     bii.check_grid(real, 4320, 2160)
     for t, w, h in [
         (real, 4319, 2160),
@@ -111,6 +112,32 @@ def test_nearest_puts_each_source_cell_where_its_lon_lat_is_and_a_pixel_takes_on
     # a 1/12° cell is 1.9 pixels wide at 8192: 1 or 2 pixels a side, so each cell paints 1-4 pixels
     assert 2 <= int((~np.isnan(fine)).sum()) <= 8
     assert np.isnan(fine[2048, 0]), "the open Pacific has no data"
+
+
+def test_every_level_4_pixel_takes_the_cell_rasterio_puts_under_its_centre_on_the_release_grid(
+    tmp_path,
+):
+    """The real-release check's index claim, runnable without the release (CI never has the browser-only zip): a
+    raster on the release's own float-noise transform with a distinct id in every cell, read back the way the
+    pipeline reads it, and every level-4 pixel compared with the cell rasterio's transform puts under its centre."""
+    ids = np.arange(4320 * 2160, dtype=np.float64).reshape(2160, 4320)
+    tif = write_tif(tmp_path / "ids.tif", ids, transform=RELEASE_TRANSFORM)
+    z = tmp_path / bii.ZIP_NAME
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.write(tif, bii.TIF.format(year=2000))
+    src = bii.read_year(z, 2000)
+    assert src.shape == (2160, 4320) and src[1200, 1403] == 1200 * 4320 + 1403
+    w = 8192
+    lons = -180 + (np.arange(w) + 0.5) * 360 / w
+    lats = 90 - (np.arange(w // 2) + 0.5) * 180 / (w // 2)
+    rows = np.array(rowcol(RELEASE_TRANSFORM, np.zeros_like(lats), lats)[0])
+    cols = np.array(rowcol(RELEASE_TRANSFORM, lons, np.zeros_like(lons))[1])
+    got = bii.nearest(src, w)
+    expect = src[np.ix_(rows, cols)].astype(np.float32)  # ids < 2**24: exact in float32
+    assert (got == expect).all(), (
+        f"{int((got != expect).sum())} pixels take another cell"
+    )
+    assert len(np.unique(got)) == 4320 * 2160, "every source cell reaches the tiles"
 
 
 def test_each_coarser_level_is_the_average_of_the_finer_one_not_a_sample_of_it():
