@@ -49,8 +49,9 @@ protection.
   a fifth of the finest pixel.
 - **Tiles**: Cesium's geographic tiling scheme (as Human Footprint), finest level 7 (256 × 128 tiles of 256 px, 0.0055°,
   ~610 m). Each finest tile is rasterised from the areas whose bounds touch it, lower groups first so the most
-  protective wins a shared pixel; coarser levels take the 2 × 2 maximum, so any protection painted at a fine level shows
-  at every coarser one. Only tiles with a painted pixel are written; the manifest lists them and the layer serves a
+  protective wins a shared pixel; a coarser pixel takes the group covering most of its 2 × 2 block (ties to the more
+  protective), and is painted whenever any of the four is. (The 2 × 2 maximum first built let a strict reserve on one
+  child repaint a national park's whole coarse pixel: Sagarmatha read strict green at 300 km from Qomolangma.) Only tiles with a painted pixel are written; the manifest lists them and the layer serves a
   blank tile for the rest (no 404s). Palette PNG, transparent where unprotected.
 - **Lookup shards**: per 1° cell (south-west corner, 90°N and 180°E folded in, as the OBIS grid), every area clipped to
   the cell: name, class, designation, operator, OSM id, Wikidata id, approximate area, polygons as rings of integers in
@@ -76,12 +77,13 @@ area is protected; a monthly cron (after the first real build is measured).
 
 - `pytest pipeline/tests/test_protected_areas.py`: class table (unknown class and non-OSM source refused, nothing
   written), extract on a parquet shaped like Overture's, rasterising planted polygons to exact pixels with the
-  priority and the 2 × 2 maximum, empty tiles not written, shards clipped per cell with holes kept, manifest last.
+  priority and the 2 × 2 majority, empty tiles not written, shards clipped per cell with holes kept, manifest last.
 - `node --test src/data/protectedAreas.test.mjs`: manifest validation, shard key folding, point in polygon with a hole,
   readout order and texts, blank tile for an unlisted tile without a request.
 - Real execution: a bounding-box extract of Overture around Yellowstone through the pipeline; the full build on jobd.
 - `node scripts/qa-protected-areas.mjs` (the acceptance check, local build then live): eight parks on six continents
   (Yellowstone, Banff, Manú, Serengeti, Kruger, Białowieża, Sagarmatha, Kakadu) each painted national-park green at an
   interior point and read by name; a point 0.02° either side of Yellowstone's west boundary (read from the served
-  shard) painted inside and not outside; an unprotected point unpainted and read "no protected area mapped here"; one
+  shard) painted inside and not outside, sampled after the layer's tile requests settle; an unprotected point whose frame
+  matches the layer switched off, read "no protected area mapped here"; one
   drape at a time; ignores the time bar; legend; no 404 or console errors.
