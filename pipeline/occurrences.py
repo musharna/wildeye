@@ -34,7 +34,8 @@ OBIS = "https://api.obis.org/v3/occurrence"
 GBIF_LICENCES = ("CC0_1_0", "CC_BY_4_0")
 PAGE = 300
 BY_NC_4 = "http://creativecommons.org/licenses/by-nc/4.0/legalcode"
-# Datasets whose own licence is shown instead of the record's, by title prefix (GBIF and OBIS give the same titles).
+# Datasets whose own licence is shown instead of the record's, by the prefix of the dataset's title (GBIF and OBIS give
+# the same titles); applied after the dataset metadata is resolved (apply_dataset_licences).
 # Every Happywhale dataset on GBIF is CC BY-NC 4.0 while most of its records say CC0 (largest dataset, 2026-10-03:
 # 172,909 CC0 of 211,278). iNaturalist is not here: its observers choose a licence per record.
 DATASET_LICENCES = (("Happywhale - ", BY_NC_4),)
@@ -437,6 +438,21 @@ def normalise_nas(r: dict, since: dt.date, until: dt.date) -> dict | None:
     }
 
 
+def apply_dataset_licences(features: list[dict], datasets: dict) -> int:
+    """Relabel features under DATASET_LICENCES; returns how many changed. The title is the dataset's own, from its
+    metadata: a record's `dataset` falls back to the dataset key when the API omits datasetName (review of PR #46), and
+    is used only when the metadata has no title (its fetch failed)."""
+    n = 0
+    for f in features:
+        p = f["properties"]
+        title = (datasets.get(p.get("dataset_key")) or {}).get("title") or p.get("dataset")
+        lic = shown_licence(title, p["license"])
+        if lic != p["license"]:
+            p["license"], p["license_label"] = lic, licence_label(lic)
+            n += 1
+    return n
+
+
 def dedupe(records: list[dict]) -> list[dict]:
     """Same taxon, same day, same ~100 m cell → one record (GBIF and OBIS overlap heavily)."""
     seen, out = set(), []
@@ -463,8 +479,8 @@ def to_feature(r: dict, taxon: dict) -> dict:
             "source": r["source"],
             "dataset": r["dataset"],
             "dataset_key": r.get("dataset_key"),
-            "license": shown_licence(r["dataset"], r["license"]),
-            "license_label": licence_label(shown_licence(r["dataset"], r["license"])),
+            "license": r["license"],
+            "license_label": licence_label(r["license"]),
             "uncertainty_m": r.get("uncertainty_m"),
             "basis": r["basis"],
             "url": r["url"],
@@ -555,6 +571,7 @@ def main(argv=None):
         failures["usgs-nas"] = repr(e)
         log.error("usgs-nas FAILED: %r", e)
     datasets = resolve_datasets(all_recs)
+    log.info("dataset licence shown instead of the record's: %d features", apply_dataset_licences(features, datasets))
     write_atomic(
         a.out,
         {
