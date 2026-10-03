@@ -121,9 +121,10 @@ publish() { # commit what is staged, push it
 # deploy after the archive catches up on several nights cannot go as one push. New archive frame files
 # go up first in commits of at most $BATCH_MB, while the published manifest still lists only the old
 # frames: every tip the uplink leaves behind is a site whose manifest names only files it has. The
-# manifest and everything else go last.
+# manifest and everything else go last. The protected-areas tiles and shards (~90 MB on first deploy)
+# go up the same way; their manifest, data/protected_areas.json, is outside data/protected/ and goes last.
 BATCH_MB="${BATCH_MB:-40}"
-mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=A -- data/birds_archive ':(exclude)data/birds_archive/manifest.json')
+mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=A -- data/birds_archive data/protected ':(exclude)data/birds_archive/manifest.json')
 NEW_BYTES=0
 [ "${#NEW[@]}" -gt 0 ] && NEW_BYTES="$(cd "$WT" && printf '%s\0' "${NEW[@]}" | du -cb --files0-from=- | tail -1 | cut -f1)"
 if [ "$NEW_BYTES" -gt $((BATCH_MB * 1000000)) ]; then
@@ -132,8 +133,8 @@ if [ "$NEW_BYTES" -gt $((BATCH_MB * 1000000)) ]; then
 	flush() {
 		part=$((part + 1))
 		(cd "$WT" && printf '%s\n' "${batch[@]}" | git add --pathspec-from-file=-)
-		publish "deploy $STAMP from $SRC: archive frames, part $part"
-		echo "pushed archive part $part: ${#batch[@]} files, $((size / 1000000)) MB"
+		publish "deploy $STAMP from $SRC: new data files, part $part"
+		echo "pushed data part $part: ${#batch[@]} files, $((size / 1000000)) MB"
 		size=0 batch=()
 	}
 	while IFS=$'\t' read -r bytes f; do
