@@ -6,7 +6,7 @@ import { setStackedImagery } from "./rasterDrape.js";
  * (land_use, subtype protected) and built by pipeline/protected_areas.py (spec
  * docs/superpowers/specs/2026-10-03-protected-areas-design.md). The globe shows a geographic tile pyramid in three
  * greens (strict reserve or wilderness, national park, other protection); only painted tiles exist, and a tile the
- * manifest does not list is served blank without a request. A WHAT LIVES HERE click reads the point's 5° lookup shard and
+ * manifest does not list is served blank without a request. A WHAT LIVES HERE click reads the point's 1° lookup shard and
  * lists the areas whose polygons hold it, most protective and smallest first. A fixed snapshot, so not on the time bar.
  * OpenStreetMap's coverage is uneven and it is not an official registry: where nobody mapped an area, none is shown.
  */
@@ -40,24 +40,45 @@ export function validateProtectedManifest(m) {
     return "groups is not 3 indexed, labelled groups";
   if (!m.classes || typeof m.classes !== "object" || !Object.values(m.classes).every((c) => isGroup(c?.group) && typeof c.label === "string"))
     return "classes is not a table of group and label";
-  if (m.shard_degrees !== 5) return `shard_degrees ${JSON.stringify(m.shard_degrees)} is not 5`;
+  const deg = m.shard_degrees;
+  if (!Number.isInteger(deg) || deg < 1 || 180 % deg !== 0) return `shard_degrees ${JSON.stringify(deg)} does not divide 180`;
+  if (!Number.isInteger(m.coord_scale) || m.coord_scale < 1) return `coord_scale ${JSON.stringify(m.coord_scale)} is not a positive integer`;
   if (typeof m.shard !== "string" || !m.shard.includes("{lat}") || !m.shard.includes("{lon}")) return `shard ${JSON.stringify(m.shard)} lacks {lat} or {lon}`;
   if (!Array.isArray(m.shards)) return "shards is not a list";
   for (const s of m.shards) {
-    const ok = Array.isArray(s) && s.length === 2 && Number.isInteger(s[0]) && Number.isInteger(s[1]) && s[0] % 5 === 0 && s[1] % 5 === 0
-      && s[0] >= -90 && s[0] <= 85 && s[1] >= -180 && s[1] <= 175;
-    if (!ok) return `shard ${JSON.stringify(s)} is not a 5° cell's south-west corner`;
+    const ok = Array.isArray(s) && s.length === 2 && Number.isInteger(s[0]) && Number.isInteger(s[1]) && s[0] % deg === 0 && s[1] % deg === 0
+      && s[0] >= -90 && s[0] <= 90 - deg && s[1] >= -180 && s[1] <= 180 - deg;
+    if (!ok) return `shard ${JSON.stringify(s)} is not a ${deg}° cell's south-west corner`;
   }
   if (!m.counts || !Number.isInteger(m.counts.areas) || m.counts.areas < 0) return "counts lacks the number of areas";
   return null;
 }
 
-/** The 5° shard a point falls in, keyed as the pipeline writes it: south-west corner, 90°N and 180°E folded in. */
-export function shardKey(lat, lon) {
+/** The shard (deg° cell) a point falls in, keyed as the pipeline writes it: south-west corner, 90°N and 180°E folded in. */
+export function shardKey(lat, lon, deg) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90) return null;
-  // only a longitude past ±180 wraps: 180 itself folds into the last cell, as the pipeline's min(…, 175)
+  // only a longitude past ±180 wraps: 180 itself folds into the last cell, as the pipeline's min(…, 180 - deg)
   const wrapped = lon >= -180 && lon <= 180 ? lon : ((((lon + 180) % 360) + 360) % 360) - 180;
-  return `${Math.min(Math.floor(lat / 5) * 5, 85)}_${Math.min(Math.floor(wrapped / 5) * 5, 175)}`;
+  return `${Math.min(Math.floor(lat / deg) * deg, 90 - deg)}_${Math.min(Math.floor(wrapped / deg) * deg, 180 - deg)}`;
+}
+
+/** A ring as the pipeline writes it (integers of 1/scale degree, the first pair absolute, each later one the difference
+ * from the one before) → flat [lon, lat, …] degrees. */
+export function decodeRing(ring, scale) {
+  const out = new Array(ring.length);
+  let x = 0, y = 0;
+  for (let i = 0; i < ring.length; i += 2) {
+    x = i ? x + ring[i] : ring[i];
+    y = i ? y + ring[i + 1] : ring[i + 1];
+    out[i] = x / scale;
+    out[i + 1] = y / scale;
+  }
+  return out;
+}
+
+/** A shard with every ring decoded to degrees. */
+export function decodeShard(shard, scale) {
+  return { ...shard, areas: shard.areas.map((a) => ({ ...a, polygons: a.polygons.map((rings) => rings.map((r) => decodeRing(r, scale))) })) };
 }
 
 /** Whether (lon, lat) is inside a polygon given as flat rings [lon, lat, …] (exterior first): even–odd, so holes are out. */
@@ -209,7 +230,7 @@ export function createProtectedAreasLayer({
       const url = `${_manifest.shard.replace("{lat}", lat).replace("{lon}", lon)}?v=${_manifest.release}`;
       p = Promise.resolve(fetchImpl(url)).then(async (res) => {
         if (!res.ok) throw new Error(`shard ${key} HTTP ${res.status}`);
-        return res.json();
+        return decodeShard(await res.json(), _manifest.coord_scale);
       });
       p.catch(() => {
         if (_shards.get(key) === p) _shards.delete(key);
@@ -252,8 +273,9 @@ export function createProtectedAreasLayer({
     getRowControls() {
       if (!_manifest) return { chips: [], legend: [] };
       const legend = _manifest.groups.map((g) => ({ label: g.label, color: `rgb(${_manifest.palette[g.index].join(",")})`, count: _manifest.counts.by_group?.[g.key] ?? null }));
+      const small = _manifest.counts.unpainted_at_max_level ?? 0;
       legend.push({
-        label: `${n(_manifest.counts.areas)} protected areas mapped in OpenStreetMap (Overture ${_manifest.release}); OpenStreetMap's coverage is uneven and it is not an official registry · © OpenStreetMap contributors, ODbL`,
+        label: `${n(_manifest.counts.areas)} protected areas mapped in OpenStreetMap (Overture ${_manifest.release})${small ? `, ${n(small)} of them too small to show at about 600 m (a WHAT LIVES HERE click still finds them)` : ""}; OpenStreetMap's coverage is uneven and it is not an official registry · © OpenStreetMap contributors, ODbL`,
         color: "transparent",
         count: null,
       });
@@ -264,7 +286,7 @@ export function createProtectedAreasLayer({
       if (!_enabled) return null;
       const row = (status, extra = {}) => ({ id, name, icon, status, text: null, date: null, ...extra });
       if (!_manifest) return row("error", { error: _lastError || "protected_areas.json not loaded yet" });
-      const key = shardKey(lat, lon);
+      const key = shardKey(lat, lon, _manifest.shard_degrees);
       if (!key) return row("outside");
       const date = `OpenStreetMap via Overture ${_manifest.release}`;
       if (!_shardSet.has(key)) return row("value", { text: NONE_TEXT, date });
