@@ -42,7 +42,9 @@ function pickCells(m) {
     .filter(([lat, lon, n]) => lat > -60 && lat < 60 && lon > -179 && lon < 178 && unlike(lat, lon, n))
     .sort((a, b) => b[2] - a[2])[0] ?? null;
   const emptyNear = ([lat, lon]) => [-2, -1, 0, 1, 2].every((dy) => [-2, -1, 0, 1, 2].every((dx) => !at.has(`${lat + dy},${lon + dx}`)));
-  const empty = [[0, -150], [-40, -120], [30, -40], [-60, 80], [20, 160]].find(emptyNear) ?? null;
+  // open ocean first; the full build reaches every one of those, so then continental interiors (OBIS has records even in
+  // the Sahara and the outback; Mongolia and central Siberia had none within two cells in the 2026-10-02 build)
+  const empty = [[0, -150], [-40, -120], [30, -40], [-60, 80], [20, 160], [45, 100], [65, 100]].find(emptyNear) ?? null;
   return { lone, empty };
 }
 
