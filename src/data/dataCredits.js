@@ -112,6 +112,10 @@ export const DATA_CREDITS = [
     html: 'Marine records: OBIS (2026) <a href="https://obis.org" target="_blank" rel="noopener">Ocean Biodiversity Information System</a>, Intergovernmental Oceanographic Commission of UNESCO, from the <a href="https://obis.org/data/access/" target="_blank" rel="noopener">OBIS open-data export</a>; records, species and datasets per 1° cell from CC0 1.0 and CC BY 4.0 datasets only, each named with its licence in <a href="data/obis_grid_datasets.json" target="_blank" rel="noopener">obis_grid_datasets.json</a>.',
   },
   {
+    key: 'protected-areas',
+    html: 'Protected areas: © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>, available under the <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener">Open Database License</a>, read from <a href="https://docs.overturemaps.org/guides/base/" target="_blank" rel="noopener">Overture Maps</a> (base theme, land_use, protected). The lookup files (<a href="data/protected_areas.json" target="_blank" rel="noopener">protected_areas.json</a> and its shards) are a derivative database, published under the ODbL. OpenStreetMap\'s coverage is uneven and it is not an official registry.',
+  },
+  {
     key: 'cmems',
     html: 'Ocean oxygen and pH: Generated using E.U. Copernicus Marine Service Information; <a href="https://doi.org/10.48670/moi-00015" target="_blank" rel="noopener">Global Ocean Biogeochemistry Analysis and Forecast</a> (daily 0.25° surface analysis)',
   },
