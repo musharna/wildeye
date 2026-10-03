@@ -30,16 +30,36 @@ test('the card body fades at the bottom while more of the list is below', () => 
   assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-body \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-body-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);/);
 });
 
-test('every card layer id is the name of a real data source', () => {
+/** Every CustomDataSource in src/data by name (a literal, or a `const id = "…"` it is built from), with its file's text. */
+function dataSources() {
   const dir = new URL('../data/', import.meta.url);
-  const names = new Set();
+  const out = new Map();
   for (const file of readdirSync(dir)) {
-    if (!file.endsWith('.js')) continue;
-    for (const match of readFileSync(new URL(file, dir), 'utf8').matchAll(/new Cesium\.CustomDataSource\(["']([a-z0-9-]+)["']\)/g)) names.add(match[1]);
+    if (!file.endsWith('.js') || file.includes('.test.')) continue;
+    const src = readFileSync(new URL(file, dir), 'utf8');
+    for (const [, literal, variable] of src.matchAll(/new Cesium\.CustomDataSource\((?:["']([a-z0-9-]+)["']|([A-Za-z_]\w*))\)/g)) {
+      const name = literal ?? src.match(new RegExp(`const ${variable} = ["']([a-z0-9-]+)["']`))?.[1];
+      assert.ok(name, `${file}: CustomDataSource(${variable}) names no literal id`);
+      out.set(name, { file, src });
+    }
   }
+  return out;
+}
+
+test('every card layer id is the name of a real data source', () => {
+  const names = dataSources();
   for (const id of BIO_CARD_LAYER_IDS) assert.ok(names.has(id), `${id} has no CustomDataSource("${id}") in src/data`);
   assert.equal(BIO_CARD_LAYER_IDS.has('flights'), false);
-  assert.equal(BIO_CARD_LAYER_IDS.size, 19);
+  assert.equal(BIO_CARD_LAYER_IDS.size, 22);
+});
+
+// Cesium's info box is off, so an entity description reaches the screen only through this card. BioTIME, GMW and GRIIS
+// put each study's or list's citation and licence there, and were left off the hand-kept list: a click showed nothing.
+test('every data source whose entities carry a description opens the card', () => {
+  const described = new Map([...dataSources()].filter(([, { src }]) => /\bdescription\s*[:,]/.test(src)).map(([name, { file }]) => [name, file]));
+  assert.ok(described.size >= 20 && described.has('occurrences'), `found ${[...described.keys()]}`); // positive control: the scan sees the layers
+  const missing = [...described].filter(([name]) => !BIO_CARD_LAYER_IDS.has(name)).map(([name, file]) => `${name} (${file})`);
+  assert.deepEqual(missing, [], 'a layer whose descriptions no click can open');
 });
 
 test('list rows put the common name first and format counts', () => {
