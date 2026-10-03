@@ -7,15 +7,15 @@ worked out by hand: at max level 2 a tile is 180 / 2² = 45° and a pixel 45 / 2
 
 import json
 
+# a hard import: CI without duckdb must fail, not skip
+import duckdb
 import numpy as np
 import pytest
-
-import duckdb  # noqa: E402  (a hard import: CI without duckdb must fail, not skip)
-import shapely  # noqa: E402
+import shapely
 from PIL import Image
 from shapely.geometry import LineString, Polygon, box
 
-from pipeline import protected_areas as pa  # noqa: E402
+from pipeline import protected_areas as pa
 
 P2 = 45 / 256  # pixel size at level 2 (geographic scheme: a level-z tile is 180 / 2^z degrees)
 
