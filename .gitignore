@@ -95,3 +95,7 @@ public/data/biotime_locations.json
 public/data/obis_grid.json
 public/data/obis_grid.png
 public/data/obis_grid_datasets.json
+public/data/camera_traps.json
+public/data/camera_traps.png
+public/data/edna.png
+public/data/camera_traps_datasets.json
