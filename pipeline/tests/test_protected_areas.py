@@ -259,7 +259,7 @@ def test_finest_tiles_paint_exact_pixels_and_the_most_protective_group_wins():
     assert list(pa.finest_tiles([_area(sliver, pa.OTHER)], 2)) == [(1, 0)]
 
 
-def test_coarser_levels_take_the_2x2_maximum_so_one_pixel_shows_at_every_level():
+def test_coarser_levels_keep_any_protection_and_colour_each_block_by_its_majority():
     one = box(
         -180 + 3 * P2, 90 - 4 * P2, -180 + 4 * P2, 90 - 3 * P2
     )  # pixel (row 3, col 3) of level-2 tile (0, 0)
@@ -269,7 +269,7 @@ def test_coarser_levels_take_the_2x2_maximum_so_one_pixel_shows_at_every_level()
         list(levels[1]) == [(0, 0)]
         and levels[1][(0, 0)][1, 1] == pa.NATIONAL_PARK
         and levels[1][(0, 0)].sum() == pa.NATIONAL_PARK
-    )
+    )  # a lone pixel still shows: one protected pixel of four is a majority of the protected ones
     assert list(levels[0]) == [(0, 0)] and levels[0][(0, 0)][0, 0] == pa.NATIONAL_PARK
     # a child in the other half of the parent lands in that half: level-2 tile (1, 1) → level-1 tile (0, 0), pixels offset 128
     t = pa.coarser({(1, 1): np.full((256, 256), pa.OTHER, np.uint8)})
@@ -278,6 +278,20 @@ def test_coarser_levels_take_the_2x2_maximum_so_one_pixel_shows_at_every_level()
         and t[(0, 0)][128:, 128:].min() == pa.OTHER
         and t[(0, 0)][:128, :].max() == 0
     )
+    # one 2 × 2 block each: 3 other + 1 strict → other; 2 park + 2 strict → strict (tie to the more protective);
+    # 1 park + 3 empty → park; 2 other + 1 park + 1 strict → other
+    child = np.zeros((256, 256), np.uint8)
+    for col, block in enumerate(
+        [
+            [pa.OTHER, pa.OTHER, pa.OTHER, pa.STRICT],
+            [pa.NATIONAL_PARK, pa.STRICT, pa.NATIONAL_PARK, pa.STRICT],
+            [pa.NATIONAL_PARK, 0, 0, 0],
+            [pa.OTHER, pa.NATIONAL_PARK, pa.OTHER, pa.STRICT],
+        ]
+    ):
+        child[0:2, 2 * col : 2 * col + 2] = np.array(block, np.uint8).reshape(2, 2)
+    got = pa.coarser({(0, 0): child})[(0, 0)][0, :5]
+    assert got.tolist() == [pa.OTHER, pa.STRICT, pa.NATIONAL_PARK, pa.OTHER, 0]
 
 
 def test_shard_key_folds_the_north_and_east_edges():
