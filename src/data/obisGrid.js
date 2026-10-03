@@ -85,7 +85,8 @@ export function createObisGridLayer({
     _manifest = null,
     _lastUpdate = null,
     _lastError = null,
-    _generation = 0;
+    _generation = 0,
+    _drawing = null; // the draw in flight: _imagery stays null across its await, so a second update joins it
 
   const drop = () => {
     _generation += 1; // a drape still loading is now stale
@@ -163,12 +164,19 @@ export function createObisGridLayer({
       if (!_viewer) return false;
       if (!_manifest && !(await load())) return false;
       // a failed image is retried by the next update
-      if (!_imagery && !(await draw())) return false;
+      if (!_imagery) {
+        if (!_drawing) {
+          const p = draw().finally(() => { if (_drawing === p) _drawing = null; });
+          _drawing = p;
+        }
+        if (!(await _drawing)) return false;
+      }
       _lastUpdate = Date.now();
       return true;
     },
     destroy() {
       drop();
+      _drawing = null; // a load still in flight is stale (drop moved the generation on); a later update starts afresh
       _viewer = null;
       _enabled = false;
     },
