@@ -281,30 +281,47 @@ def test_coarser_levels_take_the_2x2_maximum_so_one_pixel_shows_at_every_level()
 
 
 def test_shard_key_folds_the_north_and_east_edges():
-    assert pa.shard_key(44.6, -110.5) == (40, -115)
-    assert pa.shard_key(90, 180) == (85, 175) and pa.shard_key(-90, -180) == (-90, -180)
-    assert pa.shard_key(-0.1, -0.1) == (-5, -5)
+    assert pa.shard_key(44.6, -110.5) == (44, -111)
+    assert pa.shard_key(90, 180) == (89, 179) and pa.shard_key(-90, -180) == (-90, -180)
+    assert pa.shard_key(-0.1, -0.1) == (-1, -1)
+
+
+def _decode(ring):
+    """A shard ring back to (lon, lat) pairs: the first pair absolute, each later one a difference, in 1e-4 degrees."""
+    xs, ys, x, y = [], [], 0, 0
+    for i in range(0, len(ring), 2):
+        x, y = (ring[i], ring[i + 1]) if i == 0 else (x + ring[i], y + ring[i + 1])
+        xs.append(x / pa.COORD_SCALE)
+        ys.append(y / pa.COORD_SCALE)
+    return list(zip(xs, ys))
+
+
+def test_rings_are_delta_integers_the_layer_decodes():
+    # the literal src/data/protectedAreas.test.mjs decodes: shapely's box(1, 2, 3, 4) runs (3, 2), (3, 4), (1, 4), (1, 2)
+    assert pa._rings(box(1, 2, 3, 4)) == [[30000, 20000, 0, 20000, -20000, 0, 0, -20000]]
+    assert Polygon(_decode(pa._rings(box(1, 2, 3, 4))[0])).equals(box(1, 2, 3, 4))
+    # rounded to 1e-4 degrees, the error never accumulating along the ring
+    wobbly = Polygon([(10.00004, 0.00006), (10.99996, 0.0), (10.5, 0.99994)])
+    got = _decode(pa._rings(wobbly)[0])
+    assert got == [(10.0, 0.0001), (11.0, 0.0), (10.5, 0.9999)]
 
 
 def test_shards_clip_each_area_to_its_cells_and_keep_holes():
-    ring = box(3, 1, 9, 4).difference(
-        box(6, 2, 7, 3)
-    )  # spans cells (0, 0) and (0, 5); the hole lies in (0, 5)
+    ring = box(0.3, 0.2, 1.8, 0.8).difference(
+        box(1.2, 0.4, 1.4, 0.6)
+    )  # spans cells (0, 0) and (0, 1); the hole lies in (0, 1)
     cells = pa.shards([_area(ring, pa.OTHER, name="Holey")])
-    assert sorted(cells) == [(0, 0), (0, 5)]
-    west, east = cells[(0, 0)][0], cells[(0, 5)][0]
+    assert sorted(cells) == [(0, 0), (0, 1)]
+    west, east = cells[(0, 0)][0], cells[(0, 1)][0]
     assert (
         west["name"] == "Holey"
         and len(west["polygons"]) == 1
         and len(west["polygons"][0]) == 1
     )  # no hole in the west part
+    assert Polygon(_decode(west["polygons"][0][0])).equals(box(0.3, 0.2, 1, 0.8))
     assert len(east["polygons"][0]) == 2  # exterior + the hole
-    xs = east["polygons"][0][0][0::2]
-    assert min(xs) == 5 and max(xs) == 9
-    hole = Polygon(
-        list(zip(east["polygons"][0][1][0::2], east["polygons"][0][1][1::2]))
-    )
-    assert hole.equals(box(6, 2, 7, 3))
+    assert Polygon(_decode(east["polygons"][0][0])).equals(box(1, 0.2, 1.8, 0.8))
+    assert Polygon(_decode(east["polygons"][0][1])).equals(box(1.2, 0.4, 1.4, 0.6))
 
 
 def test_main_writes_listed_tiles_and_shards_then_the_manifest_and_nothing_on_an_unread_class(
@@ -384,12 +401,14 @@ def test_main_writes_listed_tiles_and_shards_then_the_manifest_and_nothing_on_an
     assert (
         on_disk == listed and len(listed) == 3 + 3 + 3 + 2
     )  # one tile per painting area at levels 3, 2 and 1; at level 0 Wild and Dot share the eastern tile
-    assert sorted(m["shards"]) == [[-45, 100], [-30, 20], [0, 0], [40, -115]]
+    # 1° cells; Wild's box ends on the 21°E and 29°S lines, so the cells past them get nothing
+    assert sorted(m["shards"]) == [[-42, 101], [-30, 20], [0, 0], [44, -111]]
+    assert m["shard_degrees"] == 1 and m["coord_scale"] == 10_000
     assert sorted(p.name for p in (out / "protected" / "shards").iterdir()) == [
         "-30_20.json",
-        "-45_100.json",
+        "-42_101.json",
         "0_0.json",
-        "40_-115.json",
+        "44_-111.json",
     ]
     z3 = m["tiles"]["3"]
     x, y = next(t for t in z3 if t[0] < 8)

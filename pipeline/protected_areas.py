@@ -41,8 +41,8 @@ MAX_LEVEL = (
     7  # 256 × 128 tiles at the finest level: 0.0055°, about 610 m at the equator
 )
 SIMPLIFY_DEG = 0.001  # a fifth of a level-7 pixel
-SHARD_DEG = 5
-COORD_DP = 4  # about 11 m
+SHARD_DEG = 1  # a click downloads one 1° cell (5° cells reached 7.8 MB in the north-eastern US)
+COORD_SCALE = 10_000  # coordinates as integers of 1e-4 degrees, about 11 m
 
 STRICT, NATIONAL_PARK, OTHER = (
     3,
@@ -364,12 +364,13 @@ def shard_key(lat: float, lon: float) -> tuple[int, int]:
     )
 
 
-def _rings(poly) -> list[list[float]]:
-    """A polygon's rings (exterior first) as flat [lon, lat, lon, lat, …] lists, rounded, closing point dropped."""
+def _rings(poly) -> list[list[int]]:
+    """A polygon's rings (exterior first), closing point dropped, as flat integer lists in 1/COORD_SCALE degrees: the
+    first lon, lat absolute, every later pair the difference from the one before (a third of the bytes of decimals)."""
     out = []
     for ring in [poly.exterior, *poly.interiors]:
-        coords = list(ring.coords)[:-1]
-        out.append([round(v, COORD_DP) for xy in coords for v in xy])
+        ints = [round(v * COORD_SCALE) for xy in list(ring.coords)[:-1] for v in xy]
+        out.append(ints[:2] + [ints[i] - ints[i - 2] for i in range(2, len(ints))])
     return out
 
 
@@ -475,6 +476,7 @@ def write(
             k: {"group": g, "label": label} for k, (g, label) in CLASSES.items()
         },
         "shard_degrees": SHARD_DEG,
+        "coord_scale": COORD_SCALE,
         "shard": "data/protected/shards/{lat}_{lon}.json",
         "shards": sorted([lat, lon] for lat, lon in cells),
         "counts": {
