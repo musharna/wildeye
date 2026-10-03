@@ -53,7 +53,7 @@ const browser = await puppeteer.launch({
 });
 const pageErrors = [];
 const consoleErrors = [];
-const tiles = { ok: 0, bad: [], unlisted: [] };
+const tiles = { ok: 0, bad: [], unlisted: [], pending: 0, lastAt: 0 };
 let listed = null;
 try {
   const page = await browser.newPage();
@@ -61,9 +61,14 @@ try {
   page.on('console', (m) => {
     if (m.type() === 'error' && /protected|Data|what-lives-here/.test(m.text())) consoleErrors.push(m.text().slice(0, 200));
   });
+  const isTile = (url) => /\/data\/protected\/tiles\//.test(url);
+  page.on('request', (r) => { if (isTile(r.url())) { tiles.pending += 1; tiles.lastAt = Date.now(); } });
+  page.on('requestfailed', (r) => { if (isTile(r.url())) { tiles.pending -= 1; tiles.lastAt = Date.now(); tiles.bad.push(`failed ${r.url()}`); } });
   page.on('response', (r) => {
     const m = r.url().match(/\/data\/protected\/tiles\/(\d+)\/(\d+)\/(\d+)\.png/);
     if (!m) return;
+    tiles.pending -= 1;
+    tiles.lastAt = Date.now();
     if (r.status() === 200 || r.status() === 304) tiles.ok += 1;
     else tiles.bad.push(`${r.status()} ${r.url()}`);
     if (listed && !listed.has(`${m[1]}/${m[2]}/${m[3]}`)) tiles.unlisted.push(`${m[1]}/${m[2]}/${m[3]}`);
@@ -73,12 +78,33 @@ try {
   await page.evaluate(() => window.__godsEyeView.styleManager.initialRestorePromise.then(() => true, () => false));
   await bootSettled(page);
 
-  const look = ([lat, lon], height) => page.evaluate(([la, lo, h]) => {
-    const v = window.__godsEyeView.viewer;
-    v.camera.setView({ destination: v.camera.position.constructor.fromDegrees(lo, la, h), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
-  }, [lat, lon, height]);
+  // Moved, and two frames rendered there: until a frame is drawn at the new view no tile is requested and
+  // globe.tilesLoaded still describes the last view, so a settle right after setView would read the old state.
+  let movedAt = 0;
+  const look = async ([lat, lon], height) => {
+    await page.evaluate(async ([la, lo, h]) => {
+      const v = window.__godsEyeView.viewer;
+      v.camera.setView({ destination: v.camera.position.constructor.fromDegrees(lo, la, h), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
+      for (let i = 0; i < 2; i += 1) {
+        v.scene.requestRender();
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+    }, [lat, lon, height]);
+    movedAt = Date.now();
+  };
+  // The view's tiles in: globe tiles loaded and none of this layer's tile requests open for 1.5 s since the later of the
+  // last tile and the last move (a layer switched on or off is a move too). Until the finer tiles
+  // arrive Cesium stretches a coarse parent over the view, and a sample then reads the coarse level, not the place.
+  const settle = async () => {
+    for (let i = 0; i < 120; i += 1) {
+      const globe = await page.evaluate(() => window.__godsEyeView.viewer.scene.globe.tilesLoaded);
+      if (globe && tiles.pending <= 0 && Date.now() - Math.max(tiles.lastAt, movedAt) > 1500) return true;
+      await sleep(500);
+    }
+    throw new Error(`tiles did not settle: ${tiles.pending} protected tile requests open`);
+  };
   // Share of the globe's centre within 40 of each palette colour, and the centre's mean colour, rendered and read in one task.
-  const centre = (palette) => page.evaluate(async (pal) => {
+  const centre = async (palette) => (await settle()) && page.evaluate(async (pal) => {
     const v = window.__godsEyeView.viewer;
     for (let i = 0; i < 90 && !v.scene.globe.tilesLoaded; i += 1) await new Promise((r) => setTimeout(r, 500));
     v.scene.render();
@@ -127,12 +153,20 @@ try {
   const palette = served.palette.slice(1); // groups 1–3
   const share = (c, group) => (group ? c.near[group - 1] : Math.max(...c.near));
 
+  // a candidate with no area's bounds within 0.1° (the 40 km view's sample is about 0.02° across)
+  const clearAround = async (lat, lon, r) => {
+    for (const la of [lat - r, lat + r]) for (const lo of [lon - r, lon + r]) {
+      for (const a of (await shardAt(la, lo))?.areas ?? []) {
+        for (const rings of a.polygons) for (let i = 0; i < rings[0].length; i += 2) {
+          if (Math.abs(rings[0][i] - lon) <= r && Math.abs(rings[0][i + 1] - lat) <= r) return false;
+        }
+        if (a.polygons.some((rings) => inPolygon(rings, lon, lat))) return false;
+      }
+    }
+    return true;
+  };
   let empty = null;
-  for (const [lat, lon] of UNPROTECTED) {
-    const around = [];
-    for (const dy of [-0.05, 0, 0.05]) for (const dx of [-0.05, 0, 0.05]) around.push(await found(lat + dy, lon + dx));
-    if (around.every((f) => f.length === 0)) { empty = [lat, lon]; break; }
-  }
+  for (const [lat, lon] of UNPROTECTED) if (await clearAround(lat, lon, 0.1)) { empty = [lat, lon]; break; }
   // Yellowstone's west boundary on EDGE_LAT, from its pieces in the shards either side of 111°W (each piece is clipped to
   // its cell, so a crossing on a cell line is the clip, not the boundary): the westmost real crossing of that latitude
   const ysParts = [];
@@ -160,8 +194,6 @@ try {
   for (const p of PARKS) parkGroups.push(await topGroup(p[2], p[3]));
   const edgeGroups = { inside: await topGroup(...inside), outside: await topGroup(...outside) };
 
-  await look(empty, 40000);
-  const emptyBefore = await centre(palette);
   await look(inside, 15000);
   const insideBefore = await centre(palette);
 
@@ -176,6 +208,7 @@ try {
     return { on: dataManager.isEnabled(id), otherOn, otherAfter: dataManager.isEnabled('surface-water') };
   }, ID);
 
+  await look(inside, 15000);
   const insideAfter = await centre(palette);
   await look(outside, 15000);
   const outsideAfter = await centre(palette);
@@ -199,12 +232,18 @@ try {
       { osm, at: [lat, lon], group: g, near: c.near, mean: c.mean, got: row(r) });
   }
 
+  // The same view with the layer on and then off: nothing of it may show, so the two frames match.
   await look(empty, 40000);
-  const emptyAfter = await centre(palette);
-  const shift = Math.hypot(...emptyAfter.mean.map((v, k) => v - emptyBefore.mean[k]));
+  const emptyOn = await centre(palette);
   const none = (await readAll({ empty }))?.empty;
-  report('negative-unprotected-point', share(emptyAfter) <= 0.05 && shift < 12 && none?.status === 'value' && none.text === NONE_TEXT && none.date === date,
-    { at: empty, nearAfter: emptyAfter.near, meanBefore: emptyBefore.mean, meanAfter: emptyAfter.mean, got: row(none) });
+  await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, false, { origin: 'user' }), ID);
+  await look(empty, 40000);
+  const emptyOff = await centre(palette);
+  await page.evaluate((id) => window.__godsEyeView.dataManager.setEnabled(id, true, { origin: 'user' }), ID);
+  const shift = Math.hypot(...emptyOn.mean.map((v, k) => v - emptyOff.mean[k]));
+  // palette-coloured pixels the imagery has of its own (dark farmland near the strict green) are in both frames
+  report('negative-unprotected-point', Math.max(...emptyOn.near.map((v, k) => v - emptyOff.near[k])) <= 0.01 && shift < 6 && none?.status === 'value' && none.text === NONE_TEXT && none.date === date,
+    { at: empty, nearOn: emptyOn.near, nearOff: emptyOff.near, meanOn: emptyOn.mean, meanOff: emptyOff.mean, got: row(none) });
 
   // A fixed snapshot: moving the time bar neither redraws the layer nor changes what it reads. The globe may still be
   // streaming tiles for the last camera move, so a redraw is told by the imagery layer object, which a redraw replaces.
@@ -217,14 +256,24 @@ try {
     return window.__qaProtectedImagery === ours[0] ? 'same' : 'replaced';
   });
   const before = await imagery();
-  await page.evaluate(() => window.__godsEyeView.observedTime.set('2010-06-01T00:00:00Z'));
+  // With no time-aware layer on, the bar has no domain and set() is a no-op: a probe extent gives it one, and the
+  // check requires the instant to have moved, so a bar that never moved cannot pass it.
+  const moved = await page.evaluate(() => {
+    const t = window.__godsEyeView.observedTime;
+    t.setLayerExtent('qa-probe', { startMs: Date.parse('2000-01-01T00:00:00Z'), endMs: Date.parse('2026-01-01T00:00:00Z') });
+    t.set('2010-06-01T00:00:00Z');
+    return t.get();
+  });
   await sleep(3000);
   const after = await imagery();
   const s2 = await stats();
   const past = (await readAll({ ys: [PARKS[0][2], PARKS[0][3]] })).ys;
-  report('ignores-the-time-bar', before === 'same' && after === 'same' && s2?.time === served.release && !s2?.error && past?.text === live.Yellowstone?.text,
-    { imageryBefore: before, imageryAfter: after, stats: s2, ys: row(past) });
-  await page.evaluate(() => window.__godsEyeView.observedTime.set(null));
+  report('ignores-the-time-bar', moved?.startsWith('2010-06-01') && before === 'same' && after === 'same' && s2?.time === served.release && !s2?.error && past?.text === live.Yellowstone?.text,
+    { moved, imageryBefore: before, imageryAfter: after, stats: s2, ys: row(past) });
+  await page.evaluate(() => {
+    window.__godsEyeView.observedTime.set(null);
+    window.__godsEyeView.observedTime.setLayerExtent('qa-probe', null);
+  });
 
   const legend = await page.evaluate(() => document.body.textContent.includes('not an official registry'));
   report('legend-names-the-caveat', legend);
