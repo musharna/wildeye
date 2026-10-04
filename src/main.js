@@ -38,6 +38,7 @@ import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLaye
 import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer, gibsAmphibianLayer, gibsMammalLayer } from './data/gibsLayer.js';
 import { hansenLossLayer } from './data/hansenLoss.js';
 import { mangrovesLayer } from './data/mangroves.js';
+import { haedatLayer } from './data/haedat.js';
 import { surfaceWaterLayer } from './data/surfaceWater.js';
 import { humanFootprintLayer } from './data/humanFootprint.js';
 import { biiLayer } from './data/bii.js';
@@ -264,12 +265,13 @@ async function init() {
     dataManager.register(phenologyLayer);
     dataManager.register(arbonetLayer);
     dataManager.register(biotimeLayer);
+    dataManager.register(haedatLayer);
     dataManager.register(speciesLayer);
     // Shared observed-time selector: one bar, every bio layer samples its own data at the instant.
     // No domain constant: the bar spans the union of what the enabled layers declare they can
     // serve (getObservedExtent), so it cannot advertise hours no layer has data for.
     const observedTime = createObservedTime();
-    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, biotimeLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer, ...gibsLayers.filter((l) => l !== gibsBiomassLayer), hansenLossLayer, humanFootprintLayer, biiLayer, mangrovesLayer];
+    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, biotimeLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer, ...gibsLayers.filter((l) => l !== gibsBiomassLayer), hansenLossLayer, humanFootprintLayer, biiLayer, mangrovesLayer, haedatLayer];
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
     // After the time bar's store exists: a scrub relabels each compare side (a gap has no restack).
@@ -330,7 +332,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, reptilesLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, reptilesLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, haedatLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
