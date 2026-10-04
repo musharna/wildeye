@@ -121,7 +121,8 @@ def fetch(
 
 def members(zip_path: Path) -> list[str]:
     """The release's GeoTIFFs, by name; anything else in the zip but its folder is refused."""
-    names = zipfile.ZipFile(zip_path).namelist()
+    with zipfile.ZipFile(zip_path) as z:
+        names = z.namelist()
     tifs = sorted(n for n in names if MEMBER.match(n))
     other = [n for n in names if n not in tifs and n != "Final_Rasters/"]
     if other or not tifs:
@@ -179,7 +180,7 @@ class Grid:
 
     def __init__(self, transform, width: int, height: int, z: int):
         self.gx = cell_index(transform.c, width, transform.a, z, "x")
-        self.gy = cell_index(transform.f, height, -transform.a, z, "y")
+        self.gy = cell_index(transform.f, height, transform.e, z, "y")
 
     def counts(self, z: int, max_level: int):
         """([(first column, source columns per column) per run], first row, source rows per row) at level z.
@@ -272,6 +273,8 @@ def shares(marsh: np.ndarray, total: np.ndarray) -> np.ndarray:
     In integers, so a share of exactly n.5% (138 of 240) rounds the same way every time."""
     if (total[marsh > 0] == 0).any():
         raise MarshChanged("marsh counted in a cell no source pixel falls in")
+    if (marsh > total).any():
+        raise MarshChanged("more marsh pixels than source pixels in a cell: the counts are out of step")
     m, t = marsh.astype(np.int64), np.maximum(total, 1).astype(np.int64)
     pct = (200 * m + t) // (2 * t)
     return np.where(marsh > 0, np.clip(pct, 1, 100), 0).astype(np.uint8)

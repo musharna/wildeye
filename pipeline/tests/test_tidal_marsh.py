@@ -156,6 +156,20 @@ def test_shares_are_whole_percent_with_any_marsh_at_least_one():
     assert tm.shares(np.array([[138, 3, 7]]), np.array([[240, 200, 200]])).tolist() == [[58, 2, 4]]
     with pytest.raises(tm.MarshChanged, match="no source pixel"):
         tm.shares(np.array([[1]]), np.array([[0]]))
+    # more marsh than pixels is a counting fault, not a 100% cell
+    assert tm.shares(np.array([[2, 0]]), np.array([[2, 0]])).tolist() == [[100, 0]]  # positive control: all of it
+    with pytest.raises(tm.MarshChanged, match="more marsh pixels than source pixels"):
+        tm.shares(np.array([[3]]), np.array([[2]]))
+
+
+def test_grid_rows_follow_the_row_step_not_the_column_step():
+    # a pixel twice as tall as wide: rows step by transform.e (-0.002°), columns by transform.a (0.001°)
+    t = rasterio.Affine(0.001, 0, 10.0, 0, -0.002, 50.0)
+    g = tm.Grid(t, 4, 4, 9)
+    lat = 50.0 - (np.arange(4) + 0.5) * 0.002
+    lon = 10.0 + (np.arange(4) + 0.5) * 0.001
+    assert g.gy.tolist() == np.floor((90 - lat) / 180 * 2**9 * 256).astype(int).tolist()
+    assert g.gx.tolist() == np.floor((lon + 180) / 360 * 2**10 * 256).astype(int).tolist()
 
 
 def test_palette_runs_light_to_dark_through_the_stated_stops():
