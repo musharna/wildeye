@@ -6,7 +6,7 @@ import { decodeCount } from "./reptiles.js";
 
 /**
  * Mammal species richness from the MDD v1.2 range maps (Marsh et al. 2022, Zenodo 10.5281/zenodo.6644198, CC BY 4.0):
- * how many of the 6,362 wild extant mammal species' ranges overlap each 0.1° cell, rasterised by pipeline/mammals.py
+ * how many of the 6,360 mapped wild extant mammal species' ranges overlap each 0.1° cell, rasterised by pipeline/mammals.py
  * into a geographic tile pyramid with one palette colour per count (spec
  * docs/superpowers/specs/2026-10-04-mammal-richness-design.md), plus level-3 RGB tiles holding the rodent, bat and
  * primate counts. A point readout decodes both exactly from level 3. Nothing varies with time. Not the SEDAC layer
@@ -168,7 +168,7 @@ export function createMammalsLayer({
             .map((v) => ({ label: `${v}`, color: `rgb(${_manifest.palette[v].join(",")})`, count: null }))
         : [];
       legend.push({
-        label: `Mammal species whose range overlaps each 0.1° cell (range maps of ${(_manifest?.species ?? 6362).toLocaleString("en-US")} wild species, MDD v1.2 taxonomy; expert ranges, not survey records) · Marsh et al. 2022, CC BY 4.0`,
+        label: `Mammal species whose range overlaps each 0.1° cell (range maps of ${(_manifest?.species ?? 6360).toLocaleString("en-US")} wild species, MDD v1.2 taxonomy; expert ranges, not survey records) · Marsh et al. 2022, CC BY 4.0`,
         color: "transparent",
         count: null,
       });

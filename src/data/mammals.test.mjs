@@ -17,7 +17,7 @@ const MANIFEST = Object.freeze({
   groups: ['rodents', 'bats', 'primates', 'other'],
   palette: PALETTE,
   maxSpecies: TOP,
-  species: 6362,
+  species: 6360,
 });
 const V = '?v=2026-10-04T09:00:00Z';
 
@@ -174,7 +174,7 @@ test('legend: sampled counts in their palette colours up to the most, plus what 
   assert.deepEqual(legend.slice(0, -1).map((e) => e.label), ['1', '50', '100', '150', '200', '220']);
   assert.equal(legend[0].color, `rgb(${PALETTE[1].join(',')})`);
   assert.equal(legend[5].color, `rgb(${PALETTE[220].join(',')})`);
-  assert.match(legend.at(-1).label, /range overlaps each 0\.1° cell \(range maps of 6,362 wild species, MDD v1\.2 taxonomy/);
+  assert.match(legend.at(-1).label, /range overlaps each 0\.1° cell \(range maps of 6,360 wild species, MDD v1\.2 taxonomy/);
   assert.match(legend.at(-1).label, /CC BY 4\.0/);
   const small = harness({ manifest: { ...MANIFEST, maxSpecies: 40, palette: PALETTE.slice(0, 41) } });
   await small.layer.update();
