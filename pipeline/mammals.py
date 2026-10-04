@@ -55,6 +55,8 @@ UNMAPPED = frozenset({"Nycticeius aenobarbus", "Phoniscus aerosus"})
 MAP_NAMES = {"Paradoxurus philippinensis": "Paradoxurus philippensis"}
 MAPPED_SPECIES = EXPECTED_SPECIES - len(UNMAPPED)
 RES = 0.1  # degrees per grid cell
+# An outline within this of a grid line (~1 cm) is taken to run along it, not into the cell beyond (see overlapped).
+EDGE_EPS = 1e-7
 MAX_LEVEL = 3  # 4096 × 2048: finer than the 0.1° grid (3600 × 1800)
 BUDGET_BYTES = 6_000_000
 # MDD order → count: rodents, bats, primates, other
@@ -160,10 +162,16 @@ def read_ranges(d: Path, zips, batch: int = 1):
 
 
 def overlapped(geom, r0: int, r1: int, c0: int, c1: int, res: float = RES) -> np.ndarray:
-    """uint8 (r1 - r0, c1 - c0): 1 in each cell of the window the range overlaps, i.e. the cell's centre lies in the range
-    (shapely, prepared) or the range's outline touches the cell (rasterio's all_touched on the outline as lines). Gives
-    GDAL's all_touched polygon fill on land ranges, cell for cell, without its cost: the fill walks every edge for every
-    row, ~14 min for a whale range of 27 M vertices against 31 s here."""
+    """uint8 (r1 - r0, c1 - c0): 1 in each cell of the window the range overlaps, i.e. the range and the cell share
+    interior (shapely: intersects and not touches): the cell's centre lies in the range (shapely, prepared) or the range's
+    outline crosses the cell's interior. The crossing is rasterio's all_touched on the outline as lines, burnt on four
+    grids moved EDGE_EPS diagonally (north-west, north-east, south-west, south-east) off the true one, and kept where all
+    agree. Burnt once, an outline running exactly along a grid line went to whichever side the window origin's float
+    rounding chose (east or south on an exact origin), so a range counted in a cell where it has no area, and only when
+    the window (the range's own bounds) reached that cell. On opposite grids such a line falls on opposite sides; where
+    two such lines meet at a grid node (an inner corner), the cell in the corner is missed by both on the grid moved
+    towards it. A crossing within EDGE_EPS of a cell's edge is not counted. Avoids GDAL's polygon fill, which walks every
+    edge for every row: ~14 min for a whale range of 27 M vertices against ~31 s here."""
     import shapely
     from rasterio import features
     from rasterio.transform import from_origin
@@ -173,15 +181,20 @@ def overlapped(geom, r0: int, r1: int, c0: int, c1: int, res: float = RES) -> np
     inside = np.zeros((r1 - r0, c1 - c0), bool)
     for i in range(r1 - r0):
         inside[i] = shapely.contains_xy(geom, xs, np.full_like(xs, 90 - (r0 + i + 0.5) * res))
-    edge = features.rasterize(
-        [(shapely.boundary(geom), 1)],
-        out_shape=(r1 - r0, c1 - c0),
-        transform=from_origin(-180 + c0 * res, 90 - r0 * res, res, res),
-        fill=0,
-        dtype="uint8",
-        all_touched=True,
-    )
-    return (inside | edge.astype(bool)).astype(np.uint8)
+    outline = shapely.boundary(geom)
+    edge = [
+        features.rasterize(
+            [(outline, 1)],
+            out_shape=(r1 - r0, c1 - c0),
+            transform=from_origin(-180 + c0 * res + sx, 90 - r0 * res + sy, res, res),
+            fill=0,
+            dtype="uint8",
+            all_touched=True,
+        ).astype(bool)
+        for sx in (-EDGE_EPS, EDGE_EPS)
+        for sy in (-EDGE_EPS, EDGE_EPS)
+    ]
+    return (inside | np.logical_and.reduce(edge)).astype(np.uint8)
 
 
 def read_release(path: Path, batch: int = 1):

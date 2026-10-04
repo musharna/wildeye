@@ -17,6 +17,7 @@ import numpy as np
 import pyogrio.raw
 import pytest
 import shapely
+import shapely.affinity
 from PIL import Image
 from rasterio import features
 from shapely.geometry import MultiPolygon, Polygon, box
@@ -146,11 +147,52 @@ def test_a_range_counts_where_it_overlaps_a_cell_without_a_polygon_fill(monkeypa
         -180 + (np.arange(c0, c1)[None, :] + 1) * mm.RES,
         90 - np.arange(r0, r1)[:, None] * mm.RES,
     )
-    want = shapely.intersects(star, cells)
+    want = shapely.intersects(star, cells) & ~shapely.touches(star, cells)
     assert want.sum() > 2000 and (~want).sum() > 100, "the window holds cells in, on and off the star"
     assert np.array_equal(got.astype(bool), want), int((got.astype(bool) != want).sum())
     # GDAL's polygon fill walks every edge for every row: ~14 min for a 27 M-vertex whale range
     assert fills and set(fills) <= {"LineString", "MultiLineString"}, fills
+
+
+def interior(geom, r0, r1, c0, c1):
+    """The reference: cells of the window whose interior the range shares (shapely: intersects and not touches)."""
+    cells = shapely.box(
+        -180 + np.arange(c0, c1)[None, :] * mm.RES,
+        90 - (np.arange(r0, r1)[:, None] + 1) * mm.RES,
+        -180 + (np.arange(c0, c1)[None, :] + 1) * mm.RES,
+        90 - np.arange(r0, r1)[:, None] * mm.RES,
+    )
+    return shapely.intersects(geom, cells) & ~shapely.touches(geom, cells)
+
+
+def test_an_outline_along_a_grid_line_counts_in_neither_neighbour_whatever_the_window():
+    # Outlines running exactly along grid lines: a box, an L with an inner corner, a triangle with corners on grid
+    # nodes. Each counts in exactly the cells it shares interior with, on a window wider than its bounds.
+    L = Polygon([(10, 10), (12, 10), (12, 11), (11, 11), (11, 12), (10, 12)])
+    shapes = {
+        "box": box(-100, 40, -90, 49),
+        # the inner corner at (11, 11) facing each of the four diagonals
+        **{f"L{k}": shapely.affinity.rotate(L, 90 * k, origin=(11, 11)) for k in range(4)},
+        "triangle": Polygon([(20, 20), (21, 20), (20, 21)]),
+    }
+    for name, g in shapes.items():
+        x0, y0, x1, y1 = g.bounds
+        r0, r1 = round((90 - y1) / mm.RES) - 3, round((90 - y0) / mm.RES) + 3
+        c0, c1 = round((x0 + 180) / mm.RES) - 3, round((x1 + 180) / mm.RES) + 3
+        got = mm.overlapped(g, r0, r1, c0, c1).astype(bool)
+        want = interior(g, r0, r1, c0, c1)
+        assert np.array_equal(got, want), (name, int((got & ~want).sum()), int((want & ~got).sum()))
+        # box and L: their area in cells; triangle: the 45 cells under its diagonal and the 10 the diagonal crosses
+        assert got.sum() == {"box": 9000, "triangle": 55}.get(name, 300), (name, int(got.sum()))
+    # A part elsewhere widens the window past the box's east and south edges: the box's own cells do not change
+    g = shapes["box"]
+    alone = mm.rasterise(iter([("A", "RODENTIA", g, g.bounds)]), {"A": "RODENTIA"}).sum(0)
+    island = box(-89, 45, -88, 46)
+    both = MultiPolygon([g, island, box(-95, 30, -94, 31)])
+    with_parts = mm.rasterise(iter([("A", "RODENTIA", both, both.bounds)]), {"A": "RODENTIA"}).sum(0)
+    assert alone.sum() == 9000, int(alone.sum())
+    assert with_parts.sum() == 9000 + 100 + 100, int(with_parts.sum())
+    assert with_parts[:, 900].sum() == 0 and with_parts[500].sum() == 0, "no cell east of -90 or south of 40 from the box"
 
 
 def test_palette_one_distinct_colour_per_count_rising_in_luminance():
@@ -495,7 +537,7 @@ def test_real_small_orders_read_and_count_as_their_raw_polygons(tmp_path):
         cols = rng.integers(int((x0 + 180) / mm.RES) - 2, int((x1 + 180) / mm.RES) + 3, 12)
         for row, col in zip(rows.tolist(), cols.tolist()):
             cell = box(-180 + col * mm.RES, 90 - (row + 1) * mm.RES, -180 + (col + 1) * mm.RES, 90 - row * mm.RES)
-            want_n = sum(1 for h in shapes.values() if h.intersects(cell))
+            want_n = sum(1 for h in shapes.values() if h.intersects(cell) and not h.touches(cell))
             assert counts[3, row, col] == want_n, (name, row, col)
             checked["in" if want_n else "out"] += 1
     assert checked["in"] >= 40 and checked["out"] >= 10, checked
