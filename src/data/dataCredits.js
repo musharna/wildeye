@@ -110,7 +110,11 @@ export const DATA_CREDITS = [
   {
     key: 'reptiles',
     html: 'Reptile richness: <a href="https://doi.org/10.5281/zenodo.6499637" target="_blank" rel="noopener">GARD 1.7, updated global distributions for all terrestrial reptiles</a> (Roll &amp; Meiri 2022, Zenodo), <a href="https://creativecommons.org/publicdomain/zero/1.0/" target="_blank" rel="noopener">CC0 1.0</a>; Roll, Feldman, Novosolov et al. 2017, <i>Nature Ecology &amp; Evolution</i> 1:1677–1682, <a href="https://doi.org/10.1038/s41559-017-0332-2" target="_blank" rel="noopener">doi:10.1038/s41559-017-0332-2</a>; Caetano, Chapple, Grenyer et al. 2022, <i>PLoS Biology</i> 20(5):e3001544, <a href="https://doi.org/10.1371/journal.pbio.3001544" target="_blank" rel="noopener">doi:10.1371/journal.pbio.3001544</a>. Species whose range overlaps each 0.1° cell, counted from the range maps.',
+  },  {
+    key: 'mammals',
+    html: 'Mammal richness: Marsh, Sica, Burgin, Dorman et al., <a href="https://doi.org/10.5281/zenodo.6644198" target="_blank" rel="noopener">range maps for the Mammal Diversity Database v1.2 taxonomy</a> (Zenodo), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Marsh et al. 2022, <i>Journal of Biogeography</i> 49:979–992, <a href="https://doi.org/10.1111/jbi.14330" target="_blank" rel="noopener">doi:10.1111/jbi.14330</a>. Changed: the 6,362 range polygons counted per 0.1° cell (a species counts where its range overlaps the cell), split into rodents, bats, primates and other.',
   },
+
   {
     key: 'wetlands',
     html: 'Wetlands: <a href="https://www.hydrosheds.org/products/glwd" target="_blank" rel="noopener">Global Lakes and Wetlands Database (GLWD) v2</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Lehner, Anand, Fluet-Chouinard, Tan et al. 2025, <i>Earth System Science Data</i> 17:2277–2329, <a href="https://doi.org/10.5194/essd-17-2277-2025" target="_blank" rel="noopener">doi:10.5194/essd-17-2277-2025</a>. Dominant wetland type where wetland covers more than half the cell, shown at ~1.2 km.',

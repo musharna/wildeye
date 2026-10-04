@@ -14,6 +14,7 @@ Live site: https://musharna.github.io/wildeye/
 - Acoustic fish detections at Ocean Tracking Network receivers
 - Whale detections from NOAA passive acoustic monitoring
 - Small mammals, and ticks and mosquitoes, at NEON field sites
+- Mammal species richness per 0.1° cell, split into rodents, bats and primates, from expert range maps (Marsh et al.)
 
 **Disease**
 - Avian influenza detections in wild birds by county (USDA APHIS)

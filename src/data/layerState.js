@@ -136,6 +136,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'hansen-loss', token: 'hl', disposition: 'enabled-only' }),
   Object.freeze({ id: 'hpai', token: '4', disposition: 'enabled-only' }),
   Object.freeze({ id: 'human-footprint', token: 'hf', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'mammals', token: 'md', disposition: 'enabled-only' }),
   Object.freeze({ id: 'marine-realms', token: 'mr', disposition: 'enabled-only' }),
   Object.freeze({ id: 'ndvi', token: '0', disposition: 'enabled-only' }),
   Object.freeze({ id: 'neon', token: '5', disposition: 'enabled-only' }),
