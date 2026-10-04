@@ -172,6 +172,10 @@ export const DATA_CREDITS = [
     html: "Marine realms: <a href=\"https://doi.org/10.17608/k6.auckland.5596840\" target=\"_blank\" rel=\"noopener\">GIS shape files of realm maps</a> (Mark Costello, figshare, <a href=\"https://creativecommons.org/licenses/by/4.0/\" target=\"_blank\" rel=\"noopener\">CC BY 4.0</a>); Costello, Tsai, Wong, Cheung, Basher &amp; Chaudhary 2017, <i>Nature Communications</i> 8:1057, <a href=\"https://doi.org/10.1038/s41467-017-01121-2\" target=\"_blank\" rel=\"noopener\">doi:10.1038/s41467-017-01121-2</a>. Changed: land removed (<a href=\"https://www.naturalearthdata.com/\" target=\"_blank\" rel=\"noopener\">Natural Earth</a> 10 m, public domain) and boundaries simplified for display; realm names, groups and species counts from the paper's Fig. 1.",
   },
   {
+    key: 'freshwater-fish',
+    html: "Freshwater fish: <a href=\"https://doi.org/10.5281/zenodo.19511163\" target=\"_blank\" rel=\"noopener\">A global geospatial dataset of freshwater fish species at the drainage-basin scale (updated to December 2024)</a> (Liuyong Ding, Zenodo, <a href=\"https://creativecommons.org/licenses/by/4.0/\" target=\"_blank\" rel=\"noopener\">CC BY 4.0</a>), updating Tedesco et al. 2017, <i>Scientific Data</i> 4:170141, <a href=\"https://doi.org/10.1038/sdata.2017.141\" target=\"_blank\" rel=\"noopener\">doi:10.1038/sdata.2017.141</a>. Changed: boundaries simplified for display; species counts binned and the five largest families per basin taken from the record's species table.",
+  },
+  {
     key: 'species',
     html: 'Species maps and "what lives here": <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF.org</a> occurrence search and maps (CC0 and CC BY records only); the top datasets behind each list and map are named with a DOI link where GBIF has one, and a gbif.org dataset page otherwise. Names: <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> and <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF</a>.',
   },
@@ -200,7 +204,7 @@ export const DATA_CREDITS = [
     html:
       'Wildlife sightings: <a href="https://www.gbif.org" target="_blank" rel="noopener">GBIF</a> and ' +
       '<a href="https://obis.org" target="_blank" rel="noopener">OBIS</a> occurrence records ' +
-      '(CC0 / CC-BY records only; publisher named per record). GBIF subset registered as derived dataset ' +
+      '(CC0 / CC-BY records only, except Happywhale sightings, shown under their datasets\' CC BY-NC 4.0; publisher named per record). GBIF subset registered as derived dataset ' +
       '<a href="https://doi.org/10.15468/dd.vugb55" target="_blank" rel="noopener">doi:10.15468/dd.vugb55</a>',
   },
   {
