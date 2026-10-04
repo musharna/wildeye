@@ -35,6 +35,7 @@ Live site: https://musharna.github.io/wildeye/
 - Sea surface temperature, chlorophyll-a and sea ice
 - Coral bleaching alerts and coral heat stress (NOAA Coral Reef Watch)
 - Surface dissolved oxygen and pH (Copernicus Marine Service)
+- Tidal marshes 2020, as the share of each ~150 m cell (Worthington et al.)
 
 Most of these layers follow a shared time bar covering the last 30 days.
 
