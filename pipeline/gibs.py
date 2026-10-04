@@ -71,7 +71,7 @@ LAYERS = {
     "gibs-gpp": {
         "gibsId": "MODIS_Terra_L4_Gross_Primary_Productivity_8Day",
         "legend": "Gross primary productivity, carbon fixed by plants over each 8 days (MOD17A2H); "
-        "urban, water, snow, ice and barren land not drawn",
+        "urban, wetland, water, snow, ice and barren land not drawn",
     },
     "gibs-canopy": {
         "gibsId": "GEDI_ISS_L3_Canopy_Height_Mean_RH100_201904-202303",
