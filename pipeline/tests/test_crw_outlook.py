@@ -1,7 +1,7 @@
 """NOAA CRW Four-Month Bleaching Outlook: finding the newest issue, reading the composite, the two output images.
 
-The .nc fixtures are rows 170-189 (9.75°N to 0.25°S, every longitude) cut from CRW's real issue of 2026-09-29
-(icwk20260927) at 60% and 90%, with the files' own attributes. The live run and scripts/qa-crw-outlook.mjs compare
+The .nc fixtures are CRW's real issue of 2026-09-29 (icwk20260927) at 60% and 90%, the whole 0.5° grid of the
+four-month composite and the surface flag with the files' own attributes (the other 20 weekly layers left out). The live run and scripts/qa-crw-outlook.mjs compare
 the full outputs cell by cell with CRW's own published maps of the same issue.
 """
 
@@ -16,7 +16,7 @@ from pipeline import raster
 
 FIX = Path(__file__).parent / "fixtures"
 INDEX = "https://example.test/outlook/"
-NC = {p: FIX / f"crw_outlook_0{p}perc_crop.nc" for p in (60, 90)}
+NC = {p: FIX / f"crw_outlook_0{p}perc.nc" for p in (60, 90)}
 PRODUCT = {
     "id": "crw-outlook",
     "name": "outlook",
@@ -98,7 +98,7 @@ def test_composite_is_rolled_to_minus_180_land_marked_and_dated_from_the_attribu
             classes[:, j], np.where(np.isnan(raw[:, k]), co.LAND, raw[:, k])
         )
     assert set(np.unique(classes).tolist()) == {0, 1, 2, 3, 4, co.LAND}
-    assert int((classes == co.LAND).sum()) == int(np.isnan(raw).sum()) == 3279
+    assert int((classes == co.LAND).sum()) == int(np.isnan(raw).sum()) == 87478
 
 
 def test_a_changed_file_is_an_error_not_a_quiet_map():
@@ -116,8 +116,22 @@ def test_a_changed_file_is_an_error_not_a_quiet_map():
         co.read_composite(bad)
     with pytest.raises(co.OutlookChanged, match="longitude grid"):
         co.read_composite(ds.assign_coords(lon=ds["lon"] - 180))
-    with pytest.raises(co.OutlookChanged, match="north-up"):
-        co.read_composite(ds.isel(lat=slice(None, None, -1)))
+    # the latitude grid is checked as fully as the longitude one: a flipped, cropped or coarser grid keeps every other
+    # check happy (and both probabilities agree with each other), so only this can stop it (review of PR #51)
+    shifted = ds.assign_coords(
+        lat=ds["lat"] - 0.25
+    )  # 360 rows by 0.5, starting at 89.5
+    squeezed = ds.assign_coords(
+        lat=89.75 - 0.4 * np.arange(360)
+    )  # 360 rows from 89.75, by 0.4
+    flipped, cropped, coarse = (
+        ds.isel(lat=slice(None, None, -1)),
+        ds.isel(lat=slice(0, 359)),
+        ds.isel(lat=slice(None, None, 2)),
+    )
+    for changed in (flipped, cropped, coarse, shifted, squeezed):
+        with pytest.raises(co.OutlookChanged, match="latitude grid"):
+            co.read_composite(changed)
 
 
 def serve(files):
@@ -212,4 +226,4 @@ def test_process_routes_the_product_and_puts_the_outlook_in_the_manifest(
     png = Image.open(
         io.BytesIO((tmp_path / "rasters" / "crw-outlook.png").read_bytes())
     )
-    assert png.size == (720, 20)
+    assert png.size == (720, 360)

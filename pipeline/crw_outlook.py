@@ -77,8 +77,14 @@ def read_composite(ds) -> tuple[np.ndarray, dict]:
         raise OutlookChanged(
             f"longitude grid {lon[:2]}…{lon[-1:]} ({len(lon)}) is not 0.25..359.75 by 0.5"
         )
-    if not np.all(np.diff(lat) < 0):
-        raise OutlookChanged("latitude is not north-up")
+    if (
+        len(lat) != 360
+        or not np.allclose(np.diff(lat), -0.5)
+        or abs(lat[0] - 89.75) > 1e-6
+    ):
+        raise OutlookChanged(
+            f"latitude grid {lat[:2]}…{lat[-1:]} ({len(lat)}) is not 89.75..-89.75 by -0.5 (north-up)"
+        )
     v = np.asarray(da.values[0], dtype=float)
     water = ~np.isnan(v)
     if not np.isin(v[water], [0, 1, 2, 3, 4]).all():
