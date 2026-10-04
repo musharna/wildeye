@@ -47,7 +47,13 @@ FILES = {
     SPECIES_LIST: "4a800c367f7f8d767779d2f68df40f93",
 }
 EXPECTED_ORDERS = 27
-EXPECTED_SPECIES = 6362
+EXPECTED_SPECIES = 6362  # rows of the release's list
+# Where the list and the maps disagree (checked against every name in the bundle 2026-10-04). The record's description
+# says these two bats have no spatial information, though the list of mapped species names them:
+UNMAPPED = frozenset({"Nycticeius aenobarbus", "Phoniscus aerosus"})
+# and one civet's map spells the epithet differently from the list (Paradoxurus philippensis); the list's name is kept
+MAP_NAMES = {"Paradoxurus philippinensis": "Paradoxurus philippensis"}
+MAPPED_SPECIES = EXPECTED_SPECIES - len(UNMAPPED)
 RES = 0.1  # degrees per grid cell
 MAX_LEVEL = 3  # 4096 × 2048: finer than the 0.1° grid (3600 × 1800)
 BUDGET_BYTES = 6_000_000
@@ -200,6 +206,9 @@ def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:
     counts = np.zeros((len(GROUP_NAMES), h, w), np.uint16)
     seen = set()
     for name, order, geom, (x0, y0, x1, y1) in ranges:
+        name = MAP_NAMES.get(name, name)
+        if name in UNMAPPED:
+            raise ValueError(f"{name} is mapped, though the record says it has no map")
         if name in seen:
             raise ValueError(f"{name}: mapped twice")
         if listed.get(name) != order:
@@ -221,7 +230,7 @@ def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:
         if not burnt.any():
             raise ValueError(f"{name}: range overlaps no cell")
         counts[GROUPS.get(order, 3), r0:r1, c0:c1] += burnt
-    missing = sorted(set(listed) - seen)
+    missing = sorted(set(listed) - seen - UNMAPPED)
     if missing:
         raise ValueError(f"{len(missing)} listed species have no range: {missing[:5]}")
     total = counts.sum(0)
@@ -295,7 +304,8 @@ def main(argv=None, *, fetch_to=_fetch_to, want: dict = FILES) -> int:
     d = fetch(a.cache / CACHE_DIR, fetch_to=fetch_to, want=want)
     listed = species_list(d / SPECIES_LIST)
     counts = rasterise(read_release(d / RELEASE), listed)
-    log.info("rasterised %d species (%.0f s)", len(listed), time.time() - t0)
+    mapped = len(set(listed) - UNMAPPED)
+    log.info("rasterised %d species (%.0f s)", mapped, time.time() - t0)
     staging = a.out_dir / ".mammals.tmp"
     shutil.rmtree(staging, ignore_errors=True)
     try:
@@ -324,7 +334,7 @@ def main(argv=None, *, fetch_to=_fetch_to, want: dict = FILES) -> int:
             "groups": list(GROUP_NAMES),
             "palette": [list(c) for c in palette(top)],
             "maxSpecies": top,
-            "species": len(listed),
+            "species": mapped,
             "resolution": f"{RES}° cells; a species counts in every cell its range overlaps",
             "source": SOURCE,
             "bytes": sizes,
@@ -333,7 +343,7 @@ def main(argv=None, *, fetch_to=_fetch_to, want: dict = FILES) -> int:
     log.info(
         "wrote %s: %d species, up to %d per cell, %.1f MB (%.0f s)",
         a.out_dir / "mammals.json",
-        len(listed),
+        mapped,
         top,
         sum(sizes.values()) / 1e6,
         time.time() - t0,

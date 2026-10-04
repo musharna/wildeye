@@ -82,6 +82,26 @@ def test_the_species_read_must_be_the_release_list_each_once():
         mm.rasterise(iter(twice), listed())
 
 
+def test_the_list_and_the_maps_disagree_only_where_pinned():
+    civet = {**RANGES, "Paradoxurus philippinensis": ("CARNIVORA", box(10, 10, 11, 11))}
+    lst = {
+        **listed(),
+        "Paradoxurus philippensis": "CARNIVORA",
+        "Nycticeius aenobarbus": "CHIROPTERA",
+        "Phoniscus aerosus": "CHIROPTERA",
+    }
+    counts = mm.rasterise(ranges(civet), lst)  # positive control: the civet under the list's spelling, two bats unmapped
+    assert counts[3, 790:800, 1900:1910].tolist() == [[1] * 10] * 10
+    assert mm.MAPPED_SPECIES == 6360
+    with pytest.raises(ValueError, match="Paradoxurus philippensis \\(CARNIVORA\\) is not on the release's list as None"):
+        mm.rasterise(ranges(civet), {k: v for k, v in lst.items() if k != "Paradoxurus philippensis"})
+    with pytest.raises(ValueError, match="1 listed species have no range: \\['Paradoxurus philippensis'\\]"):
+        mm.rasterise(ranges(), lst)
+    bat = {**RANGES, "Phoniscus aerosus": ("CHIROPTERA", box(20, 20, 21, 21))}
+    with pytest.raises(ValueError, match="Phoniscus aerosus is mapped, though the record says it has no map"):
+        mm.rasterise(ranges(bat), lst)
+
+
 def test_an_overfull_cell_stops_the_run():
     rodents = {f"R{i}": ("RODENTIA", box(0.72, 0.72, 0.74, 0.74)) for i in range(256)}
     with pytest.raises(ValueError, match="a cell holds 256 species"):
@@ -481,12 +501,12 @@ def test_real_small_orders_read_and_count_as_their_raw_polygons(tmp_path):
     assert checked["in"] >= 40 and checked["out"] >= 10, checked
 
 
-# Pre-registered from the raw polygons with shapely (ranges whose shape intersects the 0.1° cell) before the layer was
-# written: cell centre → rodents, bats, primates, other. Needs the whole release (10.3 GB) in the cache: too large for
-# CI, so it skips loudly there; the real run checks it.
+# Pre-registered from the raw polygons in MDD_Mammalia.zip with shapely (ranges whose shape intersects the 0.1° cell)
+# before the layer was written: cell centre → rodents, bats, primates, other. The last three are manatee coasts. Needs
+# the whole release (10.3 GB) in the cache: too large for CI, so it skips loudly there; the real run checks it.
 CELLS = {
     "Albertine Rift": ((-1.05, 29.55), [67, 60, 14, 68]),
-    "central Amazon": ((-3.05, -60.05), [26, 97, 11, 40]),
+    "central Amazon": ((-3.05, -60.05), [26, 97, 11, 41]),
     "Andes, Ecuador": ((-0.95, -77.85), [50, 93, 8, 52]),
     "Borneo": ((1.05, 114.05), [31, 42, 9, 32]),
     "Madagascar": ((-18.95, 47.55), [2, 12, 0, 10]),
@@ -497,6 +517,9 @@ CELLS = {
     "Greenland ice": ((72.05, -40.05), [0, 0, 0, 2]),
     "Antarctica": ((-80.05, 0.05), [0, 0, 0, 0]),
     "mid Pacific": ((0.05, -149.95), [0, 0, 0, 25]),
+    "Florida Bay": ((25.05, -80.75), [8, 10, 0, 46]),
+    "Amazon at Santarem": ((-2.45, -54.75), [31, 97, 9, 41]),
+    "Saloum delta": ((13.85, -16.65), [19, 31, 3, 37]),
 }
 
 
@@ -508,7 +531,7 @@ def test_real_release_cells_read_the_counts_of_the_raw_ranges(tmp_path):
     assert CELLS, "pre-register the cells first"
     assert mm.main(["--cache", str(CACHE), "--out-dir", str(tmp_path)]) == 0
     m = json.loads((tmp_path / "mammals.json").read_text())
-    assert m["species"] == mm.EXPECTED_SPECIES
+    assert m["species"] == mm.MAPPED_SPECIES == 6360
     assert sum(m["bytes"].values()) <= mm.BUDGET_BYTES
     out = tmp_path / "mammals"
     for name, ((lat, lon), want) in CELLS.items():
