@@ -34,11 +34,14 @@ exactly per cell and by group.
 ## Pipeline (`pipeline/mammals.py`)
 
 1. **Fetch:** each file once into the cache, refused and deleted unless its md5 is Zenodo's.
-2. **Layout:** the bundle must hold exactly 27 `MDD_<Order>.zip` (and `citation.txt`); each is copied out, read and
-   deleted in turn. Each order zip must hold exactly one `MDD_<Order>.gpkg` for its own order (at the root or under `<Order>/`), and every feature's
-   `order` must be that order. Each GeoPackage is extracted beside its zip with Info-ZIP `unzip`, read with pyogrio one
-   feature at a time (a large whale's range is ~440 MB of WKB; 20 at once ran out of memory), and deleted: through GDAL's `/vsizip/` the same read is ~30× slower (Primates 71 s against 2 s),
-   and Python's `zipfile` cannot inflate the Deflate64 that packs Chiroptera and Rodentia.
+2. **Layout:** the bundle must hold exactly 27 `MDD_<Order>.zip` (and `citation.txt`), stored uncompressed, so each
+   is opened where it lies; nothing is copied out (copying Artiodactyla's 3.6 GB zip beside its 10.5 GB GeoPackage
+   needed 14 GB of scratch and ran the disk out). Each order zip must hold exactly one `MDD_<Order>.gpkg` for its own
+   order (at the root or under `<Order>/`), and every feature's `order` must be that order. Each GeoPackage is inflated
+   to disk with `zipfile` (every member is plain deflate, CRC-checked; a Deflate64 one, as in the record's earlier
+   standalone Chiroptera and Rodentia zips, stops the run), read with pyogrio one feature at a time (a large whale's
+   range is ~440 MB of WKB; 20 at once ran out of memory), and deleted: through GDAL's `/vsizip/` the same read is ~30×
+   slower (Primates 71 s against 2 s). Scratch peaks at the largest GeoPackage, 10.5 GB.
 3. **Species:** the names read must be exactly the release list's, each once, under the order the list gives it, except
    the two pinned unmapped bats (a map for either stops the run) and the civet, counted under the list's spelling.
 4. **Count:** each range is counted over its own bounding box on a global 0.1° grid in every cell it shares interior
@@ -90,5 +93,4 @@ zips lack the three manatees (so the bundle is read), and the list and the maps 
 
 - No other layer changes; the reptile module's helpers are imported, not edited.
 - `public/data/mammals/` and `mammals.json` are gitignored generated data, copied in before a deploy.
-- CI's pipeline-tests job installs pyogrio and shapely; extraction needs Info-ZIP `unzip` on PATH (on GitHub's
-  Ubuntu runners).
+- CI's pipeline-tests job installs pyogrio and shapely.

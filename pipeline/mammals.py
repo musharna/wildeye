@@ -3,7 +3,7 @@
 Spec: docs/superpowers/specs/2026-10-04-mammal-richness-design.md. Zenodo 10.5281/zenodo.6644198 (CC BY 4.0) holds one
 range polygon per species for the 6,362 wild extant mammals of the Mammal Diversity Database v1.2 (Marsh et al. 2022),
 as one zipped GeoPackage per order, all 27 stored in MDD_Mammalia.zip. The bundle is downloaded once and refused unless its
-md5 is Zenodo's; each order zip is copied out of it and each GeoPackage extracted with Info-ZIP unzip, read, and deleted. Every range is counted, over its own bounding box, on a global 0.1° grid
+md5 is Zenodo's; each order zip is read where it is stored in the bundle, its GeoPackage inflated to disk, read, and deleted. Every range is counted, over its own bounding box, on a global 0.1° grid
 in every cell it shares interior with (the cell's centre lies in the range, or the range's outline crosses the cell), into four counts: rodents, bats,
 primates and other. The species read must be exactly the 6,362 of the release's own list, each once, under the taxonomic
 order the list gives it. The total is resampled by nearest neighbour to level 3 of Cesium's geographic tiling, one palette colour per
@@ -22,7 +22,6 @@ import math
 import os
 import re
 import shutil
-import subprocess  # nosec B404 - runs unzip with a fixed argument list, no shell
 import tempfile
 import time
 import zipfile
@@ -64,7 +63,6 @@ BUDGET_BYTES = 6_000_000
 # MDD order → count: rodents, bats, primates, other
 GROUPS = {"RODENTIA": 0, "CHIROPTERA": 1, "PRIMATES": 2}
 GROUP_NAMES = ("rodents", "bats", "primates", "other")
-UNZIP = shutil.which("unzip")
 ORDER_ZIP = re.compile(r"^MDD_[A-Za-z]+\.zip$")
 # 24 order zips hold <Order>/MDD_<Order>.gpkg; Artiodactyla, Carnivora and Sirenia hold MDD_<Order>.gpkg at the root
 MEMBER = re.compile(r"^(?:(?P<folder>[A-Za-z]+)/)?MDD_(?P<order>[A-Za-z]+)\.gpkg$")
@@ -121,46 +119,50 @@ def species_list(path: Path) -> dict[str, str]:
 
 
 def read_ranges(d: Path, zips, batch: int = 1):
-    """Yield (scientific name, ORDER, shapely geometry, bounds) per species, order zip by order zip. One feature per
-    read by default: a large whale's range is ~440 MB of WKB, and 20 of them at once ran out of memory."""
+    """Yield (scientific name, ORDER, shapely geometry, bounds) per species from order zips on disk (the record's
+    standalone ones), order by order."""
+    for zname in zips:
+        with zipfile.ZipFile(d / zname) as z:
+            yield from read_order(z, zname, d, batch)
+
+
+def read_order(z: zipfile.ZipFile, zname: str, scratch: Path, batch: int = 1):
+    """The ranges in one order zip, after checking it holds exactly one MDD_<Order>.gpkg for its own order. The
+    GeoPackage is inflated into a folder under `scratch`, read, and deleted. One feature per read by default: a large
+    whale's range is ~440 MB of WKB, and 20 of them at once ran out of memory."""
     import pyogrio.raw
     import shapely
 
-    if UNZIP is None:
-        raise RuntimeError("Info-ZIP unzip is not on PATH: it extracts the release's Deflate64 order zips")
-
-    for zname in zips:
-        zpath = d / zname
-        with zipfile.ZipFile(zpath) as z:
-            # the bundle's order zips also carry the release's citation.txt
-            names = [n for n in z.namelist() if not n.endswith("/") and n != "citation.txt"]
-        m = MEMBER.match(names[0]) if len(names) == 1 else None
-        if not m:
-            raise ValueError(
-                f"{zname}: members {names[:5]} are not one [<Order>/]MDD_<Order>.gpkg"
+    # the bundle's order zips also carry the release's citation.txt
+    names = [n for n in z.namelist() if not n.endswith("/") and n != "citation.txt"]
+    m = MEMBER.match(names[0]) if len(names) == 1 else None
+    if not m:
+        raise ValueError(
+            f"{zname}: members {names[:5]} are not one [<Order>/]MDD_<Order>.gpkg"
+        )
+    order = m["order"]
+    if f"MDD_{order}.zip" != zname or m["folder"] not in (None, order):
+        raise ValueError(f"{zname} holds {names[0]}")
+    # GDAL reads a GeoPackage inside a zip ~30x slower than from disk (SQLite seeks through the deflate stream:
+    # Primates 71 s against 2 s extracted), so it is inflated to disk first. Every member of the bundle is plain
+    # deflate (checked 2026-10-04: 54 of 54), which zipfile inflates as it reads and checks against the member's CRC;
+    # a Deflate64 member (as in the record's earlier standalone Chiroptera and Rodentia zips) raises NotImplementedError.
+    with tempfile.TemporaryDirectory(dir=scratch, prefix=".extract-") as tmp:
+        path = Path(tmp) / Path(names[0]).name
+        with z.open(names[0]) as src, open(path, "wb") as dst:
+            shutil.copyfileobj(src, dst, 1 << 24)
+        n = pyogrio.read_info(path)["features"]
+        for off in range(0, n, batch):
+            _, _, geom, fields = pyogrio.raw.read(
+                str(path),
+                columns=["sciname", "order"],
+                skip_features=off,
+                max_features=batch,
             )
-        order = m["order"]
-        if f"MDD_{order}.zip" != zname or m["folder"] not in (None, order):
-            raise ValueError(f"{zname} holds {names[0]}")
-        # GDAL reads a GeoPackage inside a zip ~30x slower than from disk (SQLite seeks through the deflate stream:
-        # Primates 71 s against 2 s extracted), so each one is extracted beside its zip and deleted once read. Info-ZIP
-        # unzip does it: the release packs its two largest orders (Chiroptera, Rodentia) with Deflate64, which Python's
-        # zipfile cannot inflate. The member name matched MEMBER, so it holds no unzip wildcard.
-        with tempfile.TemporaryDirectory(dir=d, prefix=".extract-") as tmp:
-            subprocess.run([UNZIP, "-q", str(zpath), names[0], "-d", tmp], check=True)  # nosec B603 - fixed argv, no shell
-            path = str(Path(tmp) / names[0])
-            n = pyogrio.read_info(path)["features"]
-            for off in range(0, n, batch):
-                _, _, geom, fields = pyogrio.raw.read(
-                    path,
-                    columns=["sciname", "order"],
-                    skip_features=off,
-                    max_features=batch,
-                )
-                for g, name, o in zip(shapely.from_wkb(geom), fields[0], fields[1]):
-                    if o.upper() != order.upper():
-                        raise ValueError(f"{zname}: {name} is in order {o}")
-                    yield name, order.upper(), g, g.bounds
+            for g, name, o in zip(shapely.from_wkb(geom), fields[0], fields[1]):
+                if o.upper() != order.upper():
+                    raise ValueError(f"{zname}: {name} is in order {o}")
+                yield name, order.upper(), g, g.bounds
 
 
 def overlapped(geom, r0: int, r1: int, c0: int, c1: int, res: float = RES) -> np.ndarray:
@@ -200,7 +202,9 @@ def overlapped(geom, r0: int, r1: int, c0: int, c1: int, res: float = RES) -> np
 
 
 def read_release(path: Path, batch: int = 1):
-    """read_ranges over the order zips stored in MDD_Mammalia.zip, each copied out beside it, read and deleted."""
+    """The ranges of the order zips in MDD_Mammalia.zip. The bundle stores them uncompressed, so each is opened where it
+    lies, nothing copied out: copying the largest (Artiodactyla, 3.6 GB) beside its 10.5 GB GeoPackage needed 14 GB of
+    scratch, more than the disk this ran on had free."""
     with zipfile.ZipFile(path) as outer:
         names = [n for n in outer.namelist() if not n.endswith("/") and n != "citation.txt"]
         odd = [n for n in names if not ORDER_ZIP.match(n)]
@@ -209,10 +213,8 @@ def read_release(path: Path, batch: int = 1):
                 f"{path.name}: {len(names)} members, not {EXPECTED_ORDERS} MDD_<Order>.zip (unexpected: {odd})"
             )
         for name in sorted(names):
-            with tempfile.TemporaryDirectory(dir=path.parent, prefix=".order-") as tmp:
-                with outer.open(name) as src, open(Path(tmp) / name, "wb") as dst:
-                    shutil.copyfileobj(src, dst, 1 << 24)
-                yield from read_ranges(Path(tmp), [name], batch)
+            with outer.open(name) as f, zipfile.ZipFile(f) as z:
+                yield from read_order(z, name, path.parent, batch)
 
 
 def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:
@@ -322,10 +324,10 @@ def main(argv=None, *, fetch_to=_fetch_to, want: dict = FILES) -> int:
     )
     t0 = time.time()
     d = fetch(a.cache / CACHE_DIR, fetch_to=fetch_to, want=want)
-    # A run killed outright (SIGKILL, out of memory, or SIGTERM, which skips Python's cleanup) leaves its copy of an
-    # order zip and its extracted GeoPackage, GBs each, under names no later run reuses; none outlives a run, so each
-    # run starts by removing those left. One run at a time per cache: a second would delete the first's copies.
-    for left in sorted([*d.glob(".order-*"), *d.glob(".extract-*")]):
+    # A run killed outright (SIGKILL, out of memory, or SIGTERM, which skips Python's cleanup) leaves its inflated
+    # GeoPackage, up to 10.5 GB, under a name no later run reuses; none outlives a run, so each run starts by removing
+    # those left. One run at a time per cache: a second would delete the first's.
+    for left in sorted(d.glob(".extract-*")):
         log.warning("removing %s, left by a run that was killed", left)
         shutil.rmtree(left)
     listed = species_list(d / SPECIES_LIST)

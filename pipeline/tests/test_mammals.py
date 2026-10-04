@@ -7,7 +7,6 @@ import hashlib
 import json
 import os
 import struct
-import subprocess  # nosec B404 - the test only names the error type
 import zipfile
 import zlib
 from collections import Counter
@@ -327,7 +326,13 @@ def test_the_order_zips_are_read_out_of_the_bundle_and_nothing_else(tmp_path, mo
     rel = write_release(src, tmp_path / "rel")
     got = {n: o for n, o, *_ in mm.read_release(rel / mm.RELEASE)}
     assert got == listed()  # positive control: every range of the four order zips stored in the bundle
-    assert not list(rel.glob(".order-*")), "each order zip copied out is deleted once read"
+    # read where they lie: mid-read the only file written is the GeoPackage being read, no copy of its order zip
+    # (the release's largest is 3.6 GB beside a 10.5 GB GeoPackage)
+    reading = mm.read_release(rel / mm.RELEASE)
+    next(reading)
+    assert [q.suffix for q in rel.rglob("*") if q.is_file() and q.parent != rel] == [".gpkg"]
+    reading.close()
+    assert sorted(q.name for q in rel.iterdir()) == sorted([mm.RELEASE, mm.SPECIES_LIST]), "and nothing left"
     for extra, drop, why in [
         (["MDD_Extra.zip"], [], "5 members"),
         (["readme.md"], ["MDD_Primates.zip"], r"4 members, not 4 MDD_<Order>.zip \(unexpected: \['readme.md'\]\)"),
@@ -435,9 +440,9 @@ def test_each_geopackage_is_read_from_an_extracted_copy_that_is_then_deleted(tmp
     assert not list(bad.glob(".extract-*")), "nor when it fails"
 
 def deflate64_zip(path: Path, member: str, data: bytes) -> int:
-    """A zip whose one member is marked Deflate64 (method 9), as the release packs Chiroptera and Rodentia. A
-    literal-only deflate stream uses no length code 285 and no distance code 30 or 31, so it inflates the same under
-    Deflate64. Returns the offset of the compressed data."""
+    """A zip whose one member is marked Deflate64 (method 9), as the record's earlier standalone Chiroptera and Rodentia
+    zips are. A literal-only deflate stream uses no length code 285 and no distance code 30 or 31, so it inflates the
+    same under Deflate64. Returns the offset of the compressed data."""
     c = zlib.compressobj(9, zlib.DEFLATED, -15, 9, zlib.Z_HUFFMAN_ONLY)
     comp = c.compress(data) + c.flush()
     crc, name = zlib.crc32(data), member.encode()
@@ -451,22 +456,26 @@ def deflate64_zip(path: Path, member: str, data: bytes) -> int:
     return start
 
 
-def test_a_deflate64_order_is_read(tmp_path):
+def test_a_deflate64_or_corrupt_geopackage_stops_the_run(tmp_path):
     src = write_source(tmp_path / "src")
     member = "Rodentia/MDD_Rodentia.gpkg"
     with zipfile.ZipFile(src / "MDD_Rodentia.zip") as z:
         data = z.read(member)
-    start = deflate64_zip(src / "MDD_Rodentia.zip", member, data)
+    good = (src / "MDD_Rodentia.zip").read_bytes()
+    # the release's members are all plain deflate; a Deflate64 one would be refused, not skipped
+    deflate64_zip(src / "MDD_Rodentia.zip", member, data)
+    with pytest.raises(NotImplementedError, match="compression method is not supported"):
+        list(mm.read_ranges(src, ["MDD_Rodentia.zip"]))
+    assert not list(src.glob(".extract-*"))
+    # a corrupt member fails its inflate or its CRC; the same zip unspoilt reads (positive control)
+    (src / "MDD_Rodentia.zip").write_bytes(good)
+    assert [n for n, *_ in mm.read_ranges(src, ["MDD_Rodentia.zip"])] == ["Mus a"]
     with zipfile.ZipFile(src / "MDD_Rodentia.zip") as z:
-        assert [(i.filename, i.compress_type, i.file_size) for i in z.infolist()] == [(member, 9, len(data))]
-        with pytest.raises(NotImplementedError, match="compression method is not supported"):
-            z.read(member)  # why the reader shells out to unzip
-    got = {n: o for n, o, *_ in mm.read_ranges(src, ["MDD_Rodentia.zip", "MDD_Chiroptera.zip"])}
-    assert got == {"Mus a": "RODENTIA", "Myotis b": "CHIROPTERA"}, "Deflate64 and deflate orders alike"
-    spoilt = bytearray((src / "MDD_Rodentia.zip").read_bytes())
+        start = z.getinfo(member).header_offset + 30 + len(member)
+    spoilt = bytearray(good)
     spoilt[start + 200] ^= 0xFF
     (src / "MDD_Rodentia.zip").write_bytes(bytes(spoilt))
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises((zipfile.BadZipFile, zlib.error)):
         list(mm.read_ranges(src, ["MDD_Rodentia.zip"]))
 
 def test_main_publishes_tiles_and_manifest_and_nothing_over_budget(tmp_path, monkeypatch):
@@ -480,14 +489,14 @@ def test_main_publishes_tiles_and_manifest_and_nothing_over_budget(tmp_path, mon
 
     out = tmp_path / "out"
     args = ["--cache", str(tmp_path / "cache"), "--out-dir", str(out)]
-    # copies a killed run left (an order zip, a GeoPackage) go; a file merely named alike stays
+    # GeoPackages killed runs left go; a file merely named alike stays
     d = tmp_path / "cache" / mm.CACHE_DIR
-    for left in (d / ".order-k1ll3d" / "MDD_Rodentia.zip", d / ".extract-k1ll3d" / "MDD_Rodentia.gpkg"):
+    for left in (d / ".extract-k1ll3d" / "MDD_Rodentia.gpkg", d / ".extract-0ther" / "Primates" / "MDD_Primates.gpkg"):
         left.parent.mkdir(parents=True)
         left.write_bytes(b"x" * 1000)
-    (d / "order-notes.txt").write_text("kept")
+    (d / "extract-notes.txt").write_text("kept")
     assert mm.main(args, fetch_to=fetch_to, want=want) == 0
-    assert sorted(p.name for p in d.iterdir()) == sorted([*mm.FILES, "order-notes.txt"])
+    assert sorted(p.name for p in d.iterdir()) == sorted([*mm.FILES, "extract-notes.txt"])
     m = json.loads((out / "mammals.json").read_text())
     assert (m["maxLevel"], m["maxSpecies"], m["species"], m["groups"]) == (
         3,
