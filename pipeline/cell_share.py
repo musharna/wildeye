@@ -39,10 +39,10 @@ def cell_index(origin: float, n: int, step: float, z: int, axis: str) -> np.ndar
     return np.floor((90 - centres) / 180 * 2**z * TILE).astype(np.int64)
 
 
-def row_areas_km2(top: float, rows: int, res: float) -> np.ndarray:
-    """Area in km² of one res-degree source pixel in each of `rows` rows from latitude `top` down."""
-    lat = np.radians(top - res * np.arange(rows + 1))
-    return EARTH_KM**2 * math.radians(res) * (np.sin(lat[:-1]) - np.sin(lat[1:]))
+def row_areas_km2(top: float, rows: int, dy: float, dx: float) -> np.ndarray:
+    """Area in km² of one source pixel, dy degrees tall and dx wide, in each of `rows` rows from latitude `top` down."""
+    lat = np.radians(top - dy * np.arange(rows + 1))
+    return EARTH_KM**2 * math.radians(dx) * (np.sin(lat[:-1]) - np.sin(lat[1:]))
 
 
 class Grid:
@@ -72,7 +72,7 @@ def accumulate(src, z: int, counts: dict, band_rows: int = 4096) -> float:
     grid = Grid(src.transform, src.width, src.height, z)
     col_starts = np.flatnonzero(np.diff(grid.gx, prepend=grid.gx[0] - 1))
     cols = grid.gx[col_starts]
-    areas = row_areas_km2(src.transform.f, src.height, src.transform.a)
+    areas = row_areas_km2(src.transform.f, src.height, -src.transform.e, src.transform.a)
     row_starts = np.flatnonzero(np.diff(grid.gy, prepend=grid.gy[0] - 1))
     row_ends = np.append(row_starts[1:], src.height)
     km2 = 0.0

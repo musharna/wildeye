@@ -198,6 +198,26 @@ def test_only_the_release_layout_is_read(tmp_path):
         cs.accumulate(bad, 9, {})
 
 
+def test_area_takes_rows_by_the_row_step_and_width_by_the_column_step(tmp_path):
+    """accumulate's km² for a GeoTIFF of all class pixels is the area of its bounds on the sphere, for square pixels
+    and for pixels twice as tall as wide (rows step by transform.e, columns by transform.a)."""
+
+    def area(dx, dy):
+        p = tmp_path / f"{dx}_{dy}.tif"
+        t = rasterio.Affine(dx, 0, 10.0, 0, -dy, 50.0)
+        with rasterio.open(p, "w", driver="GTiff", width=4, height=4, count=1, dtype="uint8", crs="EPSG:4326", transform=t) as dst:
+            dst.write(np.ones((1, 4, 4), np.uint8))
+        with rasterio.open(p) as src:
+            got = cs.accumulate(src, 9, {})
+        want = cs.EARTH_KM**2 * math.radians(4 * dx) * (math.sin(math.radians(50.0)) - math.sin(math.radians(50.0 - 4 * dy)))
+        return got, want
+
+    got, want = area(0.001, 0.001)  # positive control: square pixels
+    assert got == pytest.approx(want, rel=1e-12)
+    got, want = area(0.001, 0.002)
+    assert got == pytest.approx(want, rel=1e-12), "a non-square pixel's area is its own width by its own height"
+
+
 def test_main_writes_one_listed_8_bit_pyramid_per_epoch_whose_pixels_are_the_shares(
     tmp_path,
 ):
