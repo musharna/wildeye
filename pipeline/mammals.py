@@ -174,7 +174,9 @@ def overlapped(geom, r0: int, r1: int, c0: int, c1: int, res: float = RES) -> np
     rounding chose (east or south on an exact origin), so a range counted in a cell where it has no area, and only when
     the window (the range's own bounds) reached that cell. On opposite grids such a line falls on opposite sides; where
     two such lines meet at a grid node (an inner corner), the cell in the corner is missed by both on the grid moved
-    towards it. A crossing within EDGE_EPS of a cell's edge is not counted. Avoids GDAL's polygon fill, which walks every
+    towards it. A crossing within EDGE_EPS of a cell's edge is not counted: on the real release that drops only slivers
+    of float noise along grid-aligned edges (up to 1e-12 deg² in the eight cells that changed most, each of whose counts
+    now equals shapely's count of ranges covering more than 1e-11 deg² of it). Avoids GDAL's polygon fill, which walks every
     edge for every row: ~14 min for a whale range of 27 M vertices against ~31 s here."""
     import shapely
     from rasterio import features

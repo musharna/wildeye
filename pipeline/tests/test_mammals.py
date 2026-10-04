@@ -588,6 +588,14 @@ CELLS = {
     "Amazon at Santarem": ((-2.45, -54.75), [31, 97, 9, 41]),
     "Saloum delta": ((13.85, -16.65), [19, 31, 3, 37]),
 }
+# The eight cells whose count fell most when outlines along grid lines stopped counting (review of #56): the ranges
+# covering more than 1e-11 deg² (a billionth) of each cell, from the raw polygons with shapely, read independently of the
+# pipeline (2026-10-04). shapely's interior relation counted 6 to 36 more ranges in seven of them, every one a sliver
+# of float noise along a grid-aligned edge (up to 1e-12 deg²).
+EDGE_CELLS = {
+    (5.55, 103.05): 110, (60.05, 29.55): 8, (56.95, 139.05): 18, (57.05, 139.05): 18,
+    (26.05, -112.95): 29, (66.05, 40.85): 11, (63.05, 21.05): 8, (66.55, 69.45): 1,
+}
 
 
 @pytest.mark.skipif(
@@ -610,6 +618,9 @@ def test_real_release_cells_read_the_counts_of_the_raw_ranges(tmp_path):
         )
         total, rgb = tile.getpixel(px), list(g.getpixel(gpx))
         assert [*rgb, total - sum(rgb)] == want, name
+    for (lat, lon), want in EDGE_CELLS.items():
+        tile, px = read_px(lambda x, y: Image.open(out / "3" / str(x) / f"{y}.png"), lat, lon, 3)
+        assert tile.getpixel(px) == want, (lat, lon)
 
 
 def test_a_species_listed_twice_stops_the_run(tmp_path):

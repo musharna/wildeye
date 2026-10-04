@@ -56,10 +56,17 @@ exactly per cell and by group.
    coarser levels the mean over cells with any species; level-3 RGB group tiles hold rodents, bats and primates, so the
    readout splits the total exactly. Budget 6 MB.
 
-**Real run (2026-10-04):** 6,360 species from the bundle in 31.5 min (1,892 s), up to 213 species in a cell, tiles
-2.2 MB (display 1.47 MB, groups 0.69 MB) of the 6 MB budget. All 15 cells pre-registered from the raw polygons read
-their counts exactly from the published tiles. Two findings from real data changed the build: the standalone order
-zips lack the three manatees (so the bundle is read), and the list and the maps disagree in the three pinned names.
+**Real run (2026-10-04, after the review of #56):** 6,360 species from the bundle in 31 min (1,866 s), up to 213
+species in a cell, tiles 2.2 MB (display 1.47 MB, groups 0.69 MB) of the 6 MB budget. All 15 cells pre-registered from
+the raw polygons read their counts exactly from the published tiles. Against the first build, 289 of 8.4 M level-3
+pixels changed, every one down (the largest by 39 species, off Terengganu). In the eight that changed most, each count
+equals shapely's count of ranges covering more than 1e-11 deg² of the cell; in seven of them shapely's interior
+relation counts 6 to 36 more, every one a sliver of float noise along a grid-aligned edge (at most 1e-12 deg²). Those
+eight are pinned in the full-release test. Built on a
+second machine (same GDAL 3.12.4 and GEOS 3.13.1): the first had too little free disk. Findings from real data that
+changed the build: the standalone order zips lack the three manatees (so the bundle is read); the list and the maps
+disagree in the three pinned names; copying an order zip out beside its GeoPackage needed 14 GB of scratch (so each is
+read in place); and the bundle holds no Deflate64 (so Info-ZIP unzip is not needed).
 
 ## Defects and limits
 
