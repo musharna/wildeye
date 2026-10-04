@@ -64,7 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
       - name: pytest pipeline/tests
-        run: uv run --python 3.13 --with pytest --with numpy --with pillow --with boto3 --with arm-pyart --with openpyxl --with rasterio --with pyproj --with duckdb pytest pipeline/tests -q -p no:cacheprovider
+        run: uv run --python 3.13 --with pytest --with numpy --with pillow --with boto3 --with arm-pyart --with openpyxl --with rasterio --with pyproj --with duckdb --with pyogrio --with shapely pytest pipeline/tests -q -p no:cacheprovider
 
   review:
     # Automated Claude code review. Fails LOUD when the key is missing rather
