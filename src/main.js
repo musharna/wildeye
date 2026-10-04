@@ -40,6 +40,7 @@ import { mangrovesLayer } from './data/mangroves.js';
 import { surfaceWaterLayer } from './data/surfaceWater.js';
 import { humanFootprintLayer } from './data/humanFootprint.js';
 import { biiLayer } from './data/bii.js';
+import { reptilesLayer } from './data/reptiles.js';
 import { wetlandsLayer } from './data/wetlands.js';
 import { obisGridLayer } from './data/obisGrid.js';
 import { protectedAreasLayer } from './data/protectedAreas.js';
@@ -209,13 +210,14 @@ async function init() {
     dataManager.register(surfaceWaterLayer);
     dataManager.register(humanFootprintLayer);
     dataManager.register(biiLayer);
+    dataManager.register(reptilesLayer);
     dataManager.register(wetlandsLayer);
     dataManager.register(obisGridLayer);
     dataManager.register(protectedAreasLayer);
     dataManager.register(cameraTrapsLayer);
     dataManager.register(ednaLayer);
     // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
-    const drapeLayers = [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
+    const drapeLayers = [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, reptilesLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
     const drapeIds = drapeLayers.map((l) => l.id);
     const compare = createCompare({
       dataManager,
@@ -326,7 +328,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, reptilesLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
