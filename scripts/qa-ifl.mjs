@@ -177,12 +177,21 @@ try {
     t.set('2010-06-01T00:00:00Z');
     return t.get();
   });
-  await sleep(3000);
+  // The bar reaches a layer only through the module's setObservedTime (observedTime.js attachObservedTime), and
+  // getObservedExtent gives it a span: no such hook means no push can reach the layer, however late. A time
+  // sampler (hansen-loss) is the positive control that the probe sees a hook where there is one.
+  const hooks = await page.evaluate((id) => {
+    const mod = (lid) => window.__godsEyeView.dataManager.layers.get(lid)?.module;
+    const has = (lid) => ['setObservedTime', 'getObservedExtent'].filter((k) => typeof mod(lid)?.[k] === 'function');
+    return { ours: has(id), sampler: has('hansen-loss') };
+  }, ID);
+  await settle(); // tile traffic quiet: a redraw re-requests tiles
   const s2 = await stats();
   const [past] = await readAll([[green.lat, green.lon]]);
   const imageryAfter = await imagery();
-  report('ignores-the-time-bar', moved?.startsWith('2010-06-01') && imageryBefore === 'same' && imageryAfter === 'same' && s2?.time === DATE && !s2?.error && past?.text === labels[5],
-    { moved, imageryBefore, imageryAfter, stats: s2, point: row(past) });
+  report('ignores-the-time-bar', moved?.startsWith('2010-06-01') && hooks.ours.length === 0 && hooks.sampler.includes('setObservedTime')
+    && imageryBefore === 'same' && imageryAfter === 'same' && s2?.time === DATE && !s2?.error && past?.text === labels[5],
+    { moved, hooks, imageryBefore, imageryAfter, stats: s2, point: row(past) });
   await page.evaluate(() => {
     window.__godsEyeView.observedTime.set(null);
     window.__godsEyeView.observedTime.setLayerExtent('qa-probe', null);
