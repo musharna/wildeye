@@ -41,11 +41,14 @@ exactly per cell and by group.
    and Python's `zipfile` cannot inflate the Deflate64 that packs Chiroptera and Rodentia.
 3. **Species:** the names read must be exactly the release list's, each once, under the order the list gives it, except
    the two pinned unmapped bats (a map for either stops the run) and the civet, counted under the list's spelling.
-4. **Count:** each range is counted over its own bounding box on a global 0.1° grid in every cell it overlaps: the
-   cell's centre lies in the range (shapely, prepared) or the range's outline touches the cell (rasterio `all_touched`
-   on the outline as lines), so a range smaller than a cell still counts. On land ranges this gives GDAL's
-   `all_touched` polygon fill cell for cell; the fill itself walks every edge for every row, ~14 min for a whale range
-   of 27 M vertices against 31 s this way. Into rodents, bats, primates and other. A range that burns no cell or lies off the globe stops the run, as does any cell over 255 species.
+4. **Count:** each range is counted over its own bounding box on a global 0.1° grid in every cell it shares interior
+   with (shapely: intersects and not touches): the cell's centre lies in the range (shapely, prepared) or the range's
+   outline crosses the cell (rasterio `all_touched` on the outline as lines, on four grids moved 1e-7° diagonally,
+   kept where all agree), so a range smaller than a cell still counts, and an outline running exactly along a grid line
+   counts in neither cell beside it (burnt once, it counted in the cell east or south of it, and only when the range's
+   bounds reached that cell: review of #56). GDAL's polygon fill walks every edge for every row, ~14 min for a whale
+   range of 27 M vertices against ~31 s this way. Into rodents, bats, primates and other. An empty range, a range
+   reaching past ±180° or ±90°, and any cell over 255 species stop the run.
 5. **Tiles:** as for reptiles: the total by nearest neighbour to level 3 (4096 × 2048), one palette colour per count,
    coarser levels the mean over cells with any species; level-3 RGB group tiles hold rodents, bats and primates, so the
    readout splits the total exactly. Budget 6 MB.
@@ -59,14 +62,15 @@ zips lack the three manatees (so the bundle is read), and the list and the maps 
 
 - **Expert ranges, not records.** A range is the extent of occurrence drawn by experts; a species need not be present
   in every cell of it.
-- **The overlap rule counts edges.** A species counts in every cell its polygon touches, so totals near range edges run
-  higher than a cell-centre rule would give.
+- **The overlap rule counts edges.** A species counts in every cell its polygon reaches into, so totals near range
+  edges run higher than a cell-centre rule would give.
 - **255 per cell is the encoding's ceiling.** A run with more stops rather than clipping.
 
 ## Frontend (`src/data/mammals.js`)
 
 - One geographic provider to level 3; the build time is a query string on tile URLs, drape and readout alike.
-- The readout decodes the total from the display tile (the reptile layer's `decodeCount`) and the groups from the RGB
+- The readout reads the pixel under the centre of the clicked point's 0.1° cell (level 3 carries 3600 cells on 4096
+  pixels by nearest neighbour, so the pixel under an off-centre point can hold the next cell), and decodes the total from the display tile (the reptile layer's `decodeCount`) and the groups from the RGB
   tile at the same pixel; a group pixel that is not opaque or exceeds the total is an error row.
 - The legend samples counts 1, 50, 100, 150, 200 and the maximum in their colours, then what is counted.
 

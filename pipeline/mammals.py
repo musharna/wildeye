@@ -4,7 +4,7 @@ Spec: docs/superpowers/specs/2026-10-04-mammal-richness-design.md. Zenodo 10.528
 range polygon per species for the 6,362 wild extant mammals of the Mammal Diversity Database v1.2 (Marsh et al. 2022),
 as one zipped GeoPackage per order, all 27 stored in MDD_Mammalia.zip. The bundle is downloaded once and refused unless its
 md5 is Zenodo's; each order zip is copied out of it and each GeoPackage extracted with Info-ZIP unzip, read, and deleted. Every range is counted, over its own bounding box, on a global 0.1° grid
-in every cell it overlaps (the cell's centre lies in the range, or the range's outline touches the cell), into four counts: rodents, bats,
+in every cell it shares interior with (the cell's centre lies in the range, or the range's outline crosses the cell), into four counts: rodents, bats,
 primates and other. The species read must be exactly the 6,362 of the release's own list, each once, under the taxonomic
 order the list gives it. The total is resampled by nearest neighbour to level 3 of Cesium's geographic tiling, one palette colour per
 count, coarser levels the mean over cells with any species; level 3 also gets RGB group tiles (rodents, bats, primates)
@@ -18,6 +18,7 @@ import argparse
 import csv
 import datetime as dt
 import logging
+import math
 import os
 import re
 import shutil
@@ -57,6 +58,7 @@ MAPPED_SPECIES = EXPECTED_SPECIES - len(UNMAPPED)
 RES = 0.1  # degrees per grid cell
 # An outline within this of a grid line (~1 cm) is taken to run along it, not into the cell beyond (see overlapped).
 EDGE_EPS = 1e-7
+OFF_GLOBE_EPS = 1e-9  # degrees past ±180° / ±90° taken as float noise in a coordinate, not part of a range
 MAX_LEVEL = 3  # 4096 × 2048: finer than the 0.1° grid (3600 × 1800)
 BUDGET_BYTES = 6_000_000
 # MDD order → count: rodents, bats, primates, other
@@ -229,6 +231,12 @@ def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:
                 f"{name} ({order}) is not on the release's list as {listed.get(name)}"
             )
         seen.add(name)
+        if not all(map(math.isfinite, (x0, y0, x1, y1))):
+            raise ValueError(f"{name}: range has no extent (bounds {x0, y0, x1, y1})")
+        # Any part past the edges would be cut away unseen (a range in 0–360° longitudes loses its eastern half); a
+        # coordinate's float noise (Lepus timidus reaches 180.0000000000002) is not a part
+        if min(x0 + 180, 180 - x1, y0 + 90, 90 - y1) < -OFF_GLOBE_EPS:
+            raise ValueError(f"{name}: range {x0, y0, x1, y1} reaches past the globe")
         c0, c1 = (
             max(int(np.floor((x0 + 180) / res)), 0),
             min(int(np.ceil((x1 + 180) / res)), w),
@@ -237,9 +245,8 @@ def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:
             max(int(np.floor((90 - y1) / res)), 0),
             min(int(np.ceil((90 - y0) / res)), h),
         )
-        if c1 <= c0 or r1 <= r0:
-            raise ValueError(f"{name}: range {x0, y0, x1, y1} is off the globe")
         burnt = overlapped(geom, r0, r1, c0, c1, res)
+        # a range with area shares interior with some cell, so this stops the run only on a fault in overlapped
         if not burnt.any():
             raise ValueError(f"{name}: range overlaps no cell")
         counts[GROUPS.get(order, 3), r0:r1, c0:c1] += burnt
@@ -315,6 +322,12 @@ def main(argv=None, *, fetch_to=_fetch_to, want: dict = FILES) -> int:
     )
     t0 = time.time()
     d = fetch(a.cache / CACHE_DIR, fetch_to=fetch_to, want=want)
+    # A run killed outright (SIGKILL, out of memory, or SIGTERM, which skips Python's cleanup) leaves its copy of an
+    # order zip and its extracted GeoPackage, GBs each, under names no later run reuses; none outlives a run, so each
+    # run starts by removing those left. One run at a time per cache: a second would delete the first's copies.
+    for left in sorted([*d.glob(".order-*"), *d.glob(".extract-*")]):
+        log.warning("removing %s, left by a run that was killed", left)
+        shutil.rmtree(left)
     listed = species_list(d / SPECIES_LIST)
     counts = rasterise(read_release(d / RELEASE), listed)
     mapped = len(set(listed) - UNMAPPED)

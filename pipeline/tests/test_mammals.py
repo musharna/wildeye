@@ -111,15 +111,24 @@ def test_an_overfull_cell_stops_the_run():
     assert mm.rasterise(ranges(first), listed(first)).max() == 255  # positive control
 
 
-def test_a_range_that_burns_no_cell_stops_the_run():
-    empty = [("Nullus", "RODENTIA", MultiPolygon(), (0.72, 0.72, 0.74, 0.74))]
-    with pytest.raises(ValueError, match="Nullus: range overlaps no cell"):
-        mm.rasterise(iter(empty), {"Nullus": "RODENTIA"})
-    off = [("Extra", "RODENTIA", box(190, 0, 191, 1), (190, 0, 191, 1))]
-    with pytest.raises(
-        ValueError, match=r"Extra: range \(190, 0, 191, 1\) is off the globe"
-    ):
-        mm.rasterise(iter(off), {"Extra": "RODENTIA"})
+def test_an_empty_range_or_one_reaching_past_the_globe_stops_the_run(monkeypatch):
+    def run(name, g):
+        return mm.rasterise(iter([(name, "RODENTIA", g, g.bounds)]), {name: "RODENTIA"})
+
+    # an empty geometry as the reader gives it: its bounds are NaN
+    with pytest.raises(ValueError, match=r"Nullus: range has no extent \(bounds \(nan"):
+        run("Nullus", MultiPolygon())
+    # wholly or partly past an edge: the part beyond would be cut away unseen
+    for g in (box(190, 0, 191, 1), box(179.5, 0, 180.5, 1), box(0, 89.5, 1, 90.5), box(-181, -60, -179, -59)):
+        with pytest.raises(ValueError, match="Extra: range .* reaches past the globe"):
+            run("Extra", g)
+    # positive controls: float noise at 180° and a range to the edges count; 5 × 10 cells
+    assert run("Edge", box(179.5, 0, 180.0000000000002, 1)).sum() == 50
+    assert run("Edges", box(-180, -90, 180, 90)).sum() == 3600 * 1800
+    # a fault in the overlap rule that burns nothing stops the run
+    monkeypatch.setattr(mm, "overlapped", lambda g, r0, r1, c0, c1, res: np.zeros((r1 - r0, c1 - c0), np.uint8))
+    with pytest.raises(ValueError, match="Mus: range overlaps no cell"):
+        run("Mus", box(0, 0, 1, 1))
 
 
 def test_a_range_counts_where_it_overlaps_a_cell_without_a_polygon_fill(monkeypatch):
@@ -471,7 +480,14 @@ def test_main_publishes_tiles_and_manifest_and_nothing_over_budget(tmp_path, mon
 
     out = tmp_path / "out"
     args = ["--cache", str(tmp_path / "cache"), "--out-dir", str(out)]
+    # copies a killed run left (an order zip, a GeoPackage) go; a file merely named alike stays
+    d = tmp_path / "cache" / mm.CACHE_DIR
+    for left in (d / ".order-k1ll3d" / "MDD_Rodentia.zip", d / ".extract-k1ll3d" / "MDD_Rodentia.gpkg"):
+        left.parent.mkdir(parents=True)
+        left.write_bytes(b"x" * 1000)
+    (d / "order-notes.txt").write_text("kept")
     assert mm.main(args, fetch_to=fetch_to, want=want) == 0
+    assert sorted(p.name for p in d.iterdir()) == sorted([*mm.FILES, "order-notes.txt"])
     m = json.loads((out / "mammals.json").read_text())
     assert (m["maxLevel"], m["maxSpecies"], m["species"], m["groups"]) == (
         3,
