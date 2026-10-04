@@ -34,6 +34,7 @@ import neonVectorsLayer from './data/neon-vectors.js';
 import phenologyLayer from './data/phenology.js';
 import arbonetLayer from './data/arbonet.js';
 import { biotimeLayer } from './data/biotime.js';
+import { crwOutlookLayer } from './data/crwOutlook.js';
 import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, setDrapeSplit, drapeStackState, onDrapeRestack } from './data/rasterDrape.js';
 import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer, gibsAmphibianLayer, gibsMammalLayer } from './data/gibsLayer.js';
 import { hansenLossLayer } from './data/hansenLoss.js';
@@ -197,6 +198,7 @@ async function init() {
     dataManager.register(birdsLayer);
     dataManager.register(aloftLayer);
     dataManager.register(crwBleachingLayer);
+    dataManager.register(crwOutlookLayer);
     dataManager.register(oisstLayer);
     dataManager.register(chlorALayer);
     dataManager.register(crwDhwLayer);
@@ -218,7 +220,7 @@ async function init() {
     dataManager.register(cameraTrapsLayer);
     dataManager.register(ednaLayer);
     // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
-    const drapeLayers = [crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, reptilesLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
+    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, reptilesLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
     const drapeIds = drapeLayers.map((l) => l.id);
     const compare = createCompare({
       dataManager,
@@ -330,7 +332,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, reptilesLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[crwOutlookLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, biiLayer, reptilesLayer, wetlandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({

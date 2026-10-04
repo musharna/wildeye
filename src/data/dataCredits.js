@@ -35,7 +35,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'noaa-crw',
-    html: 'Coral bleaching alerts, degree heating weeks, HotSpot and sea ice: Courtesy <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (daily 5 km products v3.1; Bleaching Alert Area on the legacy 0–4 scale)',
+    html: 'Coral bleaching alerts, degree heating weeks, HotSpot, sea ice and the four-month bleaching outlook: Courtesy <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (daily 5 km products v3.1, Bleaching Alert Area on the legacy 0–4 scale; Four-Month Coral Bleaching Heat Stress Outlook v5, CFSv2, 0.5°)',
   },
   {
     key: 'noaa-ndvi-cdr',
