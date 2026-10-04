@@ -230,6 +230,42 @@ def write_source(d: Path, spec=RANGES):
     return d
 
 
+def write_release(src: Path, dest: Path, *, extra=(), drop=()):
+    """The record's shape: MDD_Mammalia.zip storing the order zips (and citation.txt), beside the species list. As in
+    the record, each stored order zip carries a citation.txt beside its GeoPackage."""
+    dest.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(dest / mm.RELEASE, "w", zipfile.ZIP_STORED) as z:
+        for p in sorted(src.glob("MDD_*.zip")):
+            if p.name not in drop:
+                inner = dest / p.name
+                inner.write_bytes(p.read_bytes())
+                with zipfile.ZipFile(inner, "a") as o:
+                    o.writestr("citation.txt", "Marsh et al.")
+                z.write(inner, p.name)
+                inner.unlink()
+        z.writestr("citation.txt", "Marsh et al.")
+        for name in extra:
+            z.writestr(name, "x")
+    (dest / mm.SPECIES_LIST).write_bytes((src / mm.SPECIES_LIST).read_bytes())
+    return dest
+
+
+def test_the_order_zips_are_read_out_of_the_bundle_and_nothing_else(tmp_path, monkeypatch):
+    monkeypatch.setattr(mm, "EXPECTED_ORDERS", 4)
+    src = write_source(tmp_path / "src")
+    rel = write_release(src, tmp_path / "rel")
+    got = {n: o for n, o, *_ in mm.read_release(rel / mm.RELEASE)}
+    assert got == listed()  # positive control: every range of the four order zips stored in the bundle
+    assert not list(rel.glob(".order-*")), "each order zip copied out is deleted once read"
+    for extra, drop, why in [
+        (["MDD_Extra.zip"], [], "5 members"),
+        (["readme.md"], ["MDD_Primates.zip"], r"4 members, not 4 MDD_<Order>.zip \(unexpected: \['readme.md'\]\)"),
+    ]:
+        bad = write_release(src, tmp_path / f"bad{len(why)}", extra=extra, drop=drop)
+        with pytest.raises(ValueError, match=why):
+            list(mm.read_release(bad / mm.RELEASE))
+
+
 def md5s(d: Path):
     return {
         p.name: hashlib.md5(p.read_bytes(), usedforsecurity=False).hexdigest()
@@ -362,9 +398,11 @@ def test_a_deflate64_order_is_read(tmp_path):
     with pytest.raises(subprocess.CalledProcessError):
         list(mm.read_ranges(src, ["MDD_Rodentia.zip"]))
 
-def test_main_publishes_tiles_and_manifest_and_nothing_over_budget(tmp_path):
-    src = write_source(tmp_path / "src")
+def test_main_publishes_tiles_and_manifest_and_nothing_over_budget(tmp_path, monkeypatch):
+    monkeypatch.setattr(mm, "EXPECTED_ORDERS", 4)
+    src = write_release(write_source(tmp_path / "orders"), tmp_path / "src")
     want = md5s(src)
+    assert sorted(want) == sorted(mm.FILES), "the files the module pins"
 
     def fetch_to(url, path):
         path.write_bytes((src / url.split("/files/")[1].split("/")[0]).read_bytes())
@@ -396,13 +434,19 @@ def test_main_publishes_tiles_and_manifest_and_nothing_over_budget(tmp_path):
     assert not (out / ".mammals.tmp").exists()
 
 
-SMALL = ["MDD_Monotremata.zip", "MDD_Microbiotheria.zip", "MDD_Notoryctemorphia.zip"]
+# The record's standalone zips of three small orders (an earlier export than the bundle's, md5s from the Zenodo API
+# 2026-10-04): small enough for CI, where the 10.3 GB bundle is not.
+SMALL = {
+    "MDD_Monotremata.zip": "0508a96e6a74bcab4c67858d3aaa44cd",
+    "MDD_Microbiotheria.zip": "6272985e06f4c00b8469415e8f3d2566",
+    "MDD_Notoryctemorphia.zip": "d327954aaf726337db138e03061c952d",
+}
 
 
-# Real execution in CI: three small orders and the species list come from Zenodo through the pinned fetcher (md5s from
-# the module), are read by the module's reader, and match the raw polygons read with pyogrio + shapely here.
+# Real execution in CI: three small orders and the species list come from Zenodo through the pinned fetcher, are read
+# by the module's reader, and match the raw polygons read with pyogrio + shapely here.
 def test_real_small_orders_read_and_count_as_their_raw_polygons(tmp_path):
-    want = {n: mm.FILES[n] for n in [*SMALL, mm.SPECIES_LIST]}
+    want = {**SMALL, mm.SPECIES_LIST: mm.FILES[mm.SPECIES_LIST]}
     d = mm.fetch(CACHE / mm.CACHE_DIR, want=want)
     full = mm.species_list(d / mm.SPECIES_LIST)
     assert len(full) == mm.EXPECTED_SPECIES
@@ -440,7 +484,20 @@ def test_real_small_orders_read_and_count_as_their_raw_polygons(tmp_path):
 # Pre-registered from the raw polygons with shapely (ranges whose shape intersects the 0.1° cell) before the layer was
 # written: cell centre → rodents, bats, primates, other. Needs the whole release (10.3 GB) in the cache: too large for
 # CI, so it skips loudly there; the real run checks it.
-CELLS = {}
+CELLS = {
+    "Albertine Rift": ((-1.05, 29.55), [67, 60, 14, 68]),
+    "central Amazon": ((-3.05, -60.05), [26, 97, 11, 40]),
+    "Andes, Ecuador": ((-0.95, -77.85), [50, 93, 8, 52]),
+    "Borneo": ((1.05, 114.05), [31, 42, 9, 32]),
+    "Madagascar": ((-18.95, 47.55), [2, 12, 0, 10]),
+    "Texas": ((30.25, -97.75), [18, 10, 0, 20]),
+    "Tasmania": ((-42.05, 146.55), [3, 7, 0, 20]),
+    "Siberia": ((60.05, 100.05), [12, 2, 0, 25]),
+    "Sahara": ((23.05, 10.05), [5, 2, 0, 9]),
+    "Greenland ice": ((72.05, -40.05), [0, 0, 0, 2]),
+    "Antarctica": ((-80.05, 0.05), [0, 0, 0, 0]),
+    "mid Pacific": ((0.05, -149.95), [0, 0, 0, 25]),
+}
 
 
 @pytest.mark.skipif(

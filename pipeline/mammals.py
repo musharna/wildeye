@@ -2,8 +2,8 @@
 
 Spec: docs/superpowers/specs/2026-10-04-mammal-richness-design.md. Zenodo 10.5281/zenodo.6644198 (CC BY 4.0) holds one
 range polygon per species for the 6,362 wild extant mammals of the Mammal Diversity Database v1.2 (Marsh et al. 2022),
-as one zipped GeoPackage per order. Each zip is downloaded once and refused unless its md5 is Zenodo's; each GeoPackage
-is extracted beside it with Info-ZIP unzip, read, and deleted. Every range is counted, over its own bounding box, on a global 0.1° grid
+as one zipped GeoPackage per order, all 27 stored in MDD_Mammalia.zip. The bundle is downloaded once and refused unless its
+md5 is Zenodo's; each order zip is copied out of it and each GeoPackage extracted with Info-ZIP unzip, read, and deleted. Every range is counted, over its own bounding box, on a global 0.1° grid
 in every cell it overlaps (the cell's centre lies in the range, or the range's outline touches the cell), into four counts: rodents, bats,
 primates and other. The species read must be exactly the 6,362 of the release's own list, each once, under the taxonomic
 order the list gives it. The total is resampled by nearest neighbour to level 3 of Cesium's geographic tiling, one palette colour per
@@ -38,37 +38,15 @@ log = logging.getLogger("mammals")
 RECORD_API = "https://zenodo.org/api/records/6644198"
 CACHE_DIR = "mdd"
 SPECIES_LIST = "mdd_spList_wFamilieswOrders_mapped_6362species.csv"
-# Zenodo's md5 of each file used (record 6644198, read from the API 2026-10-04); MDD_Mammalia.zip repeats the orders
+# Zenodo's md5 of each file used (record 6644198, read from the API 2026-10-04). MDD_Mammalia.zip stores all 27 order
+# zips as exported 2021-06-22; the record's standalone order zips are an export of 2021-06-11 whose Sirenia lacks the
+# three manatees, so only the bundle is used.
+RELEASE = "MDD_Mammalia.zip"
 FILES = {
-    "MDD_Afrosoricida.zip": "010b4ebfa2f3a6c048b4f5a107f8c832",
-    "MDD_Artiodactyla.zip": "66d9dd023ff5f08003403e1146c6878b",
-    "MDD_Carnivora.zip": "0c8ac8dcbfae968f3a3bde052eafcdb5",
-    "MDD_Chiroptera.zip": "3ecf49e018f4ab9654e22258776076fc",
-    "MDD_Cingulata.zip": "712f4c15e188e640a2a66b42d70bd301",
-    "MDD_Dasyuromorphia.zip": "a52903bb9161e42bcd7bf69b4b25c216",
-    "MDD_Dermoptera.zip": "70aa0f1fe5699c2e29c4adb684ca1bb7",
-    "MDD_Didelphimorphia.zip": "6947eae1a64a2f804a00174cc4782e6c",
-    "MDD_Diprotodontia.zip": "e7e087448d683daa3f038137e9d1f3b2",
-    "MDD_Eulipotyphla.zip": "a6bc6a36fb2cff75314d88c0c4057e96",
-    "MDD_Hyracoidea.zip": "75e03137f812843d84d2f3527b48c9d9",
-    "MDD_Lagomorpha.zip": "c743c3074b3410a8c50b84631d4e3790",
-    "MDD_Macroscelidea.zip": "d7608188b607d0f391ee3e5a78752c60",
-    "MDD_Microbiotheria.zip": "6272985e06f4c00b8469415e8f3d2566",
-    "MDD_Monotremata.zip": "0508a96e6a74bcab4c67858d3aaa44cd",
-    "MDD_Notoryctemorphia.zip": "d327954aaf726337db138e03061c952d",
-    "MDD_Paucituberculata.zip": "928d18fff093c2ec7690e882109c73ae",
-    "MDD_Peramelemorphia.zip": "a16f6c5ef5fe8e0aeedc4e57c212d081",
-    "MDD_Perissodactyla.zip": "cef638facedec39f15fb781ed667ec14",
-    "MDD_Pholidota.zip": "eb60331ad29f8adc2e031979017602ee",
-    "MDD_Pilosa.zip": "c84e1b3e3e4383a0a110d423bfc63f54",
-    "MDD_Primates.zip": "b86186911dca2184634b0bf4f26f60b8",
-    "MDD_Proboscidea.zip": "d6cc403fd705cd460b93af77920ca38a",
-    "MDD_Rodentia.zip": "116f53920981f5b1ca6cb80fcdc4116b",
-    "MDD_Scandentia.zip": "54fbf63a8b0c389bb905e117858eeb35",
-    "MDD_Sirenia.zip": "404a1f1f3ada855a7b0bebc14d892cd6",
-    "MDD_Tubulidentata.zip": "54b84a682354612be46914aa99ad8d37",
+    RELEASE: "758a24a37669a701c1c809c0bfac3da7",
     SPECIES_LIST: "4a800c367f7f8d767779d2f68df40f93",
 }
+EXPECTED_ORDERS = 27
 EXPECTED_SPECIES = 6362
 RES = 0.1  # degrees per grid cell
 MAX_LEVEL = 3  # 4096 × 2048: finer than the 0.1° grid (3600 × 1800)
@@ -77,6 +55,7 @@ BUDGET_BYTES = 6_000_000
 GROUPS = {"RODENTIA": 0, "CHIROPTERA": 1, "PRIMATES": 2}
 GROUP_NAMES = ("rodents", "bats", "primates", "other")
 UNZIP = shutil.which("unzip")
+ORDER_ZIP = re.compile(r"^MDD_[A-Za-z]+\.zip$")
 # 24 order zips hold <Order>/MDD_<Order>.gpkg; Artiodactyla, Carnivora and Sirenia hold MDD_<Order>.gpkg at the root
 MEMBER = re.compile(r"^(?:(?P<folder>[A-Za-z]+)/)?MDD_(?P<order>[A-Za-z]+)\.gpkg$")
 # deep blue-violet through teal and green to pale yellow; no channel ever falls, so more species is always lighter, and
@@ -143,7 +122,8 @@ def read_ranges(d: Path, zips, batch: int = 1):
     for zname in zips:
         zpath = d / zname
         with zipfile.ZipFile(zpath) as z:
-            names = [n for n in z.namelist() if not n.endswith("/")]
+            # the bundle's order zips also carry the release's citation.txt
+            names = [n for n in z.namelist() if not n.endswith("/") and n != "citation.txt"]
         m = MEMBER.match(names[0]) if len(names) == 1 else None
         if not m:
             raise ValueError(
@@ -196,6 +176,22 @@ def overlapped(geom, r0: int, r1: int, c0: int, c1: int, res: float = RES) -> np
         all_touched=True,
     )
     return (inside | edge.astype(bool)).astype(np.uint8)
+
+
+def read_release(path: Path, batch: int = 1):
+    """read_ranges over the order zips stored in MDD_Mammalia.zip, each copied out beside it, read and deleted."""
+    with zipfile.ZipFile(path) as outer:
+        names = [n for n in outer.namelist() if not n.endswith("/") and n != "citation.txt"]
+        odd = [n for n in names if not ORDER_ZIP.match(n)]
+        if len(names) != EXPECTED_ORDERS or odd:
+            raise ValueError(
+                f"{path.name}: {len(names)} members, not {EXPECTED_ORDERS} MDD_<Order>.zip (unexpected: {odd})"
+            )
+        for name in sorted(names):
+            with tempfile.TemporaryDirectory(dir=path.parent, prefix=".order-") as tmp:
+                with outer.open(name) as src, open(Path(tmp) / name, "wb") as dst:
+                    shutil.copyfileobj(src, dst, 1 << 24)
+                yield from read_ranges(Path(tmp), [name], batch)
 
 
 def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:
@@ -298,8 +294,7 @@ def main(argv=None, *, fetch_to=_fetch_to, want: dict = FILES) -> int:
     t0 = time.time()
     d = fetch(a.cache / CACHE_DIR, fetch_to=fetch_to, want=want)
     listed = species_list(d / SPECIES_LIST)
-    zips = sorted(n for n in want if n.endswith(".zip"))
-    counts = rasterise(read_ranges(d, zips), listed)
+    counts = rasterise(read_release(d / RELEASE), listed)
     log.info("rasterised %d species (%.0f s)", len(listed), time.time() - t0)
     staging = a.out_dir / ".mammals.tmp"
     shutil.rmtree(staging, ignore_errors=True)
