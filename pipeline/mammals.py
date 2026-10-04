@@ -3,8 +3,8 @@
 Spec: docs/superpowers/specs/2026-10-04-mammal-richness-design.md. Zenodo 10.5281/zenodo.6644198 (CC BY 4.0) holds one
 range polygon per species for the 6,362 wild extant mammals of the Mammal Diversity Database v1.2 (Marsh et al. 2022),
 as one zipped GeoPackage per order. Each zip is downloaded once and refused unless its md5 is Zenodo's; each GeoPackage
-is extracted beside it with Info-ZIP unzip, read, and deleted. Every range is rasterised, over its own bounding box, onto a global 0.1° grid
-with rasterio's all_touched rule (a species counts in every cell its range overlaps), into four counts: rodents, bats,
+is extracted beside it with Info-ZIP unzip, read, and deleted. Every range is counted, over its own bounding box, on a global 0.1° grid
+in every cell it overlaps (the cell's centre lies in the range, or the range's outline touches the cell), into four counts: rodents, bats,
 primates and other. The species read must be exactly the 6,362 of the release's own list, each once, under the taxonomic
 order the list gives it. The total is resampled by nearest neighbour to level 3 of Cesium's geographic tiling, one palette colour per
 count, coarser levels the mean over cells with any species; level 3 also gets RGB group tiles (rodents, bats, primates)
@@ -77,7 +77,8 @@ BUDGET_BYTES = 6_000_000
 GROUPS = {"RODENTIA": 0, "CHIROPTERA": 1, "PRIMATES": 2}
 GROUP_NAMES = ("rodents", "bats", "primates", "other")
 UNZIP = shutil.which("unzip")
-MEMBER = re.compile(r"^(?P<order>[A-Za-z]+)/MDD_(?P=order)\.gpkg$")
+# 24 order zips hold <Order>/MDD_<Order>.gpkg; Artiodactyla, Carnivora and Sirenia hold MDD_<Order>.gpkg at the root
+MEMBER = re.compile(r"^(?:(?P<folder>[A-Za-z]+)/)?MDD_(?P<order>[A-Za-z]+)\.gpkg$")
 # deep blue-violet through teal and green to pale yellow; no channel ever falls, so more species is always lighter, and
 # each segment moves one channel by at least as many steps as it spans, so 255 counts get 255 distinct colours
 RAMP = [(40, 25, 105), (40, 115, 140), (80, 200, 150), (250, 240, 170)]
@@ -130,8 +131,9 @@ def species_list(path: Path) -> dict[str, str]:
     return out
 
 
-def read_ranges(d: Path, zips, batch: int = 20):
-    """Yield (scientific name, ORDER, shapely geometry, bounds) per species, order zip by order zip."""
+def read_ranges(d: Path, zips, batch: int = 1):
+    """Yield (scientific name, ORDER, shapely geometry, bounds) per species, order zip by order zip. One feature per
+    read by default: a large whale's range is ~440 MB of WKB, and 20 of them at once ran out of memory."""
     import pyogrio.raw
     import shapely
 
@@ -142,12 +144,13 @@ def read_ranges(d: Path, zips, batch: int = 20):
         zpath = d / zname
         with zipfile.ZipFile(zpath) as z:
             names = [n for n in z.namelist() if not n.endswith("/")]
-        if len(names) != 1 or not MEMBER.match(names[0]):
+        m = MEMBER.match(names[0]) if len(names) == 1 else None
+        if not m:
             raise ValueError(
-                f"{zname}: members {names[:5]} are not one <Order>/MDD_<Order>.gpkg"
+                f"{zname}: members {names[:5]} are not one [<Order>/]MDD_<Order>.gpkg"
             )
-        order = MEMBER.match(names[0])["order"]
-        if f"MDD_{order}.zip" != zname:
+        order = m["order"]
+        if f"MDD_{order}.zip" != zname or m["folder"] not in (None, order):
             raise ValueError(f"{zname} holds {names[0]}")
         # GDAL reads a GeoPackage inside a zip ~30x slower than from disk (SQLite seeks through the deflate stream:
         # Primates 71 s against 2 s extracted), so each one is extracted beside its zip and deleted once read. Info-ZIP
@@ -170,11 +173,33 @@ def read_ranges(d: Path, zips, batch: int = 20):
                     yield name, order.upper(), g, g.bounds
 
 
-def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:
-    """(4, rows, cols) uint16 counts per cell: rodents, bats, primates, other. Each range is burnt over its bbox only."""
+def overlapped(geom, r0: int, r1: int, c0: int, c1: int, res: float = RES) -> np.ndarray:
+    """uint8 (r1 - r0, c1 - c0): 1 in each cell of the window the range overlaps, i.e. the cell's centre lies in the range
+    (shapely, prepared) or the range's outline touches the cell (rasterio's all_touched on the outline as lines). Gives
+    GDAL's all_touched polygon fill on land ranges, cell for cell, without its cost: the fill walks every edge for every
+    row, ~14 min for a whale range of 27 M vertices against 31 s here."""
+    import shapely
     from rasterio import features
     from rasterio.transform import from_origin
 
+    shapely.prepare(geom)
+    xs = -180 + (np.arange(c0, c1) + 0.5) * res
+    inside = np.zeros((r1 - r0, c1 - c0), bool)
+    for i in range(r1 - r0):
+        inside[i] = shapely.contains_xy(geom, xs, np.full_like(xs, 90 - (r0 + i + 0.5) * res))
+    edge = features.rasterize(
+        [(shapely.boundary(geom), 1)],
+        out_shape=(r1 - r0, c1 - c0),
+        transform=from_origin(-180 + c0 * res, 90 - r0 * res, res, res),
+        fill=0,
+        dtype="uint8",
+        all_touched=True,
+    )
+    return (inside | edge.astype(bool)).astype(np.uint8)
+
+
+def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:
+    """(4, rows, cols) uint16 counts per cell: rodents, bats, primates, other. Each range is counted over its bbox only."""
     w, h = int(round(360 / res)), int(round(180 / res))
     counts = np.zeros((len(GROUP_NAMES), h, w), np.uint16)
     seen = set()
@@ -196,14 +221,7 @@ def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:
         )
         if c1 <= c0 or r1 <= r0:
             raise ValueError(f"{name}: range {x0, y0, x1, y1} is off the globe")
-        burnt = features.rasterize(
-            [(geom, 1)],
-            out_shape=(r1 - r0, c1 - c0),
-            transform=from_origin(-180 + c0 * res, 90 - r0 * res, res, res),
-            fill=0,
-            dtype="uint8",
-            all_touched=True,
-        )
+        burnt = overlapped(geom, r0, r1, c0, c1, res)
         if not burnt.any():
             raise ValueError(f"{name}: range overlaps no cell")
         counts[GROUPS.get(order, 3), r0:r1, c0:c1] += burnt

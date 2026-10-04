@@ -18,7 +18,8 @@ import pyogrio.raw
 import pytest
 import shapely
 from PIL import Image
-from shapely.geometry import MultiPolygon, box
+from rasterio import features
+from shapely.geometry import MultiPolygon, Polygon, box
 
 from pipeline import mammals as mm
 
@@ -98,6 +99,38 @@ def test_a_range_that_burns_no_cell_stops_the_run():
         ValueError, match=r"Extra: range \(190, 0, 191, 1\) is off the globe"
     ):
         mm.rasterise(iter(off), {"Extra": "RODENTIA"})
+
+
+def test_a_range_counts_where_it_overlaps_a_cell_without_a_polygon_fill(monkeypatch):
+    # a jagged 20,000-vertex star over ~80 rows, against each cell's overlap with the raw shape (shapely)
+    rng = np.random.default_rng(6362)
+    a = np.linspace(0, 2 * np.pi, 20_000, endpoint=False)
+    r = 3 + rng.random(a.size)
+    star = Polygon(np.c_[10.03 + r * np.cos(a), 5.01 + r * np.sin(a)])
+    x0, y0, x1, y1 = star.bounds
+    r0, r1 = int((90 - y1) / mm.RES) - 1, int((90 - y0) / mm.RES) + 2
+    c0, c1 = int((x0 + 180) / mm.RES) - 1, int((x1 + 180) / mm.RES) + 2
+    fills = []
+    real = features.rasterize
+
+    def rasterize(shapes, **kw):
+        shapes = list(shapes)
+        fills.extend(g.geom_type for g, _ in shapes)
+        return real(shapes, **kw)
+
+    monkeypatch.setattr(features, "rasterize", rasterize)
+    got = mm.overlapped(star, r0, r1, c0, c1)
+    cells = shapely.box(
+        -180 + np.arange(c0, c1)[None, :] * mm.RES,
+        90 - (np.arange(r0, r1)[:, None] + 1) * mm.RES,
+        -180 + (np.arange(c0, c1)[None, :] + 1) * mm.RES,
+        90 - np.arange(r0, r1)[:, None] * mm.RES,
+    )
+    want = shapely.intersects(star, cells)
+    assert want.sum() > 2000 and (~want).sum() > 100, "the window holds cells in, on and off the star"
+    assert np.array_equal(got.astype(bool), want), int((got.astype(bool) != want).sum())
+    # GDAL's polygon fill walks every edge for every row: ~14 min for a 27 M-vertex whale range
+    assert fills and set(fills) <= {"LineString", "MultiLineString"}, fills
 
 
 def test_palette_one_distinct_colour_per_count_rising_in_luminance():
@@ -240,12 +273,18 @@ def test_only_the_release_layout_is_read(tmp_path):
     )  # positive control, read one feature at a time
     assert {n: o for n, o, *_ in got} == listed()
     one = {"Mus a": RANGES["Mus a"]}
+    # Artiodactyla, Carnivora and Sirenia keep the GeoPackage at the zip's root
+    root = tmp_path / "root"
+    write_order(root, "Rodentia", one, member="MDD_Rodentia.gpkg")
+    assert [n for n, *_ in mm.read_ranges(root, ["MDD_Rodentia.zip"])] == ["Mus a"]
     for kw, why in [
-        ({"member": "Rodentia/readme.txt"}, "are not one <Order>/MDD_<Order>.gpkg"),
+        ({"member": "Rodentia/readme.txt"}, r"are not one \[<Order>/\]MDD_<Order>.gpkg"),
         (
             {"member": "Primates/MDD_Primates.gpkg"},
             "MDD_Rodentia.zip holds Primates/MDD_Primates.gpkg",
         ),
+        ({"member": "MDD_Primates.gpkg"}, "MDD_Rodentia.zip holds MDD_Primates.gpkg"),
+        ({"member": "Primates/MDD_Rodentia.gpkg"}, "MDD_Rodentia.zip holds Primates/MDD_Rodentia.gpkg"),
         ({"field_order": "Primates"}, "MDD_Rodentia.zip: Mus a is in order Primates"),
     ]:
         bad = tmp_path / "bad"
@@ -261,17 +300,20 @@ def test_only_the_release_layout_is_read(tmp_path):
 def test_each_geopackage_is_read_from_an_extracted_copy_that_is_then_deleted(tmp_path, monkeypatch):
     src = write_source(tmp_path / "src")
     zips = sorted(p.name for p in src.glob("*.zip"))
-    paths = []
+    paths, sizes = [], []
     real = pyogrio.raw.read
 
     def read(path, **kw):
         paths.append(str(path))
+        sizes.append(kw.get("max_features"))
         return real(path, **kw)
 
     monkeypatch.setattr(pyogrio.raw, "read", read)
     assert sorted(n for n, *_ in mm.read_ranges(src, zips)) == sorted(RANGES)  # positive control
     # through /vsizip/ the full release reads ~30x slower (Primates 71 s in the zip, 2 s extracted)
     assert paths and not any(p.startswith("/vsizip/") for p in paths), paths
+    # one range per read: a large whale's is ~440 MB of WKB, and 20 at once ran out of memory
+    assert sizes == [1] * len(RANGES), sizes
     assert all(Path(p).name.endswith(".gpkg") and not Path(p).exists() for p in paths)
     assert not list(src.glob(".extract-*")), "nothing left after a full read"
     early = mm.read_ranges(src, zips)
