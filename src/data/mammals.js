@@ -17,6 +17,7 @@ export const TILE_FAILURE_LIMIT = 8;
 export const NONE_TEXT = "No mapped mammal range";
 export const DATE = "MDD v1.2 maps";
 const TILE = 256;
+const CELL = 0.1; // degrees: the pipeline's grid (pipeline/mammals.py RES), 3600 × 1800 cells
 const SOURCE = "Mammal richness: MDD v1.2 range maps (Marsh et al.)";
 
 /** null when mammals.json has the shape pipeline/mammals.py writes; otherwise what is wrong with it. */
@@ -180,7 +181,9 @@ export function createMammalsLayer({
       const row = (status, extra = {}) => ({ id, name, icon, status, text: null, date: null, ...extra });
       if (!_manifest) return row("error", { error: _lastError || "mammals.json not loaded yet" });
       const z = _manifest.maxLevel;
-      const t = geoTilePixel(lat, lon, z);
+      // the pixel under the centre of the clicked point's cell, which holds that cell's count
+      const c = cellCentre(lat, lon);
+      const t = c && geoTilePixel(c[0], c[1], z);
       if (!t) return row("outside");
       const at = (tmpl) => bust(tmpl.replace("{z}", String(z)).replace("{x}", String(t.x)).replace("{y}", String(t.y)));
       try {
@@ -205,3 +208,16 @@ export function createMammalsLayer({
 }
 
 export const mammalsLayer = createMammalsLayer();
+
+/**
+ * The centre of the 0.1° cell holding a point, or null off the globe. Level 3 (4096 × 2048 px) carries the 3600 × 1800
+ * cells by nearest neighbour, so the pixel under a point off a cell's centre can hold the next cell's count; the pixel
+ * under a cell's centre always holds that cell's (a pixel is 0.88 of a cell wide).
+ */
+export function cellCentre(lat, lon) {
+  if (!(Math.abs(lat) <= 90) || !Number.isFinite(lon)) return null;
+  const wrapped = ((((lon + 180) % 360) + 360) % 360) - 180;
+  const col = Math.min(Math.floor((wrapped + 180) / CELL), Math.round(360 / CELL) - 1);
+  const row = Math.min(Math.floor((90 - lat) / CELL), Math.round(180 / CELL) - 1);
+  return [90 - (row + 0.5) * CELL, -180 + (col + 0.5) * CELL];
+}

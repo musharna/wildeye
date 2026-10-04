@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
-import { DATE, MANIFEST_URL, NONE_TEXT, TILE_FAILURE_LIMIT, countText, createMammalsLayer, validateManifest } from './mammals.js';
+import { DATE, MANIFEST_URL, NONE_TEXT, TILE_FAILURE_LIMIT, cellCentre, countText, createMammalsLayer, validateManifest } from './mammals.js';
 import { geoTilePixel } from './humanFootprint.js';
 
 // the pipeline's palette shape (pipeline/mammals.py palette(top)): index 0 for no species, then distinct colours
@@ -137,6 +137,28 @@ test('readout: total and groups from the same level-3 pixel; none where no range
     { url: `data/mammals/groups/${t.x}/${t.y}.png${V}`, px: t.px, py: t.py },
   ]);
   assert.match((await h.layer.readoutAt(lat, lon + 360)).text, /^200 /, 'longitudes wrap');
+
+  // Off a cell's centre the pixel under the point can hold the next cell (lon 0.095 lies in cell 1800, 0.0–0.1° E,
+  // but under pixel 2049, which nearest neighbour fills from cell 1801): the readout reads the cell's centre pixel
+  const off = geoTilePixel(0.05, 0.095, 3), centre = geoTilePixel(0.05, 0.05, 3);
+  assert.equal(off.x * 256 + off.px, 2049);
+  assert.equal(Math.floor((2049 + 0.5) * 3600 / 4096), 1801, 'that pixel carries the next cell');
+  const before = h.reads.length;
+  await h.layer.readoutAt(0.05, 0.095);
+  assert.deepEqual(h.reads.slice(before).map((r) => [r.px, r.py]), [[centre.px, centre.py], [centre.px, centre.py]]);
+  // every cell of a row and a column: the pixel under its centre is filled from that cell
+  for (let col = 0; col < 3600; col += 1) {
+    const [la, lo] = cellCentre(0.05, -180 + (col + 0.5) * 0.1);
+    const t = geoTilePixel(la, lo, 3);
+    assert.equal(Math.floor((t.x * 256 + t.px + 0.5) * 3600 / 4096), col, `column ${col}`);
+  }
+  for (let r = 0; r < 1800; r += 1) {
+    const [la, lo] = cellCentre(90 - (r + 0.5) * 0.1, 0.05);
+    const t = geoTilePixel(la, lo, 3);
+    assert.equal(Math.floor((t.y * 256 + t.py + 0.5) * 1800 / 2048), r, `row ${r}`);
+  }
+  assert.deepEqual(cellCentre(-90, 180).map((v) => +v.toFixed(9)), [-89.95, -179.95], 'the south pole and 180° fall in the last row and first column');
+  assert.equal(cellCentre(91, 0), null);
 
   const empty = harness({ total: 0 });
   empty.layer.enable();
