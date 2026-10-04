@@ -36,6 +36,7 @@ Live site: https://musharna.github.io/wildeye/
 - Coral bleaching alerts and coral heat stress (NOAA Coral Reef Watch)
 - Surface dissolved oxygen and pH (Copernicus Marine Service)
 - Tidal marshes 2020, as the share of each ~150 m cell (Worthington et al.)
+- Seagrass 2019–2020 and 2023–2024, as the share of each ~150 m cell (Peng et al.)
 
 Most of these layers follow a shared time bar covering the last 30 days.
 

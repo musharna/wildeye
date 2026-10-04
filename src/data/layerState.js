@@ -148,6 +148,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'protected-areas', token: 'pa', disposition: 'enabled-only' }),
   Object.freeze({ id: 'reptiles', token: 'rp', disposition: 'enabled-only' }),
   Object.freeze({ id: 'rivers', token: 'rv', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'seagrass', token: 'sg', disposition: 'enabled-only' }),
   Object.freeze({ id: 'species', token: 'sp', disposition: 'enabled+options', optionOwner: 'species' }),
   Object.freeze({ id: 'surface-water', token: 'sw', disposition: 'enabled-only' }),
   Object.freeze({ id: 'tidal-marsh', token: 'tm', disposition: 'enabled-only' }),
