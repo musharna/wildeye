@@ -100,19 +100,36 @@ def test_counts_per_position_by_year_and_illness():
     assert maine["years"]["2014"] == {"n": 1, "ill": {"ASP": 1, "PSP": 1}}
     assert maine["uncertaintyKm"] == 100.0
     assert maine["countries"] == ["UNITED STATES"]
-    assert maine["species"][0] == ["Alexandrium tamarense", 8]
-    assert maine["places"][:2] == ["Maine Coastline", "Gulf of Maine"]
+    # the whole top five and top three, ties broken by name (counted from the rows with awk)
+    assert maine["species"] == [
+        ["Alexandrium tamarense", 8],
+        ["Alexandrium spp.", 6],
+        ["Pseudo-nitzschia spp.", 6],
+        ["Alexandrium fundyense", 5],
+        ["Alexandrium sp.", 5],
+    ]
+    assert maine["places"] == ["Maine Coastline", "Gulf of Maine", "Eastern Maine."]
     assert maine["undated"] == {"n": 0, "ill": {}}
     bungo = positions[(33.61, 131.89)]
     # JP-01-008 is dated 0000-00-00 and has no illness: undated, under None
     assert bungo["undated"] == {"n": 1, "ill": {"None": 1}}
     assert sum(v["n"] for v in bungo["years"].values()) == 106
-    # causative taxa only: Karenia mikimotoi is causative in 19 events and listed as merely present in 1 more, and
-    # Chattonella antiqua 3 + 2 (Maine's top taxa do not move either way, so it cannot show this)
-    assert bungo["species"][0] == ["Karenia mikimotoi", 19]
-    assert ["Chattonella antiqua", 3] in bungo["species"] or all(
-        s != "Chattonella antiqua" for s, _ in bungo["species"]
-    )
+    # causative taxa only, the whole top five pinned (review of PR #52: an either-or assertion passed on both outcomes).
+    # Karenia mikimotoi is causative in 19 events and merely present in 1 more; Chattonella antiqua is causative in 3
+    # and present in 2, so it ties Alexandrium tamarense at 3 and falls sixth by name, where counting the present rows
+    # would give it 5 and list it fourth
+    assert bungo["species"] == [
+        ["Karenia mikimotoi", 19],
+        ["Gymnodinium mikimotoi Miyake et Kominami ex Oda 1935", 7],
+        ["Heterosigma akashiwo", 6],
+        ["Cochlodinium polykrikoides", 5],
+        ["Alexandrium tamarense", 3],
+    ]
+    assert bungo["places"] == [
+        "Northern part of Hiroshima Bay",
+        "Suonada",
+        "Bungo-suido (Ehime prefecture)",
+    ]
     # AU-70-001 (1770) has no illness row in the archive
     assert positions[(-19.94, 148.81)]["years"] == {
         "1770": {"n": 1, "ill": {"None": 1}}

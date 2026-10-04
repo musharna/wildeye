@@ -177,6 +177,12 @@ def on_globe(e: dict) -> bool:
     return -90 <= e["lat"] <= 90 and -180 <= e["lon"] <= 180
 
 
+def _top(counts: collections.Counter, k: int) -> list[tuple[str, int]]:
+    """The k commonest, a tie broken by name: Counter.most_common breaks it by the order rows happen to come in, so
+    whether a taxon tied at the cut is listed would depend on the archive's row order (review of PR #52)."""
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:k]
+
+
 def by_position(events: list[dict]) -> list[dict]:
     """One entry per position: per-year event counts split by illness (an event with two illnesses counts under
     both, so a year's illness counts can add to more than its events), the undated events, the commonest causative
@@ -202,8 +208,8 @@ def by_position(events: list[dict]) -> list[dict]:
                 # one position, one stated precision: the widest if the archive ever disagrees with itself
                 "uncertaintyKm": max(e["uncertaintyKm"] for e in es),
                 "countries": sorted({e["country"] for e in es}),
-                "places": [p for p, _ in places.most_common(TOP_LOCALITIES)],
-                "species": [[s, n] for s, n in species.most_common(TOP_SPECIES)],
+                "places": [p for p, _ in _top(places, TOP_LOCALITIES)],
+                "species": [[s, n] for s, n in _top(species, TOP_SPECIES)],
                 "years": {
                     y: {"n": v["n"], "ill": dict(sorted(v["ill"].items()))}
                     for y, v in sorted(years.items())
