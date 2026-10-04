@@ -158,7 +158,7 @@ def test_shares_are_whole_percent_with_any_marsh_at_least_one():
         tm.shares(np.array([[1]]), np.array([[0]]))
     # more marsh than pixels is a counting fault, not a 100% cell
     assert tm.shares(np.array([[2, 0]]), np.array([[2, 0]])).tolist() == [[100, 0]]  # positive control: all of it
-    with pytest.raises(tm.MarshChanged, match="more marsh pixels than source pixels"):
+    with pytest.raises(tm.MarshChanged, match="more class pixels than source pixels"):
         tm.shares(np.array([[3]]), np.array([[2]]))
 
 
