@@ -270,6 +270,7 @@ test('legend: five share bins, each in the colour of its middle share, then the 
   assert.match(note, /~150 m cell mapped as seagrass/);
   assert.match(note, /51°S and 72°N/);
   assert.match(note, /170,457 km² mapped in 2023–2024/);
+  assert.match(note, /a difference between them is not on its own a change in the meadow/);
   assert.match(note, /CC BY 4\.0/);
   await layer.setObservedTime('2020-01-01T00:00:00Z');
   assert.match(layer.getRowControls().legend.at(-1).label, /160,123 km² mapped in 2019–2020/);

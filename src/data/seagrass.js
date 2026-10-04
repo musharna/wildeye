@@ -237,7 +237,7 @@ export function createSeagrassLayer({
       const epoch = shown();
       const area = epoch ? ` · ${n(epoch.seagrassKm2)} km² mapped in ${epoch.label}` : "";
       legend.push({
-        label: `Share of each ~150 m cell mapped as seagrass, from a 10 m Sentinel-2 map of the coasts between 51°S and 72°N${area} · Peng et al., CC BY 4.0`,
+        label: `Share of each ~150 m cell mapped as seagrass, from a 10 m Sentinel-2 map of the coasts between 51°S and 72°N${area}. The two epochs' maps often disagree cell by cell: a difference between them is not on its own a change in the meadow · Peng et al., CC BY 4.0`,
         color: "transparent",
         count: null,
       });
