@@ -58,6 +58,8 @@ public/data/marine_realms.geojson
 public/data/freshwater_fish.geojson
 public/data/protected_areas.json
 public/data/protected/
+public/data/ifl.json
+public/data/ifl/
 public/data/fishing.geojson
 public/data/phenology.geojson
 public/data/fires.geojson
