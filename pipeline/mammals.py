@@ -2,8 +2,8 @@
 
 Spec: docs/superpowers/specs/2026-10-04-mammal-richness-design.md. Zenodo 10.5281/zenodo.6644198 (CC BY 4.0) holds one
 range polygon per species for the 6,362 wild extant mammals of the Mammal Diversity Database v1.2 (Marsh et al. 2022),
-as one zipped GeoPackage per order. Each zip is downloaded once and refused unless its md5 is Zenodo's; the GeoPackages
-are read in place through GDAL's /vsizip/. Every range is rasterised, over its own bounding box, onto a global 0.1° grid
+as one zipped GeoPackage per order. Each zip is downloaded once and refused unless its md5 is Zenodo's; each GeoPackage
+is extracted beside it, read, and deleted. Every range is rasterised, over its own bounding box, onto a global 0.1° grid
 with rasterio's all_touched rule (a species counts in every cell its range overlaps), into four counts: rodents, bats,
 primates and other. The species read must be exactly the 6,362 of the release's own list, each once, under the taxonomic
 order the list gives it. The total is resampled by nearest neighbour to level 3 of Cesium's geographic tiling, one palette colour per
@@ -21,6 +21,7 @@ import logging
 import os
 import re
 import shutil
+import tempfile
 import time
 import zipfile
 from pathlib import Path
@@ -143,19 +144,23 @@ def read_ranges(d: Path, zips, batch: int = 20):
         order = MEMBER.match(names[0])["order"]
         if f"MDD_{order}.zip" != zname:
             raise ValueError(f"{zname} holds {names[0]}")
-        path = f"/vsizip/{zpath}/{names[0]}"
-        n = pyogrio.read_info(path)["features"]
-        for off in range(0, n, batch):
-            _, _, geom, fields = pyogrio.raw.read(
-                path,
-                columns=["sciname", "order"],
-                skip_features=off,
-                max_features=batch,
-            )
-            for g, name, o in zip(shapely.from_wkb(geom), fields[0], fields[1]):
-                if o.upper() != order.upper():
-                    raise ValueError(f"{zname}: {name} is in order {o}")
-                yield name, order.upper(), g, g.bounds
+        # GDAL reads a GeoPackage inside a zip ~30x slower than from disk (SQLite seeks through the deflate stream:
+        # Primates 71 s against 2 s extracted), so each one is extracted beside its zip and deleted once read
+        with tempfile.TemporaryDirectory(dir=d, prefix=".extract-") as tmp:
+            with zipfile.ZipFile(zpath) as z:
+                path = z.extract(names[0], tmp)
+            n = pyogrio.read_info(path)["features"]
+            for off in range(0, n, batch):
+                _, _, geom, fields = pyogrio.raw.read(
+                    path,
+                    columns=["sciname", "order"],
+                    skip_features=off,
+                    max_features=batch,
+                )
+                for g, name, o in zip(shapely.from_wkb(geom), fields[0], fields[1]):
+                    if o.upper() != order.upper():
+                        raise ValueError(f"{zname}: {name} is in order {o}")
+                    yield name, order.upper(), g, g.bounds
 
 
 def rasterise(ranges, listed: dict[str, str], res: float = RES) -> np.ndarray:

@@ -255,6 +255,33 @@ def test_only_the_release_layout_is_read(tmp_path):
         list(mm.read_ranges(bad, ["MDD_Rodentia.zip"]))
 
 
+def test_each_geopackage_is_read_from_an_extracted_copy_that_is_then_deleted(tmp_path, monkeypatch):
+    src = write_source(tmp_path / "src")
+    zips = sorted(p.name for p in src.glob("*.zip"))
+    paths = []
+    real = pyogrio.raw.read
+
+    def read(path, **kw):
+        paths.append(str(path))
+        return real(path, **kw)
+
+    monkeypatch.setattr(pyogrio.raw, "read", read)
+    assert sorted(n for n, *_ in mm.read_ranges(src, zips)) == sorted(RANGES)  # positive control
+    # through /vsizip/ the full release reads ~30x slower (Primates 71 s in the zip, 2 s extracted)
+    assert paths and not any(p.startswith("/vsizip/") for p in paths), paths
+    assert all(Path(p).name.endswith(".gpkg") and not Path(p).exists() for p in paths)
+    assert not list(src.glob(".extract-*")), "nothing left after a full read"
+    early = mm.read_ranges(src, zips)
+    next(early)
+    assert len(list(src.glob(".extract-*"))) == 1
+    early.close()
+    assert not list(src.glob(".extract-*")), "nor when the reader is abandoned"
+    bad = tmp_path / "bad"
+    write_order(bad, "Rodentia", {"Mus a": RANGES["Mus a"]}, field_order="Primates")
+    with pytest.raises(ValueError, match="is in order Primates"):
+        list(mm.read_ranges(bad, ["MDD_Rodentia.zip"]))
+    assert not list(bad.glob(".extract-*")), "nor when it fails"
+
 def test_main_publishes_tiles_and_manifest_and_nothing_over_budget(tmp_path):
     src = write_source(tmp_path / "src")
     want = md5s(src)
