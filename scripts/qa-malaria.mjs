@@ -9,7 +9,7 @@
  */
 import puppeteer from "puppeteer";
 import { bootSettled } from "./bootSettled.mjs";
-import { MAP_WMS, MAP_LAYER, MAP_STYLE, YEARS, RAMP, SPARSE_COLOR, timeOf } from "../src/data/malaria.js";
+import { MAP_WMS, MAP_LAYER, MAP_STYLE, MAP_EXTENT, YEARS, RAMP, SPARSE_COLOR, timeOf } from "../src/data/malaria.js";
 
 const argv = process.argv.slice(2);
 const arg = (n, f) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : f);
@@ -43,6 +43,11 @@ const times = (block.match(/<Dimension[^>]*name="time"[^>]*>([^<]*)</)?.[1] ?? "
 const want = YEARS.map(timeOf);
 report("source:years", times.length === want.length && times.every((t, k) => t === want[k]), { served: [times[0], times.at(-1), times.length], pinned: [want[0], want.at(-1), want.length] });
 report("source:style", block.includes(`<Name>${MAP_STYLE}</Name>`), { style: MAP_STYLE });
+// the drape asks for tiles only inside MAP_EXTENT, so an edge that no longer matches the release hides real estimates
+// without a failed request; the server's float32 edges sit within 1e-4° of the round numbers (180.000015, -60.0000038)
+const bound = (tag) => Number(block.match(new RegExp(`<${tag}>([^<]+)</${tag}>`))?.[1]);
+const served = { west: bound("westBoundLongitude"), south: bound("southBoundLatitude"), east: bound("eastBoundLongitude"), north: bound("northBoundLatitude") };
+report("source:extent", Object.keys(MAP_EXTENT).every((k) => Math.abs(served[k] - MAP_EXTENT[k]) < 1e-4), { served, pinned: MAP_EXTENT });
 const sld = await (await fetch(`${MAP_WMS}?service=WMS&version=1.1.1&request=GetStyles&layers=${MAP_LAYER}`)).text();
 const userStyle = sld.split("<sld:UserStyle>").find((s) => s.includes(`<sld:Name>${MAP_STYLE.split(":")[1]}</sld:Name>`)) ?? "";
 // the style has a drawn FeatureTypeStyle (inclusion mapOnly) and a legend-graphic one (legendOnly): check what is drawn

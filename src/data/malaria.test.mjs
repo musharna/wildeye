@@ -2,7 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as Cesium from 'cesium';
 import {
+  CELL_DEG,
+  MAP_EXTENT,
+  MAX_LEVEL,
   MAP_LAYER,
   MAP_STYLE,
   NO_ESTIMATE,
@@ -102,6 +106,14 @@ test('the drape asks MAP for the shown year, in the release\'s style; a scrub re
   assert.equal(o.layers, MAP_LAYER);
   assert.deepEqual(o.parameters, { format: 'image/png', transparent: true, styles: MAP_STYLE, time: '2025-01-01T00:00:00.000Z' });
   assert.equal(stacked.at(-1).id, 'malaria');
+  // tiles are asked for over the release's extent only, down to the level that resolves its grid: a south edge set
+  // too far north drew nothing over real estimates with no failed request (review of PR #50)
+  assert.ok(o.tilingScheme instanceof Cesium.GeographicTilingScheme);
+  assert.ok(Cesium.Rectangle.equalsEpsilon(o.rectangle, Cesium.Rectangle.fromDegrees(-180, -60, 180, 85), 1e-12));
+  assert.deepEqual(MAP_EXTENT, { west: -180, south: -60, east: 180, north: 85 });
+  assert.equal(o.maximumLevel, MAX_LEVEL);
+  const pixelDeg = (level) => 180 / (256 * 2 ** level); // geographic scheme: 2×1 tiles of 256 px at level 0
+  assert.ok(pixelDeg(MAX_LEVEL) < CELL_DEG && pixelDeg(MAX_LEVEL - 1) > CELL_DEG, 'the coarsest level finer than a cell');
   await layer.setObservedTime('2010-06-01T00:00:00Z');
   assert.equal(providers.at(-1).options.parameters.time, '2010-01-01T00:00:00.000Z');
   const n = providers.length;

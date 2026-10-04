@@ -25,7 +25,11 @@ export const RAMP = Object.freeze([
 export const SPARSE_COLOR = "#F0F0F0";
 export const NO_ESTIMATE = -9999;
 export const TILE_FAILURE_LIMIT = 8;
-const MAX_LEVEL = 5; // geographic level 5: 0.022° a pixel, finer than the 1/24° (0.042°) grid
+// the release's extent (capabilities EX_GeographicBoundingBox, 2026-10-03; scripts/qa-malaria.mjs re-checks it): Cesium
+// requests no tile outside it, so a wrong edge would hide real estimates without a single failed request
+export const MAP_EXTENT = Object.freeze({ west: -180, south: -60, east: 180, north: 85 });
+export const CELL_DEG = 1 / 24; // the 5 km grid
+export const MAX_LEVEL = 5; // geographic level 5: 0.022° a pixel, the coarsest level finer than the 1/24° (0.042°) grid
 const SOURCE = "Malaria Atlas Project, 2026-08 release · CC BY 3.0";
 
 /** The year drawn at an observed instant: live = the latest; otherwise the latest at or before it; null before 2000. */
@@ -133,8 +137,7 @@ export function createMalariaLayer({
       layers: MAP_LAYER,
       parameters: { format: "image/png", transparent: true, styles: MAP_STYLE, time: timeOf(year) },
       tilingScheme: new Cesium.GeographicTilingScheme(),
-      // the release's extent (capabilities EX_GeographicBoundingBox): no requests for tiles it cannot cover
-      rectangle: Cesium.Rectangle.fromDegrees(-180, -60, 180, 85),
+      rectangle: Cesium.Rectangle.fromDegrees(MAP_EXTENT.west, MAP_EXTENT.south, MAP_EXTENT.east, MAP_EXTENT.north),
       maximumLevel: MAX_LEVEL,
       credit: SOURCE,
     });
