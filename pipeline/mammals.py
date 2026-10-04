@@ -3,7 +3,7 @@
 Spec: docs/superpowers/specs/2026-10-04-mammal-richness-design.md. Zenodo 10.5281/zenodo.6644198 (CC BY 4.0) holds one
 range polygon per species for the 6,362 wild extant mammals of the Mammal Diversity Database v1.2 (Marsh et al. 2022),
 as one zipped GeoPackage per order. Each zip is downloaded once and refused unless its md5 is Zenodo's; each GeoPackage
-is extracted beside it, read, and deleted. Every range is rasterised, over its own bounding box, onto a global 0.1° grid
+is extracted beside it with Info-ZIP unzip, read, and deleted. Every range is rasterised, over its own bounding box, onto a global 0.1° grid
 with rasterio's all_touched rule (a species counts in every cell its range overlaps), into four counts: rodents, bats,
 primates and other. The species read must be exactly the 6,362 of the release's own list, each once, under the taxonomic
 order the list gives it. The total is resampled by nearest neighbour to level 3 of Cesium's geographic tiling, one palette colour per
@@ -21,6 +21,7 @@ import logging
 import os
 import re
 import shutil
+import subprocess  # nosec B404 - runs unzip with a fixed argument list, no shell
 import tempfile
 import time
 import zipfile
@@ -75,6 +76,7 @@ BUDGET_BYTES = 6_000_000
 # MDD order → count: rodents, bats, primates, other
 GROUPS = {"RODENTIA": 0, "CHIROPTERA": 1, "PRIMATES": 2}
 GROUP_NAMES = ("rodents", "bats", "primates", "other")
+UNZIP = shutil.which("unzip")
 MEMBER = re.compile(r"^(?P<order>[A-Za-z]+)/MDD_(?P=order)\.gpkg$")
 # deep blue-violet through teal and green to pale yellow; no channel ever falls, so more species is always lighter, and
 # each segment moves one channel by at least as many steps as it spans, so 255 counts get 255 distinct colours
@@ -133,6 +135,9 @@ def read_ranges(d: Path, zips, batch: int = 20):
     import pyogrio.raw
     import shapely
 
+    if UNZIP is None:
+        raise RuntimeError("Info-ZIP unzip is not on PATH: it extracts the release's Deflate64 order zips")
+
     for zname in zips:
         zpath = d / zname
         with zipfile.ZipFile(zpath) as z:
@@ -145,10 +150,12 @@ def read_ranges(d: Path, zips, batch: int = 20):
         if f"MDD_{order}.zip" != zname:
             raise ValueError(f"{zname} holds {names[0]}")
         # GDAL reads a GeoPackage inside a zip ~30x slower than from disk (SQLite seeks through the deflate stream:
-        # Primates 71 s against 2 s extracted), so each one is extracted beside its zip and deleted once read
+        # Primates 71 s against 2 s extracted), so each one is extracted beside its zip and deleted once read. Info-ZIP
+        # unzip does it: the release packs its two largest orders (Chiroptera, Rodentia) with Deflate64, which Python's
+        # zipfile cannot inflate. The member name matched MEMBER, so it holds no unzip wildcard.
         with tempfile.TemporaryDirectory(dir=d, prefix=".extract-") as tmp:
-            with zipfile.ZipFile(zpath) as z:
-                path = z.extract(names[0], tmp)
+            subprocess.run([UNZIP, "-q", str(zpath), names[0], "-d", tmp], check=True)  # nosec B603 - fixed argv, no shell
+            path = str(Path(tmp) / names[0])
             n = pyogrio.read_info(path)["features"]
             for off in range(0, n, batch):
                 _, _, geom, fields = pyogrio.raw.read(

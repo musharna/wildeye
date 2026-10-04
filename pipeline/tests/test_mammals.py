@@ -6,7 +6,10 @@ import csv
 import hashlib
 import json
 import os
+import struct
+import subprocess  # nosec B404 - the test only names the error type
 import zipfile
+import zlib
 from collections import Counter
 from pathlib import Path
 
@@ -281,6 +284,41 @@ def test_each_geopackage_is_read_from_an_extracted_copy_that_is_then_deleted(tmp
     with pytest.raises(ValueError, match="is in order Primates"):
         list(mm.read_ranges(bad, ["MDD_Rodentia.zip"]))
     assert not list(bad.glob(".extract-*")), "nor when it fails"
+
+def deflate64_zip(path: Path, member: str, data: bytes) -> int:
+    """A zip whose one member is marked Deflate64 (method 9), as the release packs Chiroptera and Rodentia. A
+    literal-only deflate stream uses no length code 285 and no distance code 30 or 31, so it inflates the same under
+    Deflate64. Returns the offset of the compressed data."""
+    c = zlib.compressobj(9, zlib.DEFLATED, -15, 9, zlib.Z_HUFFMAN_ONLY)
+    comp = c.compress(data) + c.flush()
+    crc, name = zlib.crc32(data), member.encode()
+    local = struct.pack("<IHHHHHIIIHH", 0x04034B50, 21, 0, 9, 0, 0x21, crc, len(comp), len(data), len(name), 0)
+    central = struct.pack(
+        "<IHHHHHHIIIHHHHHII", 0x02014B50, 21, 21, 0, 9, 0, 0x21, crc, len(comp), len(data), len(name), 0, 0, 0, 0, 0, 0
+    )
+    start = len(local) + len(name)
+    end = struct.pack("<IHHHHIIH", 0x06054B50, 0, 0, 1, 1, len(central) + len(name), start + len(comp), 0)
+    path.write_bytes(local + name + comp + central + name + end)
+    return start
+
+
+def test_a_deflate64_order_is_read(tmp_path):
+    src = write_source(tmp_path / "src")
+    member = "Rodentia/MDD_Rodentia.gpkg"
+    with zipfile.ZipFile(src / "MDD_Rodentia.zip") as z:
+        data = z.read(member)
+    start = deflate64_zip(src / "MDD_Rodentia.zip", member, data)
+    with zipfile.ZipFile(src / "MDD_Rodentia.zip") as z:
+        assert [(i.filename, i.compress_type, i.file_size) for i in z.infolist()] == [(member, 9, len(data))]
+        with pytest.raises(NotImplementedError, match="compression method is not supported"):
+            z.read(member)  # why the reader shells out to unzip
+    got = {n: o for n, o, *_ in mm.read_ranges(src, ["MDD_Rodentia.zip", "MDD_Chiroptera.zip"])}
+    assert got == {"Mus a": "RODENTIA", "Myotis b": "CHIROPTERA"}, "Deflate64 and deflate orders alike"
+    spoilt = bytearray((src / "MDD_Rodentia.zip").read_bytes())
+    spoilt[start + 200] ^= 0xFF
+    (src / "MDD_Rodentia.zip").write_bytes(bytes(spoilt))
+    with pytest.raises(subprocess.CalledProcessError):
+        list(mm.read_ranges(src, ["MDD_Rodentia.zip"]))
 
 def test_main_publishes_tiles_and_manifest_and_nothing_over_budget(tmp_path):
     src = write_source(tmp_path / "src")
