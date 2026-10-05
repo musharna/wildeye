@@ -132,9 +132,19 @@ def fetch_cmems(product: dict, today: dt.date | None = None, open_dataset=None) 
     return ramp_rgba(vals, product["ramp"]), when
 
 
+def _read_bytes(url: str, timeout: int = 180) -> bytes:
+    with _open(url, timeout) as r:
+        return r.read()
+
+
 def process(product: dict, out_dir: Path) -> dict:
+    extras = {}
     if "cmems" in product:
         rgba, when_from_name = fetch_cmems(product)
+    elif "crw_outlook" in product:
+        from .crw_outlook import fetch_crw_outlook
+        rgba, when_from_name, extras = fetch_crw_outlook(
+            product, out_dir, read_text=lambda u: _read_bytes(u, 60).decode("utf-8", "replace"), read_bytes=_read_bytes)
     else:
         url, when_from_name = resolve_source(product)
         rgba = fill_empty_right_edge(fetch_png(url))
@@ -156,7 +166,7 @@ def process(product: dict, out_dir: Path) -> dict:
     return {k: product[k] for k in keep if k in product} | {
         "png": f"data/rasters/{product['id']}.png", "time": when,
         "width": int(rgba.shape[1]), "height": int(rgba.shape[0]), "masked_fraction": round(masked, 4),
-        "history": history}
+        "history": history} | extras
 
 
 KEEP_DAYS = 30

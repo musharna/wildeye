@@ -53,34 +53,39 @@ def _deploy(tmp_path, wt):
     return [(msg, set(files.split())) for _, msg, files in commits]
 
 
-def _write_tiles(wt, seed):
+def _write_tiles(wt, seed, tiles="data/protected/tiles/7/{i}/0.png", manifest="data/protected_areas.json"):
     for i in range(5):
-        p = wt / f"data/protected/tiles/7/{i}/0.png"
+        p = wt / tiles.format(i=i)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(bytes([seed]) * FILE_BYTES)
-    (wt / "data/protected_areas.json").write_text(f'{{"release": "{seed}"}}')
+    (wt / manifest).write_text(f'{{"release": "{seed}"}}')
 
 
-def _check_batched(commits, tiles):
+def _check_batched(commits, tiles, manifest="data/protected_areas.json"):
     *parts, final = commits
     assert len(parts) == 3, [
         m for m, _ in commits
     ]  # 5 files of 0.4 MB, at most 1 MB a part
     assert set().union(*(f for _, f in parts)) == tiles
     for _, files in parts:
-        assert len(files) <= 2 and "data/protected_areas.json" not in files
-    assert "data/protected_areas.json" in final[1] and not final[1] & tiles
+        assert len(files) <= 2 and manifest not in files
+    assert manifest in final[1] and not final[1] & tiles
 
 
-def test_new_and_rewritten_protected_tiles_go_up_in_batches_with_the_manifest_last(
-    tmp_path,
-):
+def _repo(tmp_path):
     wt = tmp_path / "wt"
     wt.mkdir()
     _git(wt, "init", "-q")
     _git(wt, "config", "user.name", "test")
     _git(wt, "config", "user.email", "test@example.invalid")
     _git(wt, "commit", "-q", "--allow-empty", "-m", "base")
+    return wt
+
+
+def test_new_and_rewritten_protected_tiles_go_up_in_batches_with_the_manifest_last(
+    tmp_path,
+):
+    wt = _repo(tmp_path)
     tiles = {f"data/protected/tiles/7/{i}/0.png" for i in range(5)}
 
     # first deploy: every tile is new (the positive control; the old filter, added files only, passed this)
@@ -92,4 +97,16 @@ def test_new_and_rewritten_protected_tiles_go_up_in_batches_with_the_manifest_la
     _check_batched(_deploy(tmp_path, wt), tiles)
 
     # every change went up: nothing left staged or unstaged
+    assert _git(wt, "status", "--porcelain") == ""
+
+
+def test_a_layer_the_script_does_not_name_goes_up_in_batches_with_its_manifest_last(
+    tmp_path,
+):
+    # Wave 2 (2026-10-04) added four tiled layers, ~90 MB, none in the old list (birds_archive, protected):
+    # they went up as one push the uplink drops. Any directory under data/ batches; its data/<layer>.json goes last.
+    wt = _repo(tmp_path)
+    tiles = {f"data/seagrass/2019_2020/9/{i}/0.png" for i in range(5)}
+    _write_tiles(wt, 1, "data/seagrass/2019_2020/9/{i}/0.png", "data/seagrass.json")
+    _check_batched(_deploy(tmp_path, wt), tiles, "data/seagrass.json")
     assert _git(wt, "status", "--porcelain") == ""
