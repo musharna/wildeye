@@ -116,6 +116,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'crw-bleaching', token: 'h', disposition: 'enabled-only' }),
   Object.freeze({ id: 'crw-dhw', token: 'y', disposition: 'enabled-only' }),
   Object.freeze({ id: 'crw-hotspot', token: 'p', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'crw-outlook', token: 'bo', disposition: 'enabled-only' }),
   Object.freeze({ id: 'crw-seaice', token: 'l', disposition: 'enabled-only' }),
   Object.freeze({ id: 'drought', token: 'dr', disposition: 'enabled-only' }),
   Object.freeze({ id: 'ecoregions', token: 'ec', disposition: 'enabled-only' }),
