@@ -63,6 +63,13 @@ export const DATA_CREDITS = [
       + 'Tiles load from NASA GIBS and are not re-hosted',
   },
   {
+    key: 'malaria-atlas',
+    html: 'Malaria: <a href="https://data.malariaatlas.org" target="_blank" rel="noopener">Malaria Atlas Project</a>, '
+      + 'Plasmodium falciparum parasite rate in children aged 2–10, 2000–2025, 2026-08 release (5 km); '
+      + '<a href="https://malariaatlas.org/open-access-policy/" target="_blank" rel="noopener">CC BY 3.0</a>; '
+      + 'maps and point estimates load from MAP\'s server and are not re-hosted',
+  },
+  {
     key: 'ioos-atn',
     html: 'Animal tracks: <a href="https://atn.ioos.us" target="_blank" rel="noopener">IOOS Animal Telemetry Network</a> — each deployment carries its own citation and licence in the info box',
   },
