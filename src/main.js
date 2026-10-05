@@ -48,6 +48,7 @@ import { reptilesLayer } from './data/reptiles.js';
 import { wetlandsLayer } from './data/wetlands.js';
 import { iflLayer } from './data/ifl.js';
 import { tidalMarshLayer } from './data/tidalMarsh.js';
+import { seagrassLayer } from './data/seagrass.js';
 import { obisGridLayer } from './data/obisGrid.js';
 import { protectedAreasLayer } from './data/protectedAreas.js';
 import { cameraTrapsLayer, ednaLayer } from './data/gbifMethodGrid.js';
@@ -222,12 +223,13 @@ async function init() {
     dataManager.register(wetlandsLayer);
     dataManager.register(iflLayer);
     dataManager.register(tidalMarshLayer);
+    dataManager.register(seagrassLayer);
     dataManager.register(obisGridLayer);
     dataManager.register(protectedAreasLayer);
     dataManager.register(cameraTrapsLayer);
     dataManager.register(ednaLayer);
     // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
-    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, wetlandsLayer, tidalMarshLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
+    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
     const drapeIds = drapeLayers.map((l) => l.id);
     const compare = createCompare({
       dataManager,
@@ -279,7 +281,7 @@ async function init() {
     // No domain constant: the bar spans the union of what the enabled layers declare they can
     // serve (getObservedExtent), so it cannot advertise hours no layer has data for.
     const observedTime = createObservedTime();
-    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, biotimeLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer, ...gibsLayers.filter((l) => l !== gibsBiomassLayer), hansenLossLayer, humanFootprintLayer, malariaLayer, biiLayer, mangrovesLayer, haedatLayer];
+    const observedLayers = [birdsLayer, crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, occurrencesLayer, tracksLayer, wastewaterLayer, otnLayer, hpaiLayer, neonLayer, gfwLayer, whispersLayer, arbonetLayer, biotimeLayer, phenologyLayer, neonVectorsLayer, cetaceansLayer, droughtLayer, h5n1Layer, firesLayer, riversLayer, ...gibsLayers.filter((l) => l !== gibsBiomassLayer), hansenLossLayer, humanFootprintLayer, malariaLayer, biiLayer, seagrassLayer, mangrovesLayer, haedatLayer];
     attachObservedTime(observedTime, dataManager, observedLayers);
     installObservedTimeUi(observedTime, dataManager, observedLayers);
     // After the time bar's store exists: a scrub relabels each compare side (a gap has no restack).
@@ -340,7 +342,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[crwOutlookLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, wetlandsLayer, tidalMarshLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, haedatLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[crwOutlookLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, haedatLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
