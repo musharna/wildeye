@@ -35,7 +35,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'noaa-crw',
-    html: 'Coral bleaching alerts, degree heating weeks, HotSpot and sea ice: Courtesy <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (daily 5 km products v3.1; Bleaching Alert Area on the legacy 0–4 scale)',
+    html: 'Coral bleaching alerts, degree heating weeks, HotSpot, sea ice and the four-month bleaching outlook: Courtesy <a href="https://coralreefwatch.noaa.gov" target="_blank" rel="noopener">NOAA Coral Reef Watch</a> (daily 5 km products v3.1, Bleaching Alert Area on the legacy 0–4 scale; Four-Month Coral Bleaching Heat Stress Outlook v5, CFSv2, 0.5°)',
   },
   {
     key: 'noaa-ndvi-cdr',
@@ -43,7 +43,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'nasa-gibs',
-    html: 'Land cover, vegetation (EVI), land surface temperature, night lights, forest biomass and species richness: '
+    html: 'Land cover, vegetation (EVI), land surface temperature, night lights, forest biomass, species richness, plant productivity, canopy height and anthropogenic biomes: '
       + 'We acknowledge the use of imagery provided by services from NASA\'s '
       + '<a href="https://nasa-gibs.github.io/gibs-api-docs/" target="_blank" rel="noopener">Global Imagery Browse Services (GIBS)</a>, '
       + 'part of NASA\'s Earth Science Data and Information System (ESDIS).',
@@ -54,6 +54,20 @@ export const DATA_CREDITS = [
       + '<a href="https://doi.org/10.7927/H4RR1W66" target="_blank" rel="noopener">Global Amphibian Richness Grids</a> and '
       + '<a href="https://doi.org/10.7927/H4N014G5" target="_blank" rel="noopener">Global Mammal Richness Grids</a>, 2015 Release, '
       + 'NASA SEDAC, from IUCN Red List ranges (April 2013); non-commercial use, share-alike; tiles load from NASA GIBS and are not re-hosted',
+  },
+  {
+    key: 'gibs-gpp-canopy-anthromes',
+    html: 'Plant productivity: Running, Mu &amp; Zhao (2021), <a href="https://doi.org/10.5067/MODIS/MOD17A2H.061" target="_blank" rel="noopener">MOD17A2H v061</a>, NASA LP DAAC. '
+      + 'Canopy height: Dubayah et al. (2021), <a href="https://doi.org/10.3334/ORNLDAAC/1952" target="_blank" rel="noopener">GEDI L3 Gridded Land Surface Metrics, Version 2</a>, ORNL DAAC. '
+      + 'Anthropogenic biomes: Ellis &amp; Ramankutty (2008), <a href="https://doi.org/10.7927/H4H12ZXD" target="_blank" rel="noopener">Anthropogenic Biomes of the World, Version 1</a>, NASA SEDAC. '
+      + 'Tiles load from NASA GIBS and are not re-hosted',
+  },
+  {
+    key: 'malaria-atlas',
+    html: 'Malaria: <a href="https://data.malariaatlas.org" target="_blank" rel="noopener">Malaria Atlas Project</a>, '
+      + 'Plasmodium falciparum parasite rate in children aged 2–10, 2000–2025, 2026-08 release (5 km); '
+      + '<a href="https://malariaatlas.org/open-access-policy/" target="_blank" rel="noopener">CC BY 3.0</a>; '
+      + 'maps and point estimates load from MAP\'s server and are not re-hosted',
   },
   {
     key: 'ioos-atn',
@@ -142,6 +156,10 @@ export const DATA_CREDITS = [
   {
     key: 'biotime',
     html: 'Assemblage time series: <a href="https://doi.org/10.5281/zenodo.15222193" target="_blank" rel="noopener">BioTIME 2.0</a> (Zenodo 15222193, CC BY 4.0); Dornelas et al. 2025, <i>Global Ecology and Biogeography</i> 34(5): e70003, <a href="https://doi.org/10.1111/geb.70003" target="_blank" rel="noopener">doi:10.1111/geb.70003</a>. Only studies under open-attribution licences are shown; each study\'s own citation and licence are in its info box. Counts are raw taxa and samples per study-year.',
+  },
+  {
+    key: 'haedat',
+    html: 'Harmful algal events: IOC-UNESCO, <a href="https://doi.org/10.25607/k68d5v" target="_blank" rel="noopener">The Harmful Algal Event Database (HAEDAT)</a>, archive version 3.35 (2025-05-23), accessed via <a href="https://obis.org" target="_blank" rel="noopener">OBIS</a>; Provoost and Enevoldsen, CC BY 4.0. Positions are HAEDAT\'s monitoring points and regional centres, not where each event happened.',
   },
   {
     key: 'phenology',

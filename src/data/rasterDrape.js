@@ -175,6 +175,8 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
       return this._show(f, _entry);
     },
     getHistory() { return _entry?.history ?? []; },
+    /** The manifest entry on show (read-only use: product-specific fields such as an outlook's dates). */
+    getEntry() { return _entry; },
 
     async update() {
       if (!_viewer) return false;

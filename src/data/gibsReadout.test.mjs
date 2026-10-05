@@ -145,3 +145,29 @@ test('512-px tiles (GFW tree-cover loss) agree with Cesium at zoom z + 9, and a 
   const t = tilePixel(-10.0, -63.0, 12, 512);
   assert.deepEqual(r, { url: `T/12/${t.x}/${t.y}.png`, px: t.px, py: t.py });
 });
+
+test('GPP, canopy height and anthromes decode the pixels read independently from their live tiles', () => {
+  // fixtures/gibs-trio.json is the live pipeline's output; the pixels and their colour-map entries were read
+  // with Python + Pillow straight from GIBS tiles and colour maps (2026-10-03), not through this decoder.
+  const L = JSON.parse(readFileSync(new URL('./fixtures/gibs-trio.json', import.meta.url))).layers;
+  const gpp = L['gibs-gpp'], canopy = L['gibs-canopy'], anthromes = L['gibs-anthromes'];
+  // Germany 52°N 10°E on 2024-06-25: entry [0.0585,0.059)
+  assert.deepEqual(decodePixel(gpp, [0, 255, 113, 255]), { kind: 'value', lo: 0.0585, hi: 0.059, text: '0.0587 kgC/m²' });
+  // GPP's classification colours (urban, barren...) are transparent in the tiles, and no data even if opaque
+  assert.equal(decodePixel(gpp, [255, 165, 0, 0]).kind, 'nodata');
+  assert.equal(decodePixel(gpp, [190, 190, 190, 255]).kind, 'nodata');
+  // Amazon 5°S 65°W: [22.5,23.0) m; the open top bin reads as a bound; GEDI's no-data black is not 0 m
+  assert.equal(decodePixel(canopy, [72, 144, 1, 255]).text, '22.8 m');
+  assert.equal(decodePixel(canopy, [0, 16, 0, 255]).text, '≥ 45.0 m');
+  assert.equal(decodePixel(canopy, [0, 0, 0, 255]).kind, 'nodata');
+  assert.deepEqual(decodePixel(anthromes, [158, 215, 194, 255]), { kind: 'class', label: 'Remote forest' });
+  assert.deepEqual(decodePixel(anthromes, [152, 230, 0, 255]), { kind: 'class', label: 'Residential rainfed mosaic' });
+  assert.equal(decodePixel(anthromes, [0, 0, 0, 255]).kind, 'nodata'); // the empty ocean tile is opaque black
+  // every midpoint prints inside its own bin, at GPP's 0.0005-wide bins too
+  for (const e of [gpp, canopy]) for (const [, , , lo, hi] of e.decode) {
+    const text = formatValue(e, lo, hi);
+    if (/^[≥<]| – /.test(text)) continue;
+    const shown = Number.parseFloat(text);
+    assert.ok(shown >= lo && shown < hi, `${e.gibsId} [${lo},${hi}) shown as ${text}`);
+  }
+});
