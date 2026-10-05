@@ -30,6 +30,7 @@ Live site: https://musharna.github.io/wildeye/
 - Active fires (NASA FIRMS)
 - Drought (U.S. Drought Monitor)
 - Ecoregions and biomes (RESOLVE 2017)
+- Intact forest landscapes 2000–2025, coloured by the last edition each place was intact in (IFL Mapping Team)
 
 **Water and ocean**
 - River temperature and flow at USGS gages

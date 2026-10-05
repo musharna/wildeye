@@ -130,6 +130,10 @@ export const DATA_CREDITS = [
     html: 'Wetlands: <a href="https://www.hydrosheds.org/products/glwd" target="_blank" rel="noopener">Global Lakes and Wetlands Database (GLWD) v2</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Lehner, Anand, Fluet-Chouinard, Tan et al. 2025, <i>Earth System Science Data</i> 17:2277–2329, <a href="https://doi.org/10.5194/essd-17-2277-2025" target="_blank" rel="noopener">doi:10.5194/essd-17-2277-2025</a>. Dominant wetland type where wetland covers more than half the cell, shown at ~1.2 km.',
   },
   {
+    key: 'ifl',
+    html: 'Intact forest landscapes: The IFL Mapping Team, <a href="https://intactforests.org/data.ifl.html" target="_blank" rel="noopener">Intact Forest Landscapes 2000–2025</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Potapov, Hansen, Laestadius, Turubanova, Yaroshenko et al. 2017, <i>Science Advances</i> 3:e1600821, <a href="https://doi.org/10.1126/sciadv.1600821" target="_blank" rel="noopener">doi:10.1126/sciadv.1600821</a>. Changed: the five editions\' polygons simplified by 0.001° and drawn as ~610 m tiles, each place coloured by the last edition it was intact in.',
+  },
+  {
     key: 'obis-grid',
     html: 'Marine records: OBIS (2026) <a href="https://obis.org" target="_blank" rel="noopener">Ocean Biodiversity Information System</a>, Intergovernmental Oceanographic Commission of UNESCO, from the <a href="https://obis.org/data/access/" target="_blank" rel="noopener">OBIS open-data export</a>; records, species and datasets per 1° cell from CC0 1.0 and CC BY 4.0 datasets only, each named with its licence in <a href="data/obis_grid_datasets.json" target="_blank" rel="noopener">obis_grid_datasets.json</a>.',
   },
