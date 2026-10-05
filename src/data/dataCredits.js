@@ -154,6 +154,10 @@ export const DATA_CREDITS = [
     html: 'Assemblage time series: <a href="https://doi.org/10.5281/zenodo.15222193" target="_blank" rel="noopener">BioTIME 2.0</a> (Zenodo 15222193, CC BY 4.0); Dornelas et al. 2025, <i>Global Ecology and Biogeography</i> 34(5): e70003, <a href="https://doi.org/10.1111/geb.70003" target="_blank" rel="noopener">doi:10.1111/geb.70003</a>. Only studies under open-attribution licences are shown; each study\'s own citation and licence are in its info box. Counts are raw taxa and samples per study-year.',
   },
   {
+    key: 'haedat',
+    html: 'Harmful algal events: IOC-UNESCO, <a href="https://doi.org/10.25607/k68d5v" target="_blank" rel="noopener">The Harmful Algal Event Database (HAEDAT)</a>, archive version 3.35 (2025-05-23), accessed via <a href="https://obis.org" target="_blank" rel="noopener">OBIS</a>; Provoost and Enevoldsen, CC BY 4.0. Positions are HAEDAT\'s monitoring points and regional centres, not where each event happened.',
+  },
+  {
     key: 'phenology',
     html: "Phenology: Data were provided by the <a href=\"https://www.usanpn.org/data/observational\" target=\"_blank\" rel=\"noopener\">USA National Phenology Network</a> and the many participants who contribute to its Nature's Notebook program (CC BY 4.0, doi:10.5066/F78S4N1V).",
   },
