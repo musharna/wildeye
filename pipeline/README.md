@@ -60,7 +60,7 @@ archives every new acquisition to `rasters/<id>/<stamp>.png` (`keep_days`, defau
 as `history` in the manifest — the frontend drape shows the archived acquisition at the shared
 observed time. Measured 2026-09-11: ~209 s per product (ERDDAP redirect is slow).
 Products: `crw-bleaching` (NOAA CRW Bleaching Alert Area, daily) · `oisst` (NOAA OISST v2.1 Preliminary,
-`ncdcOisst21NrtAgg_LonPM180`, ~1 day behind; the Final aggregate lags ~2 weeks) · `chlor-a` (NOAA VIIRS gap-filled chlorophyll-a, log scale, daily NRT).
+`ncdcOisst21NrtAgg_LonPM180`, ~1 day behind; the Final aggregate lags ~2 weeks) · `chlor-a` (NOAA VIIRS gap-filled chlorophyll-a, log scale, daily NRT) · `crw-outlook` (NOAA CRW Four-Month Coral Bleaching Heat Stress Outlook v5, the newest weekly NetCDF issue at 60% and 90%, ~4 s; `pipeline/crw_outlook.py` also writes `rasters/crw-outlook.data.png` for the click readout).
 Requests carry a wildeye User-Agent: the ERDDAP redirect target (coastwatch.noaa.gov) returns 403 to Python-urllib.
 `--only X` leaves the other products' manifest entries untouched.
 
