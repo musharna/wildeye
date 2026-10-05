@@ -243,3 +243,67 @@ def test_no_data_colours_are_those_only_ever_transparent():
     assert (
         nodata("gedi") is None
     )  # black is a GEDI data colour as well as its no-data colour
+
+
+def test_gpp_canopy_and_anthromes_are_listed_with_their_gibs_ids():
+    # wave 2 (spec 2026-10-03-gibs-gpp-canopy-anthromes-design.md): ids and the undated layer's period
+    want = {
+        "gibs-gpp": "MODIS_Terra_L4_Gross_Primary_Productivity_8Day",
+        "gibs-canopy": "GEDI_ISS_L3_Canopy_Height_Mean_RH100_201904-202303",
+        "gibs-anthromes": "Anthropogenic_Biomes_of_the_World_2001-2006",
+    }
+    assert {k: g.LAYERS[k]["gibsId"] for k in want} == want
+    assert g.LAYERS["gibs-anthromes"]["asOf"] == "2001–2006"
+    # GPP and canopy are dated in GIBS (canopy: one 2019-04-18/P1429D interval), so asOf would raise in build
+    assert "asOf" not in g.LAYERS["gibs-gpp"] and "asOf" not in g.LAYERS["gibs-canopy"]
+
+
+def test_gpp_reads_the_production_map_and_its_classification_colours_are_no_data():
+    # GPP's real colour map (2026-10-03) carries a "Classifications" map of seven transparent classes (urban,
+    # water, snow/ice, barren, fill...) beside the production ramp; those pixels must read no data, not a value
+    cm = g.parse_colormap((FIX / "gibs_colormap_gpp.xml").read_bytes())
+    r = cm["ramp"]
+    assert (r["min"], r["max"], r["unit"]) == (0.0, 0.12, " kgC/m²")
+    d = cm["decode"]
+    assert len(d) == 240 and d[0] == [100, 0, 0, 0.0, 0.0005]
+    assert [
+        0,
+        255,
+        113,
+        0.0585,
+        0.059,
+    ] in d  # Germany, 2024-06-25 (probe of the live tile)
+    assert len({tuple(e[:3]) for e in d}) == len(d)
+    assert sorted(map(tuple, cm["noData"])) == [
+        (0, 0, 1),
+        (0, 1, 1),
+        (25, 25, 112),
+        (30, 145, 20),
+        (190, 190, 190),
+        (255, 165, 0),
+        (255, 255, 253),
+    ]
+    assert not {tuple(c) for c in cm["noData"]} & {tuple(e[:3]) for e in d}
+
+
+def test_canopy_height_has_an_open_top_bin_and_black_as_no_data():
+    cm = g.parse_colormap((FIX / "gibs_colormap_canopy.xml").read_bytes())
+    r = cm["ramp"]
+    assert (r["min"], r["max"], r["unit"]) == (0.0, 45.0, " m")
+    d = cm["decode"]
+    assert len(d) == 91 and d[-1] == [0, 16, 0, 45.0, None]
+    assert [72, 144, 1, 22.5, 23.0] in d  # Amazon at 5°S 65°W (probe of the live tile)
+    # unlike GEDI biomass, canopy height never draws black as data
+    assert cm["noData"] == [[0, 0, 0]]
+    assert not any(e[:3] == [0, 0, 0] for e in d)
+
+
+def test_anthromes_are_21_classes_and_black_is_no_data():
+    cm = g.parse_colormap((FIX / "gibs_colormap_anthromes.xml").read_bytes())
+    labels = [c["label"] for c in cm["classes"]]
+    assert len(labels) == 21 and labels[0] == "Urban" and labels[-1] == "Barren"
+    assert {"label": "Remote forest", "rgb": [158, 215, 194]} in cm["classes"]
+    assert {"label": "Residential rainfed mosaic", "rgb": [152, 230, 0]} in cm[
+        "classes"
+    ]
+    assert "decode" not in cm and cm["noData"] == [[0, 0, 0]]

@@ -88,14 +88,17 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 52);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 52);
+  assert.equal(REGISTERED_LAYER_IDS.length, 56);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 56);
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   for (const [id, token] of [
     ['biotime', 'bt'],
     ['gibs-amphibians', 'am'],
     ['gibs-mammals', 'mm'],
     ['gibs-biomass', 'gd'],
+    ['gibs-gpp', 'gp'],
+    ['gibs-canopy', 'ch'],
+    ['gibs-anthromes', 'ab'],
     ['gibs-evi', 'ev'],
     ['gibs-landcover', 'lc'],
     ['gibs-lst', 'ls'],
@@ -106,6 +109,7 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
     ['surface-water', 'sw'],
     ['human-footprint', 'hf'],
     ['marine-realms', 'mr'],
+    ['malaria', 'ml'],
     ['freshwater-fish', 'ff'],
     ['bii', 'bi'],
     ['reptiles', 'rp'],
