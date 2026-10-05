@@ -67,6 +67,23 @@ LAYERS = {
         "legend": "Mammal species per ~1 km cell (IUCN ranges, 2013); none or no data not drawn",
         "asOf": "2013",
     },
+    # wave 2 (spec 2026-10-03-gibs-gpp-canopy-anthromes-design.md)
+    "gibs-gpp": {
+        "gibsId": "MODIS_Terra_L4_Gross_Primary_Productivity_8Day",
+        "legend": "Gross primary productivity, carbon fixed by plants over each 8 days (MOD17A2H); "
+        "urban, wetland, water, snow, ice and barren land not drawn",
+    },
+    "gibs-canopy": {
+        "gibsId": "GEDI_ISS_L3_Canopy_Height_Mean_RH100_201904-202303",
+        "legend": "Mean canopy top height (GEDI RH100) per ~1 km cell, 2019–2023 composite; "
+        "GEDI covers 52°S–52°N; bare desert reads about 3.5–4 m",
+    },
+    # Ellis & Ramankutty v1: undated in GIBS; CMR gives the data period 2001-2006
+    "gibs-anthromes": {
+        "gibsId": "Anthropogenic_Biomes_of_the_World_2001-2006",
+        "legend": "Anthropogenic biomes: how people use and live in each ~9 km cell (v1, 2001–2006)",
+        "asOf": "2001–2006",
+    },
 }
 
 

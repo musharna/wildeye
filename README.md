@@ -22,6 +22,7 @@ Live site: https://musharna.github.io/wildeye/
 - H5N1 sequenced samples by state, from Nextstrain builds that use open USDA and GenBank data (United States only)
 - Mosquito- and tick-borne disease cases by state (CDC)
 - Wastewater virus trend by county (CDC NWSS)
+- Harmful algal events worldwide, 1770–2025: shellfish poisonings, fish kills and other harmful algal bloom events (IOC-UNESCO HAEDAT)
 
 **Plants and land**
 - Phenology: leaf, flower, fruit and insect observations (USA-NPN)
@@ -30,12 +31,15 @@ Live site: https://musharna.github.io/wildeye/
 - Active fires (NASA FIRMS)
 - Drought (U.S. Drought Monitor)
 - Ecoregions and biomes (RESOLVE 2017)
+- Intact forest landscapes 2000–2025, coloured by the last edition each place was intact in (IFL Mapping Team)
 
 **Water and ocean**
 - River temperature and flow at USGS gages
 - Sea surface temperature, chlorophyll-a and sea ice
 - Coral bleaching alerts and coral heat stress (NOAA Coral Reef Watch)
 - Surface dissolved oxygen and pH (Copernicus Marine Service)
+- Tidal marshes 2020, as the share of each ~150 m cell (Worthington et al.)
+- Seagrass 2019–2020 and 2023–2024, as the share of each ~150 m cell (Peng et al.)
 
 Most of these layers follow a shared time bar covering the last 30 days.
 
