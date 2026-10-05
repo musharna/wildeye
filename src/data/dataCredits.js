@@ -43,7 +43,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'nasa-gibs',
-    html: 'Land cover, vegetation (EVI), land surface temperature, night lights, forest biomass and species richness: '
+    html: 'Land cover, vegetation (EVI), land surface temperature, night lights, forest biomass, species richness, plant productivity, canopy height and anthropogenic biomes: '
       + 'We acknowledge the use of imagery provided by services from NASA\'s '
       + '<a href="https://nasa-gibs.github.io/gibs-api-docs/" target="_blank" rel="noopener">Global Imagery Browse Services (GIBS)</a>, '
       + 'part of NASA\'s Earth Science Data and Information System (ESDIS).',
@@ -54,6 +54,13 @@ export const DATA_CREDITS = [
       + '<a href="https://doi.org/10.7927/H4RR1W66" target="_blank" rel="noopener">Global Amphibian Richness Grids</a> and '
       + '<a href="https://doi.org/10.7927/H4N014G5" target="_blank" rel="noopener">Global Mammal Richness Grids</a>, 2015 Release, '
       + 'NASA SEDAC, from IUCN Red List ranges (April 2013); non-commercial use, share-alike; tiles load from NASA GIBS and are not re-hosted',
+  },
+  {
+    key: 'gibs-gpp-canopy-anthromes',
+    html: 'Plant productivity: Running, Mu &amp; Zhao (2021), <a href="https://doi.org/10.5067/MODIS/MOD17A2H.061" target="_blank" rel="noopener">MOD17A2H v061</a>, NASA LP DAAC. '
+      + 'Canopy height: Dubayah et al. (2021), <a href="https://doi.org/10.3334/ORNLDAAC/1952" target="_blank" rel="noopener">GEDI L3 Gridded Land Surface Metrics, Version 2</a>, ORNL DAAC. '
+      + 'Anthropogenic biomes: Ellis &amp; Ramankutty (2008), <a href="https://doi.org/10.7927/H4H12ZXD" target="_blank" rel="noopener">Anthropogenic Biomes of the World, Version 1</a>, NASA SEDAC. '
+      + 'Tiles load from NASA GIBS and are not re-hosted',
   },
   {
     key: 'malaria-atlas',
