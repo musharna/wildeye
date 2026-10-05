@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Cesium from "cesium";
+import { readFileSync } from "node:fs";
 import {
   createGibsLayer,
   gibsTileUrl,
@@ -259,4 +260,26 @@ test("black that is only ever no data is drawn transparent; black that is also d
   lst.layer.enable();
   await lst.layer.update();
   assert.equal(lst.list.at(-1).colorToAlpha, undefined);
+});
+
+test("the live canopy and anthromes entries key black out; GPP, whose classes are transparent in the tile, does not", async () => {
+  // fixtures/gibs-trio.json: live pipeline output 2026-10-03. Canopy and anthromes declare black no data and draw
+  // no colour near it; anthromes is undated, so its URL has no date and it is labelled with its period.
+  const { layers } = JSON.parse(readFileSync(new URL("./fixtures/gibs-trio.json", import.meta.url)));
+  const drawn = async (entry) => {
+    const h = harness({ entry });
+    h.layer.enable();
+    assert.equal(await h.layer.update(), true);
+    return h;
+  };
+  const canopy = await drawn(layers["gibs-canopy"]);
+  assert.ok(Cesium.Color.BLACK.equals(canopy.list.at(-1).colorToAlpha));
+  const anthromes = await drawn(layers["gibs-anthromes"]);
+  assert.ok(Cesium.Color.BLACK.equals(anthromes.list.at(-1).colorToAlpha));
+  assert.match(anthromes.providers[0].url, /\/Anthropogenic_Biomes_of_the_World_2001-2006\/default\/GoogleMapsCompatible_Level7\//);
+  assert.equal(anthromes.layer.getStats().time, "2001–2006");
+  assert.equal(anthromes.list.at(-1).alpha, 1); // a class map draws opaque
+  const gpp = await drawn(layers["gibs-gpp"]);
+  assert.equal(gpp.list.at(-1).colorToAlpha, undefined);
+  assert.equal(gpp.list.at(-1).alpha, 0.7);
 });
