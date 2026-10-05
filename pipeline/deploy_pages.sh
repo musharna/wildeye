@@ -121,12 +121,13 @@ publish() { # commit what is staged, push it
 # deploy after the archive catches up on several nights cannot go as one push. New archive frame files
 # go up first in commits of at most $BATCH_MB, while the published manifest still lists only the old
 # frames: every tip the uplink leaves behind is a site whose manifest names only files it has. The
-# manifest and everything else go last. The protected-areas tiles and shards (~90 MB on first deploy)
-# go up the same way; their manifest, data/protected_areas.json, is outside data/protected/ and goes last.
-# Changed files count as well as new ones: a protected-areas rebuild rewrites its tiles and shards in
-# place (archive frames are never rewritten). Pinned by pipeline/tests/test_deploy_batching.py.
+# manifest and everything else go last. Every layer's files under a directory of data/ go up the same way
+# (protected areas ~90 MB on first deploy, seagrass 61 MB); each layer's manifest, data/<layer>.json, sits
+# outside its directory and goes last. Every directory, not a list: the list named two, and the next four
+# tiled layers would have gone up as one ~90 MB push. Changed files count as well as new ones: a rebuild
+# rewrites its tiles in place (archive frames are never rewritten). Pinned by pipeline/tests/test_deploy_batching.py.
 BATCH_MB="${BATCH_MB:-40}"
-mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=AM -- data/birds_archive data/protected ':(exclude)data/birds_archive/manifest.json')
+mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=AM -- ':(glob)data/*/**' ':(exclude)data/birds_archive/manifest.json')
 NEW_BYTES=0
 [ "${#NEW[@]}" -gt 0 ] && NEW_BYTES="$(cd "$WT" && printf '%s\0' "${NEW[@]}" | du -cb --files0-from=- | tail -1 | cut -f1)"
 if [ "$NEW_BYTES" -gt $((BATCH_MB * 1000000)) ]; then

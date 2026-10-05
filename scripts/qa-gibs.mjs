@@ -24,12 +24,30 @@ const IDS = [
   "gibs-biomass",
   "gibs-amphibians",
   "gibs-mammals",
+  "gibs-gpp",
+  "gibs-canopy",
+  "gibs-anthromes",
 ];
 // Known answers decoded independently (Python + Pillow on the live level-7 tile, 2026-10-02): 81 amphibian
 // species at 3°S 60°W; the open Atlantic at 0° 30°W is GIBS's empty tile, opaque black, which must read no data.
 const KNOWN = {
   "gibs-amphibians": [
     { lat: -3, lon: -60, status: "value", text: "81", date: "2013" },
+    { lat: 0, lon: -30, status: "nodata" },
+  ],
+  // Wave 2, decoded the same way from the live tiles (2026-10-03). `observed` sets the time bar first: GPP's latest
+  // composite changes every 8 days, 2024-06-25 does not.
+  "gibs-gpp": [
+    { lat: 52, lon: 10, observed: "2024-07-01T00:00:00Z", status: "value", text: "0.0587 kgC/m²", date: "2024-06-25" },
+    { lat: 23, lon: 10, observed: "2024-07-01T00:00:00Z", status: "nodata", date: "2024-06-25" },
+  ],
+  "gibs-canopy": [
+    { lat: -5, lon: -65, status: "value", text: "22.8 m", date: "2019-04-18" },
+    { lat: 0, lon: -30, status: "nodata" },
+  ],
+  "gibs-anthromes": [
+    { lat: -5, lon: -65, status: "class", text: "Remote forest", date: "2001–2006" },
+    { lat: 40, lon: -90, status: "class", text: "Residential rainfed mosaic", date: "2001–2006" },
     { lat: 0, lon: -30, status: "nodata" },
   ],
 };
@@ -137,10 +155,26 @@ try {
     });
     for (const k of KNOWN[id] ?? []) {
       const r = await page.evaluate(
-        (id, lat, lon) => window.__godsEyeView.dataManager.layers.get(id).module.readoutAt(lat, lon),
+        async (id, lat, lon, observed, date) => {
+          const g = window.__godsEyeView;
+          const mod = g.dataManager.layers.get(id).module;
+          if (observed) {
+            g.observedTime.set(observed);
+            // wait for the layer to resolve the bar's instant to the date it should draw (a timeless one never moves)
+            const deadline = Date.now() + 30000;
+            while (Date.now() < deadline && mod.getStats().time !== date) await new Promise((r) => setTimeout(r, 200));
+          }
+          try {
+            return await mod.readoutAt(lat, lon);
+          } finally {
+            if (observed) g.observedTime.set(null);
+          }
+        },
         id,
         k.lat,
         k.lon,
+        k.observed ?? null,
+        k.date ?? null,
       );
       const ok = r?.status === k.status && (k.text === undefined || r.text === k.text) && (k.date === undefined || r.date === k.date);
       report(`${id}:readout ${k.lat},${k.lon}`, ok, { want: k, got: r });
@@ -180,6 +214,22 @@ try {
       (live.domainStart ?? "").startsWith("2001"),
     live,
   );
+  // Canopy height is a 2019–2023 composite (timeless): alone it declares no extent, so the bar has no domain. A dated
+  // canopy layer would declare 2019-04-18 on. Positive control: GPP alone spans 2000 on.
+  const extents = await page.evaluate(async () => {
+    const g = window.__godsEyeView;
+    const domainWith = async (id) => {
+      for (const l of g.dataManager.getAll()) if (g.dataManager.isEnabled(l.id)) await g.dataManager.setEnabled(l.id, false);
+      await g.dataManager.setEnabled(id, true);
+      const deadline = Date.now() + 30000;
+      while (Date.now() < deadline && !g.dataManager.layers.get(id).module.getStats().lastUpdate) await new Promise((r) => setTimeout(r, 200));
+      const d = g.observedTime.domain();
+      await g.dataManager.setEnabled(id, false);
+      return d ? new Date(d.start).toISOString() : null;
+    };
+    return { canopy: await domainWith("gibs-canopy"), gpp: await domainWith("gibs-gpp") };
+  });
+  report("canopy-ignores-the-bar", extents.canopy === null && (extents.gpp ?? "").startsWith("2000"), extents);
   report("no-page-errors", pageErrors.length === 0, {
     errors: pageErrors.slice(0, 5),
   });

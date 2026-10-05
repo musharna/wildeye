@@ -58,6 +58,8 @@ public/data/marine_realms.geojson
 public/data/freshwater_fish.geojson
 public/data/protected_areas.json
 public/data/protected/
+public/data/ifl.json
+public/data/ifl/
 public/data/fishing.geojson
 public/data/phenology.geojson
 public/data/fires.geojson
@@ -105,5 +107,6 @@ public/data/camera_traps.json
 public/data/camera_traps.png
 public/data/edna.png
 public/data/camera_traps_datasets.json
+public/data/haedat.json
 public/data/tidal_marsh/
 public/data/tidal_marsh.json

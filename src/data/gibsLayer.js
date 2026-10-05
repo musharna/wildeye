@@ -298,3 +298,27 @@ export const gibsMammalLayer = createGibsLayer({
   source: "NASA GIBS · SEDAC mammal richness",
   zrank: 23,
 });
+// wave 2 (spec 2026-10-03-gibs-gpp-canopy-anthromes-design.md)
+export const gibsGppLayer = createGibsLayer({
+  id: "gibs-gpp",
+  name: "Plant productivity (MODIS GPP, 8-day)",
+  icon: "🌿",
+  source: "NASA GIBS · MODIS Terra GPP",
+  zrank: 21,
+});
+export const gibsCanopyLayer = createGibsLayer({
+  id: "gibs-canopy",
+  name: "Canopy height (GEDI, 2019–2023)",
+  icon: "🌲",
+  source: "NASA GIBS · GEDI L3",
+  zrank: 24,
+  timeless: true,
+});
+// undated in GIBS, like the SEDAC grids: one 2001-2006 snapshot, drawn at any time
+export const gibsAnthromesLayer = createGibsLayer({
+  id: "gibs-anthromes",
+  name: "Anthropogenic biomes (SEDAC, 2001–2006)",
+  icon: "🏘️",
+  source: "NASA GIBS · SEDAC anthromes v1",
+  zrank: 26,
+});

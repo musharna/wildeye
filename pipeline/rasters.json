@@ -69,6 +69,72 @@
     ]
   },
   {
+    "id": "crw-outlook",
+    "name": "Coral bleaching heat stress outlook, next four months (NOAA CRW)",
+    "icon": "🔮",
+    "crw_outlook": {
+      "index": "https://www.star.nesdis.noaa.gov/pub/socd/mecb/crw/data/outlook/v5/nc/v1/outlook/",
+      "probabilities": [
+        60,
+        90
+      ]
+    },
+    "bounds": {
+      "west": -180,
+      "south": -90,
+      "east": 180,
+      "north": 90
+    },
+    "legend": "Four-month outlook: the stress level reached by at least 60% of the CFSv2 model runs",
+    "credit_key": "noaa-crw",
+    "credit": "Courtesy NOAA Coral Reef Watch (Four-Month Coral Bleaching Heat Stress Outlook v5, CFSv2, 0.5°)",
+    "kind": "classes",
+    "zrank": 85,
+    "classes": [
+      {
+        "label": "no stress",
+        "rgb": [
+          255,
+          255,
+          255
+        ],
+        "hidden": true
+      },
+      {
+        "label": "Watch",
+        "rgb": [
+          255,
+          210,
+          160
+        ]
+      },
+      {
+        "label": "Warning",
+        "rgb": [
+          250,
+          170,
+          10
+        ]
+      },
+      {
+        "label": "Alert Level 1",
+        "rgb": [
+          240,
+          0,
+          0
+        ]
+      },
+      {
+        "label": "Alert Level 2",
+        "rgb": [
+          150,
+          0,
+          0
+        ]
+      }
+    ]
+  },
+  {
     "id": "oisst",
     "name": "Sea surface temperature (NOAA OISST)",
     "icon": "🌡️",
