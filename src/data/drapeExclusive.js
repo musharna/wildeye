@@ -7,6 +7,10 @@
  *
  * Off-requests never cascade, so the disables issued here cannot re-enter.
  * While compare is on, its two sides are exempt from each other (`exempt`), never from a third drape.
+ *
+ * A disable carries the origin of the request that caused it: an explicit
+ * click turns the old drape off explicitly, so it leaves the saved state and
+ * the share link; a passive restore stays passive and writes neither.
  */
 export function installDrapeExclusivity(dataManager, drapeIds, { exempt = () => null } = {}) {
   const ids = new Set(drapeIds);
@@ -20,7 +24,7 @@ export function installDrapeExclusivity(dataManager, drapeIds, { exempt = () => 
     for (const other of ids) {
       if (other === change.layerId || keep?.has(other)) continue;
       if (dataManager.isEffectivelyEnabled?.(other) ?? dataManager.isEnabled(other)) {
-        dataManager.setEnabled(other, false, { origin: 'programmatic' });
+        dataManager.setEnabled(other, false, { origin: change.origin });
       }
     }
   });
