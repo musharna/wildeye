@@ -16,6 +16,7 @@ import argparse
 import collections
 import csv
 import datetime as dt
+import gzip
 import io
 import logging
 import os
@@ -31,14 +32,24 @@ log = logging.getLogger("hpai")
 CSV_URL = "https://www.aphis.usda.gov/sites/default/files/hpai-wild-birds.csv"
 PAGE_URL = "https://www.aphis.usda.gov/livestock-poultry-disease/avian/avian-influenza/hpai-detections/wild-birds"
 UA = "wildeye/0.1 (hpai sync)"
+# Akamai in front of usda.gov answers 403 Access Denied to a request without the headers a
+# browser sends (every run_hpai.sh run from 2026-09-12 to 2026-10-06). Measured from the cron's
+# connection with urllib, which speaks HTTP/1.1: the User-Agent alone, or without
+# Accept-Language, 403; all four, 200. The User-Agent still names wildeye.
+HEADERS = {"User-Agent": UA, "Accept": "*/*", "Accept-Encoding": "gzip", "Accept-Language": "en-US,en;q=0.9"}
 DEFAULT_WEEKS = 26
 LICENCE = "Public Domain U.S. Government (USDA APHIS)"
 
 
 def fetch_csv(url: str = CSV_URL, timeout: int = 600) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    req = urllib.request.Request(url, headers=HEADERS)
     with urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8-sig")
+        body, encoding = r.read(), r.headers.get("Content-Encoding")
+    if encoding == "gzip":
+        body = gzip.decompress(body)
+    elif encoding not in (None, "identity"):
+        raise RuntimeError(f"{url} came back with Content-Encoding {encoding!r}; only gzip was asked for")
+    return body.decode("utf-8-sig")
 
 
 def _date(s: str) -> dt.date | None:
@@ -149,6 +160,9 @@ def main(argv=None):
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
     text = a.csv.read_text(encoding="utf-8-sig") if a.csv else fetch_csv()
     rows, pc = parse_rows(text)
+    if not rows:
+        # an error page served with status 200 parses to zero rows; writing it would empty the layer
+        raise RuntimeError(f"no dated detection rows in the HPAI CSV ({pc}); it starts {text[:120]!r}")
     shapes = load_county_shapes(a.cache / "cb_2021_us_county_20m.zip", None)
     counties, cc = county_index(rows, county_lookup(shapes), today, a.weeks)
     feats = to_features(counties, shapes)
