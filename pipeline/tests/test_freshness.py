@@ -115,3 +115,23 @@ def test_a_product_time_that_does_not_parse_is_reported_not_a_crash(tmp_path, mo
     report = tmp_path / "report.md"
     assert f.main(["--report", str(report), "--now", NOW.isoformat()]) == f.STALE_EXIT
     assert "rasters.json: ndvi" in report.read_text()
+
+
+def test_rasters_json_of_the_wrong_shape_is_reported_not_a_crash(tmp_path, monkeypatch):
+    """PR #61 delta review: values come straight from json.loads, so a number or an object where a
+    time string belongs raised TypeError, which the ValueError guards did not catch."""
+    report = tmp_path / "report.md"
+    shapes = {
+        "numbers for times": ({"generated_at": 1791316018, "products": [
+            {"id": "ndvi", "time": 1791316018}, "not a product", {"id": "oisst", "time": ago(days=2)}]},
+            {"rasters.json", "rasters.json: ndvi", "rasters.json: product 1"}),
+        "a list, not an object": ([], {"rasters.json"}),
+        "products not a list": ({"generated_at": ago(hours=4), "products": {"id": "ndvi"}}, {"rasters.json: products"}),
+    }
+    for label, (rasters, expected) in shapes.items():
+        files = _all_fresh()
+        files["rasters.json"] = json.dumps(rasters).encode()
+        _site(monkeypatch, files)
+        assert f.main(["--report", str(report), "--now", NOW.isoformat()]) == f.STALE_EXIT, label
+        marker = report.read_text().splitlines()[0]
+        assert set(marker.removeprefix("<!-- stale: ").removesuffix(" -->").split(",")) == expected, (label, marker)

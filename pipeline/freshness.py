@@ -77,6 +77,15 @@ def _when(s: str) -> dt.datetime:
     return t if t.tzinfo else t.replace(tzinfo=dt.UTC)
 
 
+def _parse(v) -> dt.datetime | None:
+    """A JSON value as an aware datetime, or None for anything that is not an ISO time string
+    (values come straight from json.loads: a number raises TypeError, not ValueError)."""
+    try:
+        return _when(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def _age(d: dt.timedelta) -> str:
     days, hours = d.days, d.seconds // 3600
     return f"{days} days {hours} h" if days else f"{hours} h"
@@ -91,22 +100,30 @@ def assess(stamps: dict, rasters: dict | None, now: dt.datetime, layers: dict = 
         if v is None:
             out.append({"layer": name, "why": "no generated_at in the file"})
             continue
-        try:
-            t = _when(v)
-        except ValueError:
+        t = _parse(v)
+        if t is None:
             out.append({"layer": name, "why": f"could not read it: {v}"})
             continue
         if now - t > limit(cadence):
             out.append({"layer": name, "why": f"written {v}, {_age(now - t)} old; {cadence} job, limit {_age(limit(cadence))}"})
-    for p in (rasters or {}).get("products", []):
+    if rasters is None:
+        return out
+    products = rasters.get("products") if isinstance(rasters, dict) else None
+    if not isinstance(products, list):
+        if isinstance(rasters, dict):  # a non-object rasters.json is already reported via its generated_at
+            out.append({"layer": "rasters.json: products", "why": f"not a list: {products!r:.80}"})
+        return out
+    for i, p in enumerate(products):
+        if not isinstance(p, dict):
+            out.append({"layer": f"rasters.json: product {i}", "why": f"not an object: {p!r:.80}"})
+            continue
         pid, t = p.get("id", "?"), p.get("time")
         lim = PRODUCT_LIMIT.get(pid, PRODUCT_DEFAULT)
         if not t:
             out.append({"layer": f"rasters.json: {pid}", "why": "no data time"})
             continue
-        try:
-            when = _when(t)
-        except ValueError:
+        when = _parse(t)
+        if when is None:
             out.append({"layer": f"rasters.json: {pid}", "why": f"could not read its data time: {t}"})
             continue
         if now - when > lim:
@@ -138,7 +155,7 @@ def read_stamps(layers: dict = LAYERS) -> tuple[dict, dict | None]:
         try:
             if name == "rasters.json":
                 rasters = json.loads(_get(name, None))
-                stamps[name] = rasters.get("generated_at")
+                stamps[name] = rasters.get("generated_at") if isinstance(rasters, dict) else "rasters.json is not a JSON object"
             else:
                 m = GENERATED_AT.search(_get(name, 4096).decode("utf-8", "replace"))
                 stamps[name] = m.group(1) if m else None
