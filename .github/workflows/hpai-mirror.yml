@@ -1,0 +1,63 @@
+name: HPAI mirror
+
+# Akamai in front of usda.gov refuses the connection the nightly pipeline runs from (403 on
+# every usda.gov page, every run since 2026-09-12), while it serves the same file elsewhere.
+# This job fetches the APHIS wild-bird CSV on a GitHub-hosted runner and uploads it, with a
+# sidecar giving the fetch time and sha256, to the hpai-mirror release; pipeline/hpai.py
+# reads it there and fails if the pair disagrees or is more than 3 days old.
+# On a pull request it fetches and checks but publishes nothing.
+
+on:
+  schedule:
+    - cron: '17 9 * * *' # 05:17 EDT / 04:17 EST, ahead of the 07:05 local run_hpai.sh
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/hpai-mirror.yml
+      - pipeline/hpai.py
+      - pipeline/hpai_mirror.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hpai-mirror-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # gh release upload; the step is skipped on pull requests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - name: Fetch and check the APHIS CSV
+        run: uv run --python 3.13 --no-project python -m pipeline.hpai_mirror --out-dir mirror
+      - name: Summary
+        run: |
+          {
+            echo '### HPAI mirror'
+            echo '```json'
+            cat mirror/hpai-wild-birds.json
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish to the hpai-mirror release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view hpai-mirror > /dev/null; then
+            gh release create hpai-mirror --target "$GITHUB_SHA" --latest=false \
+              --title 'HPAI wild-bird detections (mirror)' \
+              --notes 'USDA APHIS HPAI detections in wild birds, public domain, refreshed daily by .github/workflows/hpai-mirror.yml for pipeline/hpai.py. Source: https://www.aphis.usda.gov/sites/default/files/hpai-wild-birds.csv'
+          fi
+          # The CSV first: a reader between the two uploads sees a new CSV with the old sidecar,
+          # and pipeline/hpai.py refuses that pair on the sha256 rather than using a mismatched one.
+          gh release upload hpai-mirror mirror/hpai-wild-birds.csv --clobber
+          gh release upload hpai-mirror mirror/hpai-wild-birds.json --clobber

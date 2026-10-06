@@ -9,6 +9,13 @@ matched by (state name, county name) to the Census 2021 boundary file shared wit
 pipeline/wastewater.py; unmatched names are counted and logged, never guessed. Output:
 one polygon per county with ≥1 detection in the last `--weeks` weeks, weekly bins of
 detection counts (by species and WOAH class), plus an all-time total for the info box.
+
+The CSV is read from the `hpai-mirror` GitHub release, not from usda.gov: Akamai in front
+of usda.gov refuses the connection the nightly cron runs from (every usda.gov page, IPv4
+and IPv6, 403 on every run since 2026-09-12), while it serves the same file elsewhere.
+.github/workflows/hpai-mirror.yml fetches it daily on a GitHub-hosted runner
+(pipeline/hpai_mirror.py) and uploads it with a sidecar giving the fetch time and sha256;
+fetch_mirror refuses a pair that disagrees or is more than MAX_MIRROR_AGE old.
 """
 
 from __future__ import annotations
@@ -16,7 +23,9 @@ import argparse
 import collections
 import csv
 import datetime as dt
+import hashlib
 import io
+import json
 import logging
 import os
 import re
@@ -33,12 +42,37 @@ PAGE_URL = "https://www.aphis.usda.gov/livestock-poultry-disease/avian/avian-inf
 UA = "wildeye/0.1 (hpai sync)"
 DEFAULT_WEEKS = 26
 LICENCE = "Public Domain U.S. Government (USDA APHIS)"
+MIRROR = "https://github.com/musharna/wildeye/releases/download/hpai-mirror/"
+MIRROR_CSV = MIRROR + "hpai-wild-birds.csv"
+MIRROR_META = MIRROR + "hpai-wild-birds.json"
+MAX_MIRROR_AGE = dt.timedelta(days=3)
+
+
+def _get(url: str, timeout: int) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urlopen(req, timeout=timeout) as r:
+        return r.read()
 
 
 def fetch_csv(url: str = CSV_URL, timeout: int = 600) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urlopen(req, timeout=timeout) as r:
-        return r.read().decode("utf-8-sig")
+    """The APHIS file itself; only pipeline/hpai_mirror.py on a GitHub runner calls this."""
+    return _get(url, timeout).decode("utf-8-sig")
+
+
+def fetch_mirror(now: dt.datetime, timeout: int = 120) -> tuple[str, dict]:
+    """(CSV text, sidecar) from the hpai-mirror release. RuntimeError if the CSV's sha256 is not the
+    sidecar's (the two came from different runs) or the fetch is older than MAX_MIRROR_AGE (the
+    workflow has stopped refreshing it: it failed, or GitHub disabled the schedule)."""
+    meta = json.loads(_get(MIRROR_META, timeout))
+    body = _get(MIRROR_CSV, timeout)
+    sha = hashlib.sha256(body).hexdigest()
+    if sha != meta["sha256"]:
+        raise RuntimeError(f"{MIRROR_CSV} has sha256 {sha}, its sidecar says {meta['sha256']}: the two are from different mirror runs")
+    fetched = dt.datetime.strptime(meta["fetched_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.UTC)
+    if now - fetched > MAX_MIRROR_AGE:
+        raise RuntimeError(f"{MIRROR_CSV} was fetched {meta['fetched_at']}, {now - fetched} old (limit {MAX_MIRROR_AGE}): "
+                           "check the runs of .github/workflows/hpai-mirror.yml")
+    return body.decode("utf-8-sig"), meta
 
 
 def _date(s: str) -> dt.date | None:
@@ -147,7 +181,12 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     t0 = time.time()
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
-    text = a.csv.read_text(encoding="utf-8-sig") if a.csv else fetch_csv()
+    mirror = None
+    if a.csv:
+        text = a.csv.read_text(encoding="utf-8-sig")
+    else:
+        text, meta = fetch_mirror(dt.datetime.now(dt.UTC))
+        mirror = {"url": MIRROR_CSV, "fetched_at": meta["fetched_at"]}
     rows, pc = parse_rows(text)
     shapes = load_county_shapes(a.cache / "cb_2021_us_county_20m.zip", None)
     counties, cc = county_index(rows, county_lookup(shapes), today, a.weeks)
@@ -156,7 +195,7 @@ def main(argv=None):
     gj = {"type": "FeatureCollection",
           "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
           "source": {"id": "aphis-hpai", "name": "USDA APHIS HPAI detections in wild birds", "url": PAGE_URL,
-                     "csv": CSV_URL, "licence": LICENCE,
+                     "csv": CSV_URL, **({"mirror": mirror} if mirror else {}), "licence": LICENCE,
                      "note": "One row per laboratory-confirmed detection; counts reflect sampling effort as much as virus presence. Captive wild birds (zoos, rehab) are counted separately."},
           "today": today.isoformat(), "newest": newest.isoformat() if newest else None,
           "weeks": [w.isoformat() for w in week_ends(today, a.weeks)],
