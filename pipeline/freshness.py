@@ -18,6 +18,7 @@ import datetime as dt
 import json
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -62,6 +63,10 @@ LAYERS = {
 # is two missed fetches with room to spare. The coral outlook is issued monthly.
 PRODUCT_LIMIT = {"crw-outlook": 2 * PERIOD["monthly"] + SLACK}
 PRODUCT_DEFAULT = 7 * DAY
+# A network error or HTTP 5xx is retried: the first live run hit "Network is unreachable" on one
+# file of 26, and one blip should not open an issue. A 4xx is not: the file is gone.
+ATTEMPTS = 3
+RETRY_DELAY = 5  # seconds
 # main's exit status when a layer is stale. Not 1: an uncaught exception exits 1, and the workflow
 # must not read a crash as a report.
 STALE_EXIT = 10
@@ -145,8 +150,18 @@ def report(problems: list[dict], now: dt.datetime, checked: int) -> str:
 
 def _get(name: str, head: int | None) -> bytes:
     req = urllib.request.Request(BASE + name, headers={"User-Agent": UA})
-    with urlopen(req, timeout=60) as r:
-        return r.read(head) if head else r.read()
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            with urlopen(req, timeout=60) as r:
+                return r.read(head) if head else r.read()
+        except urllib.error.HTTPError as e:
+            if e.code < 500 or attempt == ATTEMPTS:
+                raise
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == ATTEMPTS:
+                raise
+        time.sleep(RETRY_DELAY)
+    raise AssertionError("unreachable")
 
 
 def read_stamps(layers: dict = LAYERS) -> tuple[dict, dict | None]:
@@ -172,8 +187,8 @@ def main(argv=None) -> int:
     ap.add_argument("--now", default=None, help="pretend it is this ISO time (to test the alert path)")
     a = ap.parse_args(argv)
     now = _when(a.now) if a.now else dt.datetime.now(dt.UTC)
-    stamps, rasters = read_stamps()
-    problems = assess(stamps, rasters, now)
+    stamps, rasters = read_stamps(LAYERS)
+    problems = assess(stamps, rasters, now, LAYERS)
     text = report(problems, now, len(stamps))
     a.report.write_text(text)
     print(text)

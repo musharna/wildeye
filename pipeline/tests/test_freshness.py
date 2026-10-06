@@ -135,3 +135,31 @@ def test_rasters_json_of_the_wrong_shape_is_reported_not_a_crash(tmp_path, monke
         assert f.main(["--report", str(report), "--now", NOW.isoformat()]) == f.STALE_EXIT, label
         marker = report.read_text().splitlines()[0]
         assert set(marker.removeprefix("<!-- stale: ").removesuffix(" -->").split(",")) == expected, (label, marker)
+
+
+def test_a_network_blip_is_retried_but_a_lasting_failure_or_a_404_is_reported(tmp_path, monkeypatch):
+    """The first live run of this check hit 'Network is unreachable' on one file of 26; one blip must
+    not open an issue and email the owner. A 404 is not retried: the file is gone."""
+    monkeypatch.setattr(f, "RETRY_DELAY", 0)
+    report = tmp_path / "report.md"
+    files = _all_fresh()
+    calls = {"h5n1.geojson": 0, "fires.geojson": 0, "gone.geojson": 0}
+
+    def fake(req, *a, **k):
+        name = req.full_url.removeprefix(f.BASE)
+        if name in calls:
+            calls[name] += 1
+        if name == "h5n1.geojson" and calls[name] == 1:
+            raise urllib.error.URLError(OSError(101, "Network is unreachable"))
+        if name == "fires.geojson":
+            raise urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, None)
+        if name not in files:
+            raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+        return _Resp(files[name])
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    monkeypatch.setattr(f, "LAYERS", {**f.LAYERS, "gone.geojson": "daily"})
+    assert f.main(["--report", str(report), "--now", NOW.isoformat()]) == f.STALE_EXIT
+    marker = report.read_text().splitlines()[0]
+    assert marker == "<!-- stale: fires.geojson,gone.geojson -->", "h5n1 recovered on the second try"
+    assert calls == {"h5n1.geojson": 2, "fires.geojson": f.ATTEMPTS, "gone.geojson": 1}
+    assert f.ATTEMPTS >= 2
