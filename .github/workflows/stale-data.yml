@@ -1,0 +1,86 @@
+name: stale data
+
+# HPAI failed every night from 2026-09-12 to 2026-10-06 and nobody saw it: the error only
+# reached a log on the laptop. This job reads every cron-fed layer on the live site
+# (pipeline/freshness.py) and keeps one GitHub issue, labelled stale-data, in step with it:
+# opened when a layer has missed two runs, updated daily, commented on only when the list of
+# stale layers changes, closed when everything is fresh again. It runs off the laptop, so it
+# also fires when the laptop, its cron or the deploy stops.
+# On a pull request it checks and prints the report but does not touch issues.
+
+on:
+  schedule:
+    - cron: '0 15 * * *' # 11:00 EDT / 10:00 EST, two hours after the 09:00 deploy cron
+  workflow_dispatch:
+    inputs:
+      now:
+        description: 'Pretend it is this UTC time (ISO 8601) to test the alert path; empty = now'
+        required: false
+        default: ''
+  pull_request:
+    paths:
+      - .github/workflows/stale-data.yml
+      - pipeline/freshness.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stale-data
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write # the issue step is skipped on pull requests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - name: Check the live site
+        id: check
+        env:
+          NOW: ${{ inputs.now }}
+        run: |
+          set +e
+          if [ -n "$NOW" ]; then
+            uv run --python 3.13 --no-project python -m pipeline.freshness --report report.md --now "$NOW"
+          else
+            uv run --python 3.13 --no-project python -m pipeline.freshness --report report.md
+          fi
+          code=$?
+          set -e
+          # 0 fresh, 1 stale; anything else is the check itself failing, which fails the job
+          if [ "$code" -gt 1 ]; then exit "$code"; fi
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" -eq 1 ]; then echo "stale=true" >> "$GITHUB_OUTPUT"; else echo "stale=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Open, update or close the stale-data issue
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STALE: ${{ steps.check.outputs.stale }}
+        run: |
+          gh label create stale-data --force --color B60205 --description 'A layer on the live site has stopped updating (stale-data.yml)'
+          n=$(gh issue list --label stale-data --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ "$STALE" = true ]; then
+            if [ -z "$n" ]; then
+              gh issue create --title 'Stale data on the live site' --label stale-data --body-file report.md
+            else
+              old=$(gh issue view "$n" --json body --jq .body | head -1)
+              gh issue edit "$n" --body-file report.md
+              if [ "$old" != "$(head -1 report.md)" ]; then
+                gh issue comment "$n" --body "The list of stale layers changed; the description has the current one."
+              fi
+            fi
+          elif [ "$STALE" = false ]; then
+            if [ -n "$n" ]; then
+              gh issue close "$n" --comment "$(cat report.md)"
+            fi
+          else
+            echo "::error::the check step set no stale output"; exit 1
+          fi
