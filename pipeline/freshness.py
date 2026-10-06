@@ -62,6 +62,9 @@ LAYERS = {
 # is two missed fetches with room to spare. The coral outlook is issued monthly.
 PRODUCT_LIMIT = {"crw-outlook": 2 * PERIOD["monthly"] + SLACK}
 PRODUCT_DEFAULT = 7 * DAY
+# main's exit status when a layer is stale. Not 1: an uncaught exception exits 1, and the workflow
+# must not read a crash as a report.
+STALE_EXIT = 10
 GENERATED_AT = re.compile(r'"generated_at"\s*:\s*"([^"]+)"')
 
 
@@ -100,8 +103,14 @@ def assess(stamps: dict, rasters: dict | None, now: dt.datetime, layers: dict = 
         lim = PRODUCT_LIMIT.get(pid, PRODUCT_DEFAULT)
         if not t:
             out.append({"layer": f"rasters.json: {pid}", "why": "no data time"})
-        elif now - _when(t) > lim:
-            out.append({"layer": f"rasters.json: {pid}", "why": f"newest data {t}, {_age(now - _when(t))} old; limit {_age(lim)}"})
+            continue
+        try:
+            when = _when(t)
+        except ValueError:
+            out.append({"layer": f"rasters.json: {pid}", "why": f"could not read its data time: {t}"})
+            continue
+        if now - when > lim:
+            out.append({"layer": f"rasters.json: {pid}", "why": f"newest data {t}, {_age(now - when)} old; limit {_age(lim)}"})
     return out
 
 
@@ -151,7 +160,7 @@ def main(argv=None) -> int:
     text = report(problems, now, len(stamps))
     a.report.write_text(text)
     print(text)
-    return 1 if problems else 0
+    return STALE_EXIT if problems else 0
 
 
 if __name__ == "__main__":

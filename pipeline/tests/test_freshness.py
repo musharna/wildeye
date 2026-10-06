@@ -83,7 +83,9 @@ def _all_fresh() -> dict:
     return files
 
 
-def test_main_reads_the_live_site_and_exits_1_only_when_something_is_stale(tmp_path, monkeypatch):
+def test_main_reads_the_live_site_and_exits_stale_only_when_something_is_stale(tmp_path, monkeypatch):
+    # a crash exits 1, so "stale" must be a code a crash cannot produce
+    assert f.STALE_EXIT not in (0, 1)
     report = tmp_path / "report.md"
     # positive control: everything fresh
     _site(monkeypatch, _all_fresh())
@@ -94,7 +96,22 @@ def test_main_reads_the_live_site_and_exits_1_only_when_something_is_stale(tmp_p
     files["hpai.geojson"] = json.dumps({"generated_at": ago(days=3)}).encode()
     del files["fires.geojson"]
     _site(monkeypatch, files)
-    assert f.main(["--report", str(report), "--now", NOW.isoformat()]) == 1
+    assert f.main(["--report", str(report), "--now", NOW.isoformat()]) == f.STALE_EXIT
     text = report.read_text()
     assert "hpai.geojson" in text and "fires.geojson" in text and "HTTP 404" in text
     assert "<!-- stale: fires.geojson,hpai.geojson -->" in text, "the marker the workflow compares day to day"
+
+
+def test_a_product_time_that_does_not_parse_is_reported_not_a_crash(tmp_path, monkeypatch):
+    """PR #61 review: the product loop parsed `time` unguarded, so one bad value raised, no report
+    was written, and the workflow never touched the issue."""
+    rasters = _rasters(ago(hours=4), oisst=ago(days=2), ndvi="unknown")
+    problems = f.assess({"rasters.json": ago(hours=4)}, rasters, NOW, layers={"rasters.json": "daily"})
+    assert [(p["layer"], p["why"]) for p in problems] == [("rasters.json: ndvi", "could not read its data time: unknown")], "oisst is the positive control"
+    # and through main: a report and the stale code, not a traceback
+    files = _all_fresh()
+    files["rasters.json"] = json.dumps(rasters).encode()
+    _site(monkeypatch, files)
+    report = tmp_path / "report.md"
+    assert f.main(["--report", str(report), "--now", NOW.isoformat()]) == f.STALE_EXIT
+    assert "rasters.json: ndvi" in report.read_text()

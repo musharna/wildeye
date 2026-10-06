@@ -54,10 +54,13 @@ jobs:
           fi
           code=$?
           set -e
-          # 0 fresh, 1 stale; anything else is the check itself failing, which fails the job
-          if [ "$code" -gt 1 ]; then exit "$code"; fi
+          # 0 fresh, 10 stale (pipeline/freshness.py STALE_EXIT); anything else, a crash included
+          # (an uncaught exception exits 1), is the check failing, which fails the job loudly
+          if [ "$code" -ne 0 ] && [ "$code" -ne 10 ]; then
+            echo "::error::pipeline/freshness.py exited $code: the check itself failed"; exit "$code"
+          fi
           cat report.md >> "$GITHUB_STEP_SUMMARY"
-          if [ "$code" -eq 1 ]; then echo "stale=true" >> "$GITHUB_OUTPUT"; else echo "stale=false" >> "$GITHUB_OUTPUT"; fi
+          if [ "$code" -eq 10 ]; then echo "stale=true" >> "$GITHUB_OUTPUT"; else echo "stale=false" >> "$GITHUB_OUTPUT"; fi
       - name: Open, update or close the stale-data issue
         if: github.event_name != 'pull_request'
         env:
