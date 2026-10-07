@@ -126,7 +126,10 @@ publish() { # commit what is staged, push it
 # outside its directory and goes last. Every directory, not a list: the list named two, and the next four
 # tiled layers would have gone up as one ~90 MB push. Changed files count as well as new ones: a rebuild
 # rewrites its tiles in place (archive frames are never rewritten). Pinned by pipeline/tests/test_deploy_batching.py.
-BATCH_MB="${BATCH_MB:-40}"
+# 10, not 40: on 2026-10-07 a 40 MB part was dropped three times ("remote end hung up") while parts of at most
+# 14 MB all landed, so ~50 MB (2026-09-12) is not a ceiling this uplink holds every day. A part can land just under
+# BATCH_MB, so the default sits well below the largest part seen to land (14 MB), not at it.
+BATCH_MB="${BATCH_MB:-10}"
 mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=AM -- ':(glob)data/*/**' ':(exclude)data/birds_archive/manifest.json')
 NEW_BYTES=0
 [ "${#NEW[@]}" -gt 0 ] && NEW_BYTES="$(cd "$WT" && printf '%s\0' "${NEW[@]}" | du -cb --files0-from=- | tail -1 | cut -f1)"
