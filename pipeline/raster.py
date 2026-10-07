@@ -85,11 +85,18 @@ def resolve_source(product: dict, catalog_xml: str | None = None) -> tuple[str, 
 
 
 def ramp_rgba(values: np.ndarray, ramp: dict) -> np.ndarray:
-    """Map a 2-D float field to RGBA through `ramp` {min, max, stops:[[r,g,b],…]}; NaN → transparent."""
+    """Map a 2-D float field to RGBA through `ramp` {min, max, stops:[[r,g,b],…], log?}; NaN → transparent.
+    `log: true` spaces the stops evenly in log10 between min and max (both > 0); values ≤ 0 take the low end."""
     stops = np.asarray(ramp["stops"], dtype=float)
     lo, hi = float(ramp["min"]), float(ramp["max"])
     ok = ~np.isnan(values)
-    t = np.clip((np.where(ok, values, lo) - lo) / (hi - lo), 0.0, 1.0)
+    if ramp.get("log"):
+        if not 0 < lo < hi:
+            raise ValueError(f"log ramp needs 0 < min < max, got {lo}..{hi}")
+        v = np.where(values > lo, values, lo)  # NaN compares False: it takes lo here and is made transparent below
+        t = np.clip(np.log10(v / lo) / np.log10(hi / lo), 0.0, 1.0)
+    else:
+        t = np.clip((np.where(ok, values, lo) - lo) / (hi - lo), 0.0, 1.0)
     idx = t * (len(stops) - 1)
     i0 = np.clip(np.floor(idx), 0, len(stops) - 2).astype(int)
     f = (idx - i0)[..., None]

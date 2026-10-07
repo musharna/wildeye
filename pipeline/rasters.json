@@ -559,5 +559,60 @@
     "legend": "surface pH (total scale), daily analysis: brown = more acidic · teal = more alkaline; global mean ~8.05",
     "credit_key": "cmems",
     "credit": "Generated using E.U. Copernicus Marine Service Information; Global Ocean Biogeochemistry Analysis and Forecast, https://doi.org/10.48670/moi-00015"
+  },
+  {
+    "id": "cmems-zooc",
+    "name": "Zooplankton carbon at the surface (Copernicus Marine model)",
+    "icon": "🦐",
+    "cmems": {
+      "dataset_id": "cmems_mod_glo_bgc-plankton_anfc_0.25deg_P1D-m",
+      "variable": "zooc",
+      "max_depth": 1
+    },
+    "bounds": {
+      "west": -180,
+      "south": -80,
+      "east": 180,
+      "north": 90
+    },
+    "transparent": "none",
+    "kind": "ramp",
+    "zrank": 14,
+    "ramp": {
+      "min": 0.05,
+      "max": 5,
+      "unit": " mmol C/m³",
+      "log": true,
+      "stops": [
+        [
+          68,
+          1,
+          84
+        ],
+        [
+          59,
+          82,
+          139
+        ],
+        [
+          33,
+          145,
+          140
+        ],
+        [
+          94,
+          201,
+          98
+        ],
+        [
+          253,
+          231,
+          37
+        ]
+      ]
+    },
+    "legend": "zooplankton carbon at the surface, daily, log scale: purple = little · yellow = a lot. A model value (PISCES biogeochemical model in the Copernicus global analysis), not an observation",
+    "credit_key": "cmems",
+    "credit": "Generated using E.U. Copernicus Marine Service Information; Global Ocean Biogeochemistry Analysis and Forecast, https://doi.org/10.48670/moi-00015"
   }
 ]
