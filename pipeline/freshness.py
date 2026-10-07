@@ -60,8 +60,10 @@ LAYERS = {
     "geomodel_verdicts.json": "monthly",
 }
 # A raster product's data time trails its fetch by up to 3 days (NDVI, chlorophyll), so 7 days
-# is two missed fetches with room to spare. The coral outlook is issued monthly.
-PRODUCT_LIMIT = {"crw-outlook": 2 * PERIOD["monthly"] + SLACK}
+# is two missed fetches with room to spare. The coral outlook is issued monthly. The phytoplankton groups are a
+# monthly mean stamped on the month's first day and published some days after it ends, so the newest is up to two
+# months old before the next arrives: two months plus two weeks.
+PRODUCT_LIMIT = {"crw-outlook": 2 * PERIOD["monthly"] + SLACK, "cmems-pft": 2 * PERIOD["monthly"] + 14 * DAY}
 PRODUCT_DEFAULT = 7 * DAY
 # A network error or HTTP 5xx is retried: the first live run hit "Network is unreachable" on one
 # file of 26, and one blip should not open an issue. A 4xx is not: the file is gone.
