@@ -217,6 +217,40 @@ test('the readout pixel holds the clicked cell for every cell of a row and a col
   }
 });
 
+test('a point just inside any edge or corner of a cell reads that cell, where the pixel under it often does not', async () => {
+  // the same nearest-neighbour fake tiles; mean carries the column, SD the row
+  const cellOfPixel = (x, px, y, py) => [Math.floor((y * 256 + py + 0.5) * 1800 / 2048), Math.floor((x * 256 + px + 0.5) * 3600 / 4096)];
+  const pixel = (url, px, py) => {
+    const [, x, y] = url.match(/value\/(\d+)\/(\d+)\.png/).map(Number);
+    const [row, col] = cellOfPixel(x, px, y, py);
+    return enc(183 + (col % 700), 63 + (row % 200));
+  };
+  const h = harness({ pixel });
+  h.layer.enable();
+  await h.layer.update();
+  const D = 0.049; // inside the cell: its edges are 0.05° from the centre
+  const offsets = [[D, 0], [-D, 0], [0, D], [0, -D], [D, D], [D, -D], [-D, D], [-D, -D]];
+  const cells = [];
+  for (let col = 0; col < 3600; col += 7) cells.push([899, col]);
+  for (let row = 0; row < 1800; row += 7) cells.push([row, 1800]);
+  cells.push([0, 0], [0, 3599], [1799, 0], [1799, 3599]);
+  let pixelUnderPointWrong = 0, n = 0;
+  for (const [row, col] of cells) {
+    const [clat, clon] = [89.95 - row * 0.1, -179.95 + col * 0.1];
+    for (const [dlat, dlon] of offsets) {
+      const lat = clat + dlat, lon = clon + dlon;
+      const r = await h.layer.readoutAt(lat, lon);
+      assert.equal(r.text, valueText(183 + (col % 700), 63 + (row % 200)), `cell ${row},${col} at ${dlat},${dlon}`);
+      // the control: the pixel under the point itself, which a readout without the snap to the cell would read
+      const t = geoTilePixel(lat, lon, 3);
+      const [pr, pc] = cellOfPixel(t.x, t.px, t.y, t.py);
+      if (pr !== row || pc !== col) pixelUnderPointWrong += 1;
+      n += 1;
+    }
+  }
+  assert.ok(pixelUnderPointWrong > n / 4, `the points discriminate: the pixel under the point is another cell for ${pixelUnderPointWrong} of ${n}`);
+});
+
 test('legend: the stops in their bin colours, then the unit and what kind of number this is', async () => {
   const { layer } = harness();
   assert.equal(layer.getRowControls().legend.length, 1, 'before the manifest: the note only');
@@ -230,7 +264,7 @@ test('legend: the stops in their bin colours, then the unit and what kind of num
   assert.equal(legend[3].color, `rgb(${PALETTE[66].join(',')})`);
   assert.deepEqual([binOf(150, MANIFEST.display), binOf(159, MANIFEST.display), binOf(160, MANIFEST.display), binOf(899, MANIFEST.display), binOf(900, MANIFEST.display)], [1, 1, 2, 75, 75]);
   const note = legend.at(-1).label;
-  for (const part of [/sequence variants per soil sample/, /7,500 sequencing reads/, /0\.1° cells/, /320 sampled locations/, /R² 0\.41/, /not a survey/, /Bickel et al\. 2026/, /CC BY 4\.0/])
+  for (const part of [/sequence variants per soil sample/, /7,500 sequencing reads/, /0\.1° cells/, /320 sampled locations/, /R² 0\.41/, /not a survey/, /ice sheet are model extrapolation with no soil samples behind them/, /Antarctica is blank/, /Bickel et al\. 2026/, /CC BY 4\.0/])
     assert.match(note, part);
   assert.equal(legend.at(-1).color, 'transparent');
 });

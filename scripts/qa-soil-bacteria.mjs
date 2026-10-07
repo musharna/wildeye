@@ -164,7 +164,7 @@ try {
   });
 
   const text = await page.evaluate(() => document.body.textContent);
-  const parts = { unit: 'sequence variants per soil sample', reads: '7,500 sequencing reads', locations: '320 sampled locations', r2: 'R² 0.41', model: 'not a survey', paper: 'doi:10.1093/ismeco/ycag266', maps: 'Global maps of soil microbial and plant richness', licence: 'CC BY 4.0' };
+  const parts = { unit: 'sequence variants per soil sample', reads: '7,500 sequencing reads', locations: '320 sampled locations', r2: 'R² 0.41', model: 'not a survey', ice: 'ice sheet are model extrapolation with no soil samples behind them', paper: 'doi:10.1093/ismeco/ycag266', maps: 'Global maps of soil microbial and plant richness', licence: 'CC BY 4.0' };
   const seen = Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, text.includes(v)]));
   report('legend-and-credit', Object.values(seen).every(Boolean), seen);
 

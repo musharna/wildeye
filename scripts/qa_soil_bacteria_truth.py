@@ -8,7 +8,9 @@ cell centre at a time until the model has a value; the point read is 0.04° from
 it sits near the cell's seaward edge. Every value is read with .sel(lat, lon, method="nearest") at the point itself
 (the nearest centre to a point is the centre of the cell holding it), and the selected centre must lie within 0.05° of
 the point on both axes. Ocean points must be blank. Each land point also records its inland neighbour's values, which
-the QA uses as a negative control: they must not match what the site shows.
+the QA uses as a negative control: they must not match what the site shows. Every land cell is read again at its four
+corners, 0.045° in from both edges, where the level-3 pixel under the point is often the next cell's; the control
+there is the cell diagonally across the corner.
 """
 
 import hashlib
@@ -23,6 +25,9 @@ import xarray as xr
 
 ZIP_MD5 = "822beb1e913521d4831b4d12320f4278"
 OFF = 0.04  # degrees from the cell centre toward the sea
+CORNER = (
+    0.045  # degrees from the cell centre on both axes: inside the cell, near a corner
+)
 
 # (name, fixed coordinate, walking axis, first centre, step): walk from the sea toward land along `axis`
 WALKS = [
@@ -79,7 +84,10 @@ def main(zip_path: str) -> dict:
         clat, clon, m, s = at(lat, lon)
         if np.isnan(m) or np.isnan(s):
             raise SystemExit(f"{name}: {lat}, {lon} is blank in the model")
-        _, _, nm, ns = at(clat + inland[0], clon + inland[1])
+        nlon = (
+            clon + inland[1] + 180
+        ) % 360 - 180  # the neighbour across 180° is on the other side
+        _, _, nm, ns = at(clat + inland[0], nlon)
         points.append(
             {
                 "name": name,
@@ -112,6 +120,16 @@ def main(zip_path: str) -> dict:
         land(name, clat + d[0], clon + d[1], inland)
     for name, lat, lon in FIXED:
         land(name, lat, lon, (0.0, 0.1 if lon < 0 else -0.1))
+    # Each of those cells again at its four corners, 0.045° in from both edges: the pixel under such a point is often the
+    # next cell's (level 3 has 0.088° pixels on 0.1° cells), so these check the readout's snap to the cell. The control
+    # is the cell diagonally across that corner.
+    for p in list(points):
+        clat, clon = p["cell"]
+        for tag, sn, we in (("NE", 1, 1), ("NW", 1, -1), ("SE", -1, 1), ("SW", -1, -1)):
+            lat, lon = clat + sn * CORNER, clon + we * CORNER
+            if abs(lon) >= 180:
+                continue
+            land(f"{p['name']}, {tag} corner", lat, lon, (sn * 0.1, we * 0.1))
     ocean = []
     for name, lat, lon in OCEAN:
         clat, clon, m, s = at(lat, lon)
