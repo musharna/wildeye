@@ -27,14 +27,17 @@ npm run build && node scripts/qa-kelp.mjs --url http://127.0.0.1:<port>/        
   read 2026-10-07). Only `Intensifying_MHWs_Protection_Global_Kelp/Data/Global_Floating_Kelp/Global_Kelp_Canopy_2-24.*`
   is used; the zip is read in place through GDAL's `/vsizip/`.
 - **Paper:** Arafeh-Dalmau N., Villaseñor-Derbez J.C., Schoeman D.S., Mora-Soto A., Bell T.W. et al. (2025) Global
-  floating kelp forests have limited protection despite intensifying marine heatwave threats. Nature Communications 16,
-  doi:10.1038/s41467-025-58054-4 (CrossRef: first author Arafeh-Dalmau, 2025-04-03; CC BY 4.0).
+  floating kelp forests have limited protection despite intensifying marine heatwave threats. Nature Communications 16:3173,
+  doi:10.1038/s41467-025-58054-4 (CrossRef read 2026-10-07: 17 authors, first Arafeh-Dalmau, published 2025-04-03;
+  CC BY 4.0).
 - **Shapefile:** 426,489 features, Polygon Z (Z dropped), fields OBJECTID and Country (13 values, including the
   misspelling "Canda" and both "United States" and "United States of America"), `.prj` GCS WGS 84 in degrees
   (EPSG:4326 per pyogrio, and the authors' `02_clean_kelp.R` sets EPSG:4326). Bounds 176.97°W–178.82°E,
   55.98°S–61.50°N. Polygon edges sit on a 2.69495e-4° (~30 m) grid except where the 30 m coastline buffer clipped
   them. 2,885 rings touch themselves (GEOS "Ring Self-intersection"; `make_valid` changes their area by 1e-17 deg²).
   Overlapping polygon pairs: 0 (checked: shapely STRtree `overlaps` query over all 426,489, 2026-10-07).
+  The `.dbf` header's last update is 2024-02-16 (the file name's "2-24"), so detections run from 1984 to at most
+  February 2024; the readout dates the map "ever detected, 1984 on (map of Feb 2024)".
 - **What a polygon means** (paper, Methods): "Our final floating kelp habitat map includes any pixel the satellite
   detected kelp in the time series and represents the known presence of floating kelp habitat in the timeseries."
   Sources: Landsat, 30 m, 1984 onward, for most of the USA (California, Oregon, parts of Washington and Alaska), all of

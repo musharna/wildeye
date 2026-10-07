@@ -61,7 +61,7 @@ SOURCE = {
     "author": "Arafeh-Dalmau, Villaseñor-Derbez, Schoeman, Mora-Soto, Bell et al.",
     "url": "https://doi.org/10.5281/zenodo.14816612",
     "licence": "CC BY 4.0",
-    "cite": "Arafeh-Dalmau et al. 2025, Nature Communications 16, doi:10.1038/s41467-025-58054-4",
+    "cite": "Arafeh-Dalmau et al. 2025, Nature Communications 16:3173, doi:10.1038/s41467-025-58054-4",
 }
 
 
