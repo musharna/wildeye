@@ -2,6 +2,7 @@ import * as Cesium from "cesium";
 import { setStackedImagery } from "./rasterDrape.js";
 import { createTilePixelReader } from "./gibsReadout.js";
 import { geoTilePixel } from "./humanFootprint.js";
+import { cellCentre } from "./mammals.js";
 
 /**
  * Reptile species richness from GARD 1.7 (Roll & Meiri 2022, Zenodo 10.5281/zenodo.6499637, CC0): how many of 10,914
@@ -180,7 +181,9 @@ export function createReptilesLayer({
       const row = (status, extra = {}) => ({ id, name, icon, status, text: null, date: null, ...extra });
       if (!_manifest) return row("error", { error: _lastError || "reptiles.json not loaded yet" });
       const z = _manifest.maxLevel;
-      const t = geoTilePixel(lat, lon, z);
+      // the pixel under the centre of the clicked point's 0.1° cell, which holds that cell's counts
+      const c = cellCentre(lat, lon);
+      const t = c && geoTilePixel(c[0], c[1], z);
       if (!t) return row("outside");
       const at = (tmpl) => tmpl.replace("{z}", String(z)).replace("{x}", String(t.x)).replace("{y}", String(t.y));
       let shown, groups;

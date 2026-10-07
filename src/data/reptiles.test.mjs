@@ -154,6 +154,35 @@ test('readout: total and groups from the same level-3 pixel; none where no range
   }
 });
 
+test('readout: a click anywhere in a 0.1° cell reads that cell, not the neighbour whose pixel lies under the point', async () => {
+  const h = harness();
+  h.layer.enable();
+  await h.layer.update();
+  // lon 0.095 lies in cell 1800 (0.0–0.1° E) but under pixel 2049, which nearest neighbour fills from cell 1801
+  const off = geoTilePixel(0.05, 0.095, 3), centre = geoTilePixel(0.05, 0.05, 3);
+  assert.equal(off.x * 256 + off.px, 2049);
+  assert.equal(Math.floor((2049 + 0.5) * 3600 / 4096), 1801, 'that pixel carries the next cell');
+  let before = h.reads.length;
+  assert.equal((await h.layer.readoutAt(0.05, 0.095)).status, 'value');
+  assert.deepEqual(h.reads.slice(before).map((r) => [r.px, r.py]), [[centre.px, centre.py], [centre.px, centre.py]]);
+  assert.equal((await h.layer.readoutAt(91, 0)).status, 'outside', 'a latitude off the globe has no cell');
+  // jittered points in random cells: the pixel read is the one nearest neighbour filled from the point's own cell
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let i = 0; i < 2000; i += 1) {
+    const lat = -89.99 + rnd() * 179.98, lon = -180 + rnd() * 360;
+    const col = Math.floor((lon + 180) / 0.1), row = Math.floor((90 - lat) / 0.1);
+    before = h.reads.length;
+    await h.layer.readoutAt(lat, lon);
+    for (const r of h.reads.slice(before)) {
+      const [, x, y] = r.url.match(/\/(\d+)\/(\d+)\.png$/).map(Number);
+      const at = `lat ${lat} lon ${lon}`;
+      assert.equal(Math.floor((x * 256 + r.px + 0.5) * 3600 / 4096), col, `column, ${at}`);
+      assert.equal(Math.floor((y * 256 + r.py + 0.5) * 1800 / 2048), row, `row, ${at}`);
+    }
+  }
+});
+
 test('legend: sampled counts in their palette colours up to the most, plus what is counted', async () => {
   const { layer } = harness();
   await layer.update();
