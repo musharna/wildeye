@@ -26,7 +26,8 @@ NEW_SHAPE = (680, 2880)
 
 def migrate_png(path: Path) -> bool:
     """Redraw one frame in place; True if it changed, False if it was already redrawn."""
-    rgba = np.asarray(Image.open(path).convert("RGBA"))
+    with Image.open(path) as im:
+        rgba = np.asarray(im.convert("RGBA"))
     if rgba.shape[:2] == NEW_SHAPE:
         return False
     if rgba.shape[:2] != OLD_SHAPE:

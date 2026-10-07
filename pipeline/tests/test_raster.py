@@ -278,3 +278,21 @@ def test_process_puts_the_cmems_cell_edge_bounds_in_the_manifest(monkeypatch, tm
     entry = raster.process({"id": "cmems-o2", "cmems": {}, "name": "n", "icon": "i", "legend": "", "credit": "",
                             "credit_key": "cmems", "ramp": {"min": 0, "max": 1, "stops": [[0, 0, 0], [1, 1, 1]]}}, tmp_path)
     assert entry["bounds"] == edges and (entry["width"], entry["height"]) == (2880, 680)
+
+
+def test_edge_align_places_a_grid_whose_straddling_cell_is_the_last_one():
+    """The mirror of the Copernicus case (PR #68 review): centres -170..180, so the west edge sits half a cell INSIDE
+    -180 and the cell centred on 180 straddles the antimeridian at the east end; its east half must become the
+    image's first pixel. Mutants this kills: turning the image the same way for both offsets."""
+    import numpy as np
+    from pipeline.raster import edge_align
+
+    step = 10.0
+    lat_c = np.arange(85.0, -85.0 - 1e-9, -step)
+    lon_c = np.arange(-170.0, 180.0 + 1e-9, step)  # -170 .. 180
+    old = _coded(lat_c, lon_c)
+    assert _misplaced(old, {"west": -180, "south": -90, "east": 180, "north": 90}, lat_c, lon_c, step) > 0, "control"
+    rgba, b = edge_align(_coded(lat_c, lon_c), lat_c, lon_c)
+    assert b == {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0} and rgba.shape[1] == 2 * len(lon_c)
+    assert _misplaced(rgba, b, lat_c, lon_c, step) == 0
+    assert rgba[0, 0, 1] == len(lon_c) - 1 and rgba[0, -1, 1] == len(lon_c) - 1 and rgba[0, 1, 1] == 0
