@@ -28,20 +28,24 @@ def _cells(n_cells_x=4, block=6, fill=0.1):
 
 
 def test_block_mean_then_argmax_not_a_vote_of_pixels():
-    """In cell 0 haptophytes lead on 35 of 36 pixels but one diatom bloom pixel carries the block mean: diatoms.
-    Mutant seen failing: argmax per pixel then majority (would give haptophytes)."""
-    s = _cells(2)
+    """In cell 0 haptophytes lead on 35 of 36 pixels but one diatom bloom pixel carries the block mean: diatoms (a
+    vote of pixels would give haptophytes). Cell 2 is the reverse: one diatom pixel of 3.0 against haptophytes at 0.5
+    everywhere, so the mean is haptophytes and the block maximum would be diatoms. Mutants seen failing: argmin, block
+    max instead of mean (cell 2), block axes transposed."""
+    s = _cells(3)
     s[H, :, 0:6] = 0.11
     s[D, 0, 0] = 10.0
     s[G, :, 6:12] = 0.5  # cell 1: positive control, green algae plainly
-    assert dominant_group(s, 6).tolist() == [[D, G]]
+    s[H, :, 12:18] = 0.5
+    s[D, 0, 12] = 3.0
+    assert dominant_group(s, 6).tolist() == [[D, G, H]]
 
 
 def test_a_pixel_missing_any_group_is_left_out_for_every_group():
     """Cell 0: where PROKAR is NaN (cloud in its retrieval) diatoms are huge; over the pixels where all five exist
     PROKAR leads. Per-group nanmean would pick diatoms. Cell 1 (positive control) has no NaN: PROKAR. Cell 2 has no
     pixel with all five groups: -1. Cell 3 is all NaN: -1. Mutants seen failing: per-group nanmean (cell 0 -> D),
-    `cnt == 0` mask dropped (cells 2-3 -> 0)."""
+    `cnt == 0` mask dropped (cells 2-3 -> 0), a pixel kept when any group is present."""
     s = _cells(4)
     s[P, :, 0:12] = 0.3
     s[P, 0:3, 0:6] = np.nan
@@ -90,6 +94,8 @@ def test_check_grid_accepts_the_whole_globe_at_the_stated_size_only():
     check_grid(lat[::-1], lon, [12, 6])  # and north first
     with pytest.raises(GridChanged, match="12x6"):
         check_grid(lat, lon, [24, 12])
+    with pytest.raises(GridChanged, match="12x6, expected 12x12"):
+        check_grid(lat, lon, [12, 12])  # the height alone differs
     with pytest.raises(GridChanged, match="longitude"):
         check_grid(lat, lon + 0.25, [12, 6])  # shifted by a quarter cell
     with pytest.raises(GridChanged, match="latitude"):
@@ -159,6 +165,8 @@ def test_fetch_reads_the_five_groups_of_the_latest_month_north_up():
         _product(), today=dt.date(2026, 9, 30), open_dataset=open_dataset
     )
     assert when == "2026-09-01T00:00:00Z", "October (index 2) is after today"
+    _, first_day = fetch_cmems_dominant(_product(), today=dt.date(2026, 9, 1), open_dataset=open_dataset)
+    assert first_day == "2026-09-01T00:00:00Z", "a month is served from its first day"
     assert seen["dataset_id"] == "pft" and seen["variables"] == GROUPS, (
         "PROCHLO is not read"
     )
