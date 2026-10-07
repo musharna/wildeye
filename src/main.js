@@ -54,6 +54,7 @@ import { iflLayer } from './data/ifl.js';
 import { naturalLandsLayer } from './data/naturalLands.js';
 import { tidalMarshLayer } from './data/tidalMarsh.js';
 import { seagrassLayer } from './data/seagrass.js';
+import { kelpLayer } from './data/kelp.js';
 import { obisGridLayer } from './data/obisGrid.js';
 import { protectedAreasLayer } from './data/protectedAreas.js';
 import { cameraTrapsLayer, ednaLayer } from './data/gbifMethodGrid.js';
@@ -234,12 +235,13 @@ async function init() {
     dataManager.register(naturalLandsLayer);
     dataManager.register(tidalMarshLayer);
     dataManager.register(seagrassLayer);
+    dataManager.register(kelpLayer);
     dataManager.register(obisGridLayer);
     dataManager.register(protectedAreasLayer);
     dataManager.register(cameraTrapsLayer);
     dataManager.register(ednaLayer);
     // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
-    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, cmemsPftLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, iflLayer, naturalLandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
+    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, cmemsPftLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, naturalLandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
     const drapeIds = drapeLayers.map((l) => l.id);
     const compare = createCompare({
       dataManager,
@@ -353,7 +355,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[crwOutlookLayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, haedatLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[crwOutlookLayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, haedatLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({
