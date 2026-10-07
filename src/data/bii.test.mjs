@@ -184,6 +184,32 @@ test('readout: the bin at the finest level of the shown snapshot; no data; a gap
   assert.match(failed.error, /404/);
 });
 
+test('readout: a click anywhere in a 5′ cell reads that cell, not the neighbour whose pixel lies under the point', async () => {
+  const h = harness();
+  h.layer.enable();
+  await h.layer.update();
+  // nearest neighbour (pipeline/bii.py nearest) fills pixel g from source cell floor((g + 0.5) × 4320 / 8192)
+  const cellOf = (g, cells, px) => Math.floor((g + 0.5) * cells / px);
+  // lon 0.085 lies in cell 2161 (1/12–2/12° E) but under pixel 4097, which is filled from cell 2160
+  const off = geoTilePixel(0.04, 0.085, 4);
+  assert.equal(off.x * 256 + off.px, 4097);
+  assert.equal(cellOf(4097, 4320, 8192), 2160, 'that pixel carries the previous cell');
+  assert.equal((await h.layer.readoutAt(0.04, 0.085)).status, 'value');
+  assert.equal(cellOf(h.reads.at(-1).url.match(/\/(\d+)\/\d+\.png$/)[1] * 256 + h.reads.at(-1).px, 4320, 8192), 2161);
+  assert.equal((await h.layer.readoutAt(91, 0)).status, 'outside', 'a latitude off the globe has no cell');
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let i = 0; i < 2000; i += 1) {
+    const lat = -89.99 + rnd() * 179.98, lon = -180 + rnd() * 360;
+    const col = Math.floor((lon + 180) * 12), row = Math.floor((90 - lat) * 12);
+    await h.layer.readoutAt(lat, lon);
+    const r = h.reads.at(-1);
+    const [, x, y] = r.url.match(/\/(\d+)\/(\d+)\.png$/).map(Number);
+    assert.equal(cellOf(x * 256 + r.px, 4320, 8192), col, `column, lat ${lat} lon ${lon}`);
+    assert.equal(cellOf(y * 256 + r.py, 2160, 4096), row, `row, lat ${lat} lon ${lon}`);
+  }
+});
+
 test('legend: sampled bins in their palette colours, plus what the index is', async () => {
   const { layer } = harness();
   await layer.update();

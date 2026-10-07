@@ -2,6 +2,7 @@ import * as Cesium from "cesium";
 import { setStackedImagery } from "./rasterDrape.js";
 import { createTilePixelReader } from "./gibsReadout.js";
 import { decodeFootprint as decodePixel, epochAt, geoTilePixel } from "./humanFootprint.js";
+import { cellCentre } from "./mammals.js";
 
 /**
  * Biodiversity Intactness Index, five snapshots 2000–2020 (NHM v2.1.1, De Palma et al. 2024, doi:10.5519/k33reyb6,
@@ -16,6 +17,7 @@ export const TILE_FAILURE_LIMIT = 8;
 const TILE = 256;
 const BINS = 100;
 const SOURCE = "Biodiversity Intactness Index: NHM v2.1.1";
+const SOURCE_CELL = 1 / 12; // degrees: the 5 arc-minute source grid (pipeline/bii.py SOURCE_CELLS)
 
 /** null when bii.json has the shape pipeline/bii.py writes; otherwise what is wrong with it. */
 export function validateManifest(m) {
@@ -196,7 +198,10 @@ export function createBiiLayer({
       if (!_manifest) return row("error", { error: _lastError || "bii.json not loaded yet" });
       const year = shown();
       if (year === null) return row("gap", { observed: _observed });
-      const t = geoTilePixel(lat, lon, _manifest.maxLevel);
+      // the pixel under the centre of the clicked point's 5′ cell, which nearest neighbour filled from that cell; the
+      // pixel under the point itself can carry the next cell (a pixel is 0.53 of a cell wide)
+      const c = cellCentre(lat, lon, SOURCE_CELL);
+      const t = c && geoTilePixel(c[0], c[1], _manifest.maxLevel);
       if (!t) return row("outside");
       const url = tileUrl(year).replace("{z}", String(_manifest.maxLevel)).replace("{x}", String(t.x)).replace("{y}", String(t.y));
       let pixel;
