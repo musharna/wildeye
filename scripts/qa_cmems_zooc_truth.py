@@ -97,13 +97,23 @@ def main(data_dir):
         else:
             k = np.nanargmax(box) if kind == "max" else np.nanargmin(box)
         r, c = rows[k // box.shape[1]], cols[k % box.shape[1]]
-        # the cell spans its centre ± 0.125°; the drape pixel the same cell is drawn as is row (top-down) height-1-r,
-        # column c. A point 0.05° south and 0.1° east of the centre is inside both (checked, not assumed).
+        # The cell spans its centre ± 0.125°. A point 0.05° south and 0.1° east of the centre is inside it; the drape
+        # pixel drawn there must lie wholly inside the same cell, or the map shows the cell somewhere else (checked).
         la, lo_ = float(lat[r]) - 0.05, float(lon[c]) + 0.1
         px, py = drape_pixel(la, lo_)
-        if (px, py) != (int(c), height - 1 - int(r)):
+        dx = (b["east"] - b["west"]) / width
+        dy = (b["north"] - b["south"]) / height
+        x0, y1 = b["west"] + px * dx, b["north"] - py * dy
+        eps = 1e-9
+        if not (
+            float(lon[c]) - 0.125 - eps <= x0
+            and x0 + dx <= float(lon[c]) + 0.125 + eps
+            and float(lat[r]) - 0.125 - eps <= y1 - dy
+            and y1 <= float(lat[r]) + 0.125 + eps
+        ):
             raise SystemExit(
-                f"{name}: point {la},{lo_} is drawn by pixel {px},{py}, not cell {c},{height - 1 - r}"
+                f"{name}: pixel {px},{py} drawn at {la},{lo_} spans lon {x0}..{x0 + dx}, lat {y1 - dy}..{y1}, "
+                f"outside cell {float(lat[r])},{float(lon[c])} ± 0.125"
             )
         raw = float(field[r, c])
         rgba = png[py, px].tolist()

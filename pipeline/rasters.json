@@ -534,12 +534,6 @@
       "variable": "o2",
       "max_depth": 1
     },
-    "bounds": {
-      "west": -180,
-      "south": -80,
-      "east": 180,
-      "north": 90
-    },
     "transparent": "none",
     "kind": "ramp",
     "zrank": 12,
@@ -588,12 +582,6 @@
       "variable": "ph",
       "max_depth": 1
     },
-    "bounds": {
-      "west": -180,
-      "south": -80,
-      "east": 180,
-      "north": 90
-    },
     "transparent": "none",
     "kind": "ramp",
     "zrank": 13,
@@ -641,12 +629,6 @@
       "dataset_id": "cmems_mod_glo_bgc-plankton_anfc_0.25deg_P1D-m",
       "variable": "zooc",
       "max_depth": 1
-    },
-    "bounds": {
-      "west": -180,
-      "south": -80,
-      "east": 180,
-      "north": 90
     },
     "transparent": "none",
     "kind": "ramp",

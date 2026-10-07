@@ -105,12 +105,13 @@ def test_ramp_rgba_and_fetch_cmems_pick_latest_analysis_day_and_flip_north_up():
             return DA(a, tuple(d for d in self.dims if d not in kw))
     times = np.array(["2026-09-10", "2026-09-11", "2026-09-12", "2026-09-13"], dtype="datetime64[ns]")
     field = np.zeros((4, 1, 2, 3)); field[2, 0] = [[1, 2, 3], [7, 8, 9]]  # day index 2 = 2026-09-12; row 0 = south
-    ds = {"o2": DA(field, ("time", "depth", "latitude", "longitude")), "time": DA(times, ("time",)), "latitude": DA(np.array([-80.0, 90.0]), ("latitude",))}
+    ds = {"o2": DA(field, ("time", "depth", "latitude", "longitude")), "time": DA(times, ("time",)), "latitude": DA(np.array([10.0, 20.0]), ("latitude",)), "longitude": DA(np.array([0.0, 1.0, 2.0]), ("longitude",))}
     seen = {}
     def open_dataset(**kw):
         seen.update(kw); return ds
     product = {"id": "cmems-o2", "cmems": {"dataset_id": "d", "variable": "o2", "max_depth": 1}, "ramp": ramp}
-    rgba, when = fetch_cmems(product, today=dt.date(2026, 9, 12), open_dataset=open_dataset)
+    rgba, when, extras = fetch_cmems(product, today=dt.date(2026, 9, 12), open_dataset=open_dataset)
+    assert extras == {"bounds": {"west": -0.5, "south": 5.0, "east": 2.5, "north": 25.0}}, "cell edges, not centres"
     assert when == "2026-09-12T00:00:00Z", "the forecast day (13th) is skipped"
     assert seen["dataset_id"] == "d" and seen["variables"] == ["o2"]
     assert rgba.shape == (2, 3, 4) and rgba[0, 0, 0] > rgba[1, 0, 0], "north row first: values 7–9 on top of 1–3"
@@ -180,3 +181,100 @@ def test_log_ramp_interpolates_on_log10_between_min_and_max():
     # a log ramp cannot start at 0: refused by name, while the 0.05 start above rendered
     with pytest.raises(ValueError, match="log ramp needs 0 < min < max"):
         ramp_rgba(v, ramp | {"min": 0})
+
+
+def _drawn_at(lat, lon, b, w, h):
+    """The pixel the browser shows at (lat, lon): a mirror of drapePixel in src/data/rasterDrape.js."""
+    import math
+    span = b["east"] - b["west"]
+    x = ((lon - b["west"]) % 360) + b["west"] if span >= 360 else lon
+    return min(h - 1, math.floor((b["north"] - lat) / (b["north"] - b["south"]) * h)), min(w - 1, math.floor((x - b["west"]) / span * w))
+
+
+def _misplaced(rgba, b, lat_c, lon_c, step, first_row=0):
+    """Points well inside each cell (centre ± 0.4 cell) whose drawn pixel shows a different cell. The image encodes
+    each cell's (row, col) in its colour, so a pixel names the cell it was drawn from; lat_c[0] is row `first_row`."""
+    h, w = rgba.shape[:2]
+    bad = 0
+    for i, la in enumerate(lat_c, start=first_row):
+        for j, lo in enumerate(lon_c):
+            for dla in (-0.4, 0.0, 0.4):
+                for dlo in (-0.4, 0.0, 0.4):
+                    plat, plon = la + dla * step, lo + dlo * step
+                    if not (b["south"] <= plat <= b["north"]):
+                        continue
+                    y, x = _drawn_at(plat, plon, b, w, h)
+                    if (int(rgba[y, x, 0]), int(rgba[y, x, 1])) != (i, j):
+                        bad += 1
+    return bad
+
+
+def _coded(lat_c, lon_c):
+    """North-up RGBA whose pixel (r, c) is coloured (r, c, 0, 255): row r is lat_c[r] (north first)."""
+    import numpy as np
+    rgba = np.zeros((len(lat_c), len(lon_c), 4), np.uint8)
+    rgba[..., 0] = np.arange(len(lat_c))[:, None]
+    rgba[..., 1] = np.arange(len(lon_c))[None, :]
+    rgba[..., 3] = 255
+    return rgba
+
+
+def test_edge_align_draws_every_copernicus_cell_where_it_is():
+    """The Copernicus 0.25° grids give cell CENTRES (lat -80..90, lon -180..179.75); the drape stretches the image
+    across `bounds` edge to edge. Taking the centre range as the edges drew each cell half a cell east and up to half a
+    cell north/south (control below: the old geometry misplaces points). edge_align returns the true edges: the 90°N
+    row (half past the pole) is dropped, and the half-cell offset from ±180 is removed by drawing each cell two pixels
+    wide and turning the image one pixel, so it spans exactly -180..180. Same geometry at a 10° step to keep it small."""
+    import numpy as np
+    from pipeline.raster import edge_align
+
+    step = 10.0
+    lat_c = np.arange(90.0, -80.0 - 1e-9, -step)  # north first, as fetch_cmems draws it: 90, 80, ..., -80
+    lon_c = np.arange(-180.0, 180.0 - 1e-9, step)  # -180 .. 170
+    old = _coded(lat_c, lon_c)
+    old_bounds = {"west": -180, "south": -80, "east": 180, "north": 90}
+    assert _misplaced(old, old_bounds, lat_c, lon_c, step) > 0, "control: centres taken as edges misplace cells"
+
+    rgba, b = edge_align(_coded(lat_c, lon_c), lat_c, lon_c)
+    assert b == {"west": -180.0, "south": -85.0, "east": 180.0, "north": 85.0}
+    assert rgba.shape == (len(lat_c) - 1, 2 * len(lon_c), 4), "90°N row dropped, two pixels per cell"
+    keep = lat_c[1:]
+    assert _misplaced(rgba, b, keep, lon_c, step, first_row=1) == 0
+    # The cell centred on -180 straddles the antimeridian: its west half is the image's last pixel.
+    assert rgba[0, 0, 1] == 0 and rgba[0, -1, 1] == 0 and rgba[0, -2, 1] == len(lon_c) - 1
+
+
+def test_edge_align_leaves_an_edge_aligned_or_regional_grid_alone_and_refuses_one_it_cannot_place():
+    import numpy as np
+    import pytest
+    from pipeline.raster import edge_align
+
+    lat_c = np.arange(85.0, -85.0 - 1e-9, -10.0)
+    lon_c = np.arange(-175.0, 175.0 + 1e-9, 10.0)  # centres half a cell in: edges already -180..180
+    src = _coded(lat_c, lon_c)
+    rgba, b = edge_align(src.copy(), lat_c, lon_c)
+    assert np.array_equal(rgba, src) and b == {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+    assert _misplaced(rgba, b, lat_c, lon_c, 10.0) == 0
+
+    reg_lat = np.array([50.0, 49.0, 48.0]); reg_lon = np.array([-10.0, -9.0])  # regional: edges are just ± half a cell
+    rgba, b = edge_align(_coded(reg_lat, reg_lon), reg_lat, reg_lon)
+    assert rgba.shape == (3, 2, 4) and b == {"west": -10.5, "south": 47.5, "east": -8.5, "north": 50.5}
+
+    odd_lon = np.arange(-177.0, 180.0 - 1e-9, 10.0)  # global, but 3° off: no whole-pixel turn can place it
+    with pytest.raises(ValueError, match="cannot place"):
+        edge_align(_coded(lat_c, odd_lon), lat_c, odd_lon)
+    with pytest.raises(ValueError, match="regular"):
+        edge_align(_coded(lat_c, np.array([0.0, 1.0, 3.0])), lat_c, np.array([0.0, 1.0, 3.0]))
+
+
+def test_process_puts_the_cmems_cell_edge_bounds_in_the_manifest(monkeypatch, tmp_path):
+    """The cmems rows carry no configured bounds: the manifest's bounds are fetch_cmems's cell edges, and the
+    manifest's width/height are the redrawn image's. Mutant seen surviving without this test: process dropping
+    fetch_cmems's extras (the manifest entry then had no bounds and the drape could not draw)."""
+    from pipeline import raster
+    edges = {"west": -180.0, "south": -80.125, "east": 180.0, "north": 89.875}
+    img = np.zeros((680, 2880, 4), np.uint8); img[..., 3] = 255
+    monkeypatch.setattr(raster, "fetch_cmems", lambda p: (img, "2026-10-07T00:00:00Z", {"bounds": edges}))
+    entry = raster.process({"id": "cmems-o2", "cmems": {}, "name": "n", "icon": "i", "legend": "", "credit": "",
+                            "credit_key": "cmems", "ramp": {"min": 0, "max": 1, "stops": [[0, 0, 0], [1, 1, 1]]}}, tmp_path)
+    assert entry["bounds"] == edges and (entry["width"], entry["height"]) == (2880, 680)
