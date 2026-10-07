@@ -112,6 +112,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'cetaceans', token: 'ce', disposition: 'enabled-only' }),
   Object.freeze({ id: 'chlor-a', token: 'v', disposition: 'enabled-only' }),
   Object.freeze({ id: 'cmems-o2', token: '7', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'cmems-pft', token: 'pf', disposition: 'enabled-only' }),
   Object.freeze({ id: 'cmems-ph', token: '8', disposition: 'enabled-only' }),
   Object.freeze({ id: 'crw-bleaching', token: 'h', disposition: 'enabled-only' }),
   Object.freeze({ id: 'crw-dhw', token: 'y', disposition: 'enabled-only' }),
