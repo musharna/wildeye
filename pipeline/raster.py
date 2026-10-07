@@ -107,9 +107,36 @@ def ramp_rgba(values: np.ndarray, ramp: dict) -> np.ndarray:
     return out
 
 
-def fetch_cmems(product: dict, today: dt.date | None = None, open_dataset=None) -> tuple[np.ndarray, str]:
+def edge_align(rgba: np.ndarray, lat_north_first: np.ndarray, lon: np.ndarray) -> tuple[np.ndarray, dict]:
+    """A north-up image of a regular grid given by its cell CENTRES → (image, bounds at the cells' outer EDGES).
+    The drape stretches the image across `bounds` edge to edge, so bounds must be edges: taking the centre range
+    (e.g. -80..90, -180..180 for Copernicus 0.25°) drew every cell up to half a cell off. Rows whose cell reaches
+    past a pole are dropped (Cesium cannot draw past ±90). A global grid whose edges sit half a cell off ±180 (centres
+    on -180) is drawn two pixels per cell and turned one pixel, so the image spans exactly -180..180; any other
+    global offset raises rather than draw cells in the wrong place."""
+    lat = np.asarray(lat_north_first, dtype=float); lon = np.asarray(lon, dtype=float)
+    dlat, dlon = -np.diff(lat), np.diff(lon)
+    if len(lat) < 2 or len(lon) < 2 or not (np.allclose(dlat, dlat[0]) and np.allclose(dlon, dlon[0])) or dlat[0] <= 0 or dlon[0] <= 0:
+        raise ValueError("edge_align needs a regular grid: latitude north first, longitude ascending")
+    hy, hx = dlat[0] / 2, dlon[0] / 2
+    keep = (lat + hy <= 90 + 1e-9) & (lat - hy >= -90 - 1e-9)
+    rgba, lat = rgba[keep], lat[keep]
+    bounds = {"west": float(lon[0] - hx), "south": float(lat[-1] - hy), "east": float(lon[-1] + hx), "north": float(lat[0] + hy)}
+    if not np.isclose(bounds["east"] - bounds["west"], 360):
+        return rgba, bounds
+    off = bounds["west"] + 180
+    if np.isclose(off, 0):
+        return rgba, bounds | {"west": -180.0, "east": 180.0}
+    if not np.isclose(abs(off), hx):
+        raise ValueError(f"edge_align cannot place a global grid whose west edge is {bounds['west']}")
+    # Two pixels per cell, then turn by one pixel: the half cell past ±180 wraps to the other end.
+    return np.roll(np.repeat(rgba, 2, axis=1), -1 if off < 0 else 1, axis=1), bounds | {"west": -180.0, "east": 180.0}
+
+
+def fetch_cmems(product: dict, today: dt.date | None = None, open_dataset=None) -> tuple[np.ndarray, str, dict]:
     """Latest ANALYSIS day (≤ today; the datasets extend ~10 d into forecast) of one surface
-    variable from Copernicus Marine, rendered north-up through the product's ramp. Credentials
+    variable from Copernicus Marine, rendered north-up through the product's ramp, with the grid's cell-edge bounds
+    from edge_align (they replace any configured bounds in the manifest). Credentials
     from CMEMS_USER / CMEMS_PASS (never in the browser). copernicusmarine is imported lazily so the
     module stays importable without it."""
     import os
@@ -134,9 +161,10 @@ def fetch_cmems(product: dict, today: dt.date | None = None, open_dataset=None) 
     vals = np.asarray(da.values, dtype=float)
     lat = np.asarray(ds["latitude"].values)
     if lat[0] < lat[-1]:
-        vals = vals[::-1]  # north-up
+        vals, lat = vals[::-1], lat[::-1]  # north-up
     when = str(np.datetime_as_string(days[k], unit="D")) + "T00:00:00Z"
-    return ramp_rgba(vals, product["ramp"]), when
+    rgba, bounds = edge_align(ramp_rgba(vals, product["ramp"]), lat, np.asarray(ds["longitude"].values))
+    return rgba, when, {"bounds": bounds}
 
 
 def _read_bytes(url: str, timeout: int = 180) -> bytes:
@@ -147,7 +175,7 @@ def _read_bytes(url: str, timeout: int = 180) -> bytes:
 def process(product: dict, out_dir: Path) -> dict:
     extras = {}
     if "cmems" in product:
-        rgba, when_from_name = fetch_cmems(product)
+        rgba, when_from_name, extras = fetch_cmems(product)
     elif "cmems_dominant" in product:
         from . import cmems_pft
         rgba, when_from_name = cmems_pft.fetch_cmems_dominant(product)
