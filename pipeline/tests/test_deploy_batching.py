@@ -110,3 +110,11 @@ def test_a_layer_the_script_does_not_name_goes_up_in_batches_with_its_manifest_l
     _write_tiles(wt, 1, "data/seagrass/2019_2020/9/{i}/0.png", "data/seagrass.json")
     _check_batched(_deploy(tmp_path, wt), tiles, "data/seagrass.json")
     assert _git(wt, "status", "--porcelain") == ""
+
+
+def test_the_default_part_size_stays_under_the_worst_uplink_day_seen():
+    """2026-10-07: a 40 MB part (the old default) was dropped three times by this uplink while 14 MB parts all landed,
+    so the 09:00 cron's default must leave room under that day, not under the ~50 MB measured once on 2026-09-12."""
+    m = re.search(r'^BATCH_MB="\$\{BATCH_MB:-(\d+)\}"$', SCRIPT.read_text(), re.MULTILINE)
+    assert m, "BATCH_MB default not found in deploy_pages.sh"
+    assert 1 <= int(m.group(1)) <= 15, f"BATCH_MB default {m.group(1)} MB: parts this size were dropped on 2026-10-07"
