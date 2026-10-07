@@ -138,6 +138,12 @@ export const DATA_CREDITS = [
     html: 'Intact forest landscapes: The IFL Mapping Team, <a href="https://intactforests.org/data.ifl.html" target="_blank" rel="noopener">Intact Forest Landscapes 2000–2025</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Potapov, Hansen, Laestadius, Turubanova, Yaroshenko et al. 2017, <i>Science Advances</i> 3:e1600821, <a href="https://doi.org/10.1126/sciadv.1600821" target="_blank" rel="noopener">doi:10.1126/sciadv.1600821</a>. Changed: the five editions\' polygons simplified by 0.001° and drawn as ~610 m tiles, each place coloured by the last edition it was intact in.',
   },
   {
+    key: 'natural-lands',
+    html: 'Natural lands: WRI / SBTN <a href="https://github.com/wri/natural-lands-map" target="_blank" rel="noopener">Natural Lands Map v1.1</a> (World Resources Institute Land &amp; Carbon Lab with WWF and Systemiq, for the Science Based Targets Network), <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>; '
+      + 'Mazur, E., M. Sims, E. Goldman, M. Schneider, M.D. Pirri, C.R. Beatty, F. Stolle, Stevenson, M. 2025. “SBTN Natural Lands Map v1.1: Technical Documentation”. <i>Science Based Targets for Land Version 1-- Supplementary Material</i>. Science Based Targets Network. <a href="https://sciencebasedtargetsnetwork.org/wp-content/uploads/2025/02/Technical-Guidance-2025-Step3-Land-v1_1-Natural-Lands-Map.pdf" target="_blank" rel="noopener">https://sciencebasedtargetsnetwork.org/wp-content/uploads/2025/02/Technical-Guidance-2025-Step3-Land-v1_1-Natural-Lands-Map.pdf</a>. '
+      + 'Tiles load from Global Forest Watch as served (its three colours, each standing for a group of the map\'s classes) and are not re-hosted',
+  },
+  {
     key: 'tidal-marsh',
     html: 'Tidal marshes: Worthington, Spalding, Landis, Maxwell, Navarro, Smart and Murray, <a href="https://doi.org/10.5281/zenodo.8420753" target="_blank" rel="noopener">Global tidal marshes 2020, v2.6</a> (Zenodo), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Worthington et al. 2024, <i>Global Ecology and Biogeography</i> 33:e13852, <a href="https://doi.org/10.1111/geb.13852" target="_blank" rel="noopener">doi:10.1111/geb.13852</a>. Changed: the 10 m map drawn as the share of each ~150 m cell that is tidal marsh, in whole percent.',
   },
