@@ -49,6 +49,7 @@ import { reptilesLayer } from './data/reptiles.js';
 import { mammalsLayer } from './data/mammals.js';
 import { wetlandsLayer } from './data/wetlands.js';
 import { iflLayer } from './data/ifl.js';
+import { naturalLandsLayer } from './data/naturalLands.js';
 import { tidalMarshLayer } from './data/tidalMarsh.js';
 import { seagrassLayer } from './data/seagrass.js';
 import { obisGridLayer } from './data/obisGrid.js';
@@ -225,6 +226,7 @@ async function init() {
     dataManager.register(mammalsLayer);
     dataManager.register(wetlandsLayer);
     dataManager.register(iflLayer);
+    dataManager.register(naturalLandsLayer);
     dataManager.register(tidalMarshLayer);
     dataManager.register(seagrassLayer);
     dataManager.register(obisGridLayer);
@@ -232,7 +234,7 @@ async function init() {
     dataManager.register(cameraTrapsLayer);
     dataManager.register(ednaLayer);
     // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
-    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
+    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, iflLayer, naturalLandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
     const drapeIds = drapeLayers.map((l) => l.id);
     const compare = createCompare({
       dataManager,
