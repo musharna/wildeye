@@ -155,13 +155,15 @@ attempts would otherwise pass `run_tracks.sh`'s 3000 s guard and kill the run be
 2026-09-25 (run_tracks.sh): 13 studies, 108 animals, 544 Movebank segments + 571 ATN, 24
 species in 5 groups, 4.8 MB, 245 s.
 
-## Ocean oxygen and pH: Copernicus Marine (raster drapes)
-Two `cmems` rows in `rasters.json` (`cmems-o2` from `cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m`, `cmems-ph`
-from `…bgc-car…`). `pipeline.raster` opens the dataset lazily through the `copernicusmarine`
+## Ocean oxygen, pH and zooplankton: Copernicus Marine (raster drapes)
+Three `cmems` rows in `rasters.json` (`cmems-o2` from `cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m`, `cmems-ph`
+from `…bgc-car…`, `cmems-zooc` from `…bgc-plankton…` variable `zooc`). A ramp with `"log": true` is spaced
+evenly in log10 between `min` and `max` (`cmems-zooc`: 0.05–5 mmol C/m³; ramps without it are unchanged). `pipeline.raster` opens the dataset lazily through the `copernicusmarine`
 toolbox with `CMEMS_USER` / `CMEMS_PASS` (`run_rasters.sh` sources `~/.config/wildeye/env`), takes
 the surface level of the newest day **at or before today** (the datasets run ~10 days into
 forecast), flips north-up and renders through the row's `ramp` (NaN = land → transparent). Same
-archive/history handling as the PNG products. Measured 2026-09-12: 19 s + 10 s. Credit line is the
+archive/history handling as the PNG products. Measured 2026-09-12: 19 s + 10 s; `cmems-zooc` 16 s and 0.84 MB a
+day (2026-10-07). Credit line is the
 one Copernicus requires ("Generated using E.U. Copernicus Marine Service Information") plus the
 product DOI 10.48670/moi-00015.
 

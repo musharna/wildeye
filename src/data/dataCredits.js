@@ -165,7 +165,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'cmems',
-    html: 'Ocean oxygen and pH: Generated using E.U. Copernicus Marine Service Information; <a href="https://doi.org/10.48670/moi-00015" target="_blank" rel="noopener">Global Ocean Biogeochemistry Analysis and Forecast</a> (daily 0.25° surface analysis)',
+    html: 'Ocean oxygen, pH and zooplankton carbon (model): Generated using E.U. Copernicus Marine Service Information; <a href="https://doi.org/10.48670/moi-00015" target="_blank" rel="noopener">Global Ocean Biogeochemistry Analysis and Forecast</a> (daily 0.25° surface analysis)',
   },
   {
     key: 'arbonet',
