@@ -113,8 +113,9 @@ def test_a_layer_the_script_does_not_name_goes_up_in_batches_with_its_manifest_l
 
 
 def test_the_default_part_size_stays_under_the_worst_uplink_day_seen():
-    """2026-10-07: a 40 MB part (the old default) was dropped three times by this uplink while 14 MB parts all landed,
-    so the 09:00 cron's default must leave room under that day, not under the ~50 MB measured once on 2026-09-12."""
+    """2026-10-07: a 40 MB part (the old default) was dropped three times by this uplink while parts of at most 14 MB
+    all landed. A part can come out just under BATCH_MB, so the default must sit well below 14 MB (here at most 10,
+    ~70%), not at the largest size seen to land and not under the ~50 MB measured once on 2026-09-12 (PR #69 review)."""
     m = re.search(r'^BATCH_MB="\$\{BATCH_MB:-(\d+)\}"$', SCRIPT.read_text(), re.MULTILINE)
     assert m, "BATCH_MB default not found in deploy_pages.sh"
-    assert 1 <= int(m.group(1)) <= 15, f"BATCH_MB default {m.group(1)} MB: parts this size were dropped on 2026-10-07"
+    assert 1 <= int(m.group(1)) <= 10, f"BATCH_MB default {m.group(1)} MB leaves no room under the 14 MB parts that landed"
