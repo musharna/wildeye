@@ -212,12 +212,13 @@ export const mammalsLayer = createMammalsLayer();
 /**
  * The centre of the 0.1° cell holding a point, or null off the globe. Level 3 (4096 × 2048 px) carries the 3600 × 1800
  * cells by nearest neighbour, so the pixel under a point off a cell's centre can hold the next cell's count; the pixel
- * under a cell's centre always holds that cell's (a pixel is 0.88 of a cell wide).
+ * under a cell's centre always holds that cell's (a pixel is 0.88 of a cell wide). `cell` is the grid's cell size in
+ * degrees, for other grids filled the same way (bii: 1/12°).
  */
-export function cellCentre(lat, lon) {
+export function cellCentre(lat, lon, cell = CELL) {
   if (!(Math.abs(lat) <= 90) || !Number.isFinite(lon)) return null;
   const wrapped = ((((lon + 180) % 360) + 360) % 360) - 180;
-  const col = Math.min(Math.floor((wrapped + 180) / CELL), Math.round(360 / CELL) - 1);
-  const row = Math.min(Math.floor((90 - lat) / CELL), Math.round(180 / CELL) - 1);
-  return [90 - (row + 0.5) * CELL, -180 + (col + 0.5) * CELL];
+  const col = Math.min(Math.floor((wrapped + 180) / cell), Math.round(360 / cell) - 1);
+  const row = Math.min(Math.floor((90 - lat) / cell), Math.round(180 / cell) - 1);
+  return [90 - (row + 0.5) * cell, -180 + (col + 0.5) * cell];
 }
