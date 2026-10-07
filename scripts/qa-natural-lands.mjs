@@ -66,13 +66,13 @@ const d11 = await upsampled(11, 682, 1041);
 report('source:nothing-past-level-12', d12 === 0 && d11 > 1000, { level12to13: d12, controlLevel11to12: d11 });
 
 // known points: per group, the first homogeneous uniform-pick sample whose level-12 tile pixel sits in a 31×31 block of
-// the group's colour, so the rendered centre cannot straddle an edge
+// the group's colour, so the rendered centre cannot straddle an edge; each from a different raw tile (continent)
 const [head, ...rows] = readFileSync(new URL('../docs/analysis/natlands_legend_samples.tsv', import.meta.url), 'utf8').trim().split('\n');
 const keys = head.split('\t');
 const samples = rows.map((r) => Object.fromEntries(r.split('\t').map((v, i) => [keys[i], v])));
 const KNOWN = [];
 for (const g of GROUPS) {
-  for (const s of samples.filter((s) => s.homogeneous === '1' && s.pick.endsWith(':uniform') && g.classes.includes(Number(s.raw_class)) && Number(s.px) > 20 && Number(s.px) < 235 && Number(s.py) > 20 && Number(s.py) < 235)) {
+  for (const s of samples.filter((s) => s.homogeneous === '1' && s.pick.endsWith(':uniform') && !KNOWN.some((k) => k.what.endsWith(`(${s.raw_tile})`)) && g.classes.includes(Number(s.raw_class)) && Number(s.px) > 20 && Number(s.px) < 235 && Number(s.py) > 20 && Number(s.py) < 235)) {
     const img = await tileAt(12, s.x, s.y);
     let same = true;
     for (let j = -15; j <= 15 && same; j += 1) for (let i = -15; i <= 15 && same; i += 1) same = String(px(img, Number(s.px) + i, Number(s.py) + j)) === String([...g.rgb, 255]);
@@ -180,12 +180,13 @@ try {
     const control = i > 0 || Math.hypot(...k.rgb.map((v, j) => v - before[j])) > 40;
     report(`point ${k.what}`, n.g.title === k.group && n.d < 40 && control, { want: k.group, wantRgb: k.rgb, rendered: rgb, nearest: n.g.title, distance: Math.round(n.d), ...(i === 0 ? { beforeOn: before, beforeDistance: Math.round(Math.hypot(...k.rgb.map((v, j) => v - before[j]))) } : {}) });
   }
-  // a wide view draws coarse levels; together with the known points the drape reached level 12 and never past it
+  // a wide view draws coarse levels; with the known points the drape must reach the cache's served max zoom (not the
+  // module's own constant, which a wrong value would match) and never pass it
   await look(-3, -60, 3000000);
   await settle();
   const s1 = await stats();
   const levels = [...tiles.levels].sort((a, b) => a - b);
-  report('tiles', tiles.ok > 0 && tiles.bad.length === 0 && tiles.hops === tiles.redirected && levels.at(-1) === MAX_LEVEL && !s1?.error,
+  report('tiles', tiles.ok > 0 && tiles.bad.length === 0 && tiles.hops === tiles.redirected && levels.at(-1) === opts.max_zoom && !s1?.error,
     { tiles200: tiles.ok, redirectHops: tiles.hops, viaDynamicTiler: tiles.redirected, tilesBad: tiles.bad.length, badSample: tiles.bad.slice(0, 3), levels, stats: s1 });
 
   // A 2020 baseline: no time-bar hook (a time sampler, hansen-loss, is the control that the probe sees one)
