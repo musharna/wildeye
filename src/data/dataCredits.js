@@ -128,6 +128,10 @@ export const DATA_CREDITS = [
     key: 'mammals',
     html: 'Mammal richness: Marsh, Sica, Burgin, Dorman et al., <a href="https://doi.org/10.5281/zenodo.6644198" target="_blank" rel="noopener">range maps for the Mammal Diversity Database v1.2 taxonomy</a> (Zenodo), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Marsh et al. 2022, <i>Journal of Biogeography</i> 49:979–992, <a href="https://doi.org/10.1111/jbi.14330" target="_blank" rel="noopener">doi:10.1111/jbi.14330</a>. Changed: the 6,360 range polygons counted per 0.1° cell (a species counts where its range overlaps the cell), split into rodents, bats, primates and other.',
   },
+  {
+    key: 'soil-bacteria',
+    html: 'Soil bacterial richness: Bickel 2026, <a href="https://doi.org/10.5281/zenodo.21133869" target="_blank" rel="noopener">Global maps of soil microbial and plant richness</a> (Zenodo), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Bickel, Abdelfattah, Tack, Wicaksono &amp; Berg 2026, <i>ISME Communications</i> 6:ycag266, <a href="https://doi.org/10.1093/ismeco/ycag266" target="_blank" rel="noopener">doi:10.1093/ismeco/ycag266</a>. A model (held-out R² 0.41 from 320 sampled locations) of bacterial 16S sequence variants in 7,500 reads of one soil sample. Changed: the bacteria ensemble mean and SD rounded to whole numbers per 0.1° cell; the mean binned in tens for display.',
+  },
 
   {
     key: 'wetlands',
