@@ -1,5 +1,6 @@
 import * as Cesium from 'cesium';
 import { extentFromTimes } from './observedExtent.js';
+import { decodePng } from './pngDecode.js';
 
 /**
  * Generic single-image drape layer driven by public/data/rasters.json
@@ -59,6 +60,62 @@ export function onDrapeRestack(fn) {
 }
 
 const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+/** A value at two significant figures, as text ("0.54", "1.3", "5"). */
+const sig2 = (v) => String(Number(v.toPrecision(2)));
+
+/**
+ * The value at position `t` (0..1) along a manifest ramp: linear between min and max, or evenly spaced in
+ * log10 when `ramp.log` (pipeline/raster.py ramp_rgba draws the same mapping).
+ */
+export function rampValue(t, ramp) {
+  if (ramp.log) return ramp.min * (ramp.max / ramp.min) ** t;
+  return ramp.min + t * (ramp.max - ramp.min);
+}
+
+/**
+ * Where an RGB colour lies along a ramp's stops, as `t` in 0..1: the closest point on the polyline through the
+ * stops. A pixel rendered by ramp_rgba is that point rounded to 8 bits, so it is within one level per channel;
+ * a colour further off is not a ramp colour and gives null rather than the nearest value.
+ */
+export function rampPosition(c, stops, tolerance = 1) {
+  const n = stops.length;
+  let best = null;
+  for (let i = 0; i < n - 1; i++) {
+    const a = stops[i], b = stops[i + 1];
+    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+    const f = dd ? Math.min(1, Math.max(0, ((c[0] - a[0]) * d[0] + (c[1] - a[1]) * d[1] + (c[2] - a[2]) * d[2]) / dd)) : 0;
+    const off = Math.max(...[0, 1, 2].map((k) => Math.abs(c[k] - (a[k] + f * d[k]))));
+    if (!best || off < best.off) best = { off, t: (i + f) / (n - 1) };
+  }
+  return best && best.off <= tolerance ? best.t : null;
+}
+
+/** A drape pixel's value as readout text through the manifest ramp; the clamped ends read as bounds. */
+export function rampReadoutText(c, ramp) {
+  const t = rampPosition(c, ramp.stops);
+  if (t === null) return { kind: 'unknown', rgb: [c[0], c[1], c[2]] };
+  const unit = ramp.unit || '';
+  if (t <= 0) return { kind: 'value', text: `≤ ${ramp.min}${unit}` };
+  if (t >= 1) return { kind: 'value', text: `≥ ${ramp.max}${unit}` };
+  return { kind: 'value', text: `${sig2(rampValue(t, ramp))}${unit}` };
+}
+
+/**
+ * The pixel a drape draws at a point: the image spans `bounds` edge to edge, west to east and north to south
+ * (the Cesium rectangle the drape is given). Longitude wraps; a point off the image is null.
+ */
+export function drapePixel(lat, lon, b, width, height) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < b.south || lat > b.north) return null;
+  const span = b.east - b.west;
+  let x = lon;
+  if (span >= 360) x = ((((lon - b.west) % 360) + 360) % 360) + b.west;
+  if (x < b.west || x > b.east) return null;
+  return {
+    px: Math.min(width - 1, Math.floor(((x - b.west) / span) * width)),
+    py: Math.min(height - 1, Math.floor(((b.north - lat) / (b.north - b.south)) * height)),
+  };
+}
 /** Legend items (label + colour) from the manifest entry: discrete classes or a continuous ramp. */
 export function legendItems(entry) {
   if (!entry) return [];
@@ -72,7 +129,7 @@ export function legendItems(entry) {
     const mid = (entry.ramp.min + entry.ramp.max) / 2;
     return [
       { label: fmt(entry.ramp.min), color: at(0), count: null },
-      { label: fmt(entry.ramp.log ? Math.sqrt(entry.ramp.min * entry.ramp.max) : mid), color: at(Math.floor(n / 2)), count: null },
+      { label: entry.ramp.log ? `${sig2(rampValue(0.5, entry.ramp))}${unit}` : fmt(mid), color: at(Math.floor(n / 2)), count: null },
       { label: fmt(entry.ramp.max), color: at(n - 1), count: null },
     ];
   }
@@ -99,7 +156,15 @@ export function pickProduct(manifest, id) {
 export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, updateInterval = 3600000, zrank = 50,
   // test seams: node has no WebGL, so tests substitute the provider/layer constructors
   providerFor = (url, rectangle) => Cesium.SingleTileImageryProvider.fromUrl(url, { rectangle }),
-  imageryLayerFor = (provider, opts) => new Cesium.ImageryLayer(provider, opts) }) {
+  imageryLayerFor = (provider, opts) => new Cesium.ImageryLayer(provider, opts),
+  // readout: true adds readoutAt, which inverts the shown frame's pixels through the manifest ramp. Only for a PNG
+  // that pipeline/raster.py drew with ramp_rgba from that ramp (the cmems products), not one ERDDAP coloured.
+  readout = false,
+  decodeImage = async (url) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${url.split('?')[0]} HTTP ${res.status}`);
+    return decodePng(new Uint8Array(await res.arrayBuffer()));
+  } }) {
   let _viewer = null;
   let _layer = null;
   let _entry = null;
@@ -220,6 +285,37 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
         observed: _observed, stale: Boolean(_entry?.stale) };
     },
   };
+  if (readout) {
+    let image = null; // { key, image } for the frame last read; a failed read is not kept, so the next click retries
+    /** The ramp value under a point in the frame the selection shows (WHAT LIVES HERE); null when the layer is off. */
+    layer.readoutAt = async (lat, lon) => {
+      if (!_enabled) return null;
+      const row = (status, extra = {}) => ({ id, name, icon, status, text: null, date: null, ...extra });
+      if (!_entry) return row('error', { error: `${id} not loaded` });
+      const f = layer._target(_entry);
+      if (!f) return row('gap', { observed: _observed });
+      const date = String(f.time ?? '').slice(0, 10) || null;
+      const at = drapePixel(lat, lon, _entry.bounds, _entry.width, _entry.height);
+      if (!at) return row('outside', { date });
+      const key = `${f.png}?t=${f.time}`;
+      try {
+        if (image?.key !== key) image = { key, image: await decodeImage(key) };
+        const { width, height, data } = image.image;
+        if (width !== _entry.width || height !== _entry.height) {
+          const bad = image; image = null;
+          throw new Error(`${id} image is ${bad.image.width}×${bad.image.height}, the manifest says ${_entry.width}×${_entry.height}`);
+        }
+        const i = (at.py * width + at.px) * 4;
+        if (data[i + 3] === 0) return row('nodata', { date });
+        const v = rampReadoutText([data[i], data[i + 1], data[i + 2]], _entry.ramp);
+        if (v.kind === 'unknown') return row('error', { date, error: `colour ${v.rgb.join(',')} is not on the ramp` });
+        return row('value', { date, text: v.text });
+      } catch (e) {
+        console.error(`[Data:${id}] readout failed`, { lat, lon, png: f.png, error: e });
+        return row('error', { date, error: e?.message || String(e) });
+      }
+    };
+  }
   return layer;
 }
 
@@ -249,4 +345,8 @@ export const cmemsO2Layer = createRasterDrapeLayer({
 });
 export const cmemsPhLayer = createRasterDrapeLayer({
   id: 'cmems-ph', name: 'Surface ocean pH', icon: '🧪', source: 'E.U. Copernicus Marine Service', alpha: 0.6, zrank: 13,
+});
+export const cmemsZoocLayer = createRasterDrapeLayer({
+  id: 'cmems-zooc', name: 'Surface zooplankton carbon (model)', icon: '🦐', source: 'E.U. Copernicus Marine Service', alpha: 0.6, zrank: 14,
+  readout: true,
 });

@@ -133,3 +133,50 @@ def test_fill_empty_right_edge_closes_the_antimeridian_seam_only_when_erddap_lef
     land = np.zeros((3, 4, 4), dtype=np.uint8)
     land[:, :2] = [1, 2, 3, 255]            # last two columns empty (e.g. land/no data) → leave the gap
     assert fill_empty_right_edge(land) is land
+
+
+# The cmems-o2 / cmems-ph ramps as of 2026-10-07, inlined so the pin below cannot move with a config edit.
+_O2_RAMP = {"min": 195, "max": 395, "stops": [[127, 29, 29], [239, 138, 98], [247, 247, 247], [103, 169, 207], [5, 48, 97]]}
+_PH_RAMP = {"min": 7.95, "max": 8.16, "stops": [[84, 48, 5], [223, 194, 125], [245, 245, 245], [128, 205, 193], [1, 102, 94]]}
+
+
+def _linear_field(ramp):
+    lo, hi = ramp["min"], ramp["max"]
+    span = hi - lo
+    v = np.random.default_rng(7).uniform(lo - 0.2 * span, hi + 0.2 * span, (64, 128))
+    v[::7, ::5] = np.nan
+    return v
+
+
+def test_ramp_without_log_renders_byte_identically_to_before_the_log_option():
+    """The sha256 of each linear ramp's output was taken with ramp_rgba as it stood before `log` existed
+    (1c1677c53). `log: False` is the same ramp. Seen failing: any change to the linear path."""
+    import hashlib
+    from pipeline.raster import ramp_rgba
+    for ramp, want in ((_O2_RAMP, "9dd0e4bf70ea2565e5739a1f320ee58eadb645236c6a3562c5a8cab286c2fa2c"),
+                       (_PH_RAMP, "02ca55ad10573f611c5a32fb4248e557609f811e2ce4c738c8b10c7eff323f0d")):
+        v = _linear_field(ramp)
+        assert hashlib.sha256(ramp_rgba(v, ramp).tobytes()).hexdigest() == want
+        assert hashlib.sha256(ramp_rgba(v, ramp | {"log": False}).tobytes()).hexdigest() == want
+
+
+def test_log_ramp_interpolates_on_log10_between_min_and_max():
+    """cmems-zooc: 0.05..5 on five stops, so each stop is half a decade apart. Seen failing before `log`
+    existed: the geometric mean 0.5 landed a tenth of the way up (near stop 0), not on the middle stop."""
+    from pipeline.raster import ramp_rgba
+    stops = [[0, 0, 0], [40, 0, 0], [80, 0, 0], [120, 0, 0], [160, 0, 0]]
+    ramp = {"min": 0.05, "max": 5, "log": True, "stops": stops}
+    v = np.array([[0.05, 0.05 * 10 ** 0.5, 0.5, 5 * 10 ** -0.5, 5.0, 0.05 * 10 ** 0.25, 1e-9, 0.0, -1.0, 7.0, np.nan]])
+    out = ramp_rgba(v, ramp)
+    assert out[0, :5, 0].tolist() == [0, 40, 80, 120, 160], "every half decade is one stop"
+    assert out[0, 5, 0] == 20, "a quarter decade is half way between stop 0 and stop 1"
+    assert out[0, 6:9, 0].tolist() == [0, 0, 0], "tiny, zero and negative clamp to the low end"
+    assert (out[0, :10, 3] == 255).all(), "every finite value is opaque"
+    assert out[0, 9, 0] == 160, "above max clamps to the top"
+    assert out[0, 10, 3] == 0, "NaN (land) is transparent"
+    # positive control: the same values on the linear ramp put 0.5 a tenth of the way up, not on the middle stop
+    lin = ramp_rgba(v[:, :5], ramp | {"log": False})
+    assert lin[0, 2, 0] == round(160 * (0.5 - 0.05) / 4.95)
+    # a log ramp cannot start at 0: refused by name, while the 0.05 start above rendered
+    with pytest.raises(ValueError, match="log ramp needs 0 < min < max"):
+        ramp_rgba(v, ramp | {"min": 0})
