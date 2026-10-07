@@ -137,6 +137,12 @@ peak RSS 2.7 GB (`/usr/bin/time -v`). Level 9 fits with room; level 8 is not nee
   reading ≥ 50% in the same run.
 - Mutants through `mutate-run` for the share, the cell indexing, the antimeridian, the coarsening and the budget.
 
+**QA run (2026-10-07, built site on loopback):** 25/25 checks; the 13 cells read within 0.50 pp of the truth (rigorous
+B 0–5.59 pp): Monterey 100 / 49.85 / 0, southern Chile 74.39 / 49.80, Tasmania 83.50 / 49.55, Cape Peninsula
+100 / 50.05, Falklands 100, Peru 100, Antipodes Islands (178.81°E, nearest 180°) 12.42, open Pacific 0. The same run
+with the readout moved one cell north fails 14 checks (mutate-run). A share link must carry lat and lon to restore
+layers (`src/sharelink.js` `parseInitialHash`); the first QA run used a bare `#v=2&l=kp` and failed on it.
+
 ## Out of scope
 
 - The MPA layer in the same zip (ProtectedSeas-derived) and any protection or heatwave result.
