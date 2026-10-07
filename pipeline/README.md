@@ -165,6 +165,18 @@ archive/history handling as the PNG products. Measured 2026-09-12: 19 s + 10 s. 
 one Copernicus requires ("Generated using E.U. Copernicus Marine Service Information") plus the
 product DOI 10.48670/moi-00015.
 
+## Dominant phytoplankton group: Copernicus-GlobColour (raster drape, monthly)
+One `cmems_dominant` row in `rasters.json` (`cmems-pft`, dataset
+`cmems_obs-oc_glo_bgc-plankton_nrt_l4-multi-4km_P1M`, doi 10.48670/moi-00279), routed by `pipeline.raster` to
+`pipeline/cmems_pft.py`. It reads the newest month at or before today of the variables named by the row's classes
+(DIATO, DINO, HAPTO, GREEN, PROKAR; not PROCHLO, a prokaryote), checks the 8640×4320 whole-globe grid, averages
+each group over the 4 km pixels of every 0.25° cell where all five are present, and paints the largest in its class
+colour (no such pixel: clear). The frame is stamped on the month's first day, so the daily cron re-uses it until the
+next month is published; `keep_days: 400` keeps about 13 months on the time bar (the default 30 would delete a
+monthly frame on its first run). Measured 2026-10-07: 21 s, 1.3 GB peak RSS, 76 KB PNG. Premise check (not
+chlorophyll re-coloured) and an independent cell check: `python3 -m analysis.pft_premise`, `python3 -m
+analysis.pft_cells` (results in `docs/analysis/`).
+
 ## Introduced species by checklist: GRIIS (polygon contract)
 ```bash
 python3 -m pipeline.griis --out public/data/griis.geojson                  # cron 1st of month 06:20

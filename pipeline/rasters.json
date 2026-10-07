@@ -238,6 +238,79 @@
     }
   },
   {
+    "id": "cmems-pft",
+    "name": "Dominant phytoplankton group, monthly (Copernicus-GlobColour)",
+    "icon": "🔬",
+    "cmems_dominant": {
+      "dataset_id": "cmems_obs-oc_glo_bgc-plankton_nrt_l4-multi-4km_P1M",
+      "block": 6,
+      "grid": [
+        8640,
+        4320
+      ]
+    },
+    "bounds": {
+      "west": -180,
+      "south": -90,
+      "east": 180,
+      "north": 90
+    },
+    "transparent": "none",
+    "kind": "classes",
+    "zrank": 21,
+    "keep_days": 400,
+    "classes": [
+      {
+        "label": "diatoms",
+        "variable": "DIATO",
+        "rgb": [
+          230,
+          159,
+          0
+        ]
+      },
+      {
+        "label": "dinoflagellates",
+        "variable": "DINO",
+        "rgb": [
+          204,
+          121,
+          167
+        ]
+      },
+      {
+        "label": "haptophytes (coccolithophores and relatives)",
+        "variable": "HAPTO",
+        "rgb": [
+          86,
+          180,
+          233
+        ]
+      },
+      {
+        "label": "green algae and prochlorophytes",
+        "variable": "GREEN",
+        "rgb": [
+          0,
+          158,
+          115
+        ]
+      },
+      {
+        "label": "prokaryotes (cyanobacteria)",
+        "variable": "PROKAR",
+        "rgb": [
+          240,
+          228,
+          66
+        ]
+      }
+    ],
+    "legend": "group with the most chlorophyll in each cell, satellite estimate, monthly mean; clear = no satellite view",
+    "credit_key": "cmems-globcolour",
+    "credit": "Generated using E.U. Copernicus Marine Service Information; Global Ocean Colour (Copernicus-GlobColour) L4 NRT, https://doi.org/10.48670/moi-00279"
+  },
+  {
     "id": "crw-dhw",
     "name": "Coral heat stress: degree heating weeks (NOAA CRW)",
     "icon": "🌡️🪸",

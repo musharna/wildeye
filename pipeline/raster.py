@@ -141,6 +141,9 @@ def process(product: dict, out_dir: Path) -> dict:
     extras = {}
     if "cmems" in product:
         rgba, when_from_name = fetch_cmems(product)
+    elif "cmems_dominant" in product:
+        from . import cmems_pft
+        rgba, when_from_name = cmems_pft.fetch_cmems_dominant(product)
     elif "crw_outlook" in product:
         from .crw_outlook import fetch_crw_outlook
         rgba, when_from_name, extras = fetch_crw_outlook(
