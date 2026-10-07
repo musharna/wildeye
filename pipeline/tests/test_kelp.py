@@ -14,6 +14,7 @@ from math import floor
 from pathlib import Path
 
 import numpy as np
+import pyogrio
 import pytest
 import shapely
 import shapely.affinity
@@ -301,17 +302,24 @@ def test_palette_runs_light_to_dark_through_the_stated_stops():
 
 
 def fixture_zip(path: Path, polys, crs="EPSG:4326") -> Path:
-    """A zip of the release's layout holding a shapefile of `polys` (with Z, as the release's) at its member path."""
-    import geopandas as gpd
+    """A zip of the release's layout holding a shapefile of `polys` (with Z, as the release's) at its member path.
 
+    Written with pyogrio's raw writer, which CI's environment has (geopandas it does not)."""
     shp_dir = path / "shp"
-    shp_dir.mkdir()
-    gdf = gpd.GeoDataFrame(
-        {"OBJECTID": range(1, len(polys) + 1), "Country": ["Peru"] * len(polys)},
-        geometry=list(shapely.force_3d(np.array(polys))),
+    shp_dir.mkdir(parents=True)
+    pyogrio.raw.write(
+        shp_dir / "Global_Kelp_Canopy_2-24.shp",
+        shapely.to_wkb(shapely.force_3d(np.array(polys)), flavor="iso"),
+        field_data=[
+            np.arange(1, len(polys) + 1, dtype=np.int64),
+            np.array(["Peru"] * len(polys), dtype=object),
+        ],
+        fields=["OBJECTID", "Country"],
+        driver="ESRI Shapefile",
+        geometry_type="Polygon Z",
         crs=crs,
+        encoding="UTF-8",
     )
-    gdf.to_file(shp_dir / "Global_Kelp_Canopy_2-24.shp")
     zpath = path / kelp.ZIP_NAME
     folder = kelp.MEMBER.rsplit("/", 1)[0]
     with zipfile.ZipFile(zpath, "w") as z:
@@ -326,6 +334,13 @@ def test_main_reads_the_zip_in_place_refuses_a_changed_file_and_a_wrong_count(tm
         cell_box(MONTEREY[0] + 3, MONTEREY[1], 0, 0, 16, 16),
     ]
     src = fixture_zip(tmp_path, polys)
+    # the fixture is the release's layout: Polygon Z, EPSG:4326, at the member path
+    info = pyogrio.read_info(f"/vsizip/{src}/{kelp.MEMBER}")
+    assert (info["geometry_type"], info["crs"], info["features"]) == (
+        "Polygon Z",
+        "EPSG:4326",
+        2,
+    )
     md5 = hashlib.md5(src.read_bytes(), usedforsecurity=False).hexdigest()
     calls = []
 
@@ -361,8 +376,15 @@ def test_main_reads_the_zip_in_place_refuses_a_changed_file_and_a_wrong_count(tm
         kelp.main(argv, fetch_to=fetch_to, md5=md5, expect=2)
 
 
-def test_read_refuses_another_crs(tmp_path):
-    src = fixture_zip(tmp_path, [shapely.box(0, 0, 1000, 1000)], crs="EPSG:3857")
+def test_read_drops_z_and_refuses_another_crs(tmp_path):
+    # positive control: the release's Polygon Z in EPSG:4326 reads as 2D polygons
+    ok = fixture_zip(tmp_path / "ok", [cell_box(*MONTEREY)])
+    polys = kelp.read_polygons(f"/vsizip/{ok}/{kelp.MEMBER}", expect=1)
+    assert len(polys) == 1 and not shapely.has_z(polys).any()
+    assert shapely.equals(polys[0], cell_box(*MONTEREY))
+    src = fixture_zip(
+        tmp_path / "merc", [shapely.box(0, 0, 1000, 1000)], crs="EPSG:3857"
+    )
     with pytest.raises(cell_share.SourceChanged, match="is not EPSG:4326"):
         kelp.read_polygons(f"/vsizip/{src}/{kelp.MEMBER}", expect=1)
 
