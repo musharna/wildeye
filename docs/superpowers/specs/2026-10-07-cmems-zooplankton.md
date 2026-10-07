@@ -22,7 +22,7 @@ Wave 4, PR 1 (grill `grill_wildeye_wave4_2026-10-07`, decisions 1, 2, 5).
   `mole_concentration_of_zooplankton_expressed_as_carbon_in_sea_water`, valid_min 0, valid_max 5), 1440×681
   (lat -80..90, lon -180..179.75, cell centres), time 2023-11-29 → 2026-10-16 (forecast past today is skipped).
 - 2026-10-07 surface: 30.4% NaN (land); percentiles 0.1/1/5/50/95/99/99.9 = 0.052/0.069/0.094/0.54/2.26/3.14/4.53;
-  max 5.0 (= valid_max).
+  max 5.0 (= valid_max; 317 ocean cells sit exactly at 5.0, so the model output is capped there: they read `≥ 5`).
 - What the number is (PUM CMEMS-GLO-PUM-001-028): "This product is based on the PISCES biogeochemical model. It is
   forced offline at a daily frequency by GLOBAL_ANALYSISFORECAST_PHY_001_024 coarsened at 1/4 degree, with SEEK-based
   Data Assimilation of OCEANCOLOUR_GLO_BGC_L4_NRT_009_102." Only satellite chlorophyll is assimilated; zooplankton is
@@ -69,9 +69,12 @@ credit already carries that sentence and the DOI link 10.48670/moi-00015, which 
 - Real run: `python3 -m pipeline.raster --out public/data --only cmems-zooc` writes `rasters/cmems-zooc.png` (1440×681)
   and its manifest entry. Independent route: three or more cells (Peru or Benguela upwelling, a subtropical gyre, a
   high-latitude cell) read straight from the dataset with xarray agree with the PNG's colour inverted through the ramp.
-- `node scripts/qa-cmems-zooc.mjs --url <local vite preview>` exit 0: legend text exactly as above, swatch labels,
-  credit, share token `zc` round trip, the readout at those cells within the 8-bit colour quantisation of the raw
-  value, a land cell reads no data, no console errors.
+- `python3 -B scripts/qa_cmems_zooc_truth.py public/data > truth.json` (the independent route: raw values with xarray,
+  the PNG colour's value band from its own log rendering), then
+  `node scripts/qa-cmems-zooc.mjs --truth truth.json --url <local vite preview>` exit 0: legend text exactly as above,
+  swatch labels, credit, share token `zc` and its round trip, on the time bar, drawn, the readout at each cell inside
+  the PNG colour's band at 2 significant figures and within 5% of the raw value (`≥ 5` at the capped top), a land cell
+  reads no data, no console errors. Negative control: the same QA with every raw value ×1.2 fails.
 - `mutate-run` on the log ramp, `rampValue`, `rampPosition` and the readout: killed/total reported.
 
 ## Constraints
@@ -81,4 +84,4 @@ credit already carries that sentence and the DOI link 10.48670/moi-00015, which 
   image edges), so the readout reads what is drawn. That convention draws each cell up to ~0.27° off near 80°S;
   fixing it for the siblings is out of scope here and reported.
 - Out of scope (decision 5): micronekton, plankton size classes, phytoplankton types (separate PR), uncertainty.
-- Budget: one ~1–2 MB PNG a day × 30 archived days.
+- Budget: 0.84 MB a day (2026-10-07) × 30 archived days ≈ 25 MB.
