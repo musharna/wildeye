@@ -2812,6 +2812,51 @@ test('a layer that declares row controls renders its chips and color legend', as
   }
 });
 
+// `count: null` is how a layer marks a key-only legend entry (a raster class,
+// a caption) that has nothing to count; 43 layer files use it. The renderer
+// printed it as the word "null" after the label.
+test('a legend entry with count: null shows its label alone; real counts still show', async () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: makeControlElement };
+  const mgr = new DataLayerManager({});
+  mgr.register({
+    id: 'drought',
+    name: 'Drought',
+    icon: '',
+    source: 'USDM',
+    updateInterval: -1,
+    async init() {},
+    enable() {},
+    disable() {},
+    async update() {},
+    getStats() { return { count: 0, lastUpdate: Date.now() }; },
+    getRowControls() {
+      return {
+        chips: [],
+        legend: [
+          { label: 'fill = USDM drought category', color: 'transparent', count: null },
+          { label: 'D0', color: '#ffff00', count: 0 },
+          { label: 'D1', color: '#fcd37f', count: 1234 },
+        ],
+      };
+    },
+  });
+  const container = makeControlElement();
+
+  try {
+    mgr.buildTogglePanel(container);
+    assert.equal(await mgr.setEnabled('drought', true), true);
+    mgr._refreshTogglePanel();
+    const controls = container.querySelector('[data-layer-id="drought"]').querySelector('.data-toggle-controls');
+    const texts = collectByClass(controls, 'data-toggle-legend-item').map((item) => item.children[1].textContent);
+    assert.deepEqual(texts, ['fill = USDM drought category', 'D0 0', 'D1 1.2K']);
+  } finally {
+    await mgr.destroyAll();
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  }
+});
+
 test('clicking a row chip applies the params it declared and re-renders', async () => {
   const originalDocument = globalThis.document;
   globalThis.document = { createElement: makeControlElement };

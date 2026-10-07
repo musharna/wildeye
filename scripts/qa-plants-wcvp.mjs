@@ -145,10 +145,9 @@ try {
     const credits = [...document.querySelectorAll('[class*="credit"]')].filter((e) => !e.closest('.bio-card')).map((e) => e.textContent).join(' ');
     return { items, credits };
   }, ID);
-  // Matched by label prefix: the shared row renderer appends each item's formatted count (manager.js), and prints
-  // a null count as "null", for every layer that passes one.
-  const has = (label) => shown.items.some((t) => t.startsWith(label));
-  const legendOk = has('fill = native vascular plant species per botanical country, log scale (369 TDWG Level-3 units, WCVP 16.0). Larger units hold more species')
+  // Matched exactly: every entry here is key-only (count: null), which the row renderer shows as its label alone.
+  const has = (label) => shown.items.some((t) => t === label);
+  const legendOk = has('fill = native vascular plant species per botanical country, log scale (369 TDWG Level-3 units, WCVP 16.0). Larger units hold more species: compare units of like size.')
     && has('10,000+ native species') && has('1–9 native species') && has('none recorded') && shown.items.length === 10;
   const creditOk = shown.credits.includes('World Checklist of Vascular Plants (WCVP) 16.0') && shown.credits.includes('CC BY 3.0')
     && shown.credits.includes('TDWG World Geographical Scheme for Recording Plant Distributions') && shown.credits.includes('doi:10.1038/s41597-021-00997-6');

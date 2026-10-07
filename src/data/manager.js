@@ -2042,7 +2042,8 @@ export class DataLayerManager {
       swatch.className = 'data-toggle-legend-swatch';
       swatch.style.background = item.color;
       const text = document.createElement('span');
-      text.textContent = `${item.label} ${this._formatCount(item.count)}`;
+      // count: null marks a key-only entry (a raster class, a caption): label alone.
+      text.textContent = item.count === null ? item.label : `${item.label} ${this._formatCount(item.count)}`;
       entry.append(swatch, text);
       container.appendChild(entry);
     }
