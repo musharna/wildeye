@@ -50,6 +50,10 @@ mutants of the encoding, placement, budget and NaN handling are killed (`mutate-
   Held-out R² for bacteria 41 ± 9% (max 62%), n = 320 sample locations (paper, Results; read in the PMC full text
   2026-10-07). The `_std` file is the spread of the model ensemble; the paper's model uncertainty "highlights
   undersampled regions (e.g. Sahara)". It is not a confidence interval and the layer does not call it one.
+- **Ice sheets.** The model has values over Greenland's ice sheet (19,956 of the 20,000 cells in 68–78° N, 50–30° W;
+  312–535; e.g. ≈324 at 72.05° N, 40.05° W), where no soil was sampled: model extrapolation with no soil samples behind
+  it. Antarctica is blank (no cell south of 60° S has a value; read from bacteria_mean.nc 2026-10-07). The data are
+  drawn as published, not masked; the legend says so.
 
 ## Design
 
@@ -93,7 +97,10 @@ points, reads mean and SD with `.sel(lat, lon, method="nearest")` at the point i
 centre toward the sea for coastal cells. Points: coastal cells found by walking in from the sea on every side of Africa
 (west, east, north, south) and of Australia (north, south), Chile (west coast, southern hemisphere), both sides of the
 antimeridian in Chukotka (179.95° E and 179.95° W) and Fiji (16.85° S), the Amazon, the Sahara, plus two ocean points
-(mid-Pacific, South Atlantic) that must read no value. `scripts/qa-soil-bacteria.mjs` loads the built site, turns the
+(mid-Pacific, South Atlantic) that must read no value. Each of the 13 land cells is read again at its four corners,
+0.045° in from both edges (65 land points in all), where the level-3 pixel under the point is often the next cell's,
+so the readout's snap to the clicked cell is what makes them pass; their control is the cell diagonally across the
+corner. `scripts/qa-soil-bacteria.mjs` loads the built site, turns the
 layer on through its share token, reads each point through the site's readout and compares the text with the truth
 (whole numbers, half up); ocean points must read "No modelled soil estimate". Positive control in the same run: the
 truth with mean and SD swapped, and the neighbouring cell's truth, must not match what the site shows.

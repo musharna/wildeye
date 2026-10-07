@@ -183,7 +183,8 @@ export function createSoilBacteriaLayer({
         label:
           `Modelled soil bacterial richness: bacterial 16S rRNA sequence variants per soil sample, counted in ${md.reads.toLocaleString("en-US")} ` +
           `sequencing reads, 0.1° cells. A model of ten environmental variables fitted at ${md.locations} sampled locations ` +
-          `(held-out R² ${md.r2.toFixed(2)}): a prediction, not a survey · Bickel et al. 2026, CC BY 4.0`,
+          `(held-out R² ${md.r2.toFixed(2)}): a prediction, not a survey. Values over Greenland's ice sheet are model extrapolation ` +
+          `with no soil samples behind them (Antarctica is blank) · Bickel et al. 2026, CC BY 4.0`,
         color: "transparent",
         count: null,
       });
