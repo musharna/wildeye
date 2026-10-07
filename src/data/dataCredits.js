@@ -152,6 +152,10 @@ export const DATA_CREDITS = [
     html: 'Seagrass: Peng, Li, Krause, Lyons, Murray, Schill, Roelfsema and Asner, <a href="https://doi.org/10.5281/zenodo.18612240" target="_blank" rel="noopener">Global 10-meter seagrass maps</a> (Zenodo, 2026), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Changed: the 10 m maps of 2019–2020 and 2023–2024 drawn as the share of each ~150 m cell that is seagrass, in whole percent.',
   },
   {
+    key: 'kelp',
+    html: 'Floating kelp: Arafeh-Dalmau, Villaseñor-Derbez, Schoeman, Mora-Soto, Bell et al., <a href="https://doi.org/10.5281/zenodo.14816612" target="_blank" rel="noopener">global floating kelp map</a> (Zenodo), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Arafeh-Dalmau et al. 2025, <i>Nature Communications</i> 16:3173, <a href="https://doi.org/10.1038/s41467-025-58054-4" target="_blank" rel="noopener">doi:10.1038/s41467-025-58054-4</a>. US and Mexico canopy from the Santa Barbara Coastal LTER, <a href="https://portal.edirepository.org/nis/mapbrowse?packageid=knb-lter-sbc.74.13" target="_blank" rel="noopener">EDI package knb-lter-sbc.74.13</a> (CC BY 4.0). Changed: the kelp polygons drawn as the share of each ~150 m cell they cover, in whole percent.',
+  },
+  {
     key: 'obis-grid',
     html: 'Marine records: OBIS (2026) <a href="https://obis.org" target="_blank" rel="noopener">Ocean Biodiversity Information System</a>, Intergovernmental Oceanographic Commission of UNESCO, from the <a href="https://obis.org/data/access/" target="_blank" rel="noopener">OBIS open-data export</a>; records, species and datasets per 1° cell from CC0 1.0 and CC BY 4.0 datasets only, each named with its licence in <a href="data/obis_grid_datasets.json" target="_blank" rel="noopener">obis_grid_datasets.json</a>.',
   },
