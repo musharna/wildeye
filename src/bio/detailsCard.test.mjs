@@ -72,7 +72,7 @@ test('every card layer id is the name of a real data source', () => {
   const names = dataSources();
   for (const id of BIO_CARD_LAYER_IDS) assert.ok(names.has(id), `${id} has no CustomDataSource("${id}") in src/data`);
   assert.equal(BIO_CARD_LAYER_IDS.has('flights'), false);
-  assert.equal(BIO_CARD_LAYER_IDS.size, 26);
+  assert.equal(BIO_CARD_LAYER_IDS.size, 27);
 });
 
 // Cesium's info box is off, so an entity description reaches the screen only through this card. BioTIME, GMW and GRIIS
