@@ -157,6 +157,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'occurrences', token: 'o', disposition: 'enabled-only' }),
   Object.freeze({ id: 'oisst', token: 'j', disposition: 'enabled-only' }),
   Object.freeze({ id: 'otn', token: '3', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'penguins', token: 'pg', disposition: 'enabled-only' }),
   Object.freeze({ id: 'phenology', token: 'ph', disposition: 'enabled-only' }),
   Object.freeze({ id: 'plants-wcvp', token: 'vp', disposition: 'enabled-only' }),
   Object.freeze({ id: 'protected-areas', token: 'pa', disposition: 'enabled-only' }),

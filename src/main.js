@@ -43,6 +43,7 @@ import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, g
 import { hansenLossLayer } from './data/hansenLoss.js';
 import { mangrovesLayer } from './data/mangroves.js';
 import { haedatLayer } from './data/haedat.js';
+import { penguinsLayer } from './data/penguins.js';
 import { surfaceWaterLayer } from './data/surfaceWater.js';
 import { humanFootprintLayer } from './data/humanFootprint.js';
 import { malariaLayer } from './data/malaria.js';
@@ -291,6 +292,7 @@ async function init() {
     dataManager.register(arbonetLayer);
     dataManager.register(biotimeLayer);
     dataManager.register(haedatLayer);
+    dataManager.register(penguinsLayer);
     dataManager.register(speciesLayer);
     // Shared observed-time selector: one bar, every bio layer samples its own data at the instant.
     // No domain constant: the bar spans the union of what the enabled layers declare they can
@@ -357,7 +359,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[crwOutlookLayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, hotspotsLayer, haedatLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[crwOutlookLayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, hotspotsLayer, haedatLayer, penguinsLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({

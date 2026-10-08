@@ -192,6 +192,10 @@ export const DATA_CREDITS = [
     html: 'Harmful algal events: IOC-UNESCO, <a href="https://doi.org/10.25607/k68d5v" target="_blank" rel="noopener">The Harmful Algal Event Database (HAEDAT)</a>, archive version 3.35 (2025-05-23), accessed via <a href="https://obis.org" target="_blank" rel="noopener">OBIS</a>; Provoost and Enevoldsen, CC BY 4.0. Positions are HAEDAT\'s monitoring points and regional centres, not where each event happened.',
   },
   {
+    key: 'penguins',
+    html: 'Penguin colonies: Antarctic Penguin Biogeography Project database, mapppdr v3.1 (2026-08-21); Che-Castaldo C, Humphries G, Lynch H (2023), <i>Biodiversity Data Journal</i> 11: e101476, <a href="https://doi.org/10.3897/BDJ.11.e101476" target="_blank" rel="noopener">doi:10.3897/BDJ.11.e101476</a>; versioned dataset via SCAR-AntOBIS, <a href="https://doi.org/10.48361/zftxkr" target="_blank" rel="noopener">doi:10.48361/zftxkr</a>. CC BY 4.0.',
+  },
+  {
     key: 'phenology',
     html: "Phenology: Data were provided by the <a href=\"https://www.usanpn.org/data/observational\" target=\"_blank\" rel=\"noopener\">USA National Phenology Network</a> and the many participants who contribute to its Nature's Notebook program (CC BY 4.0, doi:10.5066/F78S4N1V).",
   },
