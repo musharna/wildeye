@@ -90,6 +90,10 @@ test('text: readout lines for a hotspot, an outer limit and neither; cards escap
   assert.match(outer, /<b>Outer limit of Wallacea<\/b>/);
   assert.match(outer, /not part of the hotspot itself/);
   assert.match(outer, /CC BY-SA 4\.0/);
+  // a file without a source block still credits the record and its share-alike licence
+  const bare = describeArea({ name: 'Japan', area_km2: 373665 }).replace(/<[^>]+>/g, '');
+  assert.match(bare, /Biodiversity Hotspots \(version 2016\.1\), Conservation International · CC BY-SA 4\.0$/);
+  assert.match(describeOuter({ name: 'Japan' }), /href="https:\/\/doi\.org\/10\.5281\/zenodo\.3261807"/);
 });
 
 test('entities: one filled polygon per area part; outer limits as dashed outer rings only', async () => {
