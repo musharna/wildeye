@@ -17,6 +17,7 @@ import ecoregionsLayer from './data/ecoregions.js';
 import { marineRealmsLayer } from './data/marineRealms.js';
 import { freshwaterFishLayer } from './data/freshwaterFish.js';
 import { plantsWcvpLayer } from './data/plantsWcvp.js';
+import { hotspotsLayer } from './data/hotspots.js';
 import speciesLayer, { DEFAULT_SPECIES_PARAMS } from './data/species.js';
 import { createBioClient } from './bio/gbif.js';
 import { createWhatLivesHere } from './bio/whatLivesHere.js';
@@ -281,6 +282,7 @@ async function init() {
     dataManager.register(marineRealmsLayer);
     dataManager.register(freshwaterFishLayer);
     dataManager.register(plantsWcvpLayer);
+    dataManager.register(hotspotsLayer);
     dataManager.register(firesLayer);
     dataManager.register(h5n1Layer);
     dataManager.register(droughtLayer);
@@ -357,7 +359,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[crwOutlookLayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, haedatLayer, penguinsLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[crwOutlookLayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, hotspotsLayer, haedatLayer, penguinsLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     whatLivesHere = createWhatLivesHere({

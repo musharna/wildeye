@@ -31,6 +31,7 @@ Live site: https://musharna.github.io/wildeye/
 - Active fires (NASA FIRMS)
 - Drought (U.S. Drought Monitor)
 - Ecoregions and biomes (RESOLVE 2017)
+- Biodiversity hotspots: the 36 regions with at least 1,500 endemic plant species that have lost at least 70% of their native vegetation (Conservation International 2016.1)
 - Intact forest landscapes 2000–2025, coloured by the last edition each place was intact in (IFL Mapping Team)
 
 **Water and ocean**

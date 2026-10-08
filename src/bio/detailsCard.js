@@ -12,7 +12,7 @@ import { observeEndWithIntersectionObserver, watchMoreBelow } from './moreCue.js
 
 export const BIO_CARD_LAYER_IDS = new Set([
   'arbonet', 'biotime', 'birds', 'cetaceans', 'drought', 'ecoregions', 'fires', 'fishing', 'freshwater-fish', 'gfw', 'gmw', 'griis', 'h5n1', 'haedat',
-  'hpai', 'marine-realms', 'neon', 'neon-vectors', 'occurrences', 'otn', 'penguins', 'phenology', 'plants-wcvp', 'rivers', 'tracks', 'wastewater', 'whispers',
+  'hotspots', 'hpai', 'marine-realms', 'neon', 'neon-vectors', 'occurrences', 'otn', 'penguins', 'phenology', 'plants-wcvp', 'rivers', 'tracks', 'wastewater', 'whispers',
 ]);
 
 export function cardDecision(entity, time = undefined) {
