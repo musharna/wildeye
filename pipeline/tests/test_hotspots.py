@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 import shapefile
 from shapely import STRtree
-from shapely.geometry import MultiPolygon, Point, box, shape
+from shapely.geometry import MultiPolygon, Point, Polygon, box, shape
 from shapely.geometry.polygon import orient
 
 from pipeline import hotspots as hs
@@ -95,7 +95,8 @@ def test_build_writes_each_area_with_its_unsimplified_area_and_each_outer_limit_
         "hotspot area",
         MultiPolygon([square(0), islet]).__geo_interface__,
     )
-    rows += [
+    # rows in reverse name order: the output is sorted by name, not kept in the file's order
+    rows = rows[::-1] + [
         (second, "outer limit", ring_around(1).__geo_interface__),
         (first, "outer limit", ring_around(0).__geo_interface__),
     ]
@@ -173,6 +174,27 @@ def test_a_hotspot_part_wider_than_cesium_draws_is_cut_but_an_outer_limit_is_kep
     assert shape(feats[4]["geometry"]).equals(square(4)), (
         "positive control: a 1° hotspot is kept whole"
     )
+
+
+def test_an_invalid_source_shape_is_repaired_before_its_area_is_taken():
+    # a bowtie: as given, its two lobes cancel in the ring area; repaired, they are two triangles of 0.25 deg² each
+    bowtie = {"type": "Polygon", "coordinates": [[[0, 0], [1, 1], [1, 0], [0, 1], [0, 0]]]}
+    rows = area_rows()
+    rows[0] = (hs.NAMES[0], "hotspot area", bowtie)
+    feats, counts = hs.build(rows, tol=0.0001, min_area=0.0001)
+    assert counts["invalid_in"] == 1, "counted"
+    assert feats[0]["properties"]["area_km2"] == pytest.approx(12364 / 2, rel=0.002)
+    assert shape(feats[0]["geometry"]).is_valid
+    assert feats[1]["properties"]["area_km2"] == pytest.approx(12364, rel=0.002), "positive control: a valid square"
+
+
+def test_an_invalid_cut_strip_stops_the_build(monkeypatch):
+    rows = area_rows()
+    assert hs.build(rows)[1]["areas"] == 36  # positive control
+    bowtie = Polygon([(0, 0), (1, 1), (1, 0), (0, 1), (0, 0)])
+    monkeypatch.setattr(hs, "split_wide", lambda g, width: MultiPolygon([bowtie]))
+    with pytest.raises(ValueError, match=f"{hs.NAMES[0]!r} hotspot area: a cut strip is invalid"):
+        hs.build(rows)
 
 
 def test_an_invalid_simplified_shape_stops_the_build(monkeypatch):
@@ -384,29 +406,26 @@ def test_real_release_reads_the_raw_answer_at_pinned_and_random_points(tmp_path)
             f"{name}: published shapes"
         )
 
-    # Random points well clear of every raw boundary read on the published shapes what they read on the raw ones,
-    # except on islets the drawing drops (parts under min_area before simplification, or that simplify below it).
+    # The spec's numbers, written here and not read from the module, so a changed tolerance or islet threshold fails:
+    # 0.02° simplification on a 0.001° grid, parts under 0.0005 deg² not drawn (a test that reads hs.DEFAULT_TOL
+    # moves with the mutant it should catch: tol 0.05 and min_area 0.01 both survived it).
+    # (1) Random points more than 0.025° from every raw boundary read on the published shapes what they read on the
+    # raw ones: none of 3,000 differ (measured 0 of 6,000 on 2026-10-07; tol 0.05 gives 4 of 6,000).
     edges = STRtree([g.boundary for g in (*raw_area.values(), *raw_outer.values())])
-    small = [
-        p
-        for g in raw_area.values()
-        for p in getattr(g, "geoms", [g])
-        if p.area < 4 * hs.MIN_AREA
-    ]
     rng = random.Random(7)
-    checked = agree = islet = 0
-    while checked < 1500:
+    checked = differ = 0
+    while checked < 3000:
         name = rng.choice(hs.NAMES)
         x0, y0, x1, y1 = raw_area[name].bounds
         p = Point(rng.uniform(x0, x1), rng.uniform(y0, y1))
-        if len(edges.query(p, predicate="dwithin", distance=hs.DEFAULT_TOL + 0.005)):
+        if len(edges.query(p, predicate="dwithin", distance=0.025)):
             continue
         checked += 1
-        if (hits(raw_area, p), hits(raw_outer, p)) == (hits(area, p), hits(outer, p)):
-            agree += 1
-        else:
-            assert any(s.covers(p) for s in small), (
-                f"{p} reads differently and is not on an islet"
-            )
-            islet += 1
-    assert agree >= 1450, (agree, islet)
+        differ += (hits(raw_area, p), hits(raw_outer, p)) != (hits(area, p), hits(outer, p))
+    assert differ == 0, differ
+    # (2) Islands of 0.002 deg² (about 25 km²) or more are drawn: the published hotspot covers the island's
+    # representative point for all but a few that simplification thins (24 of 1,910 measured on 2026-10-07, the largest
+    # a 0.02 deg² sliver of Madrean Pine-Oak Woodlands; tol 0.03 misses 85, tol 0.05 260, min_area 0.01 1,021).
+    islands = [(n, q) for n, g in raw_area.items() for q in getattr(g, "geoms", [g]) if q.area >= 0.002]
+    missed = [(n, round(q.area, 4)) for n, q in islands if not area[n].covers(q.representative_point())]
+    assert len(islands) == 1910 and len(missed) <= 30, (len(islands), missed[:10])

@@ -198,7 +198,7 @@ def premise(geoms, land) -> dict:
 
 
 def valid_rows(rows):
-    """(name, type, shapely geometry), repaired; refuses an unknown name or type."""
+    """(name, type, geometry as given, geometry repaired); refuses an unknown type (colour() refuses an unknown name)."""
     from shapely import make_valid
     from shapely.geometry import shape
 
@@ -207,8 +207,6 @@ def valid_rows(rows):
             raise ValueError(
                 f"{name!r}: type {kind!r} is neither {AREA!r} nor {OUTER!r}"
             )
-        if name not in NAMES:
-            raise ValueError(f"{name!r} is not one of the 36 hotspots")
         g = shape(geom)
         yield name, kind, g, (g if g.is_valid else make_valid(g))
 
