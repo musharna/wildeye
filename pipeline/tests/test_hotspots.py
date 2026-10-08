@@ -188,6 +188,16 @@ def test_an_invalid_source_shape_is_repaired_before_its_area_is_taken():
     assert feats[1]["properties"]["area_km2"] == pytest.approx(12364, rel=0.002), "positive control: a valid square"
 
 
+def test_an_outer_limit_crossing_180_unsplit_stops_the_build_and_one_split_there_passes():
+    rows = area_rows()
+    split = MultiPolygon([box(178, 0, 180, 2), box(-180, 0, -178, 2)])  # as the source gives New Zealand's
+    feats, counts = hs.build(rows + [(hs.NAMES[0], "outer limit", split.__geo_interface__)], tol=0.0001, min_area=0.0001)
+    assert counts["outer_limits"] == 1 and len(shape(feats[36]["geometry"]).geoms) == 2  # positive control
+    unsplit = {"type": "Polygon", "coordinates": [[[178, 0], [-178, 0], [-178, 2], [178, 2], [178, 0]]]}
+    with pytest.raises(ValueError, match=f"{hs.NAMES[0]!r} outer limit: an edge spans 356° of longitude"):
+        hs.build(rows + [(hs.NAMES[0], "outer limit", unsplit)], tol=0.0001, min_area=0.0001)
+
+
 def test_an_invalid_cut_strip_stops_the_build(monkeypatch):
     rows = area_rows()
     assert hs.build(rows)[1]["areas"] == 36  # positive control
@@ -379,6 +389,8 @@ def test_real_release_reads_the_raw_answer_at_pinned_and_random_points(tmp_path)
         if f["properties"]["kind"] == "outer"
     }
     assert sorted(area) == list(hs.NAMES)
+    # outer limits are drawn as lines: no edge may cross ±180° (measured: largest step 6.3°, widest part 75.3°)
+    assert max(hs._max_lon_step(g) for g in outer.values()) < 10
     parts = [
         p for g in (*area.values(), *outer.values()) for p in getattr(g, "geoms", [g])
     ]

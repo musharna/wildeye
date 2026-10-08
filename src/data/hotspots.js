@@ -62,25 +62,50 @@ const hierarchy = (poly) =>
   );
 const partsOf = (g) => (g.type === "MultiPolygon" ? g.coordinates : [g.coordinates]);
 
-/** Entity options for one feature: a filled polygon per hotspot part, or a dashed line per outer-limit part's outer
- * ring (its holes are the hotspot's own coastlines, already outlined by the fill). `index` is the hotspot's place. */
+const onMeridian180 = (a, b) => Math.abs(a[0]) === 180 && Math.abs(b[0]) === 180;
+
+/** The stretches of a closed ring to draw as a limit: every edge except those lying on ±180°, where the source cut a
+ * limit that crosses the antimeridian in two (New Zealand's and Polynesia-Micronesia's). Drawn, those edges would be
+ * a dashed line along the date line that is no limit at all. A ring with no such edge is one run, as given. */
+export function limitRuns(coords) {
+  const n = coords.length - 1; // closed: the last point repeats the first
+  const at = (i) => coords[i % n];
+  const isCut = (i) => onMeridian180(at(i), at(i + 1));
+  let first = -1;
+  for (let i = 0; i < n && first < 0; i += 1) if (isCut(i)) first = i;
+  if (first < 0) return [coords];
+  // walk once round the ring from the vertex after a cut edge; every cut edge closes a run, the last one included
+  const runs = [];
+  let run = [at(first + 1)];
+  for (let e = first + 1; e <= first + n; e += 1) {
+    if (isCut(e)) {
+      if (run.length > 1) runs.push(run);
+      run = [at(e + 1)];
+    } else run.push(at(e + 1));
+  }
+  return runs;
+}
+
+/** Entity options for one feature: a filled polygon per hotspot part, or dashed lines along each outer-limit part's
+ * outer ring less its edges on ±180° (`limitRuns`); the ring's holes are the hotspot's own coastlines, already
+ * outlined by the fill. `index` is the hotspot's place. */
 export function hotspotEntities(f, index, source = {}) {
   const p = f.properties || {};
   const base = Cesium.Color.fromCssColorString(p.color || "#9ca3af");
   const properties = { kind: p.kind, name: p.name };
   if (p.kind === "outer") {
     const description = describeOuter(p, source);
-    return partsOf(f.geometry).map((poly, k) => ({
-      id: `hotspots:outer:${index}:${k}`,
+    return partsOf(f.geometry).flatMap((poly, k) => limitRuns(poly[0]).map((run, r) => ({
+      id: `hotspots:outer:${index}:${k}:${r}`,
       polyline: {
-        positions: ring(poly[0]),
+        positions: ring(run),
         width: 2,
         arcType: Cesium.ArcType.RHUMB, // the shapefile's edges are straight in lon/lat
         material: new Cesium.PolylineDashMaterialProperty({ color: base.withAlpha(0.9), dashLength: 12 }),
       },
       description,
       properties,
-    }));
+    })));
   }
   const fill = base.withAlpha(FILL_ALPHA);
   const description = describeArea(p, source);

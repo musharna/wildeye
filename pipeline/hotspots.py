@@ -236,6 +236,15 @@ def build(rows, tol: float = DEFAULT_TOL, min_area: float = MIN_AREA):
             simple = split_wide(simple, MAX_PART_WIDTH)
             if not all(q.is_valid for q in getattr(simple, "geoms", [simple])):
                 raise ValueError(f"{name!r} {kind}: a cut strip is invalid")
+        else:
+            # drawn as lines and not cut: a ring crossing ±180° unsplit would draw one line the long way round the
+            # globe. The source splits New Zealand's and Polynesia-Micronesia's at the meridian (the layer leaves
+            # those edges out); a release that did not would stop here.
+            jump = _max_lon_step(simple)
+            if jump > 180:
+                raise ValueError(
+                    f"{name!r} {kind}: an edge spans {jump:.0f}° of longitude (crosses ±180° unsplit)"
+                )
         sg = mapping(simple)
         counts["vertices_out"] += _vertices(sg)
         feats[kind][name] = {"type": "Feature", "geometry": sg, "properties": p}
@@ -248,6 +257,16 @@ def build(rows, tol: float = DEFAULT_TOL, min_area: float = MIN_AREA):
         feats[OUTER][n] for n in sorted(feats[OUTER])
     ]
     return out, counts
+
+
+def _max_lon_step(g) -> float:
+    """The largest longitude difference between consecutive vertices of any exterior ring of `g`."""
+    steps = [
+        abs(b[0] - a[0])
+        for q in _polygons(g)
+        for a, b in zip(q.exterior.coords, list(q.exterior.coords)[1:])
+    ]
+    return max(steps, default=0.0)
 
 
 def _vertices(geom: dict) -> int:

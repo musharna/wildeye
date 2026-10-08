@@ -144,15 +144,32 @@ try {
     const drawn = await waitDrawn(p.areas[0]);
     report(`drew-${name}`, drawn, { want: p.areas[0], pick: await centrePick() });
   }
+  // Every outer-limit part is drawn, dashed, and no drawn segment runs along ±180° or the long way round the globe:
+  // the source cuts New Zealand's and Polynesia-Micronesia's limits at the meridian, and that cut is no limit.
   const lines = await page.evaluate(async (id) => {
+    const C = window.__godsEyeView.viewer.camera.position.constructor; // Cesium.Cartesian3
     const ds = window.__godsEyeView.viewer.dataSources.getByName(id)[0];
     const gj = await (await fetch('data/hotspots.geojson')).json();
-    const parts = gj.features.filter((f) => f.properties.kind === 'outer')
-      .reduce((n, f) => n + (f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates.length : 1), 0);
+    const outer = gj.features.filter((f) => f.properties.kind === 'outer');
+    const parts = outer.reduce((n, f) => n + (f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates.length : 1), 0);
     const polylines = ds.entities.values.filter((e) => e.polyline);
-    return { parts, polylines: polylines.length, dashed: polylines.filter((e) => e.polyline.material?.getType?.() === 'PolylineDash').length };
+    const lonOf = (c) => (Math.atan2(c.y, c.x) * 180) / Math.PI;
+    let onMeridian = 0;
+    let longWay = 0;
+    let segments = 0;
+    for (const e of polylines) {
+      const lons = e.polyline.positions.getValue().map((c) => lonOf(C.clone(c)));
+      for (let k = 1; k < lons.length; k += 1) {
+        segments += 1;
+        if (Math.abs(Math.abs(lons[k]) - 180) < 1e-6 && Math.abs(Math.abs(lons[k - 1]) - 180) < 1e-6) onMeridian += 1;
+        if (Math.abs(lons[k] - lons[k - 1]) > 180) longWay += 1;
+      }
+    }
+    const parted = new Set(polylines.map((e) => String(e.id).split(':').slice(0, 4).join(':'))).size;
+    return { parts, parted, polylines: polylines.length, dashed: polylines.filter((e) => e.polyline.material?.getType?.() === 'PolylineDash').length, segments, onMeridian, longWay };
   }, ID);
-  report('outer-limits-dashed', lines.parts > 17 && lines.polylines === lines.parts && lines.dashed === lines.parts, lines);
+  report('outer-limits-dashed', lines.parts > 17 && lines.parted === lines.parts && lines.dashed === lines.polylines && lines.segments > 1000
+    && lines.onMeridian === 0 && lines.longWay === 0, lines);
 
   // 3. a real click at every truth point (or the first --clicks n)
   const clickPoints = CLICKS === 'all' ? TRUTH.points : TRUTH.points.slice(0, Number(CLICKS));

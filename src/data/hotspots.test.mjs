@@ -1,8 +1,9 @@
 // src/data/hotspots.test.mjs — the biodiversity hotspots layer: file validation, entities, readout, legend, card text.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as Cesium from 'cesium';
 import {
-  EDITION, NONE_TEXT, areaText, createHotspotsLayer, describeArea, describeOuter, outerText, validateHotspots,
+  EDITION, NONE_TEXT, areaText, createHotspotsLayer, describeArea, describeOuter, limitRuns, outerText, validateHotspots,
 } from './hotspots.js';
 
 // The shape pipeline/hotspots.py writes: 36 areas (1° squares on the equator, 2° apart, in name order), then outer
@@ -105,11 +106,17 @@ test('entities: one filled polygon per area part; outer limits as dashed outer r
   assert.equal(lines.length, 3, "Wallacea's ring and the two parts straddling the antimeridian; no hole is drawn");
   assert.ok(areas.every((e) => e.polygon.fill !== false && e.polygon.outline === true));
   assert.equal(areas.find((e) => e.id === 'hotspots:area:0:1').properties.name, NAMES[0]);
-  const ring = lines.find((e) => e.id === 'hotspots:outer:1:0');
+  const ring = lines.find((e) => e.id === 'hotspots:outer:1:0:0');
   assert.equal(ring.polyline.positions.length, 5, "the 5 points of Wallacea's outer ring, not its hole");
   assert.equal(ring.polyline.material.constructor.name, 'PolylineDashMaterialProperty');
   assert.match(ring.description, /Outer limit of Wallacea/);
   assert.equal(ring.properties.kind, 'outer');
+  // the two parts of hotspot 35's outer limit are cut at ±180°: the cut edges are not drawn
+  const lon = (c) => Math.round(Cesium.Math.toDegrees(Cesium.Cartographic.fromCartesian(c).longitude) * 1e6) / 1e6;
+  const east = lines.find((e) => e.id === 'hotspots:outer:35:0:0').polyline.positions.map(lon);
+  const west = lines.find((e) => e.id === 'hotspots:outer:35:1:0').polyline.positions.map(lon);
+  assert.deepEqual(east, [180, 178, 178, 180], 'east of the line: 4 points, open where the ring ran up 180°');
+  assert.deepEqual(west.map(Math.abs), [180, 178, 178, 180], 'west of it: the same');
   const { legend } = layer.getRowControls();
   assert.equal(legend.length, 38);
   assert.deepEqual(legend[1], { label: 'Wallacea', color: colour(1), count: null });
@@ -172,4 +179,22 @@ test('credit: the record, its authors, the share-alike licence, the criteria pap
   assert.match(text, /re-evaluation of the hotspots has been under way since October 2025/);
   assert.match(credit.html, /href="https:\/\/doi\.org\/10\.5281\/zenodo\.3261807"/);
   assert.match(credit.html, /href="https:\/\/creativecommons\.org\/licenses\/by-sa\/4\.0\/"/);
+});
+
+test('limit runs: a ring is drawn whole unless edges lie on ±180°, which are left out and split the ring', () => {
+  const plain = [[10, 0], [12, 0], [12, 2], [10, 2], [10, 0]];
+  assert.deepEqual(limitRuns(plain), [plain], 'no edge on ±180°: one run, as given');
+  const nearly = [[179.999, 0], [179.999, 2], [178, 2], [178, 0], [179.999, 0]];
+  assert.deepEqual(limitRuns(nearly), [nearly], 'an edge just off 180° is a limit and is drawn');
+  // a strip touching 180° twice, the source's cut through Fiji: two edges on the line, two runs
+  const twice = [[178, 0], [180, 0], [180, 1], [179, 1], [179, 2], [180, 2], [180, 3], [178, 3], [178, 0]];
+  const runs = limitRuns(twice);
+  assert.deepEqual(runs, [[[180, 1], [179, 1], [179, 2], [180, 2]], [[180, 3], [178, 3], [178, 0], [180, 0]]]);
+  const edges = runs.flatMap((r) => r.slice(1).map((b, i) => [r[i], b]));
+  assert.equal(edges.length, 6, 'every edge but the two on 180°');
+  assert.ok(edges.every(([a, b]) => !(Math.abs(a[0]) === 180 && Math.abs(b[0]) === 180)));
+  const twoInARow = [[178, 0], [180, 0], [180, 1], [180, 2], [178, 2], [178, 0]];
+  assert.deepEqual(limitRuns(twoInARow), [[[180, 2], [178, 2], [178, 0], [180, 0]]], 'two cut edges in a row leave no one-point run');
+  const west = [[-180, 5], [-178, 5], [-178, 7], [-180, 7], [-180, 5]];
+  assert.deepEqual(limitRuns(west), [[[-180, 5], [-178, 5], [-178, 7], [-180, 7]]], '-180° too, the closing edge being the cut');
 });
