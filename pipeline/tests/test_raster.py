@@ -61,13 +61,18 @@ def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_hi
     stale = (dt.datetime.now(dt.UTC) - dt.timedelta(days=40)).strftime("%Y%m%dT%H%M%SZ")
     (old / f"{stale}.png").write_bytes(b"old")
     (old / "notes.txt").write_text("ignored")
-    h1 = archive_frame(latest, "x", "2026-09-10T12:00:00Z", tmp_path, keep_days=30)
-    h2 = archive_frame(latest, "x", "2026-09-10T12:00:00Z", tmp_path, keep_days=30)   # same acquisition again
-    h3 = archive_frame(latest, "x", "2026-09-11T12:00:00Z", tmp_path, keep_days=30)
-    assert h1 == h2 == [{"time": "2026-09-10T12:00:00Z", "png": "data/rasters/x/20260910T120000Z.png"}]
-    assert [e["time"] for e in h3] == ["2026-09-10T12:00:00Z", "2026-09-11T12:00:00Z"]
+    # acquisitions dated from today: archive_frame prunes against the wall clock, so fixed dates expire (this test's
+    # 2026-09-10 frame was pruned on arrival from 2026-10-10)
+    day = (dt.datetime.now(dt.UTC) - dt.timedelta(days=2)).replace(hour=12, minute=0, second=0, microsecond=0)
+    t1, t2 = (d.strftime("%Y-%m-%dT%H:%M:%SZ") for d in (day, day + dt.timedelta(days=1)))
+    f1, f2 = (d.strftime("%Y%m%dT%H%M%SZ.png") for d in (day, day + dt.timedelta(days=1)))
+    h1 = archive_frame(latest, "x", t1, tmp_path, keep_days=30)
+    h2 = archive_frame(latest, "x", t1, tmp_path, keep_days=30)   # same acquisition again
+    h3 = archive_frame(latest, "x", t2, tmp_path, keep_days=30)
+    assert h1 == h2 == [{"time": t1, "png": f"data/rasters/x/{f1}"}]
+    assert [e["time"] for e in h3] == [t1, t2]
     assert not (old / f"{stale}.png").exists(), "frame older than keep_days pruned"
-    assert sorted(p.name for p in old.iterdir()) == ["20260910T120000Z.png", "20260911T120000Z.png", "notes.txt"]
+    assert sorted(p.name for p in old.iterdir()) == [f1, f2, "notes.txt"]
 
 
 def test_resolve_source_picks_newest_catalog_file_and_dates_it():
