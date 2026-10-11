@@ -205,12 +205,14 @@ def test_process_routes_cmems_dominant_to_its_own_fetch(tmp_path, monkeypatch):
     from pipeline import cmems_pft, raster
 
     called = {}
+    # a month dated from today: archive_frame prunes against the wall clock, so a fixed month expires
+    month = (dt.datetime.now(dt.UTC) - dt.timedelta(days=36)).strftime("%Y-%m-01T00:00:00Z")
 
     def fake(product, **kw):
         called["id"] = product["id"]
         return paint_classes(
             np.array([[0, -1]], np.int8), [[1, 2, 3]] * 5
-        ), "2026-09-01T00:00:00Z"
+        ), month
 
     monkeypatch.setattr(cmems_pft, "fetch_cmems_dominant", fake)
     monkeypatch.setattr(
@@ -223,10 +225,10 @@ def test_process_routes_cmems_dominant_to_its_own_fetch(tmp_path, monkeypatch):
     )
     assert (
         called["id"] == "cmems-pft"
-        and entry["time"] == "2026-09-01T00:00:00Z"
+        and entry["time"] == month
         and entry["width"] == 2
     )
-    assert [h["time"] for h in entry["history"]] == ["2026-09-01T00:00:00Z"]
+    assert [h["time"] for h in entry["history"]] == [month]
 
 
 def test_a_month_refetched_daily_keeps_one_frame_and_survives_the_30_day_prune(

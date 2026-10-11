@@ -1,0 +1,44 @@
+name: clock shift
+
+# 2026-10-10: three pipeline tests wrote fixed acquisition dates into archive_frame, which prunes against the wall clock;
+# each passed when written and later failed on every PR at once (Dependabot #76, #77). This job runs both suites with
+# the clock 400 days ahead, weekly, so a pinned date fails here over a year before it reaches CI.
+
+on:
+  schedule:
+    - cron: '17 14 * * 1' # Mondays 10:17 EDT
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/clock-shift.yml
+      - pipeline/tests/clock_shift.py
+      - scripts/shift-date.mjs
+
+permissions:
+  contents: read
+
+env:
+  SHIFT_DAYS: '400'
+
+jobs:
+  pipeline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      - name: pytest pipeline/tests, clock +400 days
+        run: uv run --python 3.13 --with pytest --with numpy --with pillow --with boto3 --with arm-pyart --with openpyxl --with rasterio --with pyproj --with duckdb --with pyogrio --with shapely --with time-machine python -m pytest pipeline/tests -q -p no:cacheprovider -p pipeline.tests.clock_shift
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.14.0
+          cache: npm
+      - run: npm ci
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: '1'
+      - name: npm test, clock +400 days
+        run: NODE_OPTIONS="--import ./scripts/shift-date.mjs" npm test

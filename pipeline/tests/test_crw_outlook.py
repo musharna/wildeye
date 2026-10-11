@@ -210,7 +210,9 @@ def test_process_routes_the_product_and_puts_the_outlook_in_the_manifest(
             read_text(u).encode() if u.endswith("/") else read_bytes(u)
         ),
     )
-    entry = raster.process(PRODUCT, tmp_path / "rasters")
+    # the fixture issue date is fixed (2026-09-29) and archive_frame prunes against the wall clock, so the default
+    # keep_days would empty the history from 2026-10-29; pruning itself is tested in test_raster.py
+    entry = raster.process({**PRODUCT, "keep_days": 36500}, tmp_path / "rasters")
     assert entry["time"] == "2026-09-29T00:00:00Z"
     assert entry["outlook"]["probabilities"] == [60, 90]
     assert entry["legend"].startswith(
