@@ -328,6 +328,46 @@ def test_process_puts_the_cmems_cell_edge_bounds_in_the_manifest(monkeypatch, tm
     assert entry["bounds"] == edges and (entry["width"], entry["height"]) == (2880, 680)
 
 
+def test_fetch_erddap_grid_draws_the_numbers_through_the_ramp_north_up_with_cell_edges():
+    """oisst reads ERDDAP's numbers (.nc) instead of its coloured transparentPng, whose colour bar the manifest ramp
+    only approximated (median 4-12 levels off, 2026-10-12), so the legend was not exact and clicks could not be read
+    back. The field is drawn through the ramp like the cmems layers: north-up, NaN (land) clear, cell-edge bounds,
+    and the time step's own timestamp; a response with more than one time step is refused."""
+    import numpy as np
+    import pytest
+
+    from pipeline.raster import fetch_erddap_grid
+
+    class DA:
+        def __init__(self, arr): self.values = np.asarray(arr)
+    sst = np.array([[[[0.0, 10.0, np.nan], [20.0, 30.0, 32.0]]]])  # time, zlev, lat (south first), lon
+    ds = {"sst": DA(sst), "time": DA(np.array(["2026-10-11T12:00:00"], dtype="datetime64[ns]")),
+          "latitude": DA([-45.0, 45.0]), "longitude": DA([-120.0, 0.0, 120.0])}
+    seen = []
+    ramp = {"min": 0, "max": 30, "stops": [[0, 0, 0], [255, 255, 255]]}
+    product = {"id": "oisst", "erddap_grid": {"url": "https://e/x.nc?sst[(last)]", "variable": "sst"}, "ramp": ramp}
+    rgba, when, extras = fetch_erddap_grid(product, read_nc=lambda url: seen.append(url) or ds)
+    assert seen == ["https://e/x.nc?sst[(last)]"] and when == "2026-10-11T12:00:00Z"
+    assert extras == {"bounds": {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}}
+    assert rgba.shape == (2, 3, 4)
+    assert rgba[0, 0].tolist() == [170, 170, 170, 255] and rgba[0, 2].tolist() == [255, 255, 255, 255], "north row first"
+    assert rgba[1, 0].tolist() == [0, 0, 0, 255] and rgba[1, 2, 3] == 0, "south row: 0 is the low end, NaN is clear"
+    two = dict(ds, time=DA(np.array(["2026-10-10T12:00:00", "2026-10-11T12:00:00"], dtype="datetime64[ns]")))
+    with pytest.raises(ValueError, match="one time step"):
+        fetch_erddap_grid(product, read_nc=lambda url: two)
+
+
+def test_process_routes_erddap_grid_and_puts_its_cell_edge_bounds_in_the_manifest(monkeypatch, tmp_path):
+    from pipeline import raster
+    edges = {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+    img = np.zeros((720, 1440, 4), np.uint8); img[..., 3] = 255
+    monkeypatch.setattr(raster, "fetch_erddap_grid", lambda p: (img, "2026-10-11T12:00:00Z", {"bounds": edges}))
+    entry = raster.process({"id": "oisst", "erddap_grid": {}, "name": "n", "icon": "i", "legend": "", "credit": "",
+                            "credit_key": "noaa-oisst", "ramp": {"min": 0, "max": 1, "stops": [[0, 0, 0], [1, 1, 1]]}}, tmp_path)
+    assert entry["bounds"] == edges and entry["time"] == "2026-10-11T12:00:00Z"
+    assert (entry["width"], entry["height"]) == (1440, 720)
+
+
 def test_edge_align_places_a_grid_whose_straddling_cell_is_the_last_one():
     """The mirror of the Copernicus case (PR #68 review): centres -170..180, so the west edge sits half a cell INSIDE
     -180 and the cell centred on 180 straddles the antimeridian at the east end; its east half must become the
