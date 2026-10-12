@@ -69,4 +69,20 @@ devfix=$(printf 'p = "%sers/a2b32/Zotero/x.pdf"' "$devroot")
 check no-dev-paths j.py "$devfix" fail
 homefix=$(printf 'p = "/home%s"' "/someone/data.csv") # placeholder home must PASS
 check no-dev-paths k.py "$homefix" pass
+mkdir -p "$tmp/r/.github/workflows"
+check no-unpinned-action .github/workflows/u1.yml '      - uses: actions/checkout@v7' fail
+check no-unpinned-action .github/workflows/u2.yml '        uses: actions/setup-node@v7.1.0 # v7.1.0' fail
+check no-unpinned-action .github/workflows/u3.yml '      - uses: actions/checkout@3d3c42e # short SHA' fail
+check no-unpinned-action .github/workflows/u4.yaml '    uses: "owner/repo/.github/workflows/build.yml@main"' fail
+check no-unpinned-action .github/workflows/v1.yml '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1' pass
+check no-unpinned-action .github/workflows/v2.yml '      - uses: ./.github/actions/setup' pass
+check no-unpinned-action .github/workflows/v3.yml '      # was uses: actions/checkout@v7' pass
+check no-unpinned-action u5.md '      - uses: actions/checkout@v7' pass # outside workflows: prose may quote a tag
+check no-unpinned-action .github/workflows/u6.yml '      - uses: docker://alpine:3.20' fail
+check no-unpinned-action .github/workflows/u7.yml '      - uses: docker://ghcr.io/o/img@sha256:abc123' fail
+check no-unpinned-action .github/workflows/v4.yml '      - uses: docker://alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' pass
+mkdir -p "$tmp/r/.github/actions/setup"
+check no-unpinned-action .github/actions/setup/action.yml '      - uses: actions/setup-node@v7' fail # composite action
+check no-unpinned-action action.yaml '    - uses: actions/checkout@v7' fail # root composite action
+check no-unpinned-action .github/actions/setup/action.yml '      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0' pass
 exit $fail
