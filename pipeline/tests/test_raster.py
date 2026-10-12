@@ -339,9 +339,10 @@ def test_fetch_erddap_grid_draws_the_numbers_through_the_ramp_north_up_with_cell
     from pipeline.raster import fetch_erddap_grid
 
     class DA:
-        def __init__(self, arr): self.values = np.asarray(arr)
+        def __init__(self, arr, dims=()): self.values, self.dims = np.asarray(arr), dims
     sst = np.array([[[[0.0, 10.0, np.nan], [20.0, 30.0, 32.0]]]])  # time, zlev, lat (south first), lon
-    ds = {"sst": DA(sst), "time": DA(np.array(["2026-10-11T12:00:00"], dtype="datetime64[ns]")),
+    ds = {"sst": DA(sst, ("time", "zlev", "latitude", "longitude")),
+          "time": DA(np.array(["2026-10-11T12:00:00"], dtype="datetime64[ns]")),
           "latitude": DA([-45.0, 45.0]), "longitude": DA([-120.0, 0.0, 120.0])}
     seen = []
     ramp = {"min": 0, "max": 30, "stops": [[0, 0, 0], [255, 255, 255]]}
@@ -355,6 +356,36 @@ def test_fetch_erddap_grid_draws_the_numbers_through_the_ramp_north_up_with_cell
     two = dict(ds, time=DA(np.array(["2026-10-10T12:00:00", "2026-10-11T12:00:00"], dtype="datetime64[ns]")))
     with pytest.raises(ValueError, match="one time step"):
         fetch_erddap_grid(product, read_nc=lambda url: two)
+
+
+def test_fetch_erddap_grid_hides_at_or_below_scales_and_refuses_transposed_axes():
+    """The CRW layers: DHW and HotSpot hide 0 and below (the legend says so; the ERDDAP PNGs did it by matching one pinned
+    colour), sea ice is a 0..1 fraction drawn on a % ramp (`scale`). A field whose axes are (longitude, latitude) is
+    refused by name even when the grid is square, where a shape check alone could not tell (PR #83 review)."""
+    import numpy as np
+    import pytest
+
+    from pipeline.raster import fetch_erddap_grid
+
+    class DA:
+        def __init__(self, arr, dims=()): self.values, self.dims = np.asarray(arr), dims
+    field = np.array([[[-0.5, 0.0, 0.25], [0.5, np.nan, 1.0]]])  # time, lat (north first), lon
+    dims = ("time", "latitude", "longitude")
+    ds = {"v": DA(field, dims), "time": DA(np.array(["2026-10-11T12:00:00"], dtype="datetime64[ns]")),
+          "latitude": DA([45.0, -45.0]), "longitude": DA([-120.0, 0.0, 120.0])}
+    ramp = {"min": 0, "max": 100, "stops": [[0, 0, 0], [200, 200, 200]]}
+    base = {"id": "crw", "ramp": ramp}
+    rgba, _, _ = fetch_erddap_grid(base | {"erddap_grid": {"url": "u", "variable": "v", "scale": 100,
+                                                           "clear_at_or_below": 0}}, read_nc=lambda url: ds)
+    assert rgba[0, :, 3].tolist() == [0, 0, 255], "-0.5 and 0 hidden, 0.25 shown"
+    assert rgba[0, 2].tolist() == [50, 50, 50, 255] and rgba[1, 2].tolist() == [200, 200, 200, 255], "x100: 25 % and 100 %"
+    assert rgba[1, 0].tolist() == [100, 100, 100, 255] and rgba[1, 1, 3] == 0, "50 % shown, NaN clear"
+    plain, _, _ = fetch_erddap_grid(base | {"erddap_grid": {"url": "u", "variable": "v"}}, read_nc=lambda url: ds)
+    assert plain[0, :, 3].tolist() == [255, 255, 255], "without clear_at_or_below nothing is hidden"
+    square = {"v": DA(np.zeros((1, 2, 2)), ("time", "longitude", "latitude")), "time": ds["time"],
+              "latitude": DA([45.0, -45.0]), "longitude": DA([-90.0, 90.0])}
+    with pytest.raises(ValueError, match="longitude, latitude"):
+        fetch_erddap_grid(base | {"erddap_grid": {"url": "u", "variable": "v"}}, read_nc=lambda url: square)
 
 
 def test_process_routes_erddap_grid_and_puts_its_cell_edge_bounds_in_the_manifest(monkeypatch, tmp_path):
