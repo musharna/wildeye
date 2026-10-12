@@ -136,7 +136,8 @@ def edge_align(rgba: np.ndarray, lat_north_first: np.ndarray, lon: np.ndarray) -
 def fetch_cmems(product: dict, today: dt.date | None = None, open_dataset=None) -> tuple[np.ndarray, str, dict]:
     """Latest ANALYSIS day (≤ today; the datasets extend ~10 d into forecast) of one surface
     variable from Copernicus Marine, rendered north-up through the product's ramp, with the grid's cell-edge bounds
-    from edge_align (they replace any configured bounds in the manifest). Credentials
+    from edge_align (they replace any configured bounds in the manifest). With `block` and `grid` (a whole-globe grid of
+    [width, height] cells), each block x block group of cells is averaged into one, NaN left out. Credentials
     from CMEMS_USER / CMEMS_PASS (never in the browser). copernicusmarine is imported lazily so the
     module stays importable without it."""
     import os
@@ -162,9 +163,31 @@ def fetch_cmems(product: dict, today: dt.date | None = None, open_dataset=None) 
     lat = np.asarray(ds["latitude"].values)
     if lat[0] < lat[-1]:
         vals, lat = vals[::-1], lat[::-1]  # north-up
+    lon = np.asarray(ds["longitude"].values)
+    if "block" in c:
+        # Copernicus-GlobColour 4 km: float32 coordinates sit ~5e-6 deg off the true centres, which edge_align reads as
+        # an irregular grid once blocks are averaged. Check the grid is the configured whole globe, then use exact centres.
+        from .cmems_pft import check_grid
+        check_grid(lat, lon, c["grid"])
+        b = int(c["block"])
+        vals = block_mean(vals, b)
+        h, w = vals.shape
+        lat, lon = 90 - (np.arange(h) + 0.5) * 180 / h, -180 + (np.arange(w) + 0.5) * 360 / w
     when = str(np.datetime_as_string(days[k], unit="D")) + "T00:00:00Z"
-    rgba, bounds = edge_align(ramp_rgba(vals, product["ramp"]), lat, np.asarray(ds["longitude"].values))
+    rgba, bounds = edge_align(ramp_rgba(vals, product["ramp"]), lat, lon)
     return rgba, when, {"bounds": bounds}
+
+
+def block_mean(vals: np.ndarray, block: int) -> np.ndarray:
+    """Mean of each block x block group of cells, NaN left out; a group with no finite cell stays NaN."""
+    h, w = vals.shape
+    if h % block or w % block:
+        raise ValueError(f"{h}x{w} grid is not divisible into {block}x{block} blocks")
+    ok = np.isfinite(vals)
+    shape = (h // block, block, w // block, block)
+    total = np.where(ok, vals, 0.0).reshape(shape).sum(axis=(1, 3), dtype=np.float64)
+    n = ok.reshape(shape).sum(axis=(1, 3))
+    return np.where(n > 0, total / np.maximum(n, 1), np.nan)
 
 
 def _read_bytes(url: str, timeout: int = 180) -> bytes:

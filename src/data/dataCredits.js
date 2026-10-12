@@ -272,8 +272,8 @@ export const DATA_CREDITS = [
       '<a href="https://doi.org/10.15468/dd.vugb55" target="_blank" rel="noopener">doi:10.15468/dd.vugb55</a>',
   },
   {
-    key: 'noaa-viirs-chl',
-    html: 'Chlorophyll-a: <a href="https://coastwatch.noaa.gov" target="_blank" rel="noopener">NOAA CoastWatch</a> VIIRS S-NPP/NOAA-20 gap-filled daily 4 km',
+    key: 'cmems-globcolour-chl',
+    html: 'Chlorophyll-a: Generated using E.U. Copernicus Marine Service Information; <a href="https://doi.org/10.48670/moi-00279" target="_blank" rel="noopener">Global Ocean Colour (Copernicus-GlobColour)</a> (daily 4 km gap-free, averaged to 0.25°)',
   },
   {
     key: 'noaa-oisst',

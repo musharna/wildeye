@@ -126,6 +126,49 @@ def test_ramp_rgba_and_fetch_cmems_pick_latest_analysis_day_and_flip_north_up():
         assert "no time step" in str(e)
 
 
+def test_fetch_cmems_block_averages_a_fine_grid_onto_exact_cell_centres():
+    """chlor-a reads Copernicus-GlobColour's 4 km grid (8640x4320) and draws it at 0.25 deg (1440x720): each 6x6 block
+    is the mean of its finite cells (land, ice and cloud NaN ignored; an all-NaN block stays clear). The dataset's
+    float32 coordinates sit ~5e-6 deg off the true centres, which made the block centres fail edge_align's
+    regular-grid check (real coordinates, 2026-10-12), so the block path checks the configured whole-globe grid and
+    draws on its exact centres. Same geometry with 30 deg cells in 3x3 blocks to keep it small."""
+    import datetime as dt
+
+    import numpy as np
+    import pytest
+
+    from pipeline.cmems_pft import GridChanged
+    from pipeline.raster import fetch_cmems
+
+    class DA:
+        def __init__(self, arr, dims): self.values, self.dims = arr, dims
+        def isel(self, **kw):
+            return DA(self.values[kw["time"]], tuple(d for d in self.dims if d != "time"))
+    jitter = np.where(np.arange(12) % 2, 5e-6, -5e-6)
+    lon = (-180 + (np.arange(12) + 0.5) * 30 + jitter).astype(np.float32)
+    lat = (-90 + (np.arange(6) + 0.5) * 30 + jitter[:6]).astype(np.float32)  # south first, as the dataset stores it
+    north_up = np.full((6, 12), 10.0)
+    north_up[0:3, 0:3] = 0.0                                                   # NW block: 0 -> black
+    north_up[0:3, 3:6] = [[np.nan, 0, 10], [np.nan, 0, 10], [np.nan, 0, 10]]   # mean of the finite cells is 5
+    north_up[0:3, 6:9] = np.nan                                                # no finite cell -> clear
+    field = np.stack([np.zeros((6, 12)), north_up[::-1]])
+    ds = {"CHL": DA(field, ("time", "latitude", "longitude")),
+          "time": DA(np.array(["2026-10-10", "2026-10-11"], dtype="datetime64[ns]"), ("time",)),
+          "latitude": DA(lat, ("latitude",)), "longitude": DA(lon, ("longitude",))}
+    ramp = {"min": 0, "max": 10, "stops": [[0, 0, 0], [255, 255, 255]]}
+    product = {"id": "chlor-a", "cmems": {"dataset_id": "d", "variable": "CHL", "block": 3, "grid": [12, 6]}, "ramp": ramp}
+    rgba, when, extras = fetch_cmems(product, today=dt.date(2026, 10, 12), open_dataset=lambda **kw: ds)
+    assert when == "2026-10-11T00:00:00Z"
+    assert rgba.shape == (2, 4, 4), "one pixel per 3x3 block"
+    assert extras == {"bounds": {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}}
+    assert rgba[0, 0].tolist() == [0, 0, 0, 255] and rgba[0, 3].tolist() == [255, 255, 255, 255]
+    assert rgba[0, 1].tolist() == [128, 128, 128, 255], "NaN cells are left out of the mean, not counted as 0"
+    assert rgba[0, 2, 3] == 0 and rgba[1, 2].tolist() == [255, 255, 255, 255], "all-NaN block clear, south row drawn"
+    with pytest.raises(GridChanged, match="expected 24x12"):
+        fetch_cmems(product | {"cmems": product["cmems"] | {"grid": [24, 12]}}, today=dt.date(2026, 10, 12),
+                    open_dataset=lambda **kw: ds)
+
+
 def test_fill_empty_right_edge_closes_the_antimeridian_seam_only_when_erddap_left_it_empty():
     """Mutant seen failing: returning the image unchanged (the seam stays). Positive controls: an image
     with data in its last column, and one with nothing beside an empty last column, are untouched."""

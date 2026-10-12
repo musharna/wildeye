@@ -187,20 +187,21 @@
   },
   {
     "id": "chlor-a",
-    "name": "Chlorophyll-a / algal blooms (NOAA VIIRS)",
+    "name": "Chlorophyll-a / algal blooms (Copernicus-GlobColour)",
     "icon": "🦠",
-    "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/nesdisVHNnoaaSNPPnoaa20NRTchlaGapfilledDaily.transparentPng?chlor_a%5B(last)%5D%5B(0)%5D%5B(-90):(90)%5D%5B(-180):(180)%5D&.size=1440%7C720&.colorBar=KT_algae%7C%7CLog%7C0.05%7C20%7C",
-    "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/nesdisVHNnoaaSNPPnoaa20NRTchlaGapfilledDaily.json?time%5B(last)%5D",
-    "bounds": {
-      "west": -180,
-      "south": -90,
-      "east": 180,
-      "north": 90
+    "cmems": {
+      "dataset_id": "cmems_obs-oc_glo_bgc-plankton_nrt_l4-gapfree-multi-4km_P1D",
+      "variable": "CHL",
+      "block": 6,
+      "grid": [
+        8640,
+        4320
+      ]
     },
     "transparent": "none",
     "legend": "chlorophyll-a, log scale: dark = clear water · pale green = bloom",
-    "credit_key": "noaa-viirs-chl",
-    "credit": "NOAA CoastWatch VIIRS S-NPP/NOAA-20 gap-filled (DINEOF) chlorophyll-a, NRT daily 4 km",
+    "credit_key": "cmems-globcolour-chl",
+    "credit": "Generated using E.U. Copernicus Marine Service Information; Global Ocean Colour (Copernicus-GlobColour) L4 NRT daily gap-free, https://doi.org/10.48670/moi-00279",
     "kind": "ramp",
     "zrank": 20,
     "ramp": {

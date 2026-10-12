@@ -326,7 +326,7 @@ export const oisstLayer = createRasterDrapeLayer({
   id: 'oisst', name: 'Sea surface temperature', icon: '🌡️', source: 'NOAA OISST v2.1', alpha: 0.5, zrank: 10,
 });
 export const chlorALayer = createRasterDrapeLayer({
-  id: 'chlor-a', name: 'Chlorophyll-a / algal blooms', icon: '🦠', source: 'NOAA CoastWatch VIIRS', alpha: 0.6, zrank: 20,
+  id: 'chlor-a', name: 'Chlorophyll-a / algal blooms', icon: '🦠', source: 'Copernicus-GlobColour', alpha: 0.6, zrank: 20,
 });
 export const crwDhwLayer = createRasterDrapeLayer({
   id: 'crw-dhw', name: 'Coral heat stress: degree heating weeks', icon: '🪸', source: 'NOAA Coral Reef Watch', alpha: 0.65, zrank: 30,
