@@ -158,7 +158,7 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
   providerFor = (url, rectangle) => Cesium.SingleTileImageryProvider.fromUrl(url, { rectangle }),
   imageryLayerFor = (provider, opts) => new Cesium.ImageryLayer(provider, opts),
   // readout: true adds readoutAt, which inverts the shown frame's pixels through the manifest ramp. Only for a PNG
-  // that pipeline/raster.py drew with ramp_rgba from that ramp (the cmems products), not one ERDDAP coloured.
+  // that pipeline/raster.py drew with ramp_rgba from that ramp (cmems and erddap_grid products), not one ERDDAP coloured.
   readout = false,
   decodeImage = async (url) => {
     const res = await fetch(url);
@@ -324,6 +324,7 @@ export const crwBleachingLayer = createRasterDrapeLayer({
 });
 export const oisstLayer = createRasterDrapeLayer({
   id: 'oisst', name: 'Sea surface temperature', icon: '🌡️', source: 'NOAA OISST v2.1', alpha: 0.5, zrank: 10,
+  readout: true,
 });
 export const chlorALayer = createRasterDrapeLayer({
   id: 'chlor-a', name: 'Chlorophyll-a / algal blooms', icon: '🦠', source: 'Copernicus-GlobColour', alpha: 0.6, zrank: 20,

@@ -195,10 +195,47 @@ def _read_bytes(url: str, timeout: int = 180) -> bytes:
         return r.read()
 
 
+def _read_nc(url: str, timeout: int = 600):
+    """A NetCDF response as an in-memory xarray Dataset. xarray is imported lazily (CI's pipeline tests lack it)."""
+    import tempfile
+
+    import xarray as xr
+    data = _read_bytes(url, timeout)
+    with tempfile.NamedTemporaryFile(suffix=".nc") as f:
+        f.write(data)
+        f.flush()
+        with xr.open_dataset(f.name) as ds:
+            return ds.load()
+
+
+def fetch_erddap_grid(product: dict, read_nc=None) -> tuple[np.ndarray, str, dict]:
+    """One time step of an ERDDAP griddap variable as numbers (`erddap_grid.url` asks for .nc), drawn north-up through
+    the product's ramp with cell-edge bounds from edge_align, like fetch_cmems. ERDDAP's own transparentPng was coloured
+    by its colour bar, which the manifest ramp only approximated (median 4-12 levels off, 2026-10-12): the legend was
+    not exact and a click could not be read back. NaN (land) is clear."""
+    c = product["erddap_grid"]
+    ds = (read_nc or _read_nc)(c["url"])
+    times = np.asarray(ds["time"].values).ravel()
+    if len(times) != 1:
+        raise ValueError(f"{product['id']}: expected one time step, got {len(times)}")
+    vals = np.asarray(ds[c["variable"]].values, dtype=float).squeeze()
+    lat = np.asarray(ds["latitude"].values, dtype=float)
+    lon = np.asarray(ds["longitude"].values, dtype=float)
+    if vals.shape != (len(lat), len(lon)):
+        raise ValueError(f"{product['id']}: {c['variable']} is {vals.shape}, the grid is {len(lat)}x{len(lon)}")
+    if lat[0] < lat[-1]:
+        vals, lat = vals[::-1], lat[::-1]  # north-up
+    when = str(np.datetime_as_string(times[0].astype("datetime64[s]"), unit="s")) + "Z"
+    rgba, bounds = edge_align(ramp_rgba(vals, product["ramp"]), lat, lon)
+    return rgba, when, {"bounds": bounds}
+
+
 def process(product: dict, out_dir: Path) -> dict:
     extras = {}
     if "cmems" in product:
         rgba, when_from_name, extras = fetch_cmems(product)
+    elif "erddap_grid" in product:
+        rgba, when_from_name, extras = fetch_erddap_grid(product)
     elif "cmems_dominant" in product:
         from . import cmems_pft
         rgba, when_from_name = cmems_pft.fetch_cmems_dominant(product)

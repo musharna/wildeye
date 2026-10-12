@@ -220,6 +220,21 @@ test('chlor-a readout: ramp_rgba colours read back as chlorophyll; the clamped e
   assert.deepEqual(rampReadoutText([215, 249, 208], CHL), { kind: 'unknown', rgb: [215, 249, 208] });
 });
 
+// The oisst ramp as in pipeline/rasters.json (linear); colours rendered by ramp_rgba (2026-10-12). Over 4,001 values
+// -2..32 every rendered colour read back on the ramp, worst 0.06 °C off.
+const SST = { min: -2, max: 32, unit: ' °C', stops: [[4, 35, 51], [82, 59, 154], [176, 95, 124], [242, 151, 72], [232, 250, 91]] };
+
+test('oisst readout: ramp_rgba colours read back as °C; the clamped ends read as bounds', () => {
+  assert.equal(typeof oisstLayer.readoutAt, 'function', 'oisst is drawn by ramp_rgba from ERDDAP numbers, so it opts in');
+  assert.deepEqual(rampReadoutText([9, 36, 57], SST), { kind: 'value', text: '-1.5 °C' });
+  assert.deepEqual(rampReadoutText([215, 128, 93], SST), { kind: 'value', text: '20 °C' });
+  assert.deepEqual(rampReadoutText([238, 195, 80], SST), { kind: 'value', text: '27 °C' });
+  assert.deepEqual(rampReadoutText([4, 35, 51], SST), { kind: 'value', text: '≤ -2 °C' }, 'ice-edge water');
+  assert.deepEqual(rampReadoutText([232, 250, 91], SST), { kind: 'value', text: '≥ 32 °C' });
+  // ERDDAP's own KT_thermal colour for the warm equatorial Pacific (the old frames) is off this ramp: no value
+  assert.deepEqual(rampReadoutText([239, 229, 80], SST), { kind: 'unknown', rgb: [239, 229, 80] });
+});
+
 test('drapePixel: the pixel the drape draws at a point, from the manifest bounds; off the image is null', () => {
   const b = { west: -180, south: -80, east: 180, north: 90 };
   assert.deepEqual(drapePixel(90, -180, b, 1440, 681), { px: 0, py: 0 });
@@ -306,7 +321,7 @@ test('readoutAt: the shown frame\'s pixel under the point, inverted through the 
     assert.deepEqual(await l.readoutAt(-45, 0), { ...row('error', { error: 'z image is 2×2, the manifest says 4×2' }), date: '2026-10-08' }, 'a refused image is read again, not kept');
     assert.equal(read.length, before + 2, 'each click decoded it again');
     l.destroy(viewer);
-    // a drape not built with readout has no readoutAt (cmems-zooc and chlor-a opt in)
+    // a drape not built with readout has no readoutAt (cmems-zooc, chlor-a and oisst opt in)
     assert.equal(createRasterDrapeLayer({ id: 'q', name: 'q', icon: 'i', source: 's' }).readoutAt, undefined);
     assert.equal(typeof cmemsZoocLayer.readoutAt, 'function');
     assert.equal(cmemsZoocLayer.id, 'cmems-zooc');
