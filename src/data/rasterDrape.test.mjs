@@ -1,7 +1,7 @@
 // src/data/rasterDrape.test.mjs — manifest selection + layer contract.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, drapePixel, cmemsZoocLayer } from './rasterDrape.js';
+import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, drapePixel, cmemsZoocLayer, chlorALayer } from './rasterDrape.js';
 
 test('pickProduct: finds by id, null when absent or malformed', () => {
   const m = { products: [{ id: 'a', png: 'x' }, { id: 'b' }] };
@@ -203,6 +203,23 @@ test('rampReadoutText: two significant figures and the unit; the clamped ends re
   assert.deepEqual(rampReadoutText([255, 0, 0], ZOOC), { kind: 'unknown', rgb: [255, 0, 0] });
 });
 
+// The chlor-a ramp as in pipeline/rasters.json; colours rendered by pipeline/raster.py ramp_rgba (2026-10-12). Over
+// 4,001 log-spaced values 0.05..20 every rendered colour read back on the ramp, worst 2.0% off.
+const CHL = { min: 0.05, max: 20, unit: ' mg/m³', log: true,
+  stops: [[24, 58, 37], [21, 102, 65], [18, 148, 80], [114, 187, 108], [184, 227, 172]] };
+
+test('chlor-a readout: ramp_rgba colours read back as chlorophyll; the clamped ends read as bounds', () => {
+  assert.equal(typeof chlorALayer.readoutAt, 'function', 'chlor-a is drawn by ramp_rgba (Copernicus), so it opts in');
+  assert.deepEqual(rampReadoutText([21, 109, 67], CHL), { kind: 'value', text: '0.28 mg/m³' });
+  assert.deepEqual(rampReadoutText([18, 148, 80], CHL), { kind: 'value', text: '1 mg/m³' });
+  assert.deepEqual(rampReadoutText([69, 169, 95], CHL), { kind: 'value', text: '2.2 mg/m³' });
+  assert.deepEqual(rampReadoutText([160, 213, 150], CHL), { kind: 'value', text: '12 mg/m³' });
+  assert.deepEqual(rampReadoutText([24, 58, 37], CHL), { kind: 'value', text: '≤ 0.05 mg/m³' }, 'gyres below 0.05');
+  assert.deepEqual(rampReadoutText([184, 227, 172], CHL), { kind: 'value', text: '≥ 20 mg/m³' }, 'blooms above 20');
+  // the old NOAA frames' pale gyre colour (ERDDAP KT_algae) is not on this ramp: no value rather than a wrong one
+  assert.deepEqual(rampReadoutText([215, 249, 208], CHL), { kind: 'unknown', rgb: [215, 249, 208] });
+});
+
 test('drapePixel: the pixel the drape draws at a point, from the manifest bounds; off the image is null', () => {
   const b = { west: -180, south: -80, east: 180, north: 90 };
   assert.deepEqual(drapePixel(90, -180, b, 1440, 681), { px: 0, py: 0 });
@@ -289,7 +306,7 @@ test('readoutAt: the shown frame\'s pixel under the point, inverted through the 
     assert.deepEqual(await l.readoutAt(-45, 0), { ...row('error', { error: 'z image is 2×2, the manifest says 4×2' }), date: '2026-10-08' }, 'a refused image is read again, not kept');
     assert.equal(read.length, before + 2, 'each click decoded it again');
     l.destroy(viewer);
-    // a drape not built with readout has no readoutAt (only cmems-zooc opts in)
+    // a drape not built with readout has no readoutAt (cmems-zooc and chlor-a opt in)
     assert.equal(createRasterDrapeLayer({ id: 'q', name: 'q', icon: 'i', source: 's' }).readoutAt, undefined);
     assert.equal(typeof cmemsZoocLayer.readoutAt, 'function');
     assert.equal(cmemsZoocLayer.id, 'cmems-zooc');
