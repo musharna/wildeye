@@ -104,10 +104,12 @@ repos:
       # A tag (@v7) can be moved to different code after review; a commit SHA cannot. wildeye #79 added
       # setup-node@v7 in a new workflow and ci.yml carried two more (2026-10-11): review caught one of three.
       - id: no-unpinned-action
-        name: "GitHub Actions pinned to a full commit SHA (uses: owner/repo@<40 hex> # vX.Y.Z)"
+        # Workflows and composite actions (action.yml). Local ./ actions are exempt; a docker:// image needs its
+        # @sha256: digest (a tag like :3.20 moves the same way). PR review found both gaps in the first version.
+        name: "GitHub Actions pinned (uses: owner/repo@<40-hex SHA> # vX.Y.Z, docker://image@sha256:<64 hex>)"
         language: pygrep
-        files: '^(\.github/workflows|templates/workflows)/.*\.ya?ml$'
-        entry: '^\s*(-\s+)?uses:\s*["'']?(?!\./|docker://)[^\s"''@]+@(?![0-9a-f]{40}(["''\s]|$))'
+        files: '^((\.github/workflows|templates/workflows)/.*\.ya?ml|(.*/)?action\.ya?ml)$'
+        entry: '^\s*(-\s+)?uses:\s*["'']?(?:(?!\./|docker://)[^\s"''@]+@(?![0-9a-f]{40}(["''\s]|$))|docker://(?![^\s"'']*@sha256:[0-9a-f]{64}(["''\s]|$)))'
 
       # The same rule set CI runs (guardrails.yml security job: bandit -ll =
       # medium and up), on the files being committed. Until 2026-09-18 bandit

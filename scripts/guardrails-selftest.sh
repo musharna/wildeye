@@ -78,4 +78,11 @@ check no-unpinned-action .github/workflows/v1.yml '      - uses: actions/checkou
 check no-unpinned-action .github/workflows/v2.yml '      - uses: ./.github/actions/setup' pass
 check no-unpinned-action .github/workflows/v3.yml '      # was uses: actions/checkout@v7' pass
 check no-unpinned-action u5.md '      - uses: actions/checkout@v7' pass # outside workflows: prose may quote a tag
+check no-unpinned-action .github/workflows/u6.yml '      - uses: docker://alpine:3.20' fail
+check no-unpinned-action .github/workflows/u7.yml '      - uses: docker://ghcr.io/o/img@sha256:abc123' fail
+check no-unpinned-action .github/workflows/v4.yml '      - uses: docker://alpine@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' pass
+mkdir -p "$tmp/r/.github/actions/setup"
+check no-unpinned-action .github/actions/setup/action.yml '      - uses: actions/setup-node@v7' fail # composite action
+check no-unpinned-action action.yaml '    - uses: actions/checkout@v7' fail # root composite action
+check no-unpinned-action .github/actions/setup/action.yml '      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0' pass
 exit $fail
