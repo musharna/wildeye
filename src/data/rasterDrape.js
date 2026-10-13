@@ -344,6 +344,7 @@ export const crwSeaIceLayer = createRasterDrapeLayer({
 });
 export const ndviLayer = createRasterDrapeLayer({
   id: 'ndvi', name: 'Vegetation greenness (NDVI)', icon: '🌿', source: 'NOAA NDVI CDR via NCEI', alpha: 0.7, zrank: 15,
+  readout: true,
 });
 export const cmemsO2Layer = createRasterDrapeLayer({
   id: 'cmems-o2', name: 'Surface dissolved oxygen', icon: '🫧', source: 'E.U. Copernicus Marine Service', alpha: 0.6, zrank: 12,

@@ -1,7 +1,7 @@
 // src/data/rasterDrape.test.mjs — manifest selection + layer contract.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, drapePixel, cmemsZoocLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer } from './rasterDrape.js';
+import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, drapePixel, cmemsZoocLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer } from './rasterDrape.js';
 
 test('pickProduct: finds by id, null when absent or malformed', () => {
   const m = { products: [{ id: 'a', png: 'x' }, { id: 'b' }] };
@@ -257,6 +257,20 @@ test('CRW readouts: DHW, HotSpot and sea ice colours read back in their units; o
   assert.deepEqual(rampReadoutText([239, 229, 80], DHW), { kind: 'unknown', rgb: [239, 229, 80] });
 });
 
+// The ndvi ramp as in pipeline/rasters.json; colours rendered by ramp_rgba (2026-10-12). Over 4,001 values 0..0.9 every
+// rendered colour read back on the ramp, worst 0.003.
+const NDVI = { min: 0, max: 0.9, unit: '', stops: [[255, 255, 229], [217, 240, 163], [65, 171, 93], [0, 104, 55]] };
+
+test('ndvi readout: ramp_rgba colours read back as NDVI; the WMS palette colours give no value', () => {
+  assert.equal(typeof ndviLayer.readoutAt, 'function', 'ndvi is drawn by ramp_rgba from OPeNDAP numbers, so it opts in');
+  assert.deepEqual(rampReadoutText([230, 245, 185], NDVI), { kind: 'value', text: '0.2' });
+  assert.deepEqual(rampReadoutText([141, 206, 128], NDVI), { kind: 'value', text: '0.45' });
+  assert.deepEqual(rampReadoutText([39, 144, 78], NDVI), { kind: 'value', text: '0.72' });
+  assert.deepEqual(rampReadoutText([0, 104, 55], NDVI), { kind: 'value', text: '≥ 0.9' });
+  // the most common colours of NCEI's own seq-YlGn WMS PNG are mostly off this ramp (144 of the top 200, 2026-10-09)
+  assert.deepEqual(rampReadoutText([240, 249, 180], NDVI), { kind: 'unknown', rgb: [240, 249, 180] });
+});
+
 test('drapePixel: the pixel the drape draws at a point, from the manifest bounds; off the image is null', () => {
   const b = { west: -180, south: -80, east: 180, north: 90 };
   assert.deepEqual(drapePixel(90, -180, b, 1440, 681), { px: 0, py: 0 });
@@ -343,7 +357,7 @@ test('readoutAt: the shown frame\'s pixel under the point, inverted through the 
     assert.deepEqual(await l.readoutAt(-45, 0), { ...row('error', { error: 'z image is 2×2, the manifest says 4×2' }), date: '2026-10-08' }, 'a refused image is read again, not kept');
     assert.equal(read.length, before + 2, 'each click decoded it again');
     l.destroy(viewer);
-    // a drape not built with readout has no readoutAt (cmems-zooc, chlor-a, oisst and the CRW layers opt in)
+    // a drape not built with readout has no readoutAt (cmems-zooc, chlor-a, oisst, the CRW layers and ndvi opt in)
     assert.equal(createRasterDrapeLayer({ id: 'q', name: 'q', icon: 'i', source: 's' }).readoutAt, undefined);
     assert.equal(typeof cmemsZoocLayer.readoutAt, 'function');
     assert.equal(cmemsZoocLayer.id, 'cmems-zooc');

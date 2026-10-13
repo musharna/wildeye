@@ -458,12 +458,15 @@
     "catalog": "https://www.ncei.noaa.gov/thredds/catalog/cdr/ndvi/2026/catalog.xml",
     "file_regex": "VIIRS-Land_v001_[A-Z0-9]+_NOAA-20_\\d{8}_c\\d+\\.nc",
     "time_regex": "_(\\d{4})(\\d{2})(\\d{2})_c",
-    "url_template": "https://www.ncei.noaa.gov/thredds/wms/cdr/ndvi/2026/{file}?service=WMS&version=1.3.0&request=GetMap&layers=NDVI&styles=default-scalar/seq-YlGn&crs=CRS:84&bbox=-180,-90,180,90&width=1440&height=720&format=image/png&transparent=true&colorscalerange=0,0.9&numcolorbands=250&belowmincolor=transparent&abovemaxcolor=extend",
-    "bounds": {
-      "west": -180,
-      "south": -90,
-      "east": 180,
-      "north": 90
+    "url_template": "https://www.ncei.noaa.gov/thredds/dodsC/cdr/ndvi/2026/{file}",
+    "opendap_grid": {
+      "variable": "NDVI",
+      "stride": 5,
+      "offset": 2,
+      "clear_outside": [
+        0,
+        1
+      ]
     },
     "transparent": "none",
     "kind": "ramp",
