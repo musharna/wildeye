@@ -135,6 +135,31 @@ def test_resolve_source_reads_this_years_catalog_and_last_years_only_when_this_o
         resolve_source(prod, today=dt.date(2027, 1, 3), read_catalog=read)
 
 
+def test_resolve_source_takes_this_year_in_utc_like_the_rest_of_the_pipeline(monkeypatch):
+    """The default `today` is UTC's date, as fetch_cmems's is (PR #87 review): a host on EST at 20:00 on 31 December
+    is already in the new year by UTC, and the run reads that year's catalog first."""
+    import datetime as real
+    import types
+
+    from pipeline import raster
+
+    class Date(real.date):
+        @classmethod
+        def today(cls):
+            return real.date(2026, 12, 31)  # the host's local date
+
+    class Datetime(real.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return real.datetime(2027, 1, 1, 1, 0, tzinfo=tz)
+    monkeypatch.setattr(raster, "dt", types.SimpleNamespace(date=Date, datetime=Datetime, UTC=real.UTC))
+    seen = []
+    prod = {"id": "ndvi", "catalog": "https://c/{year}/catalog.xml", "url_template": "https://d/{year}/{file}",
+            "file_regex": r"F_\d{8}\.nc", "time_regex": r"_(\d{4})(\d{2})(\d{2})"}
+    url, when = raster.resolve_source(prod, read_catalog=lambda u: seen.append(u) or ("<a>F_20261230.nc</a>" if "/2026/" in u else "<catalog/>"))
+    assert seen == ["https://c/2027/catalog.xml", "https://c/2026/catalog.xml"] and when == "2026-12-30T00:00:00Z"
+
+
 def test_resolve_source_picks_newest_catalog_file_and_dates_it():
     from pipeline.raster import resolve_source
     prod = {"id": "ndvi", "catalog": "c", "url_template": "https://x/wms/{file}?GetMap",

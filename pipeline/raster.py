@@ -82,7 +82,7 @@ def resolve_source(product: dict, catalog_xml: str | None = None, today: dt.date
     if "catalog" not in product:
         return product["url"], None
     if catalog_xml is None:
-        year, tried = (today or dt.date.today()).year, []
+        year, tried = (today or dt.datetime.now(dt.UTC).date()).year, []  # UTC, as fetch_cmems
         for y in (year, year - 1):
             url = product["catalog"].format(year=y)
             try:
