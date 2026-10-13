@@ -39,7 +39,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'noaa-ndvi-cdr',
-    html: 'Vegetation greenness: <a href="https://www.ncei.noaa.gov/products/climate-data-records/normalized-difference-vegetation-index" target="_blank" rel="noopener">NOAA NDVI Climate Data Record</a> (VIIRS daily 0.05°, NCEI THREDDS WMS)',
+    html: 'Vegetation greenness: <a href="https://www.ncei.noaa.gov/products/climate-data-records/normalized-difference-vegetation-index" target="_blank" rel="noopener">NOAA NDVI Climate Data Record</a> (VIIRS daily 0.05°, NCEI THREDDS OPeNDAP)',
   },
   {
     key: 'nasa-gibs',
