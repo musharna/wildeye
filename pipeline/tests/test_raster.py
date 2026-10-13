@@ -75,6 +75,91 @@ def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_hi
     assert sorted(p.name for p in old.iterdir()) == [f1, f2, "notes.txt"]
 
 
+def test_catalog_products_take_the_year_from_the_date_not_the_manifest():
+    """ndvi's catalog and data URLs had 2026 written in (ncei .../cdr/ndvi/2026/...), so from 1 January the layer would
+    have kept reading 2026's last file. Every catalog product writes {year} instead."""
+    import json
+    import re
+    from pathlib import Path
+    products = [p for p in json.loads((Path(__file__).parents[1] / "rasters.json").read_text()) if "catalog" in p]
+    assert [p["id"] for p in products] == ["ndvi"], "control: the catalog products this test covers"
+    for p in products:
+        for k in ("catalog", "url_template"):
+            assert "{year}" in p[k] and not re.search(r"/(19|20)\d\d/", p[k]), f"{p['id']}.{k}: {p[k]}"
+
+
+def test_resolve_source_reads_this_years_catalog_and_last_years_only_when_this_one_is_missing():
+    """NCEI publishes a day's file ~2 days later and opens the new year's directory with its first file (2025's 12-31
+    file is dated 2026-01-05; a future year's catalog is a 404, checked 2026-10-12). So in early January the newest file
+    is in last year's catalog: read this year's, fall back to last year's only on a 404 or no matching file, and take
+    the data URL's year from the file's own date. Any other HTTP error is raised, not fallen back from."""
+    import datetime as dt
+    import io
+    import urllib.error
+
+    import pytest
+
+    from pipeline.raster import resolve_source
+    prod = {"id": "ndvi", "catalog": "https://c/{year}/catalog.xml", "url_template": "https://d/{year}/{file}",
+            "file_regex": r"VIIRS-Land_v001_[A-Z0-9]+_NOAA-20_\d{8}_c\d+\.nc", "time_regex": r"_(\d{4})(\d{2})(\d{2})_c"}
+    f = "VIIRS-Land_v001_JP113C1_NOAA-20_{}_c{}143010.nc".format
+
+    def server(pages):
+        seen = []
+
+        def read(url):
+            seen.append(url)
+            page = pages.get(url, 404)
+            if isinstance(page, int):
+                raise urllib.error.HTTPError(url, page, "x", {}, io.BytesIO())
+            return page
+        return read, seen
+
+    read, seen = server({"https://c/2026/catalog.xml": f"<a>{f('20261230', '20270101')}</a><a>{f('20261231', '20270105')}</a>"})
+    url, when = resolve_source(prod, today=dt.date(2027, 1, 3), read_catalog=read)
+    assert seen == ["https://c/2027/catalog.xml", "https://c/2026/catalog.xml"], "2027 is a 404: fall back once"
+    assert url == "https://d/2026/" + f("20261231", "20270105") and when == "2026-12-31T00:00:00Z"
+
+    read, seen = server({"https://c/2027/catalog.xml": f"<a>{f('20270108', '20270110')}</a>", "https://c/2026/catalog.xml": "x"})
+    url, when = resolve_source(prod, today=dt.date(2027, 1, 12), read_catalog=read)
+    assert seen == ["https://c/2027/catalog.xml"] and url == "https://d/2027/" + f("20270108", "20270110")
+
+    read, seen = server({"https://c/2027/catalog.xml": "<catalog/>", "https://c/2026/catalog.xml": f"<a>{f('20261231', '20270105')}</a>"})
+    assert resolve_source(prod, today=dt.date(2027, 1, 2), read_catalog=read)[1] == "2026-12-31T00:00:00Z", "empty: fall back"
+
+    read, _ = server({"https://c/2027/catalog.xml": 500, "https://c/2026/catalog.xml": f"<a>{f('20261231', '20270105')}</a>"})
+    with pytest.raises(urllib.error.HTTPError, match="500|x"):
+        resolve_source(prod, today=dt.date(2027, 1, 3), read_catalog=read)
+    read, _ = server({})
+    with pytest.raises(RuntimeError, match="2027/catalog.xml.*2026/catalog.xml"):
+        resolve_source(prod, today=dt.date(2027, 1, 3), read_catalog=read)
+
+
+def test_resolve_source_takes_this_year_in_utc_like_the_rest_of_the_pipeline(monkeypatch):
+    """The default `today` is UTC's date, as fetch_cmems's is (PR #87 review): a host on EST at 20:00 on 31 December
+    is already in the new year by UTC, and the run reads that year's catalog first."""
+    import datetime as real
+    import types
+
+    from pipeline import raster
+
+    class Date(real.date):
+        @classmethod
+        def today(cls):
+            return real.date(2026, 12, 31)  # the host's local date
+
+    class Datetime(real.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return real.datetime(2027, 1, 1, 1, 0, tzinfo=tz)
+    monkeypatch.setattr(raster, "dt", types.SimpleNamespace(date=Date, datetime=Datetime, UTC=real.UTC))
+    seen = []
+    prod = {"id": "ndvi", "catalog": "https://c/{year}/catalog.xml", "url_template": "https://d/{year}/{file}",
+            "file_regex": r"F_\d{8}\.nc", "time_regex": r"_(\d{4})(\d{2})(\d{2})"}
+    url, when = raster.resolve_source(prod, read_catalog=lambda u: seen.append(u) or ("<a>F_20261230.nc</a>" if "/2026/" in u else "<catalog/>"))
+    assert seen == ["https://c/2027/catalog.xml", "https://c/2026/catalog.xml"] and when == "2026-12-30T00:00:00Z"
+
+
 def test_resolve_source_picks_newest_catalog_file_and_dates_it():
     from pipeline.raster import resolve_source
     prod = {"id": "ndvi", "catalog": "c", "url_template": "https://x/wms/{file}?GetMap",
