@@ -53,6 +53,111 @@ def test_only_flag_keeps_unselected_products_in_manifest(tmp_path, monkeypatch):
     assert ids["oisst"]["time"] == "2026-08-26T12:00:00Z" and ids["chlor-a"]["time"] == "new"
 
 
+def test_transient_names_the_errors_a_later_attempt_may_not_hit():
+    """PacIOOS on 2026-10-12 (the CRW backfill): 503, a 404 for a day it serves, a connection cut mid-body
+    (IncompleteRead), a TLS handshake timeout; each went away on the next try. A bad request or a bug does not."""
+    import http.client
+    import io
+    import ssl
+    import urllib.error
+
+    from pipeline.raster import transient
+
+    def err(code):
+        return urllib.error.HTTPError("u", code, "x", {}, io.BytesIO())
+    for e in (err(500), err(502), err(503), err(504), err(404), err(408), err(429),
+              http.client.IncompleteRead(b"x"), http.client.RemoteDisconnected("x"), urllib.error.URLError("timed out"),
+              ConnectionResetError(), TimeoutError(), ssl.SSLError("handshake")):
+        assert transient(e), repr(e)
+    for e in (err(400), err(401), err(403), ValueError("bad grid"), KeyError("ramp"), FileNotFoundError("x"),
+              RuntimeError("no file matching")):
+        assert not transient(e), repr(e)
+
+
+def test_with_retries_retries_real_transient_http_failures_and_not_a_bad_request(monkeypatch):
+    """Against a real local HTTP server: a 503, then a body cut short (a real IncompleteRead), then the PNG: the third
+    try succeeds after 30 s and 60 s waits. A 400 is raised at once, one request served."""
+    import http.server
+    import io
+    import threading
+    import urllib.error
+
+    from PIL import Image
+
+    from pipeline import raster
+
+    png = io.BytesIO()
+    Image.new("RGBA", (2, 1), (10, 20, 30, 255)).save(png, "PNG")
+    script = {"/flaky": ["503", "cut", "ok"], "/bad": ["400", "ok"]}
+    served = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a): pass
+
+        def do_GET(self):
+            what = script[self.path].pop(0)
+            served.append((self.path, what))
+            if what in ("503", "400"):
+                self.send_error(int(what))
+                return
+            body = png.getvalue()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body if what == "ok" else body[:10])
+            if what == "cut":
+                self.close_connection = True
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    waits = []
+    monkeypatch.setattr(raster, "_sleep", waits.append)
+    try:
+        rgba = raster.with_retries(lambda: raster.fetch_png(base + "/flaky", timeout=10), "t")
+        assert rgba[0, 0].tolist() == [10, 20, 30, 255] and waits == [30, 60]
+        assert [w for _, w in served] == ["503", "cut", "ok"]
+        with pytest.raises(urllib.error.HTTPError, match="400"):
+            raster.with_retries(lambda: raster.fetch_png(base + "/bad", timeout=10), "t")
+        assert served[-1] == ("/bad", "400") and len(served) == 4 and waits == [30, 60]
+    finally:
+        srv.shutdown()
+
+
+def test_main_retries_a_product_once_its_fetch_fails_transiently(tmp_path, monkeypatch):
+    import http.client
+    import json
+
+    from pipeline import raster
+    out = tmp_path / "data"
+    out.mkdir()
+    calls = []
+
+    def process(p, d):
+        calls.append(p["id"])
+        if len(calls) == 1:
+            raise http.client.IncompleteRead(b"5407919 bytes")
+        return {"id": p["id"], "png": f"data/rasters/{p['id']}.png", "time": "new"}
+    monkeypatch.setattr(raster, "process", process)
+    monkeypatch.setattr(raster, "_sleep", lambda s: None)
+    raster.main(["--out", str(out), "--only", "oisst"])
+    m = json.loads((out / "rasters.json").read_text())
+    assert calls == ["oisst", "oisst"] and m["failures"] == {} and m["products"][0]["time"] == "new"
+
+    # a non-transient error is tried once and recorded, the other product still runs (PR #88 review)
+    calls.clear()
+
+    def broken(p, d):
+        calls.append(p["id"])
+        if p["id"] == "crw-dhw":
+            raise ValueError("edge_align needs a regular grid")
+        return {"id": p["id"], "png": f"data/rasters/{p['id']}.png", "time": "new"}
+    monkeypatch.setattr(raster, "process", broken)
+    raster.main(["--out", str(out), "--only", "oisst,crw-dhw"])
+    m = json.loads((out / "rasters.json").read_text())
+    assert sorted(calls) == ["crw-dhw", "oisst"] and list(m["failures"]) == ["crw-dhw"] and "regular grid" in m["failures"]["crw-dhw"]
+
+
 def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_history(tmp_path):
     import datetime as dt
     from pipeline.raster import archive_frame

@@ -1,7 +1,7 @@
 """Config-driven raster drapes: fetch a data-only PNG (ERDDAP transparentPng), post-process,
 write public/data/rasters/<id>.png and public/data/rasters.json."""
 from __future__ import annotations
-import argparse, datetime as dt, io, json, logging, re, time, urllib.error, urllib.request
+import argparse, datetime as dt, http.client, io, json, logging, re, ssl, time, urllib.error, urllib.request
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -375,6 +375,33 @@ def archive_frame(latest_png: Path, pid: str, when: str | None, out_dir: Path, k
         hist.append({"time": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "png": f"data/rasters/{pid}/{f.name}"})
     return hist
 
+RETRY_ATTEMPTS = 3
+RETRY_WAIT_S = 30  # then 60: the daily run has hours of slack before the 09:00 deploy
+_sleep = time.sleep
+
+
+def transient(e: BaseException) -> bool:
+    """An error the next attempt may not hit. PacIOOS on 2026-10-12 gave a 503, a 404 for a day it serves, a body cut
+    short (IncompleteRead) and a TLS handshake timeout, each gone on the next try; so 5xx, 404, 408, 429 and broken
+    connections are retried. Any other HTTP status, and every error raised by our own code, is not."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code >= 500 or e.code in (404, 408, 429)
+    return isinstance(e, (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError, ssl.SSLError))
+
+
+def with_retries(fn, name: str):
+    """fn() with up to RETRY_ATTEMPTS tries, waiting RETRY_WAIT_S × the try number between them, for transient errors
+    only; the last error, or any other, is raised as it was."""
+    for attempt in range(1, RETRY_ATTEMPTS + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt == RETRY_ATTEMPTS or not transient(e):
+                raise
+            log.warning("%s try %d/%d failed: %r; again in %ds", name, attempt, RETRY_ATTEMPTS, e, RETRY_WAIT_S * attempt)
+            _sleep(RETRY_WAIT_S * attempt)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path("public/data"))
@@ -392,7 +419,7 @@ def main(argv=None):
     for p in products:
         t0 = time.time()
         try:
-            entries[p["id"]] = process(p, a.out / "rasters")
+            entries[p["id"]] = with_retries(lambda: process(p, a.out / "rasters"), p["id"])
             log.info("%s ok time=%s %.0fs", p["id"], entries[p["id"]]["time"], time.time() - t0)
         except Exception as e:
             failures[p["id"]] = repr(e); log.error("%s FAILED: %r", p["id"], e)
