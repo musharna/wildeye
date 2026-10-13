@@ -113,12 +113,24 @@ def edge_align(rgba: np.ndarray, lat_north_first: np.ndarray, lon: np.ndarray) -
     (e.g. -80..90, -180..180 for Copernicus 0.25°) drew every cell up to half a cell off. Rows whose cell reaches
     past a pole are dropped (Cesium cannot draw past ±90). A global grid whose edges sit half a cell off ±180 (centres
     on -180) is drawn two pixels per cell and turned one pixel, so the image spans exactly -180..180; any other
-    global offset raises rather than draw cells in the wrong place."""
-    lat = np.asarray(lat_north_first, dtype=float); lon = np.asarray(lon, dtype=float)
-    dlat, dlon = -np.diff(lat), np.diff(lon)
-    if len(lat) < 2 or len(lon) < 2 or not (np.allclose(dlat, dlat[0]) and np.allclose(dlon, dlon[0])) or dlat[0] <= 0 or dlon[0] <= 0:
+    global offset raises rather than draw cells in the wrong place. Regularity is judged at the coordinates' own
+    precision as well as by equal gaps (float32 centres sit up to half a float32 step off, so a gap can be off by a
+    whole step: NCEI NDVI 2026-10-12), and the step is the whole span's."""
+    def regular(c):
+        c = np.asarray(c)
+        x = c.astype(float)
+        if len(x) < 2:
+            return None
+        step = (x[-1] - x[0]) / (len(x) - 1)
+        gaps = np.diff(x)
+        ulp = float(np.spacing(np.abs(c).max())) if np.issubdtype(c.dtype, np.floating) else 0.0
+        on_grid = np.all(np.abs(x - (x[0] + step * np.arange(len(x)))) <= max(1e-5 * abs(step), 2 * ulp))
+        return step if step != 0 and (np.allclose(gaps, gaps[0]) or on_grid) else None
+    sy, sx = regular(lat_north_first), regular(lon)
+    if sy is None or sx is None or sy >= 0 or sx <= 0:
         raise ValueError("edge_align needs a regular grid: latitude north first, longitude ascending")
-    hy, hx = dlat[0] / 2, dlon[0] / 2
+    lat = np.asarray(lat_north_first, dtype=float); lon = np.asarray(lon, dtype=float)
+    hy, hx = -sy / 2, sx / 2
     keep = (lat + hy <= 90 + 1e-9) & (lat - hy >= -90 - 1e-9)
     rgba, lat = rgba[keep], lat[keep]
     bounds = {"west": float(lon[0] - hx), "south": float(lat[-1] - hy), "east": float(lon[-1] + hx), "north": float(lat[0] + hy)}
@@ -215,7 +227,34 @@ def fetch_erddap_grid(product: dict, read_nc=None) -> tuple[np.ndarray, str, dic
     not exact and a click could not be read back. NaN (land) is clear. Optional `scale` multiplies the values (a 0..1
     fraction on a % ramp); optional `clear_at_or_below` makes those values clear as well (CRW: 0 = no heat stress)."""
     c = product["erddap_grid"]
-    ds = (read_nc or _read_nc)(c["url"])
+    return _draw_grid(product, c, (read_nc or _read_nc)(c["url"]))
+
+
+def _read_opendap(url: str, variable: str, stride: int, offset: int):
+    """`variable` over OPeNDAP, every `stride`-th cell from `offset` on both axes; only that subset is transferred."""
+    import xarray as xr
+    with xr.open_dataset(url) as ds:
+        cut = slice(offset, None, stride)
+        return ds[[variable]].isel(latitude=cut, longitude=cut).load()
+
+
+def fetch_opendap_grid(product: dict, catalog_xml: str | None = None, read_grid=None) -> tuple[np.ndarray, str, dict]:
+    """The newest catalog file (resolve_source) read as numbers over OPeNDAP and drawn like fetch_erddap_grid. ndvi:
+    NCEI's WMS PNG was coloured by its own seq-YlGn palette, which the manifest ramp only approximated; the numbers make
+    the legend exact and a click readable. Optional `clear_outside` [lo, hi] makes values outside it clear (ndvi: the WMS
+    hid < 0 and > 1, 2026-10-12). The file's own time must be the date in its name."""
+    c = product["opendap_grid"]
+    url, named = resolve_source(product, catalog_xml)
+    rgba, when, extras = _draw_grid(
+        product, c, (read_grid or _read_opendap)(url, c["variable"], int(c["stride"]), int(c["offset"])))
+    if named and when != named:
+        raise ValueError(f"{product['id']}: the file says {when}, its name says {named}")
+    return rgba, when, extras
+
+
+def _draw_grid(product: dict, c: dict, ds) -> tuple[np.ndarray, str, dict]:
+    """One time step of ds[c.variable] on (latitude, longitude), drawn north-up through the ramp with edge_align bounds,
+    after the optional `scale`, `clear_at_or_below` and `clear_outside` of the source config `c`."""
     times = np.asarray(ds["time"].values).ravel()
     if len(times) != 1:
         raise ValueError(f"{product['id']}: expected one time step, got {len(times)}")
@@ -226,8 +265,11 @@ def fetch_erddap_grid(product: dict, read_nc=None) -> tuple[np.ndarray, str, dic
     vals = np.asarray(da.values, dtype=float).squeeze() * float(c.get("scale", 1))
     if "clear_at_or_below" in c:
         vals[vals <= float(c["clear_at_or_below"])] = np.nan
-    lat = np.asarray(ds["latitude"].values, dtype=float)
-    lon = np.asarray(ds["longitude"].values, dtype=float)
+    if "clear_outside" in c:
+        lo, hi = (float(x) for x in c["clear_outside"])
+        vals[(vals < lo) | (vals > hi)] = np.nan
+    lat = np.asarray(ds["latitude"].values)  # native dtype: edge_align judges regularity at its precision
+    lon = np.asarray(ds["longitude"].values)
     if vals.shape != (len(lat), len(lon)):
         raise ValueError(f"{product['id']}: {c['variable']} is {vals.shape}, the grid is {len(lat)}x{len(lon)}")
     if lat[0] < lat[-1]:
@@ -243,6 +285,8 @@ def process(product: dict, out_dir: Path) -> dict:
         rgba, when_from_name, extras = fetch_cmems(product)
     elif "erddap_grid" in product:
         rgba, when_from_name, extras = fetch_erddap_grid(product)
+    elif "opendap_grid" in product:
+        rgba, when_from_name, extras = fetch_opendap_grid(product)
     elif "cmems_dominant" in product:
         from . import cmems_pft
         rgba, when_from_name = cmems_pft.fetch_cmems_dominant(product)

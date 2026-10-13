@@ -399,6 +399,89 @@ def test_process_routes_erddap_grid_and_puts_its_cell_edge_bounds_in_the_manifes
     assert (entry["width"], entry["height"]) == (1440, 720)
 
 
+def test_fetch_opendap_grid_reads_the_catalog_file_strided_and_keeps_0_to_1():
+    """ndvi reads the NDVI numbers over OPeNDAP instead of NCEI's WMS PNG (seq-YlGn, which the manifest ramp only
+    approximated). The newest catalog file is read at `stride` from `offset` (the centre 0.05 deg cell of each 0.25 deg
+    block, the cells the WMS drew); values outside `clear_outside` [0, 1] are clear, which is what the WMS showed
+    (2026-10-12: it hid < 0 and the > 1 values beyond valid_range, showed 0..1). A file whose own time is not the date
+    in its name is refused next to the passing path."""
+    import numpy as np
+    import pytest
+
+    from pipeline.raster import fetch_opendap_grid
+
+    class DA:
+        def __init__(self, arr, dims=()): self.values, self.dims = np.asarray(arr), dims
+    ndvi = np.array([[[-0.05, 0.0, 0.45], [0.9, 1.2, np.nan]]])  # time, lat (north first), lon
+    t = DA(np.array(["2026-10-09T00:00:00"], dtype="datetime64[ns]"))
+    ds = {"NDVI": DA(ndvi, ("time", "latitude", "longitude")), "time": t,
+          "latitude": DA([45.0, -45.0]), "longitude": DA([-120.0, 0.0, 120.0])}
+    catalog = ('<dataset urlPath="a/VIIRS-Land_v001_JP113C1_NOAA-20_20261008_c20261010143010.nc"/>'
+               '<dataset urlPath="a/VIIRS-Land_v001_JP113C1_NOAA-20_20261009_c20261011143011.nc"/>')
+    product = {"id": "ndvi", "catalog": "https://c/catalog.xml",
+               "file_regex": "VIIRS-Land_v001_[A-Z0-9]+_NOAA-20_\\d{8}_c\\d+\\.nc", "time_regex": "_(\\d{4})(\\d{2})(\\d{2})_c",
+               "url_template": "https://d/dodsC/{file}",
+               "opendap_grid": {"variable": "NDVI", "stride": 5, "offset": 2, "clear_outside": [0, 1]},
+               "ramp": {"min": 0, "max": 0.9, "stops": [[0, 0, 0], [90, 90, 90]]}}
+    seen = []
+    rgba, when, extras = fetch_opendap_grid(product, catalog_xml=catalog,
+                                            read_grid=lambda *a: seen.append(a) or ds)
+    assert seen == [("https://d/dodsC/VIIRS-Land_v001_JP113C1_NOAA-20_20261009_c20261011143011.nc", "NDVI", 5, 2)]
+    assert when == "2026-10-09T00:00:00Z" and extras["bounds"] == {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+    assert rgba[0, :, 3].tolist() == [0, 255, 255], "< 0 clear, 0 and 0.45 drawn"
+    assert rgba[0, 1].tolist() == [0, 0, 0, 255] and rgba[0, 2].tolist() == [45, 45, 45, 255]
+    assert rgba[1, :, 3].tolist() == [255, 0, 0], "0.9 drawn, 1.2 (beyond valid_range) and NaN clear"
+    late = dict(ds, time=DA(np.array(["2026-10-10T00:00:00"], dtype="datetime64[ns]")))
+    with pytest.raises(ValueError, match="2026-10-10T00:00:00Z.*2026-10-09T00:00:00Z"):
+        fetch_opendap_grid(product, catalog_xml=catalog, read_grid=lambda *a: late)
+
+
+def test_process_routes_opendap_grid(monkeypatch, tmp_path):
+    from pipeline import raster
+    edges = {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+    img = np.zeros((720, 1440, 4), np.uint8)
+    img[..., 3] = 255
+    monkeypatch.setattr(raster, "fetch_opendap_grid", lambda p: (img, "2026-10-09T00:00:00Z", {"bounds": edges}))
+    entry = raster.process({"id": "ndvi", "opendap_grid": {}, "catalog": "x", "name": "n", "icon": "i", "legend": "",
+                            "credit": "", "credit_key": "noaa-ndvi-cdr",
+                            "ramp": {"min": 0, "max": 1, "stops": [[0, 0, 0], [1, 1, 1]]}}, tmp_path)
+    assert entry["bounds"] == edges and entry["time"] == "2026-10-09T00:00:00Z"
+
+
+def test_edge_align_accepts_float32_centres_and_still_refuses_an_irregular_grid():
+    """NCEI's NDVI stores its 0.05 deg centres as float32: taken every 5th from the 3rd, each centre is within half a
+    float32 step (3.8e-6 deg near 90) of the 0.25 deg grid, but 2 of 719 latitude gaps then differ from 0.25 by more
+    than allclose's default 2.5e-6, so the first real ndvi run was refused as irregular (2026-10-12). Regularity is
+    judged at the coordinates' own precision and the step comes from the whole span, so the edges land on +-90/180; a
+    grid with one centre really out of place is still refused."""
+    import numpy as np
+    import pytest
+
+    from pipeline.raster import edge_align
+
+    lat = np.float32(89.875 - 0.25 * np.arange(720))
+    lat[128:256] -= np.float32(2.0 ** -18)  # bit-identical to the file's strided latitudes (2026-10-09)
+    lon = np.float32(-179.875 + 0.25 * np.arange(1440))
+    assert (~np.isclose(-np.diff(lat.astype(float)), 0.25)).sum() > 0, "control: the float32 gaps are not all 0.25"
+    rgba, b = edge_align(np.zeros((len(lat), len(lon), 4), np.uint8), lat, lon)
+    assert b == {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0} and rgba.shape[:2] == (720, 1440)
+    bent = lat.copy()
+    bent[300] += np.float32(0.01)
+    with pytest.raises(ValueError, match="regular grid"):
+        edge_align(np.zeros((len(lat), len(lon), 4), np.uint8), bent, lon)
+
+    # the same coordinates through a fetch: the float32 must reach edge_align (a cast to float64 first hid it)
+    from pipeline.raster import fetch_erddap_grid
+
+    class DA:
+        def __init__(self, arr, dims=()): self.values, self.dims = np.asarray(arr), dims
+    ds = {"v": DA(np.zeros((1, 720, 1440)), ("time", "latitude", "longitude")), "latitude": DA(lat), "longitude": DA(lon),
+          "time": DA(np.array(["2026-10-09T00:00:00"], dtype="datetime64[ns]"))}
+    product = {"id": "ndvi", "erddap_grid": {"url": "u", "variable": "v"}, "ramp": {"min": 0, "max": 1, "stops": [[0, 0, 0], [1, 1, 1]]}}
+    _, _, extras = fetch_erddap_grid(product, read_nc=lambda url: ds)
+    assert extras["bounds"] == {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+
+
 def test_edge_align_places_a_grid_whose_straddling_cell_is_the_last_one():
     """The mirror of the Copernicus case (PR #68 review): centres -170..180, so the west edge sits half a cell INSIDE
     -180 and the cell centred on 180 straddles the antimeridian at the east end; its east half must become the
