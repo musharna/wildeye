@@ -65,23 +65,48 @@ def fetch_time(url: str | None) -> str | None:
         d = json.load(r)
     return d["table"]["rows"][0][0]
 
-def resolve_source(product: dict, catalog_xml: str | None = None) -> tuple[str, str | None]:
+def _read_text(url: str, timeout: int = 60) -> str:
+    with _open(url, timeout) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def resolve_source(product: dict, catalog_xml: str | None = None, today: dt.date | None = None,
+                   read_catalog=None) -> tuple[str, str | None]:
     """(url, time) for a product. Static products return (url, None → fetch_time later).
     Products with `catalog` pick the newest file matching `file_regex` from a THREDDS
     catalog.xml, fill `url_template` with {file}, and read the acquisition date from the
-    filename via `time_regex` (a date-stamped daily file, e.g. NOAA NDVI CDR on NCEI)."""
+    filename via `time_regex` (a date-stamped daily file, e.g. NOAA NDVI CDR on NCEI).
+    `catalog` and `url_template` carry {year}: this year's catalog is read, and last year's only when this one is a
+    404 or holds no matching file (early January: NCEI opens a year's directory with its first file, ~2 days late);
+    the data URL takes the year of the chosen file. Any other HTTP error is raised."""
     if "catalog" not in product:
         return product["url"], None
     if catalog_xml is None:
-        with _open(product["catalog"], 60) as r:
-            catalog_xml = r.read().decode("utf-8", "replace")
+        year, tried = (today or dt.datetime.now(dt.UTC).date()).year, []  # UTC, as fetch_cmems
+        for y in (year, year - 1):
+            url = product["catalog"].format(year=y)
+            try:
+                xml = (read_catalog or _read_text)(url)
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    raise
+                tried.append(f"{url} (404)")
+                continue
+            if re.search(product["file_regex"], xml):
+                catalog_xml = xml
+                break
+            tried.append(f"{url} (no matching file)")
+        else:
+            raise RuntimeError(f"{product['id']}: no file matching {product['file_regex']!r} in {'; '.join(tried)}")
     files = sorted(set(re.findall(product["file_regex"], catalog_xml)))
     if not files:
         raise RuntimeError(f"{product['id']}: no file matching {product['file_regex']!r} in {product['catalog']}")
     f = files[-1]
     m = re.search(product["time_regex"], f)
+    if m is None and "{year}" in product["url_template"]:
+        raise RuntimeError(f"{product['id']}: {f} has no date for the {{year}} in its url_template")
     when = f"{m.group(1)}-{m.group(2)}-{m.group(3)}T00:00:00Z" if m else None
-    return product["url_template"].format(file=f), when
+    return product["url_template"].format(file=f, year=m.group(1) if m else ""), when
 
 
 def ramp_rgba(values: np.ndarray, ramp: dict) -> np.ndarray:
