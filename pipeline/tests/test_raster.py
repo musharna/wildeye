@@ -144,6 +144,19 @@ def test_main_retries_a_product_once_its_fetch_fails_transiently(tmp_path, monke
     m = json.loads((out / "rasters.json").read_text())
     assert calls == ["oisst", "oisst"] and m["failures"] == {} and m["products"][0]["time"] == "new"
 
+    # a non-transient error is tried once and recorded, the other product still runs (PR #88 review)
+    calls.clear()
+
+    def broken(p, d):
+        calls.append(p["id"])
+        if p["id"] == "crw-dhw":
+            raise ValueError("edge_align needs a regular grid")
+        return {"id": p["id"], "png": f"data/rasters/{p['id']}.png", "time": "new"}
+    monkeypatch.setattr(raster, "process", broken)
+    raster.main(["--out", str(out), "--only", "oisst,crw-dhw"])
+    m = json.loads((out / "rasters.json").read_text())
+    assert sorted(calls) == ["crw-dhw", "oisst"] and list(m["failures"]) == ["crw-dhw"] and "regular grid" in m["failures"]["crw-dhw"]
+
 
 def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_history(tmp_path):
     import datetime as dt
