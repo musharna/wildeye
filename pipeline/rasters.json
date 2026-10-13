@@ -455,10 +455,10 @@
     "id": "ndvi",
     "name": "Vegetation greenness NDVI (NOAA VIIRS CDR)",
     "icon": "🌿",
-    "catalog": "https://www.ncei.noaa.gov/thredds/catalog/cdr/ndvi/2026/catalog.xml",
+    "catalog": "https://www.ncei.noaa.gov/thredds/catalog/cdr/ndvi/{year}/catalog.xml",
     "file_regex": "VIIRS-Land_v001_[A-Z0-9]+_NOAA-20_\\d{8}_c\\d+\\.nc",
     "time_regex": "_(\\d{4})(\\d{2})(\\d{2})_c",
-    "url_template": "https://www.ncei.noaa.gov/thredds/dodsC/cdr/ndvi/2026/{file}",
+    "url_template": "https://www.ncei.noaa.gov/thredds/dodsC/cdr/ndvi/{year}/{file}",
     "opendap_grid": {
       "variable": "NDVI",
       "stride": 5,
