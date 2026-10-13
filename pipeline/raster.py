@@ -212,13 +212,20 @@ def fetch_erddap_grid(product: dict, read_nc=None) -> tuple[np.ndarray, str, dic
     """One time step of an ERDDAP griddap variable as numbers (`erddap_grid.url` asks for .nc), drawn north-up through
     the product's ramp with cell-edge bounds from edge_align, like fetch_cmems. ERDDAP's own transparentPng was coloured
     by its colour bar, which the manifest ramp only approximated (median 4-12 levels off, 2026-10-12): the legend was
-    not exact and a click could not be read back. NaN (land) is clear."""
+    not exact and a click could not be read back. NaN (land) is clear. Optional `scale` multiplies the values (a 0..1
+    fraction on a % ramp); optional `clear_at_or_below` makes those values clear as well (CRW: 0 = no heat stress)."""
     c = product["erddap_grid"]
     ds = (read_nc or _read_nc)(c["url"])
     times = np.asarray(ds["time"].values).ravel()
     if len(times) != 1:
         raise ValueError(f"{product['id']}: expected one time step, got {len(times)}")
-    vals = np.asarray(ds[c["variable"]].values, dtype=float).squeeze()
+    da = ds[c["variable"]]
+    axes = tuple(d for d, n in zip(da.dims, np.shape(da.values)) if n != 1)
+    if axes != ("latitude", "longitude"):
+        raise ValueError(f"{product['id']}: {c['variable']} axes are ({', '.join(axes)}), expected (latitude, longitude)")
+    vals = np.asarray(da.values, dtype=float).squeeze() * float(c.get("scale", 1))
+    if "clear_at_or_below" in c:
+        vals[vals <= float(c["clear_at_or_below"])] = np.nan
     lat = np.asarray(ds["latitude"].values, dtype=float)
     lon = np.asarray(ds["longitude"].values, dtype=float)
     if vals.shape != (len(lat), len(lon)):

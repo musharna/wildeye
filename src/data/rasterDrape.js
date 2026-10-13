@@ -332,12 +332,15 @@ export const chlorALayer = createRasterDrapeLayer({
 });
 export const crwDhwLayer = createRasterDrapeLayer({
   id: 'crw-dhw', name: 'Coral heat stress: degree heating weeks', icon: '🪸', source: 'NOAA Coral Reef Watch', alpha: 0.65, zrank: 30,
+  readout: true,
 });
 export const crwHotspotLayer = createRasterDrapeLayer({
   id: 'crw-hotspot', name: 'Coral heat stress: HotSpot', icon: '🔥', source: 'NOAA Coral Reef Watch', alpha: 0.65, zrank: 40,
+  readout: true,
 });
 export const crwSeaIceLayer = createRasterDrapeLayer({
   id: 'crw-seaice', name: 'Sea ice fraction', icon: '🧊', source: 'NOAA Coral Reef Watch', alpha: 0.7, zrank: 25,
+  readout: true,
 });
 export const ndviLayer = createRasterDrapeLayer({
   id: 'ndvi', name: 'Vegetation greenness (NDVI)', icon: '🌿', source: 'NOAA NDVI CDR via NCEI', alpha: 0.7, zrank: 15,

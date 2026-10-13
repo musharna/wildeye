@@ -311,22 +311,12 @@
     "id": "crw-dhw",
     "name": "Coral heat stress: degree heating weeks (NOAA CRW)",
     "icon": "🌡️🪸",
-    "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.transparentPng?CRW_DHW%5B(last)%5D%5B(-60):(60)%5D%5B(-180):(180)%5D&.size=1440%7C480&.colorBar=KT_thermal%7C%7C%7C0%7C16%7C",
-    "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.json?time%5B(last)%5D",
-    "bounds": {
-      "west": -180,
-      "south": -60,
-      "east": 180,
-      "north": 60
+    "erddap_grid": {
+      "url": "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.nc?CRW_DHW%5B(last)%5D%5B(59.875):5:(-59.875)%5D%5B(-179.875):5:(179.875)%5D",
+      "variable": "CRW_DHW",
+      "clear_at_or_below": 0
     },
-    "transparent": {
-      "rgb": [
-        4,
-        35,
-        51
-      ],
-      "tolerance": 0
-    },
+    "transparent": "none",
     "kind": "ramp",
     "zrank": 30,
     "ramp": {
@@ -369,22 +359,12 @@
     "id": "crw-hotspot",
     "name": "Coral heat stress: HotSpot anomaly (NOAA CRW)",
     "icon": "🔥🪸",
-    "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.transparentPng?CRW_HOTSPOT%5B(last)%5D%5B(-60):(60)%5D%5B(-180):(180)%5D&.size=1440%7C480&.colorBar=KT_thermal%7C%7C%7C0%7C5%7C",
-    "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.json?time%5B(last)%5D",
-    "bounds": {
-      "west": -180,
-      "south": -60,
-      "east": 180,
-      "north": 60
+    "erddap_grid": {
+      "url": "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.nc?CRW_HOTSPOT%5B(last)%5D%5B(59.875):5:(-59.875)%5D%5B(-179.875):5:(179.875)%5D",
+      "variable": "CRW_HOTSPOT",
+      "clear_at_or_below": 0
     },
-    "transparent": {
-      "rgb": [
-        4,
-        35,
-        51
-      ],
-      "tolerance": 0
-    },
+    "transparent": "none",
     "kind": "ramp",
     "zrank": 40,
     "ramp": {
@@ -427,13 +407,10 @@
     "id": "crw-seaice",
     "name": "Sea ice fraction (NOAA CRW)",
     "icon": "🧊",
-    "url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.transparentPng?CRW_SEAICE%5B(last)%5D%5B(-90):(90)%5D%5B(-180):(180)%5D&.size=1440%7C720&.colorBar=KT_ice%7C%7C%7C0%7C1%7C",
-    "time_url": "https://coastwatch.pfeg.noaa.gov/erddap/griddap/NOAA_DHW.json?time%5B(last)%5D",
-    "bounds": {
-      "west": -180,
-      "south": -90,
-      "east": 180,
-      "north": 90
+    "erddap_grid": {
+      "url": "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.nc?CRW_SEAICE%5B(last)%5D%5B(89.875):5:(-89.875)%5D%5B(-179.875):5:(179.875)%5D",
+      "variable": "CRW_SEAICE",
+      "scale": 100
     },
     "transparent": "none",
     "kind": "ramp",

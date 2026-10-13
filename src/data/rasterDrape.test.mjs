@@ -1,7 +1,7 @@
 // src/data/rasterDrape.test.mjs — manifest selection + layer contract.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, drapePixel, cmemsZoocLayer, chlorALayer } from './rasterDrape.js';
+import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, drapePixel, cmemsZoocLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer } from './rasterDrape.js';
 
 test('pickProduct: finds by id, null when absent or malformed', () => {
   const m = { products: [{ id: 'a', png: 'x' }, { id: 'b' }] };
@@ -235,6 +235,28 @@ test('oisst readout: ramp_rgba colours read back as °C; the clamped ends read a
   assert.deepEqual(rampReadoutText([239, 229, 80], SST), { kind: 'unknown', rgb: [239, 229, 80] });
 });
 
+// The CRW ramps as in pipeline/rasters.json; colours rendered by ramp_rgba (2026-10-12). Over 4,001 values each, every
+// rendered colour read back on its ramp, worst 0.03 °C-weeks (DHW), 0.009 °C (HotSpot), 0.26 % (sea ice).
+const THERMAL = [[4, 35, 51], [82, 59, 154], [176, 95, 124], [242, 151, 72], [232, 250, 91]];
+const DHW = { min: 0, max: 16, unit: ' °C-weeks', stops: THERMAL };
+const HOTSPOT = { min: 0, max: 5, unit: ' °C', stops: THERMAL };
+const SEAICE = { min: 0, max: 100, unit: ' %', stops: [[27, 27, 55], [61, 67, 137], [66, 123, 183], [107, 177, 203], [188, 228, 231]] };
+
+test('CRW readouts: DHW, HotSpot and sea ice colours read back in their units; off-ramp colours give no value', () => {
+  for (const l of [crwDhwLayer, crwHotspotLayer, crwSeaIceLayer]) assert.equal(typeof l.readoutAt, 'function', `${l.id} opts in`);
+  assert.deepEqual(rampReadoutText([53, 50, 115], DHW), { kind: 'value', text: '2.5 °C-weeks' });
+  assert.deepEqual(rampReadoutText([82, 59, 154], DHW), { kind: 'value', text: '4 °C-weeks' }, 'bleaching likely');
+  assert.deepEqual(rampReadoutText([176, 95, 124], DHW), { kind: 'value', text: '8 °C-weeks' }, 'severe');
+  assert.deepEqual(rampReadoutText([232, 250, 91], DHW), { kind: 'value', text: '≥ 16 °C-weeks' });
+  // 1.0 °C drawn in 8-bit colour reads back 0.99: one colour step is ~0.009 °C on this ramp
+  assert.deepEqual(rampReadoutText([66, 54, 133], HOTSPOT), { kind: 'value', text: '0.99 °C' });
+  assert.deepEqual(rampReadoutText([153, 86, 131], HOTSPOT), { kind: 'value', text: '2.2 °C' });
+  assert.deepEqual(rampReadoutText([63, 94, 159], SEAICE), { kind: 'value', text: '37 %' });
+  assert.deepEqual(rampReadoutText([139, 197, 214], SEAICE), { kind: 'value', text: '85 %' });
+  // ERDDAP's KT_thermal colour (the old frames) is off the thermal ramp: no value rather than a wrong one
+  assert.deepEqual(rampReadoutText([239, 229, 80], DHW), { kind: 'unknown', rgb: [239, 229, 80] });
+});
+
 test('drapePixel: the pixel the drape draws at a point, from the manifest bounds; off the image is null', () => {
   const b = { west: -180, south: -80, east: 180, north: 90 };
   assert.deepEqual(drapePixel(90, -180, b, 1440, 681), { px: 0, py: 0 });
@@ -321,7 +343,7 @@ test('readoutAt: the shown frame\'s pixel under the point, inverted through the 
     assert.deepEqual(await l.readoutAt(-45, 0), { ...row('error', { error: 'z image is 2×2, the manifest says 4×2' }), date: '2026-10-08' }, 'a refused image is read again, not kept');
     assert.equal(read.length, before + 2, 'each click decoded it again');
     l.destroy(viewer);
-    // a drape not built with readout has no readoutAt (cmems-zooc, chlor-a and oisst opt in)
+    // a drape not built with readout has no readoutAt (cmems-zooc, chlor-a, oisst and the CRW layers opt in)
     assert.equal(createRasterDrapeLayer({ id: 'q', name: 'q', icon: 'i', source: 's' }).readoutAt, undefined);
     assert.equal(typeof cmemsZoocLayer.readoutAt, 'function');
     assert.equal(cmemsZoocLayer.id, 'cmems-zooc');
