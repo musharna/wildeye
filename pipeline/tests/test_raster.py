@@ -802,3 +802,26 @@ def test_a_product_with_no_time_for_its_newest_step_still_draws_and_fills_no_gap
     entry = raster.process({"id": "x", "url": "https://e/erddap/griddap/X.transparentPng?v%5B(last)%5D"}, tmp_path)
     assert (tmp_path / "x.png").exists() and entry["time"] is None and "gap_failures" not in entry
     assert len(entry["history"]) == 1, "only the newest image, stamped by the wall clock as before"
+
+
+def test_log_lines_carry_utc_with_a_z_whatever_the_process_wide_converter(monkeypatch):
+    """copernicusmarine sets logging.Formatter.converter = time.gmtime for the whole process when it loads, so the
+    raster log's unmarked local times turned into unmarked UTC mid-run (2026-10-16: oisst at 06:49, chlor-a "at 10:50",
+    read as a 4 h stall). Every line is UTC and says so, before and after that change."""
+    import logging
+    import time
+
+    from pipeline import raster
+    monkeypatch.setenv("TZ", "America/New_York")
+    time.tzset()
+    try:
+        rec = logging.LogRecord("raster", logging.INFO, __file__, 1, "oisst ok", None, None)
+        rec.created = 1792147799.0  # 2026-10-16T10:49:59Z, 06:49:59 EDT
+        before = raster.log_formatter().format(rec)
+        monkeypatch.setattr(logging.Formatter, "converter", time.gmtime)
+        after = raster.log_formatter().format(rec)
+        assert before == after == "2026-10-16T10:49:59Z INFO oisst ok"
+        assert time.strftime("%H:%M", time.localtime(rec.created)) == "06:49", "control: this host's local clock differs"
+    finally:
+        monkeypatch.undo()
+        time.tzset()

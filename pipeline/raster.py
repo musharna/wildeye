@@ -496,12 +496,23 @@ def with_retries(fn, name: str):
             _sleep(RETRY_WAIT_S * attempt)
 
 
+def log_formatter() -> logging.Formatter:
+    """Log lines stamped in UTC with a Z. copernicusmarine sets logging.Formatter.converter = time.gmtime for the whole
+    process when it loads, so the run's unmarked local times turned into unmarked UTC partway through (2026-10-16: an
+    exact +4:00 jump read as a 4 h stall). The converter is set on this instance, which that class-wide change can't reach."""
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s", "%Y-%m-%dT%H:%M:%SZ")
+    fmt.converter = time.gmtime
+    return fmt
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", type=Path, default=Path("public/data"))
     ap.add_argument("--only", default=None, help="comma-separated product ids")
     a = ap.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    handler = logging.StreamHandler()
+    handler.setFormatter(log_formatter())
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
     products = json.loads((HERE / "rasters.json").read_text())
     if a.only:
         keep = set(a.only.split(",")); products = [p for p in products if p["id"] in keep]
