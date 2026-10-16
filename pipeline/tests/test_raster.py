@@ -817,10 +817,16 @@ def test_log_lines_carry_utc_with_a_z_whatever_the_process_wide_converter(monkey
     try:
         rec = logging.LogRecord("raster", logging.INFO, __file__, 1, "oisst ok", None, None)
         rec.created = 1792147799.0  # 2026-10-16T10:49:59Z, 06:49:59 EDT
-        before = raster.log_formatter().format(rec)
+        fmt = raster.log_formatter()
+        assert logging.Formatter.converter is time.localtime, "log_formatter leaves the class-wide converter alone"
+        assert fmt.format(rec) == "2026-10-16T10:49:59Z INFO oisst ok"
+        # the same instance, under the class-wide flip copernicusmarine makes and its reverse (PR #91 review: rebuilding
+        # the formatter could not tell an instance converter from one set on the class)
         monkeypatch.setattr(logging.Formatter, "converter", time.gmtime)
-        after = raster.log_formatter().format(rec)
-        assert before == after == "2026-10-16T10:49:59Z INFO oisst ok"
+        assert fmt.format(rec) == "2026-10-16T10:49:59Z INFO oisst ok"
+        monkeypatch.setattr(logging.Formatter, "converter", time.localtime)
+        assert fmt.format(rec) == "2026-10-16T10:49:59Z INFO oisst ok"
+        assert logging.Formatter().formatTime(rec, "%H:%M") == "06:49", "control: an ordinary formatter here is local"
         assert time.strftime("%H:%M", time.localtime(rec.created)) == "06:49", "control: this host's local clock differs"
     finally:
         monkeypatch.undo()
