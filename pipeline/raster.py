@@ -81,6 +81,13 @@ def resolve_source(product: dict, catalog_xml: str | None = None, today: dt.date
     the data URL takes the year of the chosen file. Any other HTTP error is raised."""
     if "catalog" not in product:
         return product["url"], None
+    return _file_source(product, _catalog_files(product, catalog_xml, today, read_catalog)[-1])
+
+
+def _catalog_files(product: dict, catalog_xml: str | None = None, today: dt.date | None = None,
+                   read_catalog=None) -> list[str]:
+    """The sorted file names matching `file_regex` in this year's catalog (last year's when this one is a 404 or holds
+    no matching file); see resolve_source."""
     if catalog_xml is None:
         year, tried = (today or dt.datetime.now(dt.UTC).date()).year, []  # UTC, as fetch_cmems
         for y in (year, year - 1):
@@ -101,7 +108,11 @@ def resolve_source(product: dict, catalog_xml: str | None = None, today: dt.date
     files = sorted(set(re.findall(product["file_regex"], catalog_xml)))
     if not files:
         raise RuntimeError(f"{product['id']}: no file matching {product['file_regex']!r} in {product['catalog']}")
-    f = files[-1]
+    return files
+
+
+def _file_source(product: dict, f: str) -> tuple[str, str | None]:
+    """(data url, time from the file name) for one catalog file."""
     m = re.search(product["time_regex"], f)
     if m is None and "{year}" in product["url_template"]:
         raise RuntimeError(f"{product['id']}: {f} has no date for the {{year}} in its url_template")
@@ -304,7 +315,9 @@ def _draw_grid(product: dict, c: dict, ds) -> tuple[np.ndarray, str, dict]:
     return rgba, when, {"bounds": bounds}
 
 
-def process(product: dict, out_dir: Path) -> dict:
+def render(product: dict, out_dir: Path) -> tuple[np.ndarray, str | None, dict, float]:
+    """(image, time, manifest extras, masked fraction) of the product's newest time step, or of the step a
+    source_steps variant asks for."""
     extras = {}
     if "cmems" in product:
         rgba, when_from_name, extras = fetch_cmems(product)
@@ -329,18 +342,96 @@ def process(product: dict, out_dir: Path) -> dict:
         log.info("%s masked %.1f%% of opaque pixels as %s", product["id"], 100 * masked, t["rgb"])
     elif t != "none":
         raise ValueError(f"{product['id']}: transparent must be 'none' or {{'rgb': [r,g,b]}}, got {t!r}")
-    when = when_from_name or fetch_time(product.get("time_url"))
-    png = out_dir / f"{product['id']}.png"
+    return rgba, when_from_name or fetch_time(product.get("time_url")), extras, masked
+
+
+def _save_png(rgba: np.ndarray, png: Path) -> None:
     png.parent.mkdir(parents=True, exist_ok=True)
     tmp = png.with_suffix(".tmp.png")
     Image.fromarray(rgba, "RGBA").save(tmp, optimize=True)
     tmp.replace(png)
-    history = archive_frame(png, product["id"], when, out_dir, int(product.get("keep_days", KEEP_DAYS)))
+
+
+def process(product: dict, out_dir: Path) -> dict:
+    rgba, when, extras, masked = render(product, out_dir)
+    png = out_dir / f"{product['id']}.png"
+    _save_png(rgba, png)
+    keep_days = int(product.get("keep_days", KEEP_DAYS))
+    gap_failures = fill_gaps(product, out_dir, when, extras.get("bounds", product.get("bounds")), keep_days)
+    history = archive_frame(png, product["id"], when, out_dir, keep_days)
     keep = ("id", "name", "icon", "bounds", "legend", "credit", "credit_key", "classes", "ramp", "kind", "zrank")
     return {k: product[k] for k in keep if k in product} | {
         "png": f"data/rasters/{product['id']}.png", "time": when,
         "width": int(rgba.shape[1]), "height": int(rgba.shape[0]), "masked_fraction": round(masked, 4),
-        "history": history} | extras
+        "history": history} | extras | ({"gap_failures": gap_failures} if gap_failures else {})
+
+
+GAP_MAX = 7  # steps drawn per product per run: ~200 s each for oisst at 06:45, and the deploy is at 09:00
+
+
+def source_steps(product: dict, since: str, read_json=None, catalog_xml: str | None = None) -> list[tuple[str, dict]]:
+    """[(time, product variant that fetches that step)] for every time step the source holds from `since` on, oldest
+    first; [] for a source that only offers its newest step (cmems, cmems_dominant, crw_outlook). An ERDDAP url asking
+    for `(last)` lists the dataset's own time axis; a catalog product lists its files (this year's catalog only)."""
+    if "opendap_grid" in product and "catalog" in product:
+        steps = []
+        for f in _catalog_files(product, catalog_xml):
+            url, when = _file_source(product, f)
+            if when and when >= since:
+                steps.append((when, {k: v for k, v in product.items() if k != "catalog"} | {"url": url}))
+        return sorted(steps, key=lambda s: s[0])
+    if "erddap_grid" in product:
+        url = product["erddap_grid"]["url"]
+    elif "url" in product and not any(k in product for k in ("cmems", "cmems_dominant", "crw_outlook", "catalog")):
+        url = product["url"]
+    else:
+        return []
+    if url.count("(last)") != 1:
+        raise ValueError(f"{product['id']}: expected one (last) in {url}")
+    axis = url.split("?", 1)[0].rsplit(".", 1)[0] + f".json?time%5B({since}):1:(last)%5D"
+    rows = (read_json or (lambda u: json.loads(_read_text(u, 120))))(axis)["table"]["rows"]
+
+    def at(t):
+        v = json.loads(json.dumps(product))
+        if "erddap_grid" in v:
+            v["erddap_grid"]["url"] = url.replace("(last)", f"({t})")
+        else:
+            v["url"] = url.replace("(last)", f"({t})")
+            if v.get("time_url"):
+                v["time_url"] = v["time_url"].replace("(last)", f"({t})")
+        return v
+    return [(r[0], at(r[0])) for r in rows]
+
+
+def fill_gaps(product: dict, out_dir: Path, latest: str, bounds: dict | None, keep_days: int) -> dict:
+    """Draw the time steps older than `latest` that the source holds but rasters/<id>/ lacks, within keep_days, newest
+    first and at most GAP_MAX a run. The run used to fetch only the newest step, so a morning the source was down left
+    a hole for good (2026-10-15: 15 missing days over 6 layers; ERDDAP answers 404 "Currently unknown datasetID" while
+    it reloads a dataset). Returns {time: error} for the steps that still failed after retries; the next run tries them
+    again. A step drawn with a different time or bounds from the one asked for is refused."""
+    since = (dt.datetime.now(dt.UTC) - dt.timedelta(days=keep_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    pid, d = product["id"], out_dir / product["id"]
+    try:
+        steps = with_retries(lambda: source_steps(product, since), f"{pid} time steps")
+    except Exception as e:
+        log.error("%s time steps FAILED: %r", pid, e)
+        return {"time steps": repr(e)}
+    have = {f.stem for f in d.glob("*.png")} if d.exists() else set()
+    missing = [(t, v) for t, v in steps if t < latest and _stamp(t) not in have][::-1][:GAP_MAX]
+    failed = {}
+    for t, variant in missing:
+        try:
+            rgba, when, extras, _ = with_retries(lambda v=variant: render(v, out_dir), f"{pid} {t}")
+            if when != t:
+                raise ValueError(f"asked for {t}, the source gave {when}")
+            if extras.get("bounds", product.get("bounds")) != bounds:
+                raise ValueError(f"{t} bounds {extras.get('bounds')} differ from the newest step's {bounds}")
+            _save_png(rgba, d / f"{_stamp(t)}.png")
+            log.info("%s filled %s", pid, t)
+        except Exception as e:
+            failed[t] = repr(e)
+            log.error("%s %s FAILED: %r", pid, t, e)
+    return failed
 
 
 KEEP_DAYS = 30
@@ -415,18 +506,20 @@ def main(argv=None):
     prev = {e["id"]: e for e in (json.loads(manifest_path.read_text()) if manifest_path.exists() else {"products": []})["products"]}
     # products not selected this run keep their previous manifest entry untouched
     entries = {k: v for k, v in prev.items() if k not in {p["id"] for p in products}}
-    failures = {}
+    failures, gap_failures = {}, {}
     for p in products:
         t0 = time.time()
         try:
             entries[p["id"]] = with_retries(lambda: process(p, a.out / "rasters"), p["id"])
+            if entries[p["id"]].get("gap_failures"):
+                gap_failures[p["id"]] = entries[p["id"]].pop("gap_failures")
             log.info("%s ok time=%s %.0fs", p["id"], entries[p["id"]]["time"], time.time() - t0)
         except Exception as e:
             failures[p["id"]] = repr(e); log.error("%s FAILED: %r", p["id"], e)
             if p["id"] in prev:
                 entries[p["id"]] = prev[p["id"]] | {"stale": True}
     write_atomic(manifest_path, {"generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                                 "failures": failures, "products": [entries[k] for k in sorted(entries)]})
+                                 "failures": failures, "gap_failures": gap_failures, "products": [entries[k] for k in sorted(entries)]})
     if failures and len(failures) == len(products):
         raise SystemExit(f"every selected raster failed: {failures}")
 
