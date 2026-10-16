@@ -60,6 +60,12 @@ jobs:
   # tests that ci.yml never ran. README says `python3 -m pytest pipeline/tests`.
   pipeline-tests:
     runs-on: ubuntu-latest
+    env:
+      # restore and save must name the same paths: actions/cache hashes the path list into the entry's version, so a
+      # save with an extra exclusion line was never found by the restore (PR #90, first rerun)
+      RELEASE_CACHE_PATHS: |
+        ~/.cache/wildeye
+        !~/.cache/wildeye/**/*.part
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -75,9 +81,15 @@ jobs:
         id: release-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: ~/.cache/wildeye
+          path: ${{ env.RELEASE_CACHE_PATHS }}
           key: ${{ steps.release-key.outputs.prefix }}-
           restore-keys: ${{ steps.release-key.outputs.prefix }}-
+      - name: say whether the release files came from the cache
+        env:
+          MATCHED: ${{ steps.release-cache.outputs.cache-matched-key }}
+        run: |
+          if [ -n "$MATCHED" ]; then echo "release files restored from $MATCHED"
+          else echo "::warning::no cached release files for this prefix: the real-release tests download them this run"; fi
       - name: pytest pipeline/tests
         run: uv run --python 3.13 --with pytest --with numpy --with pillow --with boto3 --with arm-pyart --with openpyxl --with rasterio --with pyproj --with duckdb --with pyogrio --with shapely pytest pipeline/tests -q -p no:cacheprovider
       - name: name the release files on disk
@@ -92,9 +104,7 @@ jobs:
         if: always() && steps.release-cache.outputs.cache-matched-key != format('{0}-{1}', steps.release-key.outputs.prefix, steps.release-files.outputs.names)
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.cache/wildeye
-            !~/.cache/wildeye/**/*.part
+          path: ${{ env.RELEASE_CACHE_PATHS }}
           key: ${{ steps.release-key.outputs.prefix }}-${{ steps.release-files.outputs.names }}
 
   review:
