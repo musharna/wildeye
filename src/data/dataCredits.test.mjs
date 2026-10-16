@@ -5,23 +5,23 @@ import fs from 'node:fs';
 import { DATA_CREDITS } from './dataCredits.js';
 
 // Layers the pipeline draws from the numbers no longer use the providers' coloured PNG services. ndvi moved off NCEI's
-// WMS in PR #85 while its credit still said "NCEI THREDDS WMS". "From the numbers" is every source key process() in
+// WMS in PR #85 while its credit still said "NCEI THREDDS WMS". "From the numbers" is every source key render() in
 // pipeline/raster.py dispatches on before its PNG fallback, read from that file, so a new source is covered without
 // editing this test (a hand-kept list here missed cmems_dominant and crw_outlook, PR #86 review).
 const PNG_ROUTE = /\bWMS\b|transparentPng/;
 
 function numberSources() {
   const py = fs.readFileSync(new URL('../../pipeline/raster.py', import.meta.url), 'utf8');
-  const start = py.indexOf('\ndef process(');
+  const start = py.indexOf('\ndef render(');
   const end = py.indexOf('\n    else:', start);
-  assert.ok(start > 0 && end > start, 'process() and its PNG fallback are where this test expects them');
+  assert.ok(start > 0 && end > start, 'render() and its PNG fallback are where this test expects them');
   return [...py.slice(start, end).matchAll(/^ {4}(?:if|elif) "(\w+)" in product:$/gm)].map((m) => m[1]);
 }
 
 test('credits of layers drawn from numbers do not name a coloured-PNG route', () => {
   const keys = numberSources();
   for (const k of ['cmems', 'erddap_grid', 'opendap_grid', 'cmems_dominant', 'crw_outlook']) {
-    assert.ok(keys.includes(k), `control: ${k} is read from process()`);
+    assert.ok(keys.includes(k), `control: ${k} is read from render()`);
   }
   const products = JSON.parse(fs.readFileSync(new URL('../../pipeline/rasters.json', import.meta.url), 'utf8'));
   const fromNumbers = products.filter((p) => keys.some((k) => k in p));

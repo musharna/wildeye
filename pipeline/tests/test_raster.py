@@ -688,3 +688,117 @@ def test_edge_align_places_a_grid_whose_straddling_cell_is_the_last_one():
     assert b == {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0} and rgba.shape[1] == 2 * len(lon_c)
     assert _misplaced(rgba, b, lat_c, lon_c, step) == 0
     assert rgba[0, 0, 1] == len(lon_c) - 1 and rgba[0, -1, 1] == len(lon_c) - 1 and rgba[0, 1, 1] == 0
+
+
+def test_source_steps_lists_the_erddap_time_axis_and_the_catalog_files_and_nothing_for_newest_only_sources():
+    """fill_gaps needs every step a source holds: ERDDAP's own time axis for a url asking for (last), each step fetched
+    by naming its time where (last) was; a catalog product's files, each read by its own url. cmems and friends only
+    offer the newest step."""
+    import pytest
+
+    from pipeline.raster import source_steps
+    asked = []
+    axis = {"table": {"columnNames": ["time"], "rows": [["2026-10-12T12:00:00Z"], ["2026-10-13T12:00:00Z"]]}}
+    grid = {"id": "oisst", "erddap_grid": {"url": "https://e/erddap/griddap/X.nc?sst%5B(last)%5D%5B(0)%5D", "variable": "sst"}}
+    steps = source_steps(grid, "2026-10-01T00:00:00Z", read_json=lambda u: asked.append(u) or axis)
+    assert asked == ["https://e/erddap/griddap/X.json?time%5B(2026-10-01T00:00:00Z):1:(last)%5D"]
+    assert [(t, v["erddap_grid"]["url"]) for t, v in steps] == [
+        ("2026-10-12T12:00:00Z", "https://e/erddap/griddap/X.nc?sst%5B(2026-10-12T12:00:00Z)%5D%5B(0)%5D"),
+        ("2026-10-13T12:00:00Z", "https://e/erddap/griddap/X.nc?sst%5B(2026-10-13T12:00:00Z)%5D%5B(0)%5D")]
+    assert grid["erddap_grid"]["url"].endswith("(last)%5D%5B(0)%5D"), "the product itself is left as it was"
+    png = {"id": "crw-bleaching", "url": "https://e/erddap/griddap/D.transparentPng?B%5B(last)%5D",
+           "time_url": "https://e/erddap/griddap/D.json?time%5B(last)%5D"}
+    (t, v), = source_steps(png, "s", read_json=lambda u: {"table": {"rows": [["2026-10-13T12:00:00Z"]]}})
+    assert v["url"].endswith("B%5B(2026-10-13T12:00:00Z)%5D") and v["time_url"].endswith("time%5B(2026-10-13T12:00:00Z)%5D")
+    catalog = "".join(f'<dataset urlPath="a/VIIRS-Land_v001_JP113C1_NOAA-20_202610{d:02d}_c20261020000000.nc"/>' for d in (3, 9, 4))
+    ndvi = {"id": "ndvi", "catalog": "https://c/{year}/catalog.xml", "opendap_grid": {},
+            "file_regex": "VIIRS-Land_v001_[A-Z0-9]+_NOAA-20_\\d{8}_c\\d+\\.nc", "time_regex": "_(\\d{4})(\\d{2})(\\d{2})_c",
+            "url_template": "https://d/dodsC/{year}/{file}"}
+    steps = source_steps(ndvi, "2026-10-04T00:00:00Z", catalog_xml=catalog)
+    assert [t for t, _ in steps] == ["2026-10-04T00:00:00Z", "2026-10-09T00:00:00Z"], "oldest first, none before since"
+    assert steps[0][1]["url"] == "https://d/dodsC/2026/VIIRS-Land_v001_JP113C1_NOAA-20_20261004_c20261020000000.nc"
+    assert "catalog" not in steps[0][1]
+    for newest_only in ({"id": "c", "cmems": {}}, {"id": "p", "cmems_dominant": {}}, {"id": "o", "crw_outlook": {}}):
+        assert source_steps(newest_only, "s", read_json=lambda u: pytest.fail("no time axis to read")) == []
+    with pytest.raises(ValueError, match="one \\(last\\)"):
+        source_steps({"id": "x", "erddap_grid": {"url": "https://e/X.nc?v%5B(last)%5D%5B(last)%5D"}}, "s", read_json=lambda u: axis)
+
+
+def _days_ago(n):
+    import datetime as dt
+    d = (dt.datetime.now(dt.UTC) - dt.timedelta(days=n)).replace(hour=12, minute=0, second=0, microsecond=0)
+    return d.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_fill_gaps_draws_missing_steps_newest_first_capped_and_refuses_a_step_with_the_wrong_time(monkeypatch, tmp_path):
+    """The run fetched only the newest step, so a morning the source was down left a hole for good (oisst lost 4 days in
+    a month). fill_gaps draws the held steps rasters/<id>/ lacks, older than the newest, newest first, at most GAP_MAX a
+    run; a step the source answers with another time or other bounds is refused and reported, the rest still drawn."""
+    from pipeline import raster
+    from pipeline.raster import _stamp
+    d = tmp_path / "oisst"
+    d.mkdir()
+    times = [_days_ago(n) for n in range(12, -1, -1)]  # 12 days ago .. today, oldest first
+    latest, have = times[-1], {times[-2], times[0]}
+    for t in have:
+        (d / f"{_stamp(t)}.png").write_bytes(b"kept")
+    edges = {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+    monkeypatch.setattr(raster, "source_steps", lambda p, since: [(t, {"id": "oisst", "at": t}) for t in times])
+    drawn = []
+    img = np.zeros((2, 4, 4), np.uint8)
+
+    def render(v, out_dir):
+        drawn.append(v["at"])
+        if v["at"] == times[-4]:
+            return img, times[-5], {"bounds": edges}, 0.0    # the source gave another day
+        if v["at"] == times[-6]:
+            return img, v["at"], {"bounds": edges | {"south": -80.0}}, 0.0
+        return img, v["at"], {"bounds": edges}, 0.0
+    monkeypatch.setattr(raster, "render", render)
+    monkeypatch.setattr(raster, "_sleep", lambda s: None)
+    failed = raster.fill_gaps({"id": "oisst"}, tmp_path, latest, edges, keep_days=30)
+    assert drawn == times[-3:-3 - raster.GAP_MAX:-1], "newest first, GAP_MAX of them, none on disk or the newest"
+    assert set(failed) == {times[-4], times[-6]} and "another" not in failed[times[-4]]
+    assert "asked for" in failed[times[-4]] and "bounds" in failed[times[-6]]
+    written = {f.stem for f in d.glob("*.png")}
+    assert written == {_stamp(t) for t in have} | {_stamp(t) for t in drawn} - {_stamp(times[-4]), _stamp(times[-6])}
+    assert (d / f"{_stamp(times[-2])}.png").read_bytes() == b"kept", "an archived step is not redrawn"
+    monkeypatch.setattr(raster, "source_steps", lambda p, since: (_ for _ in ()).throw(ValueError("axis down")))
+    assert "axis down" in raster.fill_gaps({"id": "oisst"}, tmp_path, latest, edges, keep_days=30)["time steps"]
+
+
+def test_process_puts_filled_steps_in_the_history_and_main_reports_the_steps_that_failed(monkeypatch, tmp_path):
+    import json
+
+    from pipeline import raster
+    edges = {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+    img = np.zeros((2, 4, 4), np.uint8)
+    t0, t1, t2 = _days_ago(2), _days_ago(1), _days_ago(0)
+    monkeypatch.setattr(raster, "render", lambda v, d: (img, v.get("at", t2), {"bounds": edges}, 0.0))
+    monkeypatch.setattr(raster, "source_steps", lambda p, since: [(t, {"at": t}) for t in (t0, t1, t2)])
+    entry = raster.process({"id": "oisst", "erddap_grid": {}}, tmp_path)
+    assert [h["time"] for h in entry["history"]] == [t0, t1, t2] and "gap_failures" not in entry
+
+    def flaky(v, d):
+        if v.get("at") == t0:
+            raise ValueError("no such step")
+        return img, v.get("at", t2), {"bounds": edges}, 0.0
+    monkeypatch.setattr(raster, "render", flaky)
+    (tmp_path / "data" / "rasters" / "oisst").mkdir(parents=True)
+    raster.main(["--out", str(tmp_path / "data"), "--only", "oisst"])
+    m = json.loads((tmp_path / "data" / "rasters.json").read_text())
+    assert m["failures"] == {} and list(m["gap_failures"]) == ["oisst"] and "no such step" in m["gap_failures"]["oisst"][t0]
+    oisst, = m["products"]
+    assert "gap_failures" not in oisst and [h["time"] for h in oisst["history"]] == [t1, t2]
+
+
+def test_a_product_with_no_time_for_its_newest_step_still_draws_and_fills_no_gaps(monkeypatch, tmp_path):
+    """render() may return no time (a PNG product without time_url); fill_gaps compared each step with it and the
+    TypeError failed the whole product (PR #89 review). The newest image is still drawn; no gap is filled."""
+    from pipeline import raster
+    img = np.zeros((2, 4, 4), np.uint8)
+    monkeypatch.setattr(raster, "render", lambda v, d: (img, None, {}, 0.0))
+    monkeypatch.setattr(raster, "source_steps", lambda p, since: [(_days_ago(1), {"at": 1})])
+    entry = raster.process({"id": "x", "url": "https://e/erddap/griddap/X.transparentPng?v%5B(last)%5D"}, tmp_path)
+    assert (tmp_path / "x.png").exists() and entry["time"] is None and "gap_failures" not in entry
+    assert len(entry["history"]) == 1, "only the newest image, stamped by the wall clock as before"
