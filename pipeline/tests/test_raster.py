@@ -790,3 +790,15 @@ def test_process_puts_filled_steps_in_the_history_and_main_reports_the_steps_tha
     assert m["failures"] == {} and list(m["gap_failures"]) == ["oisst"] and "no such step" in m["gap_failures"]["oisst"][t0]
     oisst, = m["products"]
     assert "gap_failures" not in oisst and [h["time"] for h in oisst["history"]] == [t1, t2]
+
+
+def test_a_product_with_no_time_for_its_newest_step_still_draws_and_fills_no_gaps(monkeypatch, tmp_path):
+    """render() may return no time (a PNG product without time_url); fill_gaps compared each step with it and the
+    TypeError failed the whole product (PR #89 review). The newest image is still drawn; no gap is filled."""
+    from pipeline import raster
+    img = np.zeros((2, 4, 4), np.uint8)
+    monkeypatch.setattr(raster, "render", lambda v, d: (img, None, {}, 0.0))
+    monkeypatch.setattr(raster, "source_steps", lambda p, since: [(_days_ago(1), {"at": 1})])
+    entry = raster.process({"id": "x", "url": "https://e/erddap/griddap/X.transparentPng?v%5B(last)%5D"}, tmp_path)
+    assert (tmp_path / "x.png").exists() and entry["time"] is None and "gap_failures" not in entry
+    assert len(entry["history"]) == 1, "only the newest image, stamped by the wall clock as before"

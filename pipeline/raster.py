@@ -403,14 +403,17 @@ def source_steps(product: dict, since: str, read_json=None, catalog_xml: str | N
     return [(r[0], at(r[0])) for r in rows]
 
 
-def fill_gaps(product: dict, out_dir: Path, latest: str, bounds: dict | None, keep_days: int) -> dict:
+def fill_gaps(product: dict, out_dir: Path, latest: str | None, bounds: dict | None, keep_days: int) -> dict:
     """Draw the time steps older than `latest` that the source holds but rasters/<id>/ lacks, within keep_days, newest
     first and at most GAP_MAX a run. The run used to fetch only the newest step, so a morning the source was down left
     a hole for good (2026-10-15: 15 missing days over 6 layers; ERDDAP answers 404 "Currently unknown datasetID" while
     it reloads a dataset). Returns {time: error} for the steps that still failed after retries; the next run tries them
     again. A step drawn with a different time or bounds from the one asked for is refused."""
-    since = (dt.datetime.now(dt.UTC) - dt.timedelta(days=keep_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
     pid, d = product["id"], out_dir / product["id"]
+    if latest is None:  # no time for the newest step (a PNG product without time_url): nothing to call older (PR #89 review)
+        log.warning("%s has no time for its newest step; gaps not filled", pid)
+        return {}
+    since = (dt.datetime.now(dt.UTC) - dt.timedelta(days=keep_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         steps = with_retries(lambda: source_steps(product, since), f"{pid} time steps")
     except Exception as e:
