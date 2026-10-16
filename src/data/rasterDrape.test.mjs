@@ -271,6 +271,8 @@ test('a ramp that hides values at or below its min: the first stop reads as unde
   assert.deepEqual(rampReadoutText([4, 35, 51], SST), { kind: 'value', text: '≤ -2 °C' });
   assert.deepEqual(rampReadoutText([4, 35, 51], { ...SST, clear_at_or_below: -5 }), { kind: 'value', text: '≤ -2 °C' },
     'hiding below min leaves min itself drawn');
+  assert.throws(() => rampReadoutText([4, 35, 51], { ...DHW0, stops: [[4, 35, 51], ...DHW.stops] }), /no top/,
+    'two equal first stops would read "< Infinity"');
 });
 
 test('every shipped ramp that hides its min reads its first stop as a value above it', () => {

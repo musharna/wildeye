@@ -98,6 +98,7 @@ export function rampPosition(c, stops, tolerance = 1) {
 function bottomStepTop(ramp) {
   const [a, b] = ramp.stops;
   const steep = Math.max(...[0, 1, 2].map((k) => Math.abs(b[k] - a[k])));
+  if (!steep) throw new Error(`ramp's first two stops are both ${a.join(',')}: the bottom step has no top`);
   return rampValue(0.5 / steep / (ramp.stops.length - 1), ramp);
 }
 
