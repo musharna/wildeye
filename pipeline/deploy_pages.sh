@@ -59,7 +59,9 @@ if not refs or missing:
     sys.exit(f"index.html references missing from dist: {missing or 'no same-origin refs found'}")
 print(f"index.html: {len(refs)} same-origin refs resolve in dist")
 PYEOF
-echo "dist size: $(du -sh dist | cut -f1)"
+# Bytes, not disk blocks: `du -sh` counted each of ~87,000 small files as a whole 4 KB block and printed 1.1G for a
+# site of 866 MB (a 704 MB Pages artifact) on 2026-10-16, which read as over the 1 GB Pages limit.
+echo "dist size: $(du -sh --apparent-size dist | cut -f1) in $(find dist -type f | wc -l) files"
 
 SRC="$(git rev-parse --short HEAD)"
 # Every deploy before 2026-09-20 was `checkout --orphan` + `push --force`, so the whole site went up
