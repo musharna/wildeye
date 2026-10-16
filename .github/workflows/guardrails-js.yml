@@ -63,8 +63,39 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+      # The real-release tests download pinned files (Zenodo and others) into ~/.cache/wildeye. Fetched fresh on every
+      # run, they failed 5 runs in a row on 2026-10-15 (SSL EOF from Zenodo, a truncated zip) and held PR #89 for 4 h.
+      # Each file is checked against the md5 pinned in its module on every use, so a restored file is the release or is
+      # refused; the key prefix hashes those modules, so a changed pin starts a fresh cache rather than restoring a file
+      # it would refuse. The saved key ends in the files' names and sizes, so an unchanged cache is not uploaded again.
+      - name: cache key for the pinned release files
+        id: release-key
+        run: echo "prefix=wildeye-releases-v1-${{ hashFiles('pipeline/bii.py', 'pipeline/freshwater_fish.py', 'pipeline/hotspots.py', 'pipeline/mammals.py', 'pipeline/marine_realms.py', 'pipeline/reptiles.py', 'pipeline/soil_bacteria.py', 'pipeline/wcvp_plants.py', 'pipeline/hfp.py', 'pipeline/land.py') }}" >> "$GITHUB_OUTPUT"
+      - name: restore the pinned release files
+        id: release-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/wildeye
+          key: ${{ steps.release-key.outputs.prefix }}-
+          restore-keys: ${{ steps.release-key.outputs.prefix }}-
       - name: pytest pipeline/tests
         run: uv run --python 3.13 --with pytest --with numpy --with pillow --with boto3 --with arm-pyart --with openpyxl --with rasterio --with pyproj --with duckdb --with pyogrio --with shapely pytest pipeline/tests -q -p no:cacheprovider
+      - name: name the release files on disk
+        id: release-files
+        if: always()
+        run: |
+          mkdir -p ~/.cache/wildeye
+          echo "names=$(find ~/.cache/wildeye -type f ! -name '*.part' -printf '%P %s\n' | sort | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          du -sh ~/.cache/wildeye
+      # A failed run still saves the files it did get (each is renamed into place only once its md5 matched).
+      - name: save the release files
+        if: always() && steps.release-cache.outputs.cache-matched-key != format('{0}-{1}', steps.release-key.outputs.prefix, steps.release-files.outputs.names)
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/wildeye
+            !~/.cache/wildeye/**/*.part
+          key: ${{ steps.release-key.outputs.prefix }}-${{ steps.release-files.outputs.names }}
 
   review:
     # Automated Claude code review. Fails LOUD when the key is missing rather
