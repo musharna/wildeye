@@ -313,8 +313,7 @@
     "icon": "🌡️🪸",
     "erddap_grid": {
       "url": "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.nc?CRW_DHW%5B(last)%5D%5B(59.875):5:(-59.875)%5D%5B(-179.875):5:(179.875)%5D",
-      "variable": "CRW_DHW",
-      "clear_at_or_below": 0
+      "variable": "CRW_DHW"
     },
     "transparent": "none",
     "kind": "ramp",
@@ -323,6 +322,7 @@
       "min": 0,
       "max": 16,
       "unit": " °C-weeks",
+      "clear_at_or_below": 0,
       "stops": [
         [
           4,
@@ -361,8 +361,7 @@
     "icon": "🔥🪸",
     "erddap_grid": {
       "url": "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/dhw_5km.nc?CRW_HOTSPOT%5B(last)%5D%5B(59.875):5:(-59.875)%5D%5B(-179.875):5:(179.875)%5D",
-      "variable": "CRW_HOTSPOT",
-      "clear_at_or_below": 0
+      "variable": "CRW_HOTSPOT"
     },
     "transparent": "none",
     "kind": "ramp",
@@ -371,6 +370,7 @@
       "min": 0,
       "max": 5,
       "unit": " °C",
+      "clear_at_or_below": 0,
       "stops": [
         [
           4,

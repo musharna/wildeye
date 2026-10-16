@@ -1,6 +1,7 @@
 // src/data/rasterDrape.test.mjs — manifest selection + layer contract.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, drapePixel, cmemsZoocLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer } from './rasterDrape.js';
 
 test('pickProduct: finds by id, null when absent or malformed', () => {
@@ -255,6 +256,28 @@ test('CRW readouts: DHW, HotSpot and sea ice colours read back in their units; o
   assert.deepEqual(rampReadoutText([139, 197, 214], SEAICE), { kind: 'value', text: '85 %' });
   // ERDDAP's KT_thermal colour (the old frames) is off the thermal ramp: no value rather than a wrong one
   assert.deepEqual(rampReadoutText([239, 229, 80], DHW), { kind: 'unknown', rgb: [239, 229, 80] });
+});
+
+test('a ramp that hides values at or below its min: the first stop reads as under the top of its colour step', () => {
+  // ramp_rgba draws a value as the first stop itself until the steepest channel of the first segment moves half a
+  // level: DHW [4,35,51]→[82,59,154] is 103 levels in blue over a quarter of 0..16, so 0.5/103/4 × 16 = 0.019
+  const DHW0 = { ...DHW, clear_at_or_below: 0 }, HOT0 = { ...HOTSPOT, clear_at_or_below: 0 };
+  assert.deepEqual(rampReadoutText([4, 35, 51], DHW0), { kind: 'value', text: '< 0.019 °C-weeks' });
+  assert.deepEqual(rampReadoutText([4, 35, 51], HOT0), { kind: 'value', text: '< 0.0061 °C' });
+  assert.deepEqual(rampReadoutText([4, 35, 52], DHW0), { kind: 'value', text: '0.024 °C-weeks' }, 'one level up is a value');
+  assert.deepEqual(rampReadoutText([232, 250, 91], DHW0), { kind: 'value', text: '≥ 16 °C-weeks' });
+  // nothing hidden: the first stop still holds everything at or below min
+  assert.deepEqual(rampReadoutText([4, 35, 51], DHW), { kind: 'value', text: '≤ 0 °C-weeks' });
+  assert.deepEqual(rampReadoutText([4, 35, 51], SST), { kind: 'value', text: '≤ -2 °C' });
+  assert.deepEqual(rampReadoutText([4, 35, 51], { ...SST, clear_at_or_below: -5 }), { kind: 'value', text: '≤ -2 °C' },
+    'hiding below min leaves min itself drawn');
+});
+
+test('every shipped ramp that hides its min reads its first stop as a value above it', () => {
+  const products = JSON.parse(readFileSync(new URL('../../pipeline/rasters.json', import.meta.url), 'utf8'));
+  const hiding = products.filter((p) => p.ramp && p.ramp.clear_at_or_below >= p.ramp.min);
+  assert.deepEqual(hiding.map((p) => p.id), ['crw-dhw', 'crw-hotspot'], 'CRW hides 0 = no heat stress');
+  for (const p of hiding) assert.match(rampReadoutText(p.ramp.stops[0], p.ramp).text, /^< /, p.id);
 });
 
 // The ndvi ramp as in pipeline/rasters.json; colours rendered by ramp_rgba (2026-10-12). Over 4,001 values 0..0.9 every

@@ -91,11 +91,25 @@ export function rampPosition(c, stops, tolerance = 1) {
   return best && best.off <= tolerance ? best.t : null;
 }
 
-/** A drape pixel's value as readout text through the manifest ramp; the clamped ends read as bounds. */
+/**
+ * The top of a ramp's bottom colour step: ramp_rgba rounds each channel, so a value draws as the first stop itself
+ * until the steepest channel of the first segment has moved half a level.
+ */
+function bottomStepTop(ramp) {
+  const [a, b] = ramp.stops;
+  const steep = Math.max(...[0, 1, 2].map((k) => Math.abs(b[k] - a[k])));
+  return rampValue(0.5 / steep / (ramp.stops.length - 1), ramp);
+}
+
+/**
+ * A drape pixel's value as readout text through the manifest ramp; the clamped ends read as bounds. A ramp whose
+ * `clear_at_or_below` hides min draws only values above it, so its first stop reads as under the step's top.
+ */
 export function rampReadoutText(c, ramp) {
   const t = rampPosition(c, ramp.stops);
   if (t === null) return { kind: 'unknown', rgb: [c[0], c[1], c[2]] };
   const unit = ramp.unit || '';
+  if (t <= 0 && ramp.clear_at_or_below >= ramp.min) return { kind: 'value', text: `< ${sig2(bottomStepTop(ramp))}${unit}` };
   if (t <= 0) return { kind: 'value', text: `≤ ${ramp.min}${unit}` };
   if (t >= 1) return { kind: 'value', text: `≥ ${ramp.max}${unit}` };
   return { kind: 'value', text: `${sig2(rampValue(t, ramp))}${unit}` };
