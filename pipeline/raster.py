@@ -372,7 +372,7 @@ def _to_wire(e: BaseException):
     if isinstance(e, urllib.error.HTTPError):
         return ("HTTPError", e.url, e.code, str(e.reason))
     try:
-        pickle.loads(pickle.dumps(e))
+        pickle.loads(pickle.dumps(e))  # nosec B301 - loads only the bytes dumped here, in this process: a round-trip check
         return e
     except Exception:
         return RuntimeError(f"{e!r} (raised in the fetch process; not picklable)")
