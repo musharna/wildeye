@@ -144,12 +144,12 @@ def build_nights(root: Path, sites: list[dict], out: Path, now: dt.datetime, nig
                 continue
             entry.update(night=night.isoformat(), complete=now >= sunrise)
             table.setdefault(site["id"], {})[night.isoformat()] = entry
-    cutoff = (now.date() - dt.timedelta(days=keep_nights)).isoformat()
+    cutoff = (now.date() - dt.timedelta(days=keep_nights)).isoformat()   # kept: the keep_nights after it
     doc = {"generated_at": _iso(now),
            "method": ("bioRad 0.12.0 integrate_profile (0 m to profile top, ASL) over each night's stored "
                       "vol2bird profiles; night = bioRad sunset to sunrise (sun -0.268 deg)"),
            "failures": failures,
-           "sites": {s: [rows[k] for k in sorted(rows) if k >= cutoff] for s, rows in sorted(table.items())}}
+           "sites": {s: [rows[k] for k in sorted(rows) if k > cutoff] for s, rows in sorted(table.items())}}
     write_atomic(out, doc)
     return doc
 
@@ -203,13 +203,13 @@ def main(argv=None):
     if unknown:
         raise SystemExit(f"unknown site(s): {sorted(unknown)}")
     sites = [s for s in SITES if not a.site or s["id"] in a.site]
+    failed = []
     if a.command == "backfill":
         failed = [k for s in sites for n in a.night for k in backfill_night(s, n, a.vp_dir, a.workdir, a.workers)]
-        if failed:
-            raise SystemExit(f"{len(failed)} volumes failed: {failed[:5]}")
+    # rebuilt even when some volumes failed: the ones that landed are stored and count
     doc = build_nights(a.vp_dir, sites, a.out, dt.datetime.now(dt.UTC), nights=a.night)
-    if doc["failures"]:
-        raise SystemExit(f"night failures: {doc['failures']}")
+    if failed or doc["failures"]:
+        raise SystemExit(f"{len(failed)} volumes failed: {failed[:5]}; night failures: {doc['failures']}")
 
 if __name__ == "__main__":
     main()

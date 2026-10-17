@@ -117,3 +117,27 @@ def test_a_whole_real_night_with_rain_matches_biorad_scan_by_scan(tmp_path: Path
     n = night_total(ps, sunset, sunrise)
     assert n["mt_birds_km"] == pytest.approx(float(g[-1]["mt"]), rel=1e-12)
     assert n["profiles_without_density"] == 22 and n["measured_coverage"] < n["coverage"] <= 1
+
+def test_keeps_exactly_keep_nights_nights(tmp_path: Path):
+    """Review of #99: the cutoff was inclusive, so KEEP_NIGHTS = 60 kept 61 nights."""
+    out = tmp_path / "n.json"
+    now = dt.datetime(2026, 10, 17, 6, 0, tzinfo=UTC)
+    nights = [(now.date() - dt.timedelta(days=d)).isoformat() for d in range(0, 62)]
+    out.write_text(json.dumps({"sites": {"KGRR": [{"night": n} for n in nights]}}))
+    doc = build_nights(tmp_path / "vp", [], out, now, keep_nights=60)
+    kept = [e["night"] for e in doc["sites"]["KGRR"]]
+    assert len(kept) == 60 and kept[0] == "2026-08-19" and kept[-1] == "2026-10-17"   # 08-18 is 60 back
+
+def test_backfill_with_a_failed_volume_still_rebuilds_the_nights_then_fails(tmp_path: Path, monkeypatch):
+    """Review of #99: one failed volume of ~140 stopped the night table from being rebuilt
+    from the ones that did land; now it is rebuilt and the run still exits non-zero."""
+    import pipeline.bird_nights as bn
+    built = []
+    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers: ["2026/10/17/KOKX/K_V06"])
+    monkeypatch.setattr(bn, "build_nights", lambda root, sites, out, now, nights=None: built.append(nights) or {"failures": {}})
+    with pytest.raises(SystemExit, match="1 volumes failed"):
+        main(["backfill", "--night", "2026-10-16", "--site", "KOKX", "--vp-dir", str(tmp_path), "--out", str(tmp_path / "o.json")])
+    assert built == [[dt.date(2026, 10, 16)]]
+    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers: [])   # positive control
+    main(["backfill", "--night", "2026-10-16", "--site", "KOKX", "--vp-dir", str(tmp_path), "--out", str(tmp_path / "o.json")])
+    assert len(built) == 2
