@@ -181,8 +181,10 @@ def test_backfill_every_min_runs_the_first_volume_of_each_slot_that_is_not_store
     import pipeline.bird_nights as bn
     import pipeline.nexrad as nx
     sunset, sunrise = night_window(dt.date(2026, 10, 16), KOKX["lon"], KOKX["lat"])
-    t = lambda m: sunset + dt.timedelta(minutes=m)
-    key = lambda m: f"{t(m):%Y/%m/%d}/KOKX/KOKX{t(m):%Y%m%d_%H%M%S}_V06"
+    def t(m):
+        return sunset + dt.timedelta(minutes=m)
+    def key(m):
+        return f"{t(m):%Y/%m/%d}/KOKX/KOKX{t(m):%Y%m%d_%H%M%S}_V06"
     mins = [-5, 0.5, 3, 9, 10.5, 14, 25, 27]                            # -5 is before sunset
     monkeypatch.setattr(nx, "list_day_keys", lambda site, day: [key(m) for m in mins if t(m).date() == day.date()])
     ran = []
