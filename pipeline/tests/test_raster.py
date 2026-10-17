@@ -233,6 +233,87 @@ def test_main_retries_a_product_once_its_fetch_fails_transiently(tmp_path, monke
     assert sorted(calls) == ["crw-dhw", "oisst"] and list(m["failures"]) == ["crw-dhw"] and "regular grid" in m["failures"]["crw-dhw"]
 
 
+def test_main_gives_up_a_hung_fetch_once_and_the_next_product_still_runs(tmp_path, monkeypatch):
+    """With a dead proxy fetch_cmems hung for over 400 s instead of raising (2026-10-16), and the cron's only limit was
+    timeout 1800 on the whole run, so one hung source would have lost every product's update that day. A fetch now
+    gets FETCH_DEADLINE_S; a hung one fails its product once (no retries: it would hang again) and the run goes on."""
+    import json
+    import threading
+    import time
+
+    import numpy as np
+
+    from pipeline import raster
+    out = tmp_path / "data"
+    out.mkdir()
+    calls, release = [], threading.Event()
+
+    def render(p, d):
+        calls.append(p["id"])
+        if p["id"] == "oisst":
+            release.wait(30)  # a source that never answers
+        return np.zeros((1, 2, 4), np.uint8), "2026-10-15T12:00:00Z", {}, 0.0
+    monkeypatch.setattr(raster, "render", render)
+    monkeypatch.setattr(raster, "source_steps", lambda *a, **k: [])
+    monkeypatch.setattr(raster, "FETCH_DEADLINE_S", 0.5)
+    monkeypatch.setattr(raster, "_sleep", lambda s: None)
+    t0 = time.monotonic()
+    try:
+        raster.main(["--out", str(out), "--only", "oisst,crw-dhw"])
+    finally:
+        release.set()
+    m = json.loads((out / "rasters.json").read_text())
+    assert time.monotonic() - t0 < 10
+    assert calls == ["oisst", "crw-dhw"], "the hung fetch is not retried"
+    assert list(m["failures"]) == ["oisst"] and "still running after" in m["failures"]["oisst"]
+    assert [e["id"] for e in m["products"]] == ["crw-dhw"] and m["products"][0]["time"] == "2026-10-15T12:00:00Z"
+
+
+def test_fill_gaps_stops_at_a_hung_step(tmp_path, monkeypatch):
+    import threading
+
+    from pipeline import raster
+    release, asked = threading.Event(), []
+
+    def render(v, d):
+        asked.append(v["t"])
+        release.wait(30)
+    steps = [(t, {"id": "x", "t": t}) for t in ("2026-10-12T12:00:00Z", "2026-10-13T12:00:00Z", "2026-10-14T12:00:00Z")]
+    monkeypatch.setattr(raster, "render", render)
+    monkeypatch.setattr(raster, "source_steps", lambda *a, **k: steps)
+    monkeypatch.setattr(raster, "FETCH_DEADLINE_S", 0.3)
+    try:
+        failed = raster.fill_gaps({"id": "x"}, tmp_path, "2026-10-15T12:00:00Z", None, 30)
+    finally:
+        release.set()
+    assert asked == ["2026-10-14T12:00:00Z"], "newest missing step first, and no more after it hung"
+    assert list(failed) == ["2026-10-14T12:00:00Z"] and "still running after" in failed["2026-10-14T12:00:00Z"]
+
+
+def test_main_writes_the_manifest_after_each_product(tmp_path, monkeypatch):
+    """A run killed partway (the cron's timeout 1800) kept none of its work: the manifest was written once, at the end.
+    Now each finished product is on disk; one the run never reached keeps its previous entry."""
+    import json
+
+    import pytest
+
+    from pipeline import raster
+    out = tmp_path / "data"
+    out.mkdir()
+    old = [{"id": i, "png": f"data/rasters/{i}.png", "time": "old"} for i in ("crw-dhw", "oisst")]
+    (out / "rasters.json").write_text(json.dumps({"products": old}))
+
+    def process(p, d):
+        if p["id"] == "crw-dhw":  # after oisst in rasters.json
+            raise SystemExit("killed by timeout")  # not an Exception: main does not catch it
+        return {"id": p["id"], "png": f"data/rasters/{p['id']}.png", "time": "new"}
+    monkeypatch.setattr(raster, "process", process)
+    with pytest.raises(SystemExit):
+        raster.main(["--out", str(out), "--only", "crw-dhw,oisst"])
+    m = json.loads((out / "rasters.json").read_text())
+    assert {e["id"]: e["time"] for e in m["products"]} == {"oisst": "new", "crw-dhw": "old"}
+
+
 def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_history(tmp_path):
     import datetime as dt
     from pipeline.raster import archive_frame

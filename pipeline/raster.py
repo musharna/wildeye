@@ -1,7 +1,7 @@
 """Config-driven raster drapes: fetch a data-only PNG (ERDDAP transparentPng), post-process,
 write public/data/rasters/<id>.png and public/data/rasters.json."""
 from __future__ import annotations
-import argparse, datetime as dt, http.client, io, json, logging, re, ssl, time, urllib.error, urllib.request
+import argparse, datetime as dt, http.client, io, json, logging, re, ssl, threading, time, urllib.error, urllib.request
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -356,8 +356,39 @@ def _save_png(rgba: np.ndarray, png: Path) -> None:
     tmp.replace(png)
 
 
+# One fetch (render): the slowest seen is crw-bleaching at 327 s (cron log, 2026-09/10). With a dead proxy fetch_cmems
+# hung for over 400 s instead of raising (2026-10-16), and the cron's timeout 1800 on the whole run would then have
+# lost every product's update for the day.
+FETCH_DEADLINE_S = 600
+
+
+class FetchDeadline(Exception):
+    """A fetch still running after FETCH_DEADLINE_S. Not transient: a source that hung once is given up, not retried."""
+
+
+def bounded(fn, name: str):
+    """fn() on a daemon thread, given up after FETCH_DEADLINE_S with FetchDeadline; fn's own error is raised as it
+    was. A thread can't be killed, so a hung one is left to finish or end with the run. render writes no file except
+    crw-outlook's readout image (atomically, after its downloads), so an abandoned fetch leaves the data as it was."""
+    box = {}
+
+    def run():
+        try:
+            box["value"] = fn()
+        except BaseException as e:  # handed to the caller below
+            box["error"] = e
+    worker = threading.Thread(target=run, name=f"fetch {name}", daemon=True)
+    worker.start()
+    worker.join(FETCH_DEADLINE_S)
+    if worker.is_alive():
+        raise FetchDeadline(f"{name} still running after {FETCH_DEADLINE_S:g}s")
+    if "error" in box:
+        raise box["error"]
+    return box["value"]
+
+
 def process(product: dict, out_dir: Path) -> dict:
-    rgba, when, extras, masked = render(product, out_dir)
+    rgba, when, extras, masked = bounded(lambda: render(product, out_dir), product["id"])
     png = out_dir / f"{product['id']}.png"
     _save_png(rgba, png)
     keep_days = int(product.get("keep_days", KEEP_DAYS))
@@ -428,13 +459,18 @@ def fill_gaps(product: dict, out_dir: Path, latest: str | None, bounds: dict | N
     failed = {}
     for t, variant in missing:
         try:
-            rgba, when, extras, _ = with_retries(lambda v=variant: render(v, out_dir), f"{pid} {t}")
+            rgba, when, extras, _ = with_retries(
+                lambda v=variant, t=t: bounded(lambda: render(v, out_dir), f"{pid} {t}"), f"{pid} {t}")
             if when != t:
                 raise ValueError(f"asked for {t}, the source gave {when}")
             if extras.get("bounds", product.get("bounds")) != bounds:
                 raise ValueError(f"{t} bounds {extras.get('bounds')} differ from the newest step's {bounds}")
             _save_png(rgba, d / f"{_stamp(t)}.png")
             log.info("%s filled %s", pid, t)
+        except FetchDeadline as e:  # the source is hung: the older steps would hang too
+            failed[t] = repr(e)
+            log.error("%s %s FAILED: %r; no more gaps this run", pid, t, e)
+            break
         except Exception as e:
             failed[t] = repr(e)
             log.error("%s %s FAILED: %r", pid, t, e)
@@ -535,9 +571,14 @@ def main(argv=None):
         keep = set(a.only.split(",")); products = [p for p in products if p["id"] in keep]
     manifest_path = a.out / "rasters.json"
     prev = {e["id"]: e for e in (json.loads(manifest_path.read_text()) if manifest_path.exists() else {"products": []})["products"]}
-    # products not selected this run keep their previous manifest entry untouched
-    entries = {k: v for k, v in prev.items() if k not in {p["id"] for p in products}}
+    # products not selected this run, or not reached yet, keep their previous manifest entry untouched
+    entries = dict(prev)
     failures, gap_failures = {}, {}
+
+    def write_manifest():
+        write_atomic(manifest_path, {"generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                     "failures": failures, "gap_failures": gap_failures,
+                                     "products": [entries[k] for k in sorted(entries)]})
     for p in products:
         t0 = time.time()
         try:
@@ -549,8 +590,7 @@ def main(argv=None):
             failures[p["id"]] = repr(e); log.error("%s FAILED: %r", p["id"], e)
             if p["id"] in prev:
                 entries[p["id"]] = prev[p["id"]] | {"stale": True}
-    write_atomic(manifest_path, {"generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                                 "failures": failures, "gap_failures": gap_failures, "products": [entries[k] for k in sorted(entries)]})
+        write_manifest()  # each product as it finishes: a run killed partway keeps what it did (the cron's timeout 1800)
     if failures and len(failures) == len(products):
         raise SystemExit(f"every selected raster failed: {failures}")
 
