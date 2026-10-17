@@ -1,0 +1,3 @@
+# bioRad 0.12.0 integrate_profile defaults (alt_min 0, alt_max Inf, interval_max 3600)
+datetime,vid,mtr,mt
+2026-09-11T02:53:00Z,52.230000000000004,1147.8423600000001,NA

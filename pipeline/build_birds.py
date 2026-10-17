@@ -5,7 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from .atomic import write_atomic  # noqa: F401  (re-exported for build_archive/tests)
 from .nexrad import latest_volume_key, download_volume
-from .vol2bird import run_vol2bird, parse_profile, reduce_profile
+from .vol2bird import (run_vol2bird, parse_profile, reduce_profile, integrate_profile,
+                       save_profile, prune_profiles)
 from .ppi import ppi_for_volume
 from .field import composite, write_field_png
 
@@ -38,8 +39,10 @@ def merge_last_good(new: dict[str, dict], previous_geojson: dict | None) -> list
     return [out[k] for k in sorted(out)]
 
 
-def process_site(site: dict, workdir: Path, ppi_dir: Path | None, key: str | None = None) -> tuple[dict, dict]:
-    """Returns (feature, ppi_meta). ppi_meta = {png, bounds, grid}; png is None when ppi_dir is None."""
+def process_site(site: dict, workdir: Path, ppi_dir: Path | None, key: str | None = None,
+                 vp_dir: Path | None = None) -> tuple[dict, dict]:
+    """Returns (feature, ppi_meta). ppi_meta = {png, bounds, grid}; png is None when ppi_dir is None.
+    With vp_dir, the raw vol2bird profile is kept there (save_profile) for the nightly totals."""
     if key is None:
         key = latest_volume_key(site["id"])
     if not key:
@@ -49,7 +52,11 @@ def process_site(site: dict, workdir: Path, ppi_dir: Path | None, key: str | Non
     # re-hits; without this the workdir grew ~23 GB/day and filled the disk (2026-09-15).
     # unlink in finally also drops a partial download so a retry re-fetches it.
     try:
-        rec = reduce_profile(parse_profile(run_vol2bird(vol)))
+        raw = run_vol2bird(vol)
+        bins = parse_profile(raw)
+        rec = {**reduce_profile(bins), **integrate_profile(bins)}
+        if vp_dir is not None:
+            save_profile(raw, site["id"], key, vp_dir)
         if ppi_dir is None:
             from .ppi import bio_grid
             import pyart
@@ -87,6 +94,10 @@ def main(argv=None):
     ap.add_argument("--workdir", type=Path,
                     default=Path(os.environ.get("WILDEYE_WORK") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wildeye" / "nexrad"))
     ap.add_argument("--sites", type=int, default=None, help="limit to first N sites")
+    ap.add_argument("--vp-dir", type=Path,
+                    default=Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wildeye" / "vp",
+                    help="where each scan's raw vol2bird profile is kept (gzip, ~3 MB/day for 20 sites)")
+    ap.add_argument("--vp-keep-days", type=int, default=60)
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     sites = SITES[: a.sites] if a.sites else SITES
@@ -99,12 +110,13 @@ def main(argv=None):
     t0 = time.time()
     new, failures = {}, {}
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
-        futs = {ex.submit(process_site, s, a.workdir, ppi_dir): s for s in sites}
+        futs = {ex.submit(process_site, s, a.workdir, ppi_dir, vp_dir=a.vp_dir): s for s in sites}
         for fut in as_completed(futs):
             s = futs[fut]
             try:
                 new[s["id"]], metas[s["id"]] = fut.result()
-                log.info("%s ok dens=%s", s["id"], new[s["id"]]["properties"]["density_birds_km3"])
+                pr = new[s["id"]]["properties"]
+                log.info("%s ok dens=%s mtr=%s", s["id"], pr["density_birds_km3"], pr["mtr_birds_km_h"])
             except Exception as e:  # logged loud; last-good keeps the site
                 failures[s["id"]] = repr(e)
                 log.error("%s FAILED: %r", s["id"], e)
@@ -134,6 +146,9 @@ def main(argv=None):
         log.info("wrote %s %dx%d from %d sites", field_json, grid.shape[1], grid.shape[0], len(items))
     log.info("wrote %s fresh=%d stale=%d wall=%.0fs", a.out, len(new),
              len(fc["features"]) - len(new), time.time() - t0)
+    pruned = prune_profiles(a.vp_dir, a.vp_keep_days)
+    if pruned:
+        log.info("pruned %d profile day dirs older than %d days", len(pruned), a.vp_keep_days)
     if not new:
         raise SystemExit("every site failed")
 

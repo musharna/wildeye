@@ -53,6 +53,7 @@ def test_process_site_unlinks_volume_after_processing(tmp_path: Path, monkeypatc
     monkeypatch.setattr(bb, "run_vol2bird", lambda vol: "raw")
     monkeypatch.setattr(bb, "parse_profile", lambda raw: "prof")
     monkeypatch.setattr(bb, "reduce_profile", lambda prof: REC)
+    monkeypatch.setattr(bb, "integrate_profile", lambda prof: {})
     monkeypatch.setattr(bb, "ppi_for_volume", lambda vol, png: ("grid", "bounds"))
 
     feat, meta = bb.process_site(SITE, tmp_path / "work", tmp_path / "ppi", key=key)
@@ -89,3 +90,37 @@ def test_process_site_unlinks_volume_even_when_processing_fails(tmp_path: Path, 
         bb.process_site(SITE, tmp_path / "work", tmp_path / "ppi", key=key)
 
     assert not made["path"].exists()
+
+def test_process_site_integrates_and_keeps_the_raw_profile(tmp_path: Path, monkeypatch):
+    """The real KOKX vol2bird output goes through the real parse/reduce/integrate: the feature
+    carries bioRad's numbers (pipeline/tests/fixtures/KOKX_profile.biorad.csv) and the raw text
+    lands in the store; without vp_dir nothing is stored."""
+    import gzip
+    import pytest
+    import pipeline.build_birds as bb
+
+    fix = Path(__file__).parent / "fixtures" / "KOKX_profile.txt"
+    key = "2026/09/11/KOKX/KOKX20260911_025354_V06"
+
+    def fake_download(k, dest_dir):
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        p = dest_dir / Path(k).name
+        p.write_bytes(b"volume")
+        return p
+
+    monkeypatch.setattr(bb, "download_volume", fake_download)
+    monkeypatch.setattr(bb, "run_vol2bird", lambda vol: fix.read_text())
+    monkeypatch.setattr(bb, "ppi_for_volume", lambda vol, png: ("grid", "bounds"))
+
+    feat, _ = bb.process_site(SITE, tmp_path / "work", tmp_path / "ppi", key=key, vp_dir=tmp_path / "vp")
+    p = feat["properties"]
+    assert p["mtr_birds_km_h"] == pytest.approx(1147.8423600000001, rel=1e-12)
+    assert p["vid_birds_km2"] == pytest.approx(52.230000000000004, rel=1e-12)
+    assert p["density_birds_km3"] > 10                       # the old record is still there
+    stored, = (tmp_path / "vp").rglob("*.txt.gz")
+    assert stored.relative_to(tmp_path / "vp").as_posix() == "KOKX/20260911/KOKX20260911_025354_V06.txt.gz"
+    assert gzip.decompress(stored.read_bytes()).decode() == fix.read_text()
+
+    # a new scan without vp_dir is stored nowhere (a new key, so the store's dedup can't hide a write)
+    bb.process_site(SITE, tmp_path / "work2", tmp_path / "ppi", key="2026/09/11/KOKX/KOKX20260911_030354_V06")
+    assert list(tmp_path.rglob("*.txt.gz")) == [stored]

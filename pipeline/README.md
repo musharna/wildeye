@@ -24,9 +24,16 @@ Downloads cache in `$WILDEYE_WORK` (default `/tmp/wildeye-nexrad`).
 | `heading_deg` | density-weighted circular mean of `dd` |
 | `speed_ms` | density-weighted mean of `ff` |
 | `peak_altitude_m` | height bin with max density |
+| `vid_birds_km2` | birds per km² of ground, whole column: Σ `dens`·Δh (bioRad `integrate_profile` vid) |
+| `mtr_birds_km_h` | migration traffic rate, birds crossing 1 km per hour: Σ `dens`·`ff`·3.6·Δh (bioRad mtr; gap bins drop out) |
+| `speedless_share` | part of `vid` in gap bins with no `ff`, which `mtr` cannot count (null when `vid` is 0) |
 | `scan_time` | volume timestamp, UTC ISO |
 | `stale` | true when this run failed for the site and the last good record was kept |
 Top level: `generated_at`, `site_count`, `fresh_count`, `failures` (site → error).
+
+Each scan's raw vol2bird output is kept in `--vp-dir` (default `~/.cache/wildeye/vp/SITE/YYYYMMDD/*.txt.gz`,
+60 days). bioRad reads it as is: `Rscript pipeline/biorad_golden.R SITE out.csv <files>` writes bioRad's
+vid/mtr/mt for the same profiles (the tests' golden numbers come from this, bioRad 0.12.0).
 
 ## Field outputs (M2/M3)
 - `public/data/birds_ppi/<SITE>.png` + bounds: lowest sweep reflectivity with rain
