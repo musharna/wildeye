@@ -128,27 +128,35 @@ def migration_traffic(times: list[dt.datetime], mtr: list[float], interval_max_s
     missing = [i for i, m in enumerate(mtr) if m is None]
     if missing:
         raise ValueError(f"no migration traffic rate for profiles {missing}")
+    out, cum = [], 0.0
+    for h, m in zip(profile_hours(times, interval_max_s), mtr):
+        cum += h * m
+        out.append(cum)
+    return out
+
+def profile_hours(times: list[dt.datetime], interval_max_s: float = 3600.0) -> list[float]:
+    """Hours each profile stands for in bioRad's time integration: half the step on either side
+    (none past the ends), capped at the mean of the steps shorter than interval_max_s."""
     steps = [(b - a).total_seconds() for a, b in zip(times, times[1:])]
     if any(s <= 0 for s in steps):
         raise ValueError("profile times must be strictly increasing")
     short = [s for s in steps if s < interval_max_s]
     replace = sum(short) / len(short) if short else interval_max_s
-    out, cum = [], 0.0
-    for before, after, m in zip([0.0] + steps, steps + [0.0], mtr):
-        cum += min(replace, (before + after) / 2) / 3600 * m
-        out.append(cum)
-    return out
+    return [min(replace, (before + after) / 2) / 3600 for before, after in zip([0.0] + steps, steps + [0.0])]
 
 _SCAN = re.compile(r"(\d{8})_\d{6}")
 
-def save_profile(text: str, site: str, key: str, root: Path) -> Path:
-    """Keep one scan's raw vol2bird output as root/SITE/YYYYMMDD/<volume>.txt.gz (UTC day of the scan),
-    the input bioRad's read_stdout takes. A scan already stored is left as first written."""
+def profile_path(site: str, key: str, root: Path) -> Path:
     name = Path(key).name
     m = _SCAN.search(name)
     if not m:
         raise ValueError(f"no scan time in key {key}")
-    dest = root / site / m.group(1) / f"{name}.txt.gz"
+    return root / site / m.group(1) / f"{name}.txt.gz"
+
+def save_profile(text: str, site: str, key: str, root: Path) -> Path:
+    """Keep one scan's raw vol2bird output as root/SITE/YYYYMMDD/<volume>.txt.gz (UTC day of the scan),
+    the input bioRad's read_stdout takes. A scan already stored is left as first written."""
+    dest = profile_path(site, key, root)
     if dest.exists():
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
