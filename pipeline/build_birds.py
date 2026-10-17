@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from .atomic import write_atomic  # noqa: F401  (re-exported for build_archive/tests)
 from .nexrad import latest_volume_key, download_volume
-from .vol2bird import (run_vol2bird, parse_profile, reduce_profile, integrate_profile,
+from .vol2bird import (run_vol2bird, parse_profile, reduce_profile, integrate_profile, bio_gate_share,
                        save_profile, prune_profiles)
 from .bird_nights import build_nights
 from .ppi import ppi_for_volume
@@ -55,7 +55,7 @@ def process_site(site: dict, workdir: Path, ppi_dir: Path | None, key: str | Non
     try:
         raw = run_vol2bird(vol)
         bins = parse_profile(raw)
-        rec = {**reduce_profile(bins), **integrate_profile(bins)}
+        rec = {**reduce_profile(bins), **integrate_profile(bins), "bio_gate_share": bio_gate_share(bins)}
         if vp_dir is not None:
             save_profile(raw, site["id"], key, vp_dir)
         if ppi_dir is None:

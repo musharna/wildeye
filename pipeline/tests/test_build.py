@@ -54,6 +54,7 @@ def test_process_site_unlinks_volume_after_processing(tmp_path: Path, monkeypatc
     monkeypatch.setattr(bb, "parse_profile", lambda raw: "prof")
     monkeypatch.setattr(bb, "reduce_profile", lambda prof: REC)
     monkeypatch.setattr(bb, "integrate_profile", lambda prof: {})
+    monkeypatch.setattr(bb, "bio_gate_share", lambda prof: None)
     monkeypatch.setattr(bb, "ppi_for_volume", lambda vol, png: ("grid", "bounds"))
 
     feat, meta = bb.process_site(SITE, tmp_path / "work", tmp_path / "ppi", key=key)
@@ -117,6 +118,7 @@ def test_process_site_integrates_and_keeps_the_raw_profile(tmp_path: Path, monke
     assert p["mtr_birds_km_h"] == pytest.approx(1147.8423600000001, rel=1e-12)
     assert p["vid_birds_km2"] == pytest.approx(52.230000000000004, rel=1e-12)
     assert p["density_birds_km3"] > 10                       # the old record is still there
+    assert p["bio_gate_share"] == pytest.approx(0.758218, abs=1e-6)  # awk sum($16)/sum($18)
     stored, = (tmp_path / "vp").rglob("*.txt.gz")
     assert stored.relative_to(tmp_path / "vp").as_posix() == "KOKX/20260911/KOKX20260911_025354_V06.txt.gz"
     assert gzip.decompress(stored.read_bytes()).decode() == fix.read_text()

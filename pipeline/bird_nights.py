@@ -13,7 +13,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from .atomic import write_atomic
-from .vol2bird import (run_vol2bird, parse_profile, integrate_profile, migration_traffic, profile_hours,
+from .vol2bird import (run_vol2bird, parse_profile, integrate_profile, migration_traffic, profile_hours, bio_gate_share,
                        profile_time, profile_path, save_profile)
 
 log = logging.getLogger("bird_nights")
@@ -98,12 +98,16 @@ def night_total(profiles: list[tuple[dt.datetime, str]], sunset: dt.datetime, su
     """mt over the night as bioRad computes it, peak mtr, how much of the night the profiles stand for,
     and the part of the night's birds (vid-time weighted) that had no speed and so are missing from mt.
     A profile with no density at all (vol2bird removed every gate, usually rain) counts as zero
-    traffic for its time, as bioRad's na.rm sums do; measured_coverage leaves those out."""
-    recs = [(t, integrate_profile(parse_profile(text))) for t, text in profiles]
+    traffic for its time, as bioRad's na.rm sums do; measured_coverage leaves those out.
+    bio_gate_share is the profiles' bio_gate_share weighted by the time each stands for (profiles with
+    no echo left out): near 0 on a night of rain, where the birds counted rest on a few gates."""
+    parsed = [(t, parse_profile(text)) for t, text in profiles]
+    recs = [(t, integrate_profile(bins)) for t, bins in parsed]
+    shares = [bio_gate_share(bins) for _, bins in parsed]
     out = {"sunset": _iso(sunset), "sunrise": _iso(sunrise), "profiles": len(recs),
            "profiles_without_density": sum(1 for _, r in recs if r["vid_birds_km2"] is None),
            "coverage": 0.0, "measured_coverage": 0.0, "mt_birds_km": None,
-           "peak_mtr_birds_km_h": None, "peak_time": None, "speedless_share": None}
+           "peak_mtr_birds_km_h": None, "peak_time": None, "speedless_share": None, "bio_gate_share": None}
     if not recs:
         return out
     times = [t for t, _ in recs]
@@ -115,6 +119,10 @@ def night_total(profiles: list[tuple[dt.datetime, str]], sunset: dt.datetime, su
     unseen = sum(h * r["vid_birds_km2"] * r["speedless_share"] for h, r in measured if r["speedless_share"] is not None)
     out.update(coverage=sum(hours) / night_h, measured_coverage=sum(h for h, _ in measured) / night_h,
                mt_birds_km=mt[-1], speedless_share=unseen / seen if seen > 0 else None)
+    echo = [(h, s) for h, s in zip(hours, shares) if s is not None]
+    echo_h = sum(h for h, _ in echo)
+    if echo_h > 0:
+        out["bio_gate_share"] = sum(h * s for h, s in echo) / echo_h
     if measured:
         t_peak, r_peak = max(((t, r) for t, r in recs if r["mtr_birds_km_h"] is not None),
                              key=lambda p: p[1]["mtr_birds_km_h"])

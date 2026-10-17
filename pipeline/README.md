@@ -27,6 +27,7 @@ Downloads cache in `$WILDEYE_WORK` (default `/tmp/wildeye-nexrad`).
 | `vid_birds_km2` | birds per km² of ground, whole column: Σ `dens`·Δh (bioRad `integrate_profile` vid) |
 | `mtr_birds_km_h` | migration traffic rate, birds crossing 1 km per hour: Σ `dens`·`ff`·3.6·Δh (bioRad mtr; gap bins drop out) |
 | `speedless_share` | part of `vid` in gap bins with no `ff`, which `mtr` cannot count (null when `vid` is 0) |
+| `bio_gate_share` | Σ `n_dbz` / Σ `n_dbz_all`: share of the reflective gates vol2bird kept as birds after its dual-pol rain filter and clutter screen (near 0 in rain, where `dens` rests on the few gates left; ~0.6–0.9 on a clear night; null with no echo) |
 | `scan_time` | volume timestamp, UTC ISO |
 | `stale` | true when this run failed for the site and the last good record was kept |
 Top level: `generated_at`, `site_count`, `fresh_count`, `failures` (site → error).
@@ -40,7 +41,8 @@ Every bird run rebuilds tonight and last night for each site from the profile st
 Night D runs from bioRad's sunset on D to its sunrise on D+1 (sun 0.268° below the horizon; `biorad_sun_golden.R`
 checks the port). Per site and night: `mt_birds_km` (birds crossing 1 km over the night, bioRad mt),
 `peak_mtr_birds_km_h` and `peak_time`, `profiles`, `coverage` (share of the night the profiles stand for),
-`speedless_share` (share of the night's birds with no speed, which mt cannot count), `complete` (sunrise passed).
+`speedless_share` (share of the night's birds with no speed, which mt cannot count), `bio_gate_share`
+(the profiles' share weighted by the time each stands for: the night's rain readout), `complete` (sunrise passed).
 Kept 60 nights; a site-night that fails is listed in `failures` and the rest still written.
 Past nights from the archive: `python3 -m pipeline.bird_nights backfill --site KOKX --night 2026-10-16`
 (~140 volumes a night, vol2bird in Docker); `build` recomputes nights from what is stored.

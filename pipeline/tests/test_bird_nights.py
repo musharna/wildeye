@@ -1,5 +1,6 @@
 import csv
 import datetime as dt
+import gzip
 import json
 from pathlib import Path
 import pytest
@@ -18,12 +19,13 @@ def rows(path: Path) -> list[dict]:
 def iso(s: str) -> dt.datetime:
     return dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
 
-def prof(when: dt.datetime, bins: list[tuple]) -> str:
-    """A vol2bird stdout profile; bins are (height_m, dens, ff or None for a gap bin)."""
+def prof(when: dt.datetime, bins: list[tuple], kept: tuple = (1, 1)) -> str:
+    """A vol2bird stdout profile; bins are (height_m, dens, ff or None for a gap bin); kept is each bin's
+    (n_dbz, n_dbz_all)."""
     out = [HDR]
     for h, dens, ff in bins:
         f, g = ("nan", "T") if ff is None else (f"{ff}", "F")
-        out.append(f"{when:%Y%m%d} {when:%H%M} {h} nan nan nan {f} nan 2.0 {g} 0.0 0.0 {dens} 0.0 1 1 1 1\n")
+        out.append(f"{when:%Y%m%d} {when:%H%M} {h} nan nan nan {f} nan 2.0 {g} 0.0 0.0 {dens} 0.0 1 {kept[0]} 1 {kept[1]}\n")
     return "".join(out)
 
 def store_night(root: Path) -> None:
@@ -141,3 +143,34 @@ def test_backfill_with_a_failed_volume_still_rebuilds_the_nights_then_fails(tmp_
     monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers: [])   # positive control
     main(["backfill", "--night", "2026-10-16", "--site", "KOKX", "--vp-dir", str(tmp_path), "--out", str(tmp_path / "o.json")])
     assert len(built) == 2
+
+def test_night_bio_gate_share_weights_profiles_by_the_time_they_stand_for():
+    t0 = dt.datetime(2026, 10, 17, 1, 0, tzinfo=UTC)
+    a = prof(t0, [(0, 10.0, 5.0), (200, 0.0, 5.0)], kept=(50, 50))                     # all echo kept, 5 min
+    b = prof(t0 + dt.timedelta(minutes=10), [(0, "nan", 5.0), (200, "nan", 5.0)], kept=(0, 80))  # rain, 10 min
+    c = prof(t0 + dt.timedelta(minutes=20), [(0, "nan", 5.0), (200, "nan", 5.0)], kept=(0, 0))   # empty sky
+    sunset, sunrise = t0 - dt.timedelta(hours=1), t0 + dt.timedelta(hours=1)
+    n = night_total([(t0, a), (t0 + dt.timedelta(minutes=10), b), (t0 + dt.timedelta(minutes=20), c)], sunset, sunrise)
+    assert n["bio_gate_share"] == pytest.approx((5 * 1.0 + 10 * 0.0) / 15)            # c has no echo to share
+    assert night_total([(t0 + dt.timedelta(minutes=20), c)], sunset, sunrise)["bio_gate_share"] is None
+    assert night_total([(t0, a)], sunset, sunrise)["bio_gate_share"] is None     # one profile stands for no time
+    assert night_total([], sunset, sunrise)["bio_gate_share"] is None
+
+def test_night_bio_gate_share_tells_the_rain_night_from_the_clear_one():
+    """The rain readout (wildeye radar-depth ledger, Q2) on real nights: KOKX 2026-10-16 had rain overnight
+    (JFK ASOS 0.10 in), KLOT the same night was dry (ORD); profiles as vol2bird wrote them. Per-scan numbers
+    are awk's sum($16)/sum($18) over each file."""
+    from pipeline.vol2bird import bio_gate_share, parse_profile
+    sites = {s["id"]: s for s in json.loads((FIX.parent.parent / "sites.json").read_text())}
+    shares = {}
+    for site in ("KOKX", "KLOT"):
+        sunset, sunrise = night_window(dt.date(2026, 10, 16), sites[site]["lon"], sites[site]["lat"])
+        ps = [(dt.datetime.strptime(f.name[4:19], "%Y%m%d_%H%M%S").replace(tzinfo=UTC), gzip.decompress(f.read_bytes()).decode())
+              for f in sorted((FIX / f"vp_{site}_night_20261016").glob("*.txt.gz"))]
+        assert len(ps) == {"KOKX": 140, "KLOT": 39}[site]
+        shares[site] = night_total(ps, sunset, sunrise)["bio_gate_share"]
+        if site == "KOKX":
+            per = {t.strftime("%H%M"): bio_gate_share(parse_profile(x)) for t, x in ps}
+            assert per["2227"] == pytest.approx(0.474254, abs=1e-6) and per["0115"] == pytest.approx(0.213764, abs=1e-6)
+            assert per["0457"] == pytest.approx(0.000013, abs=1e-6)
+    assert shares["KOKX"] < 0.25 < 0.6 < shares["KLOT"], shares
