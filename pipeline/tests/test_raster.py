@@ -98,6 +98,12 @@ def test_transient_covers_real_opendap_failures_and_the_cmems_login_outage():
         def log_message(self, *a):
             pass
 
+    class H404(H503):
+        def do_GET(self):
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
     class Drop(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             self.connection.shutdown(socket.SHUT_RDWR)
@@ -114,10 +120,9 @@ def test_transient_covers_real_opendap_failures_and_the_cmems_login_outage():
             finally:
                 srv.shutdown()
         return e.value
-    server, dropped = raised(H503), raised(Drop)
-    assert (server.errno, dropped.errno) == (-70, -68), (server, dropped)
-    assert transient(server) and transient(dropped)
-    assert transient(OSError(-90, "NetCDF: file not found"))
+    server, missing, dropped = raised(H503), raised(H404), raised(Drop)
+    assert (server.errno, missing.errno, dropped.errno) == (-70, -90, -68), (server, missing, dropped)
+    assert transient(server) and transient(missing) and transient(dropped)
     for e in (OSError(-51, "NetCDF: Unknown file format"), OSError(-101, "NetCDF: HDF error"),
               FileNotFoundError(2, "No such file or directory"), OSError(28, "No space left on device")):
         assert not transient(e), repr(e)
