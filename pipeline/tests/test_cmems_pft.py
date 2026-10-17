@@ -204,12 +204,12 @@ def test_fetch_refuses_a_month_with_no_cell_at_all():
 def test_process_routes_cmems_dominant_to_its_own_fetch(tmp_path, monkeypatch):
     from pipeline import cmems_pft, raster
 
-    called = {}
+    called = tmp_path / "called"  # the fetch runs in a child process (raster.bounded): a dict here would stay empty
     # a month dated from today: archive_frame prunes against the wall clock, so a fixed month expires
     month = (dt.datetime.now(dt.UTC) - dt.timedelta(days=36)).strftime("%Y-%m-01T00:00:00Z")
 
     def fake(product, **kw):
-        called["id"] = product["id"]
+        called.write_text(product["id"])
         return paint_classes(
             np.array([[0, -1]], np.int8), [[1, 2, 3]] * 5
         ), month
@@ -224,7 +224,7 @@ def test_process_routes_cmems_dominant_to_its_own_fetch(tmp_path, monkeypatch):
         _product() | {"bounds": {}, "kind": "classes", "keep_days": 400}, tmp_path
     )
     assert (
-        called["id"] == "cmems-pft"
+        called.read_text() == "cmems-pft"
         and entry["time"] == month
         and entry["width"] == 2
     )

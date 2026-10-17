@@ -233,6 +233,149 @@ def test_main_retries_a_product_once_its_fetch_fails_transiently(tmp_path, monke
     assert sorted(calls) == ["crw-dhw", "oisst"] and list(m["failures"]) == ["crw-dhw"] and "regular grid" in m["failures"]["crw-dhw"]
 
 
+def test_main_gives_up_a_hung_fetch_once_and_the_next_product_still_runs(tmp_path, monkeypatch):
+    """With a dead proxy fetch_cmems hung for over 400 s instead of raising (2026-10-16), and the cron's only limit was
+    timeout 1800 on the whole run, so one hung source would have lost every product's update that day. A fetch now
+    gets FETCH_DEADLINE_S in its own process; a hung one is killed and fails its product once (no retries: it would
+    hang again), and the run goes on. Calls are logged to a file: the fetch runs in a child process."""
+    import json
+    import time
+
+    import numpy as np
+
+    from pipeline import raster
+    out, log = tmp_path / "data", tmp_path / "calls"
+    out.mkdir()
+
+    def render(p, d):
+        with log.open("a") as f:
+            f.write(p["id"] + "\n")
+        if p["id"] == "oisst":
+            time.sleep(30)  # a source that never answers
+        return np.zeros((1, 2, 4), np.uint8), "2026-10-15T12:00:00Z", {}, 0.0
+    monkeypatch.setattr(raster, "render", render)
+    monkeypatch.setattr(raster, "source_steps", lambda *a, **k: [])
+    monkeypatch.setattr(raster, "FETCH_DEADLINE_S", 1)
+    monkeypatch.setattr(raster, "_sleep", lambda s: None)
+    t0 = time.monotonic()
+    raster.main(["--out", str(out), "--only", "oisst,crw-dhw"])
+    m = json.loads((out / "rasters.json").read_text())
+    assert time.monotonic() - t0 < 15
+    assert log.read_text().split() == ["oisst", "crw-dhw"], "the hung fetch is not retried"
+    assert list(m["failures"]) == ["oisst"] and "still running after" in m["failures"]["oisst"]
+    assert [e["id"] for e in m["products"]] == ["crw-dhw"] and m["products"][0]["time"] == "2026-10-15T12:00:00Z"
+
+
+def test_fill_gaps_stops_at_a_hung_step(tmp_path, monkeypatch):
+    import time
+
+    from pipeline import raster
+    log = tmp_path / "asked"
+
+    def render(v, d):
+        with log.open("a") as f:
+            f.write(v["t"] + "\n")
+        time.sleep(30)
+    steps = [(t, {"id": "x", "t": t}) for t in ("2026-10-12T12:00:00Z", "2026-10-13T12:00:00Z", "2026-10-14T12:00:00Z")]
+    monkeypatch.setattr(raster, "render", render)
+    monkeypatch.setattr(raster, "source_steps", lambda *a, **k: steps)
+    monkeypatch.setattr(raster, "FETCH_DEADLINE_S", 1)
+    failed = raster.fill_gaps({"id": "x"}, tmp_path, "2026-10-15T12:00:00Z", None, 30)
+    assert log.read_text().split() == ["2026-10-14T12:00:00Z"], "newest missing step first, and no more after it hung"
+    assert list(failed) == ["2026-10-14T12:00:00Z"] and "still running after" in failed["2026-10-14T12:00:00Z"]
+
+
+def test_bounded_kills_a_hung_child_and_hands_back_values_and_errors_as_raised(tmp_path, monkeypatch):
+    """A hung fetch is a process that is killed, not a thread left running beside the next fetch (PR #95 review).
+    Values and errors come back as fn produced them; HTTPError, which pickle can't rebuild, keeps its code, so a 503
+    is still retried. An error that can't travel, or a child that dies, is reported, never lost."""
+    import os
+    import time
+    import urllib.error
+
+    import numpy as np
+    import pytest
+
+    from pipeline import raster
+    monkeypatch.setattr(raster, "FETCH_DEADLINE_S", 1)
+    pidfile = tmp_path / "pid"
+
+    def hang():
+        pidfile.write_text(str(os.getpid()))
+        time.sleep(60)
+    t0 = time.monotonic()
+    with pytest.raises(raster.FetchDeadline, match="hang still running after 1s"):
+        raster.bounded(hang, "hang")
+    assert time.monotonic() - t0 < 10, "given up at the deadline, not when the hung fetch ends"
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pidfile.read_text()), 0)  # the hung child is gone, not left running
+    big = raster.bounded(lambda: np.arange(4_000_000, dtype=np.uint32).reshape(1000, 4000), "big")
+    assert big.shape == (1000, 4000) and int(big[-1, -1]) == 3_999_999, "a 16 MB frame comes back whole"
+
+    def http(code):
+        raise urllib.error.HTTPError("https://x/y.nc", code, "Service Unavailable", {}, None)
+    with pytest.raises(urllib.error.HTTPError) as e:
+        raster.bounded(lambda: http(503), "h")
+    assert e.value.code == 503 and e.value.url == "https://x/y.nc" and raster.transient(e.value)
+    with pytest.raises(urllib.error.HTTPError) as e:
+        raster.bounded(lambda: http(400), "h")
+    assert e.value.code == 400 and not raster.transient(e.value)
+    with pytest.raises(OSError) as e:
+        raster.bounded(lambda: (_ for _ in ()).throw(OSError(-70, "NetCDF: DAP server error")), "dap")
+    assert e.value.errno == -70 and raster.transient(e.value)
+
+    class Local(Exception):  # defined inside a function: pickle can't find it by name
+        pass
+    with pytest.raises(RuntimeError, match="Local.*not picklable"):
+        raster.bounded(lambda: (_ for _ in ()).throw(Local("x")), "local")
+    with pytest.raises(RuntimeError, match="ended without a result \\(exit code 3\\)"):
+        raster.bounded(lambda: os._exit(3), "crash")
+
+
+def test_main_writes_the_manifest_after_each_product(tmp_path, monkeypatch):
+    """A run killed partway (the cron's timeout 1800) kept none of its work: the manifest was written once, at the end.
+    Now each finished product is on disk; one the run never reached keeps its previous entry."""
+    import json
+
+    import pytest
+
+    from pathlib import Path
+
+    from pipeline import raster
+    order = [p["id"] for p in json.loads((Path(raster.__file__).parent / "rasters.json").read_text())]
+    first, second = sorted(["crw-dhw", "oisst"], key=order.index)  # the run follows rasters.json, not --only
+    out = tmp_path / "data"
+    out.mkdir()
+    old = [{"id": i, "png": f"data/rasters/{i}.png", "time": "old"} for i in (first, second)]
+    (out / "rasters.json").write_text(json.dumps({"products": old}))
+
+    def process(p, d):
+        if p["id"] == second:
+            raise SystemExit("killed by timeout")  # not an Exception: main does not catch it
+        return {"id": p["id"], "png": f"data/rasters/{p['id']}.png", "time": "new"}
+    monkeypatch.setattr(raster, "process", process)
+    with pytest.raises(SystemExit):
+        raster.main(["--out", str(out), "--only", f"{second},{first}"])
+    m = json.loads((out / "rasters.json").read_text())
+    assert {e["id"]: e["time"] for e in m["products"]} == {first: "new", second: "old"}
+
+
+def test_main_refuses_an_only_naming_an_unknown_product(tmp_path, monkeypatch):
+    import json
+
+    import pytest
+
+    from pipeline import raster
+    out = tmp_path / "data"
+    out.mkdir()
+    monkeypatch.setattr(raster, "process", lambda p, d: {"id": p["id"], "png": "x", "time": "new"})
+    with pytest.raises(SystemExit, match="not in rasters.json: osist"):
+        raster.main(["--out", str(out), "--only", "osist,crw-dhw"])
+    assert not (out / "rasters.json").exists(), "nothing run on a typo"
+    raster.main(["--out", str(out), "--only", "oisst"])
+    assert json.loads((out / "rasters.json").read_text())["products"][0]["time"] == "new"
+
+
 def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_history(tmp_path):
     import datetime as dt
     from pipeline.raster import archive_frame
@@ -823,11 +966,12 @@ def test_fill_gaps_draws_missing_steps_newest_first_capped_and_refuses_a_step_wi
         (d / f"{_stamp(t)}.png").write_bytes(b"kept")
     edges = {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
     monkeypatch.setattr(raster, "source_steps", lambda p, since: [(t, {"id": "oisst", "at": t}) for t in times])
-    drawn = []
+    log = tmp_path / "drawn"  # render runs in a child process (bounded): a list here would stay empty
     img = np.zeros((2, 4, 4), np.uint8)
 
     def render(v, out_dir):
-        drawn.append(v["at"])
+        with log.open("a") as f:
+            f.write(v["at"] + "\n")
         if v["at"] == times[-4]:
             return img, times[-5], {"bounds": edges}, 0.0    # the source gave another day
         if v["at"] == times[-6]:
@@ -836,6 +980,7 @@ def test_fill_gaps_draws_missing_steps_newest_first_capped_and_refuses_a_step_wi
     monkeypatch.setattr(raster, "render", render)
     monkeypatch.setattr(raster, "_sleep", lambda s: None)
     failed = raster.fill_gaps({"id": "oisst"}, tmp_path, latest, edges, keep_days=30)
+    drawn = log.read_text().split()
     assert drawn == times[-3:-3 - raster.GAP_MAX:-1], "newest first, GAP_MAX of them, none on disk or the newest"
     assert set(failed) == {times[-4], times[-6]} and "another" not in failed[times[-4]]
     assert "asked for" in failed[times[-4]] and "bounds" in failed[times[-6]]
