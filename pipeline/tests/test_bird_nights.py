@@ -135,12 +135,12 @@ def test_backfill_with_a_failed_volume_still_rebuilds_the_nights_then_fails(tmp_
     from the ones that did land; now it is rebuilt and the run still exits non-zero."""
     import pipeline.bird_nights as bn
     built = []
-    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers: ["2026/10/17/KOKX/K_V06"])
+    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers, every_min=None: ["2026/10/17/KOKX/K_V06"])
     monkeypatch.setattr(bn, "build_nights", lambda root, sites, out, now, nights=None: built.append(nights) or {"failures": {}})
     with pytest.raises(SystemExit, match="1 volumes failed"):
         main(["backfill", "--night", "2026-10-16", "--site", "KOKX", "--vp-dir", str(tmp_path), "--out", str(tmp_path / "o.json")])
     assert built == [[dt.date(2026, 10, 16)]]
-    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers: [])   # positive control
+    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers, every_min=None: [])   # positive control
     main(["backfill", "--night", "2026-10-16", "--site", "KOKX", "--vp-dir", str(tmp_path), "--out", str(tmp_path / "o.json")])
     assert len(built) == 2
 
@@ -174,3 +174,28 @@ def test_night_bio_gate_share_tells_the_rain_night_from_the_clear_one():
             assert per["2227"] == pytest.approx(0.474254, abs=1e-6) and per["0115"] == pytest.approx(0.213764, abs=1e-6)
             assert per["0457"] == pytest.approx(0.000013, abs=1e-6)
     assert shares["KOKX"] < 0.25 < 0.6 < shares["KLOT"], shares
+
+def test_backfill_every_min_runs_the_first_volume_of_each_slot_that_is_not_stored(tmp_path: Path, monkeypatch):
+    """--every-min samples the archive the way the cron does (about one volume per 10 min) so a
+    backfilled night is the product as shipped; slots count from sunset, stored scans are skipped."""
+    import pipeline.bird_nights as bn
+    import pipeline.nexrad as nx
+    sunset, sunrise = night_window(dt.date(2026, 10, 16), KOKX["lon"], KOKX["lat"])
+    t = lambda m: sunset + dt.timedelta(minutes=m)
+    key = lambda m: f"{t(m):%Y/%m/%d}/KOKX/KOKX{t(m):%Y%m%d_%H%M%S}_V06"
+    mins = [-5, 0.5, 3, 9, 10.5, 14, 25, 27]                            # -5 is before sunset
+    monkeypatch.setattr(nx, "list_day_keys", lambda site, day: [key(m) for m in mins if t(m).date() == day.date()])
+    ran = []
+    def fake_download(k, dest):
+        ran.append(k)
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "v").write_bytes(b"x")
+        return dest / "v"
+    monkeypatch.setattr(nx, "download_volume", fake_download)
+    monkeypatch.setattr(bn, "run_vol2bird", lambda vol: "raw")
+    save_profile("raw", "KOKX", key(25), tmp_path / "vp")                # slot 2 already stored
+    assert bn.backfill_night(KOKX, dt.date(2026, 10, 16), tmp_path / "vp", tmp_path / "w", 1, every_min=10) == []
+    assert sorted(ran) == [key(0.5), key(10.5)]                          # slots 0 and 1; slot 2 stored
+    ran.clear()                                                          # positive control: no sampling
+    bn.backfill_night(KOKX, dt.date(2026, 10, 16), tmp_path / "vp2", tmp_path / "w", 1)
+    assert sorted(ran) == [key(m) for m in mins[1:]]
