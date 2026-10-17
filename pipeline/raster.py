@@ -1,7 +1,7 @@
 """Config-driven raster drapes: fetch a data-only PNG (ERDDAP transparentPng), post-process,
 write public/data/rasters/<id>.png and public/data/rasters.json."""
 from __future__ import annotations
-import argparse, datetime as dt, http.client, io, json, logging, re, ssl, threading, time, urllib.error, urllib.request
+import argparse, datetime as dt, http.client, io, json, logging, multiprocessing, pickle, re, ssl, time, urllib.error, urllib.request
 from pathlib import Path
 import numpy as np
 from PIL import Image
@@ -366,25 +366,58 @@ class FetchDeadline(Exception):
     """A fetch still running after FETCH_DEADLINE_S. Not transient: a source that hung once is given up, not retried."""
 
 
-def bounded(fn, name: str):
-    """fn() on a daemon thread, given up after FETCH_DEADLINE_S with FetchDeadline; fn's own error is raised as it
-    was. A thread can't be killed, so a hung one is left to finish or end with the run. render writes no file except
-    crw-outlook's readout image (atomically, after its downloads), so an abandoned fetch leaves the data as it was."""
-    box = {}
+def _to_wire(e: BaseException):
+    """e in a form that survives pickling back to the parent. HTTPError does not (its __init__ needs five arguments),
+    so it travels as its url, code and reason; anything else that can't make the trip becomes a RuntimeError naming it."""
+    if isinstance(e, urllib.error.HTTPError):
+        return ("HTTPError", e.url, e.code, str(e.reason))
+    try:
+        pickle.loads(pickle.dumps(e))
+        return e
+    except Exception:
+        return RuntimeError(f"{e!r} (raised in the fetch process; not picklable)")
 
-    def run():
+
+def _from_wire(w) -> BaseException:
+    if isinstance(w, tuple) and w[0] == "HTTPError":
+        return urllib.error.HTTPError(w[1], w[2], w[3], {}, None)
+    return w
+
+
+def _fetch_child(conn, fn):
+    try:
+        out = ("value", fn())
+    except BaseException as e:  # sent to the parent, which raises it
+        out = ("error", _to_wire(e))
+    conn.send(out)
+    conn.close()
+
+
+def bounded(fn, name: str):
+    """fn() in a forked child process, killed after FETCH_DEADLINE_S with FetchDeadline; fn's own error is raised as
+    it was (HTTPError rebuilt from its url, code and reason). A process, not a thread: a hung thread can't be stopped,
+    and an abandoned one would run alongside the next fetch in libraries that aren't thread-safe (netCDF's C library,
+    the copernicusmarine client; PR #95 review). fork, so the child sees this process's state as it is."""
+    ctx = multiprocessing.get_context("fork")
+    recv, send = ctx.Pipe(duplex=False)
+    child = ctx.Process(target=_fetch_child, args=(send, fn), name=f"fetch {name}", daemon=True)
+    child.start()
+    send.close()  # the child holds the only writer: if it dies, recv sees EOF
+    try:
+        if not recv.poll(FETCH_DEADLINE_S):
+            child.kill()
+            raise FetchDeadline(f"{name} still running after {FETCH_DEADLINE_S:g}s")
         try:
-            box["value"] = fn()
-        except BaseException as e:  # handed to the caller below
-            box["error"] = e
-    worker = threading.Thread(target=run, name=f"fetch {name}", daemon=True)
-    worker.start()
-    worker.join(FETCH_DEADLINE_S)
-    if worker.is_alive():
-        raise FetchDeadline(f"{name} still running after {FETCH_DEADLINE_S:g}s")
-    if "error" in box:
-        raise box["error"]
-    return box["value"]
+            kind, payload = recv.recv()
+        except EOFError:
+            child.join()
+            raise RuntimeError(f"{name}: the fetch process ended without a result (exit code {child.exitcode})") from None
+    finally:
+        child.join()
+        recv.close()
+    if kind == "error":
+        raise _from_wire(payload)
+    return payload
 
 
 def process(product: dict, out_dir: Path) -> dict:
@@ -568,7 +601,11 @@ def main(argv=None):
     logging.basicConfig(level=logging.INFO, handlers=[handler])
     products = json.loads((HERE / "rasters.json").read_text())
     if a.only:
-        keep = set(a.only.split(",")); products = [p for p in products if p["id"] in keep]
+        keep = set(a.only.split(","))
+        unknown = keep - {p["id"] for p in products}
+        if unknown:  # a typo used to select nothing and exit 0 (PR #95 review)
+            raise SystemExit(f"--only names products not in rasters.json: {', '.join(sorted(unknown))}")
+        products = [p for p in products if p["id"] in keep]
     manifest_path = a.out / "rasters.json"
     prev = {e["id"]: e for e in (json.loads(manifest_path.read_text()) if manifest_path.exists() else {"products": []})["products"]}
     # products not selected this run, or not reached yet, keep their previous manifest entry untouched
