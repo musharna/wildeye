@@ -94,17 +94,21 @@ def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float
     vid (birds/km2) = sum dens*dh; mtr (birds/km/h) = sum dens*ff*3.6*dh. A bin with dens but no
     ff (vol2bird gap) counts in vid and drops out of mtr, as bioRad's na.rm does; speedless_share
     is the part of vid that mtr cannot see."""
+    if all(b.get("dens") is None for b in bins):
+        return {"vid_birds_km2": None, "mtr_birds_km_h": None, "speedless_share": None}
     hs = sorted(b["height_m"] for b in bins)
+    if len(hs) < 2:
+        raise ValueError(f"need at least two height bins to know the interval, got {len(hs)}")
     steps = {round(b - a, 6) for a, b in zip(hs, hs[1:])}
     if len(steps) != 1:
         raise ValueError(f"uneven height bins (steps {sorted(steps)} m); need one interval")
     interval, = steps
+    if interval <= 0:
+        raise ValueError(f"duplicate height bins (step {interval} m)")
     vid = mtr = speedless = 0.0
-    seen = False
     for b in bins:
         if b.get("dens") is None:
             continue
-        seen = True
         h = b["height_m"]
         dh = min(min(max(h + interval - alt_min_m, 0), interval), min(max(alt_max_m - h, 0), interval)) / 1000
         vid += b["dens"] * dh
@@ -112,8 +116,6 @@ def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float
             speedless += b["dens"] * dh
         else:
             mtr += b["dens"] * b["ff"] * 3.6 * dh
-    if not seen:
-        return {"vid_birds_km2": None, "mtr_birds_km_h": None, "speedless_share": None}
     return {"vid_birds_km2": vid, "mtr_birds_km_h": mtr,
             "speedless_share": speedless / vid if vid > 0 else None}
 

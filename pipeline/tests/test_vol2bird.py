@@ -91,6 +91,19 @@ def test_integrate_profile_by_hand_gap_bin_and_clipping():
     with pytest.raises(ValueError, match="uneven height bins"):
         integrate_profile(bins + [{"height_m": 500, "dens": 1.0, "ff": 1.0}])
 
+def test_integrate_profile_rejects_duplicate_and_too_few_bins_but_nulls_an_empty_profile():
+    """Review of #96: a duplicated height bin made the step 0, every dh 0 and vid/mtr 0 for a
+    profile with birds; an empty profile raised and failed the site where reduce_profile gives nulls."""
+    dup = [{"height_m": 200, "dens": 10.0, "ff": 5.0}, {"height_m": 200, "dens": 20.0, "ff": 5.0}]
+    with pytest.raises(ValueError, match="duplicate height bins"):
+        integrate_profile(dup)
+    with pytest.raises(ValueError, match="at least two height bins"):
+        integrate_profile(dup[:1])
+    assert integrate_profile([]) == {"vid_birds_km2": None, "mtr_birds_km_h": None, "speedless_share": None}
+    assert reduce_profile([])["density_birds_km3"] is None              # same answer as the old record
+    ok = integrate_profile([dup[0], {**dup[1], "height_m": 400}])       # positive control
+    assert ok["vid_birds_km2"] == pytest.approx(10 * 0.2 + 20 * 0.2)
+
 def test_migration_traffic_rejects_unordered_times_and_missing_rates():
     t0 = dt.datetime(2026, 10, 17, 1, tzinfo=dt.UTC)
     ts = [t0, t0 + dt.timedelta(minutes=10)]
