@@ -201,3 +201,15 @@ def test_backfill_every_min_runs_the_first_volume_of_each_slot_that_is_not_store
     ran.clear()                                                          # positive control: no sampling
     bn.backfill_night(KOKX, dt.date(2026, 10, 16), tmp_path / "vp2", tmp_path / "w", 1)
     assert sorted(ran) == [key(m) for m in mins[1:]]
+
+def test_the_night_cli_runs_without_the_ppi_stack(tmp_path: Path):
+    """A worker that only has boto3 + Docker can backfill: bird_nights reads sites.json itself instead of
+    importing build_birds (which pulls in Py-ART for the PPI images)."""
+    import subprocess
+    import sys
+    code = ("import sys; sys.modules['pyart'] = None; from pipeline.bird_nights import main; "
+            f"main(['build', '--night', '2026-10-16', '--site', 'KOKX', '--vp-dir', {str(tmp_path)!r}, "
+            f"'--out', {str(tmp_path / 'o.json')!r}])")
+    p = subprocess.run([sys.executable, "-c", code], cwd=FIX.parent.parent.parent, capture_output=True, text=True, timeout=60)
+    assert p.returncode == 0, p.stderr[-2000:]
+    assert json.loads((tmp_path / "o.json").read_text())["sites"]["KOKX"][0]["profiles"] == 0

@@ -202,7 +202,7 @@ def backfill_night(site: dict, night: dt.date, root: Path, workdir: Path, worker
     return failed
 
 def main(argv=None):
-    from .build_birds import SITES
+    SITES = json.loads((Path(__file__).parent / "sites.json").read_text())   # not build_birds: no Py-ART needed
     cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wildeye"
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=["backfill", "build"])
