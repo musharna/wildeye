@@ -1,0 +1,30 @@
+# vol2bird Vertical Profile of Birds (VPB)
+# source: RAD:KOKX,PLC:NEW_YORK_CITY,state:NY,radar_name:KOKX
+# polar volume input: /data/KOKX20261017_032800_V06
+# volume coverage pattern (VCP): 212
+# date   time HGHT    u      v       w     ff    dd  sd_vvp gap dbz     eta   dens   DBZH   n   n_dbz n_all n_dbz_all
+20261017 0328    0    nan    nan     nan   nan   nan   2.05 T    nan    nan    nan  11.39     0     0 52117 63004
+20261017 0328  200    nan    nan     nan   nan   nan   1.99 T  -8.22    3.3   0.30  12.11    44    48 108271 120209
+20261017 0328  400    nan    nan     nan   nan   nan   1.67 T -14.46    0.8   0.07  12.05     0    29 68951 78781
+20261017 0328  600    nan    nan     nan   nan   nan   1.56 T -15.95    0.5   0.05  12.61    34   689 44001 57489
+20261017 0328  800    nan    nan     nan   nan   nan   1.49 T -21.10    0.2   0.02  13.01    89  1896 28219 40178
+20261017 0328 1000    nan    nan     nan   nan   nan   1.65 T -24.95    0.1   0.01  14.27   109  2198 22558 32682
+20261017 0328 1200    nan    nan     nan   nan   nan   1.64 T -21.88    0.1   0.01  14.57    84  1121 18569 25365
+20261017 0328 1400    nan    nan     nan   nan   nan   1.93 T -27.31    0.0   0.00  15.61    17  1564 18615 25441
+20261017 0328 1600    nan    nan     nan   nan   nan   2.04 T -26.10    0.1   0.00  15.85     0   608 16383 21024
+20261017 0328 1800    nan    nan     nan   nan   nan   1.76 T -23.94    0.1   0.01  16.58     6   999 15930 20180
+20261017 0328 2000    nan    nan     nan   nan   nan   1.80 T -24.44    0.1   0.01  16.57     0   276 13740 16286
+20261017 0328 2200    nan    nan     nan   nan   nan   2.00 T -31.98    0.0   0.00  17.15     0   493 13366 15923
+20261017 0328 2400    nan    nan     nan   nan   nan   2.00 T -30.47    0.0   0.00  17.27     0   582 12718 15220
+20261017 0328 2600    nan    nan     nan   nan   nan   1.78 T   -inf    0.0   0.00  17.54     0    43 10732 11999
+20261017 0328 2800    nan    nan     nan   nan   nan   1.66 T   -inf    0.0   0.00  17.61     0   374 11342 13041
+20261017 0328 3000    nan    nan     nan   nan   nan   1.62 T   -inf    0.0   0.00  18.90     0   499 10466 12411
+20261017 0328 3200    nan    nan     nan   nan   nan   1.51 T   -inf    0.0   0.00  23.25     0    38  8173  8822
+20261017 0328 3400    nan    nan     nan   nan   nan   1.50 T   -inf    0.0   0.00  24.79     0   108  8998  9912
+20261017 0328 3600    nan    nan     nan   nan   nan   1.57 T -27.98    0.0   0.00  19.53     0   271  7503  8897
+20261017 0328 3800    nan    nan     nan   nan   nan   1.65 T -31.56    0.0   0.00  15.08     0   435  7704  9614
+20261017 0328 4000    nan    nan     nan   nan   nan   1.55 T    nan    nan    nan  13.40     0    14  5643  6745
+20261017 0328 4200    nan    nan     nan   nan   nan   1.44 T -28.10    0.0   0.00  10.94     4   104  5355  6743
+20261017 0328 4400    nan    nan     nan   nan   nan   1.44 T -24.67    0.1   0.01   7.84     3   162  4789  6757
+20261017 0328 4600    nan    nan     nan   nan   nan   1.57 T -27.91    0.0   0.00   2.71     5   260  3971  6806
+20261017 0328 4800    nan    nan     nan   nan   nan   1.71 T -36.45    0.0   0.00  -4.08     1   351  2546  6439
