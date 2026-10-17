@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 
 from .atomic import write_atomic
+from .cell_share import png as cell_png
 from .hfp import TILE, _fetch_to, _md5, block_mean, tiles_for_level
 
 log = logging.getLogger("soil_bacteria")
@@ -229,20 +230,8 @@ def levels(mean_i: np.ndarray, ok: np.ndarray, max_level: int = MAX_LEVEL):
 
 
 def png_palette(idx: np.ndarray, pal: list[tuple[int, int, int]]) -> bytes:
-    """8-bit palette PNG (the readout's decoder, src/data/pngDecode.js, reads 8-bit only), index 0 transparent."""
-    from PIL import Image
-
-    im = Image.fromarray(np.ascontiguousarray(idx), "P")
-    im.putpalette(bytes(c for rgb in pal for c in rgb))
-    buf = io.BytesIO()
-    im.save(
-        buf,
-        "PNG",
-        optimize=True,
-        bits=8,
-        transparency=bytes([0] + [255] * (len(pal) - 1)),
-    )
-    return buf.getvalue()
+    """8-bit palette PNG (cell_share.png; the readout's decoder reads 8-bit only), index 0 transparent."""
+    return cell_png(idx, pal)
 
 
 def png_rgba(rgba: np.ndarray) -> bytes:
