@@ -565,13 +565,17 @@ def test_fetch_erddap_grid_hides_at_or_below_scales_and_refuses_transposed_axes(
           "latitude": DA([45.0, -45.0]), "longitude": DA([-120.0, 0.0, 120.0])}
     ramp = {"min": 0, "max": 100, "stops": [[0, 0, 0], [200, 200, 200]]}
     base = {"id": "crw", "ramp": ramp}
-    rgba, _, _ = fetch_erddap_grid(base | {"erddap_grid": {"url": "u", "variable": "v", "scale": 100,
-                                                           "clear_at_or_below": 0}}, read_nc=lambda url: ds)
+    rgba, _, _ = fetch_erddap_grid({"id": "crw", "ramp": ramp | {"clear_at_or_below": 0},
+                                    "erddap_grid": {"url": "u", "variable": "v", "scale": 100}}, read_nc=lambda url: ds)
     assert rgba[0, :, 3].tolist() == [0, 0, 255], "-0.5 and 0 hidden, 0.25 shown"
     assert rgba[0, 2].tolist() == [50, 50, 50, 255] and rgba[1, 2].tolist() == [200, 200, 200, 255], "x100: 25 % and 100 %"
     assert rgba[1, 0].tolist() == [100, 100, 100, 255] and rgba[1, 1, 3] == 0, "50 % shown, NaN clear"
     plain, _, _ = fetch_erddap_grid(base | {"erddap_grid": {"url": "u", "variable": "v"}}, read_nc=lambda url: ds)
     assert plain[0, :, 3].tolist() == [255, 255, 255], "without clear_at_or_below nothing is hidden"
+    # the rule lives in the ramp, which the manifest publishes, so the click readout knows the first stop is above it
+    with pytest.raises(ValueError, match="belongs in ramp"):
+        fetch_erddap_grid(base | {"erddap_grid": {"url": "u", "variable": "v", "clear_at_or_below": 0}},
+                          read_nc=lambda url: ds)
     square = {"v": DA(np.zeros((1, 2, 2)), ("time", "longitude", "latitude")), "time": ds["time"],
               "latitude": DA([45.0, -45.0]), "longitude": DA([-90.0, 90.0])}
     with pytest.raises(ValueError, match="longitude, latitude"):

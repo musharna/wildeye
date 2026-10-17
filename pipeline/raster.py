@@ -121,11 +121,15 @@ def _file_source(product: dict, f: str) -> tuple[str, str | None]:
 
 
 def ramp_rgba(values: np.ndarray, ramp: dict) -> np.ndarray:
-    """Map a 2-D float field to RGBA through `ramp` {min, max, stops:[[r,g,b],…], log?}; NaN → transparent.
+    """Map a 2-D float field to RGBA through `ramp` {min, max, stops:[[r,g,b],…], log?, clear_at_or_below?}; NaN →
+    transparent, and so are values ≤ `clear_at_or_below` (CRW: 0 = no heat stress). The manifest publishes the ramp, so
+    the click readout knows a first-stop pixel is above that value rather than at or below min.
     `log: true` spaces the stops evenly in log10 between min and max (both > 0); values ≤ 0 take the low end."""
     stops = np.asarray(ramp["stops"], dtype=float)
     lo, hi = float(ramp["min"]), float(ramp["max"])
     ok = ~np.isnan(values)
+    if "clear_at_or_below" in ramp:
+        ok &= values > float(ramp["clear_at_or_below"])
     if ramp.get("log"):
         if not 0 < lo < hi:
             raise ValueError(f"log ramp needs 0 < min < max, got {lo}..{hi}")
@@ -261,7 +265,7 @@ def fetch_erddap_grid(product: dict, read_nc=None) -> tuple[np.ndarray, str, dic
     the product's ramp with cell-edge bounds from edge_align, like fetch_cmems. ERDDAP's own transparentPng was coloured
     by its colour bar, which the manifest ramp only approximated (median 4-12 levels off, 2026-10-12): the legend was
     not exact and a click could not be read back. NaN (land) is clear. Optional `scale` multiplies the values (a 0..1
-    fraction on a % ramp); optional `clear_at_or_below` makes those values clear as well (CRW: 0 = no heat stress)."""
+    fraction on a % ramp); the ramp's optional `clear_at_or_below` makes those values clear as well (ramp_rgba)."""
     c = product["erddap_grid"]
     return _draw_grid(product, c, (read_nc or _read_nc)(c["url"]))
 
@@ -290,7 +294,7 @@ def fetch_opendap_grid(product: dict, catalog_xml: str | None = None, read_grid=
 
 def _draw_grid(product: dict, c: dict, ds) -> tuple[np.ndarray, str, dict]:
     """One time step of ds[c.variable] on (latitude, longitude), drawn north-up through the ramp with edge_align bounds,
-    after the optional `scale`, `clear_at_or_below` and `clear_outside` of the source config `c`."""
+    after the optional `scale` and `clear_outside` of the source config `c`."""
     times = np.asarray(ds["time"].values).ravel()
     if len(times) != 1:
         raise ValueError(f"{product['id']}: expected one time step, got {len(times)}")
@@ -300,7 +304,7 @@ def _draw_grid(product: dict, c: dict, ds) -> tuple[np.ndarray, str, dict]:
         raise ValueError(f"{product['id']}: {c['variable']} axes are ({', '.join(axes)}), expected (latitude, longitude)")
     vals = np.asarray(da.values, dtype=float).squeeze() * float(c.get("scale", 1))
     if "clear_at_or_below" in c:
-        vals[vals <= float(c["clear_at_or_below"])] = np.nan
+        raise ValueError(f"{product['id']}: clear_at_or_below belongs in ramp, where the click readout can see it")
     if "clear_outside" in c:
         lo, hi = (float(x) for x in c["clear_outside"])
         vals[(vals < lo) | (vals > hi)] = np.nan
