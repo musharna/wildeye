@@ -478,12 +478,25 @@ RETRY_WAIT_S = 30  # then 60: the daily run has hours of slack before the 09:00 
 _sleep = time.sleep
 
 
+# netCDF4 over OPeNDAP (ndvi) raises a bare OSError with the netCDF code as errno: -70 for a server error (a 503), -68
+# for a dropped or refused connection, -90 for a 404 (probed against NCEI and a local server, 2026-10-16).
+DAP_TRANSIENT = {-70, -68, -90}
+# copernicusmarine raises this when the login server can't be reached after its own three tries (cmems-o2 and cmems-ph,
+# 2026-09-12). Matched by name: importing copernicusmarine changes logging for the whole process (log_formatter).
+CMEMS_TRANSIENT = {("copernicusmarine", "CouldNotConnectToAuthenticationSystem")}
+
+
 def transient(e: BaseException) -> bool:
     """An error the next attempt may not hit. PacIOOS on 2026-10-12 gave a 503, a 404 for a day it serves, a body cut
     short (IncompleteRead) and a TLS handshake timeout, each gone on the next try; so 5xx, 404, 408, 429 and broken
-    connections are retried. Any other HTTP status, and every error raised by our own code, is not."""
+    connections are retried. Any other HTTP status, and every error raised by our own code, is not. The same failures
+    over OPeNDAP and from the CMEMS login are retried too (DAP_TRANSIENT, CMEMS_TRANSIENT)."""
     if isinstance(e, urllib.error.HTTPError):
         return e.code >= 500 or e.code in (404, 408, 429)
+    if type(e) is OSError and e.errno in DAP_TRANSIENT:
+        return True
+    if (type(e).__module__.split(".")[0], type(e).__name__) in CMEMS_TRANSIENT:
+        return True
     return isinstance(e, (urllib.error.URLError, http.client.HTTPException, ConnectionError, TimeoutError, ssl.SSLError))
 
 

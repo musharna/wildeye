@@ -74,6 +74,76 @@ def test_transient_names_the_errors_a_later_attempt_may_not_hit():
         assert not transient(e), repr(e)
 
 
+def test_transient_covers_real_opendap_failures_and_the_cmems_login_outage():
+    """ndvi reads NCEI over OPeNDAP, where netCDF4 turns a 503 into OSError -70, a dropped or refused connection into
+    -68 and a 404 into -90 (probed against NCEI and a local server, 2026-10-16); CMEMS gave
+    CouldNotConnectToAuthenticationSystem on 2026-09-12, raised after the client's own three connection tries. None
+    was retried. Real netCDF4 errors from local servers here; a file that is not netCDF, or a missing local path, is not
+    transient."""
+    import http.server
+    import socket
+    import socketserver
+    import threading
+
+    import pytest
+    pytest.importorskip("netCDF4")
+    from pipeline.raster import _read_opendap, transient
+
+    class H503(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(503)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, *a):
+            pass
+
+    class Drop(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.connection.shutdown(socket.SHUT_RDWR)
+
+        def log_message(self, *a):
+            pass
+
+    def raised(handler):
+        with socketserver.TCPServer(("127.0.0.1", 0), handler) as srv:
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            try:
+                with pytest.raises(OSError) as e:
+                    _read_opendap(f"http://127.0.0.1:{srv.server_address[1]}/thredds/dodsC/x.nc", "NDVI", 5, 2)
+            finally:
+                srv.shutdown()
+        return e.value
+    server, dropped = raised(H503), raised(Drop)
+    assert (server.errno, dropped.errno) == (-70, -68), (server, dropped)
+    assert transient(server) and transient(dropped)
+    assert transient(OSError(-90, "NetCDF: file not found"))
+    for e in (OSError(-51, "NetCDF: Unknown file format"), OSError(-101, "NetCDF: HDF error"),
+              FileNotFoundError(2, "No such file or directory"), OSError(28, "No space left on device")):
+        assert not transient(e), repr(e)
+
+    # matched by name: importing copernicusmarine changes logging for the whole process (log_formatter)
+    Login = type("CouldNotConnectToAuthenticationSystem", (Exception,),
+                 {"__module__": "copernicusmarine.core_functions.credentials_utils"})
+    assert transient(Login())
+    Elsewhere = type("CouldNotConnectToAuthenticationSystem", (Exception,), {"__module__": "pipeline.other"})
+    BadLogin = type("InvalidUsernameOrPassword", (Exception,),
+                    {"__module__": "copernicusmarine.core_functions.credentials_utils"})
+    assert not transient(Elsewhere()) and not transient(BadLogin())
+
+
+def test_the_cmems_login_outage_stand_in_matches_the_real_class(monkeypatch):
+    import logging
+
+    import pytest
+    # importing copernicusmarine sets logging.Formatter.converter for the process; put it back after this test
+    monkeypatch.setattr(logging.Formatter, "converter", logging.Formatter.converter)
+    cm = pytest.importorskip("copernicusmarine")
+    from pipeline.raster import transient
+    assert transient(cm.CouldNotConnectToAuthenticationSystem())
+    assert not transient(cm.InvalidUsernameOrPassword())
+
+
 def test_with_retries_retries_real_transient_http_failures_and_not_a_bad_request(monkeypatch):
     """Against a real local HTTP server: a 503, then a body cut short (a real IncompleteRead), then the PNG: the third
     try succeeds after 30 s and 60 s waits. A 400 is raised at once, one request served."""
