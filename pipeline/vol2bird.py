@@ -46,6 +46,7 @@ def parse_profile(text: str) -> list[dict]:
             "dens": _f(col.get("dens")), "dbz": _f(col.get("dbz")),
             "eta": _f(col.get("eta")),
             "sd_vvp": _f(col.get("sd_vvp")), "gap": {"T": True, "F": False}.get(col.get("gap")),
+            "n_dbz": _f(col.get("n_dbz")), "n_dbz_all": _f(col.get("n_dbz_all")),
         })
     rows.sort(key=lambda b: b["height_m"] if b["height_m"] is not None else 1e9)
     return rows
@@ -118,6 +119,15 @@ def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float
             mtr += b["dens"] * b["ff"] * 3.6 * dh
     return {"vid_birds_km2": vid, "mtr_birds_km_h": mtr,
             "speedless_share": speedless / vid if vid > 0 else None}
+
+def bio_gate_share(bins: list[dict]) -> float | None:
+    """Share of the profile's reflective gates vol2bird kept as biological, sum n_dbz / sum n_dbz_all.
+    Its dual-pol rain filter and clutter screen drop the rest, so a rain-filled volume reads near 0 and
+    its dens rests on the few gates left. None when no gate had reflectivity."""
+    if any(b.get("n_dbz") is None or b.get("n_dbz_all") is None for b in bins):
+        raise ValueError("no n_dbz / n_dbz_all gate counts in this vol2bird output")
+    kept, total = sum(b["n_dbz"] for b in bins), sum(b["n_dbz_all"] for b in bins)
+    return kept / total if total else None
 
 def migration_traffic(times: list[dt.datetime], mtr: list[float], interval_max_s: float = 3600.0) -> list[float]:
     """bioRad integrate_profile.vpts mt (birds/km), cumulative from the first profile: each profile
