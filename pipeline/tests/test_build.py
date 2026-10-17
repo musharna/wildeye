@@ -124,3 +124,23 @@ def test_process_site_integrates_and_keeps_the_raw_profile(tmp_path: Path, monke
     # a new scan without vp_dir is stored nowhere (a new key, so the store's dedup can't hide a write)
     bb.process_site(SITE, tmp_path / "work2", tmp_path / "ppi", key="2026/09/11/KOKX/KOKX20260911_030354_V06")
     assert list(tmp_path.rglob("*.txt.gz")) == [stored]
+
+def test_main_writes_the_night_table_even_when_every_site_fails(tmp_path: Path, monkeypatch):
+    """The night table is rebuilt from the profile store on every run, beside birds.geojson,
+    and a run where every site failed still says so (SystemExit) after writing it."""
+    import pytest
+    import pipeline.build_birds as bb
+
+    calls = []
+    def boom(site, workdir, ppi_dir, vp_dir=None):
+        raise RuntimeError("no volume")
+    def fake_nights(root, sites, out, now, **kw):
+        calls.append((root, [s["id"] for s in sites], out))
+        return {"failures": {}}
+    monkeypatch.setattr(bb, "process_site", boom)
+    monkeypatch.setattr(bb, "build_nights", fake_nights)
+    out = tmp_path / "data" / "birds.geojson"
+    with pytest.raises(SystemExit, match="every site failed"):
+        bb.main(["--out", str(out), "--sites", "2", "--workers", "1", "--vp-dir", str(tmp_path / "vp")])
+    assert calls == [(tmp_path / "vp", ["KOKX", "KBOX"], tmp_path / "data" / "birds_nights.json")]
+    assert json.loads(out.read_text())["fresh_count"] == 0

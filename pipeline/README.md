@@ -35,6 +35,16 @@ Each scan's raw vol2bird output is kept in `--vp-dir` (default `~/.cache/wildeye
 60 days). bioRad reads it as is: `Rscript pipeline/biorad_golden.R SITE out.csv <files>` writes bioRad's
 vid/mtr/mt for the same profiles (the tests' golden numbers come from this, bioRad 0.12.0).
 
+## Night totals (`public/data/birds_nights.json`)
+Every bird run rebuilds tonight and last night for each site from the profile store (`pipeline/bird_nights.py`).
+Night D runs from bioRad's sunset on D to its sunrise on D+1 (sun 0.268° below the horizon; `biorad_sun_golden.R`
+checks the port). Per site and night: `mt_birds_km` (birds crossing 1 km over the night, bioRad mt),
+`peak_mtr_birds_km_h` and `peak_time`, `profiles`, `coverage` (share of the night the profiles stand for),
+`speedless_share` (share of the night's birds with no speed, which mt cannot count), `complete` (sunrise passed).
+Kept 60 nights; a site-night that fails is listed in `failures` and the rest still written.
+Past nights from the archive: `python3 -m pipeline.bird_nights backfill --site KOKX --night 2026-10-16`
+(~140 volumes a night, vol2bird in Docker); `build` recomputes nights from what is stored.
+
 ## Field outputs (M2/M3)
 - `public/data/birds_ppi/<SITE>.png` + bounds: lowest sweep reflectivity with rain
   masked (RHOHV < 0.95, −10..35 dBZ, 5–150 km), 0.01° grid, viridis ramp.

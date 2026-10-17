@@ -22,6 +22,7 @@ __pycache__/
 public/data/birds_ppi/
 public/data/birds_field.png
 public/data/birds_field.json
+public/data/birds_nights.json
 public/data/birds_archive/
 pipeline/cron_aloft.log
 pipeline/cron_rasters.log
