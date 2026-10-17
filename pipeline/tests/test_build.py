@@ -121,5 +121,6 @@ def test_process_site_integrates_and_keeps_the_raw_profile(tmp_path: Path, monke
     assert stored.relative_to(tmp_path / "vp").as_posix() == "KOKX/20260911/KOKX20260911_025354_V06.txt.gz"
     assert gzip.decompress(stored.read_bytes()).decode() == fix.read_text()
 
-    bb.process_site(SITE, tmp_path / "work2", tmp_path / "ppi", key=key)
-    assert list((tmp_path / "vp").rglob("*.txt.gz")) == [stored]
+    # a new scan without vp_dir is stored nowhere (a new key, so the store's dedup can't hide a write)
+    bb.process_site(SITE, tmp_path / "work2", tmp_path / "ppi", key="2026/09/11/KOKX/KOKX20260911_030354_V06")
+    assert list(tmp_path.rglob("*.txt.gz")) == [stored]
