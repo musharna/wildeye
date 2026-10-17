@@ -169,11 +169,17 @@ def ramp(stops) -> list[list[int]]:
     return out
 
 
+# The readout's decoder (src/data/pngDecode.js) reads 8-bit images only. Pillow 12 honoured bits=8; Pillow 13 writes a
+# palette of 16 entries or fewer in 1, 2 or 4 bits whatever bits says, so short palettes are padded past 16.
+PNG8_MIN_ENTRIES = 17
+
+
 def png(arr: np.ndarray, palette: list[list[int]]) -> bytes:
+    """8-bit palette PNG, index 0 transparent and the rest opaque."""
     im = Image.fromarray(np.ascontiguousarray(arr), "P")
-    im.putpalette(bytes(c for rgb in palette for c in rgb))
+    padded = [list(rgb) for rgb in palette] + [[0, 0, 0]] * (PNG8_MIN_ENTRIES - len(palette))
+    im.putpalette(bytes(c for rgb in padded for c in rgb))
     buf = io.BytesIO()
-    # bits=8: the readout's decoder (src/data/pngDecode.js) reads 8-bit images only
     im.save(
         buf,
         "PNG",

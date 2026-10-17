@@ -18,7 +18,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
-import io
 import logging
 import math
 import os
@@ -28,9 +27,9 @@ import urllib.request
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
 
 from .atomic import write_atomic
+from .cell_share import png as cell_png
 from .net import urlopen
 
 log = logging.getLogger("ifl")
@@ -265,14 +264,8 @@ def pyramid(finest: dict, max_level: int = MAX_LEVEL):
 
 
 def png(arr: np.ndarray) -> bytes:
-    im = Image.fromarray(np.ascontiguousarray(arr), "P")
-    im.putpalette(bytes(c for rgb in PALETTE for c in rgb))
-    buf = io.BytesIO()
-    # bits=8: Pillow would pack six colours into 4 bits, and the readout's decoder (src/data/pngDecode.js) reads 8 only
-    im.save(
-        buf, "PNG", optimize=True, bits=8, transparency=bytes([0] + [255] * len(CLASSES))
-    )
-    return buf.getvalue()
+    """8-bit palette PNG (cell_share.png: Pillow would pack six colours into 4 bits), index 0 transparent."""
+    return cell_png(arr, PALETTE)
 
 
 def _replace_dir(tmp: Path, final: Path) -> None:
