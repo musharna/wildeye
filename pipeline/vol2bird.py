@@ -1,16 +1,27 @@
 """Run vol2bird (Docker), reduce its vertical profile to one record, and integrate it
 the way bioRad does (integrate_profile: vid, mtr, cumulative mt)."""
 from __future__ import annotations
-import datetime as dt, gzip, math, os, re, shutil, subprocess, tempfile
+import contextlib, datetime as dt, gzip, math, os, re, shutil, subprocess, tempfile
 from pathlib import Path
 
 IMAGE = "adokter/vol2bird"
 MAX_HEIGHT_M = 3000
 
-def run_vol2bird(volume: Path, timeout_s: int = 300) -> str:
-    cmd = ["docker", "run", "--rm", "-v", f"{volume.parent}:/data", IMAGE,
-           "vol2bird", f"/data/{volume.name}"]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
+_OPT_KEY, _OPT_VALUE = re.compile(r"[A-Z][A-Z0-9_]*"), re.compile(r"[A-Za-z0-9_.+-]+")
+
+def run_vol2bird(volume: Path, timeout_s: int = 300, options: dict[str, str] | None = None) -> str:
+    """vol2bird on one volume. options (e.g. AZIMMIN) go in an options.conf in a fresh directory mounted
+    as vol2bird's working directory, where it looks for one; None runs vol2bird's defaults."""
+    for k, val in (options or {}).items():
+        if not (_OPT_KEY.fullmatch(k) and _OPT_VALUE.fullmatch(str(val))):
+            raise ValueError(f"bad vol2bird option {k!r} = {val!r}")
+    with tempfile.TemporaryDirectory() if options else contextlib.nullcontext() as conf_dir:
+        cmd = ["docker", "run", "--rm", "-v", f"{volume.parent}:/data"]
+        if options:
+            Path(conf_dir, "options.conf").write_text("".join(f"{k} = {val}\n" for k, val in options.items()))
+            cmd += ["-v", f"{conf_dir}:/conf", "-w", "/conf"]
+        cmd += [IMAGE, "vol2bird", f"/data/{volume.name}"]
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
     if p.returncode != 0:
         raise RuntimeError(f"vol2bird failed rc={p.returncode} on {volume.name}: {p.stderr[-2000:]}")
     return p.stdout

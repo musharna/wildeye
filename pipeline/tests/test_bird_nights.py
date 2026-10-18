@@ -135,12 +135,12 @@ def test_backfill_with_a_failed_volume_still_rebuilds_the_nights_then_fails(tmp_
     from the ones that did land; now it is rebuilt and the run still exits non-zero."""
     import pipeline.bird_nights as bn
     built = []
-    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers, every_min=None: ["2026/10/17/KOKX/K_V06"])
+    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers, every_min=None, options=None: ["2026/10/17/KOKX/K_V06"])
     monkeypatch.setattr(bn, "build_nights", lambda root, sites, out, now, nights=None: built.append(nights) or {"failures": {}})
     with pytest.raises(SystemExit, match="1 volumes failed"):
         main(["backfill", "--night", "2026-10-16", "--site", "KOKX", "--vp-dir", str(tmp_path), "--out", str(tmp_path / "o.json")])
     assert built == [[dt.date(2026, 10, 16)]]
-    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers, every_min=None: [])   # positive control
+    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers, every_min=None, options=None: [])   # positive control
     main(["backfill", "--night", "2026-10-16", "--site", "KOKX", "--vp-dir", str(tmp_path), "--out", str(tmp_path / "o.json")])
     assert len(built) == 2
 
@@ -194,7 +194,7 @@ def test_backfill_every_min_runs_the_first_volume_of_each_slot_that_is_not_store
         (dest / "v").write_bytes(b"x")
         return dest / "v"
     monkeypatch.setattr(nx, "download_volume", fake_download)
-    monkeypatch.setattr(bn, "run_vol2bird", lambda vol: "raw")
+    monkeypatch.setattr(bn, "run_vol2bird", lambda vol, options=None: "raw")
     save_profile("raw", "KOKX", key(25), tmp_path / "vp")                # slot 2 already stored
     assert bn.backfill_night(KOKX, dt.date(2026, 10, 16), tmp_path / "vp", tmp_path / "w", 1, every_min=10) == []
     assert sorted(ran) == [key(0.5), key(10.5)]                          # slots 0 and 1; slot 2 stored
@@ -213,3 +213,32 @@ def test_the_night_cli_runs_without_the_ppi_stack(tmp_path: Path):
     p = subprocess.run([sys.executable, "-c", code], cwd=FIX.parent.parent.parent, capture_output=True, text=True, timeout=60)
     assert p.returncode == 0, p.stderr[-2000:]
     assert json.loads((tmp_path / "o.json").read_text())["sites"]["KOKX"][0]["profiles"] == 0
+
+def test_backfill_hands_vol2bird_options_to_every_volume(tmp_path: Path, monkeypatch):
+    import pipeline.bird_nights as bn
+    import pipeline.nexrad as nx
+    sunset, _ = night_window(dt.date(2026, 10, 16), KOKX["lon"], KOKX["lat"])
+    t = sunset + dt.timedelta(minutes=5)
+    monkeypatch.setattr(nx, "list_day_keys", lambda site, day: [f"{t:%Y/%m/%d}/KOKX/KOKX{t:%Y%m%d_%H%M%S}_V06"] if t.date() == day.date() else [])
+    def fake_download(k, dest):
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "v").write_bytes(b"x")
+        return dest / "v"
+    monkeypatch.setattr(nx, "download_volume", fake_download)
+    got = []
+    monkeypatch.setattr(bn, "run_vol2bird", lambda vol, options=None: got.append(options) or "raw")
+    bn.backfill_night(KOKX, dt.date(2026, 10, 16), tmp_path / "vp", tmp_path / "w", 1, options={"AZIMMIN": "239"})
+    bn.backfill_night(KOKX, dt.date(2026, 10, 16), tmp_path / "vp2", tmp_path / "w", 1)
+    assert got == [{"AZIMMIN": "239"}, None]
+
+def test_cli_parses_vol2bird_options_and_refuses_a_malformed_one(tmp_path: Path, monkeypatch):
+    import pipeline.bird_nights as bn
+    got = []
+    monkeypatch.setattr(bn, "backfill_night", lambda site, night, root, workdir, workers, every_min=None, options=None: got.append(options) or [])
+    monkeypatch.setattr(bn, "build_nights", lambda root, sites, out, now, nights=None: {"failures": {}})
+    base = ["backfill", "--night", "2026-10-16", "--site", "KOKX", "--vp-dir", str(tmp_path), "--out", str(tmp_path / "o.json")]
+    bn.main(base + ["--vol2bird-option", "AZIMMIN=239", "--vol2bird-option", "AZIMMAX=279"])
+    bn.main(base)
+    assert got == [{"AZIMMIN": "239", "AZIMMAX": "279"}, None]
+    with pytest.raises(SystemExit, match="KEY=VALUE"):
+        bn.main(base + ["--vol2bird-option", "AZIMMIN"])
