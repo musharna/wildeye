@@ -163,8 +163,10 @@ def build_nights(root: Path, sites: list[dict], out: Path, now: dt.datetime, nig
 
 # --- backfill a past night from the NEXRAD archive -------------------------------------------------
 
-def backfill_night(site: dict, night: dt.date, root: Path, workdir: Path, workers: int = 4) -> list[str]:
-    """Run vol2bird on every archived volume of `site` in the night's window and store the profiles.
+def backfill_night(site: dict, night: dt.date, root: Path, workdir: Path, workers: int = 4,
+                   every_min: float | None = None) -> list[str]:
+    """Run vol2bird on every archived volume of `site` in the night's window and store the profiles;
+    with every_min, only the first volume of each every_min slot from sunset (the cron's sampling).
     Scans already stored are skipped. Returns the keys that failed (logged)."""
     from .nexrad import list_day_keys, key_time, download_volume
     sunset, sunrise = night_window(night, site["lon"], site["lat"])
@@ -172,8 +174,13 @@ def backfill_night(site: dict, night: dt.date, root: Path, workdir: Path, worker
     while day <= sunrise.date():
         keys += list_day_keys(site["id"], dt.datetime(day.year, day.month, day.day, tzinfo=dt.UTC))
         day += dt.timedelta(days=1)
-    todo = sorted(k for k in keys if k.endswith("_V06") and sunset <= key_time(k) <= sunrise
-                  and not profile_path(site["id"], k, root).exists())
+    night_keys = sorted((k for k in keys if k.endswith("_V06") and sunset <= key_time(k) <= sunrise), key=key_time)
+    if every_min is not None:
+        slots = {}
+        for k in night_keys:
+            slots.setdefault(int((key_time(k) - sunset).total_seconds() // (every_min * 60)), k)
+        night_keys = list(slots.values())
+    todo = [k for k in night_keys if not profile_path(site["id"], k, root).exists()]
     log.info("%s night %s: %d volumes to run", site["id"], night, len(todo))
 
     def one(key):
@@ -195,7 +202,7 @@ def backfill_night(site: dict, night: dt.date, root: Path, workdir: Path, worker
     return failed
 
 def main(argv=None):
-    from .build_birds import SITES
+    SITES = json.loads((Path(__file__).parent / "sites.json").read_text())   # not build_birds: no Py-ART needed
     cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "wildeye"
     ap = argparse.ArgumentParser()
     ap.add_argument("command", choices=["backfill", "build"])
@@ -205,6 +212,7 @@ def main(argv=None):
     ap.add_argument("--workdir", type=Path, default=cache / "nexrad")
     ap.add_argument("--out", type=Path, default=Path("public/data/birds_nights.json"))
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--every-min", type=float, help="backfill: first volume of each slot from sunset (cron ~10)")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     unknown = set(a.site or []) - {s["id"] for s in SITES}
@@ -213,7 +221,7 @@ def main(argv=None):
     sites = [s for s in SITES if not a.site or s["id"] in a.site]
     failed = []
     if a.command == "backfill":
-        failed = [k for s in sites for n in a.night for k in backfill_night(s, n, a.vp_dir, a.workdir, a.workers)]
+        failed = [k for s in sites for n in a.night for k in backfill_night(s, n, a.vp_dir, a.workdir, a.workers, every_min=a.every_min)]
     # rebuilt even when some volumes failed: the ones that landed are stored and count
     doc = build_nights(a.vp_dir, sites, a.out, dt.datetime.now(dt.UTC), nights=a.night)
     if failed or doc["failures"]:
