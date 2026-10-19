@@ -149,6 +149,12 @@ def test_bio_gate_share_is_kept_gates_over_all_reflective_gates():
     with pytest.raises(ValueError, match="no n_dbz"):                     # a vol2bird without the counts
         bio_gate_share(parse_profile(old))
 
+def test_vol2bird_image_is_pinned_by_digest():
+    import re
+    from pipeline.vol2bird import IMAGE
+    assert re.fullmatch(r"adokter/vol2bird@sha256:[0-9a-f]{64}", IMAGE)
+    assert not re.fullmatch(r"adokter/vol2bird@sha256:[0-9a-f]{64}", "adokter/vol2bird")        # a tag fails
+
 def test_run_vol2bird_with_options_uses_a_private_options_conf_and_without_is_unchanged(tmp_path: Path, monkeypatch):
     """vol2bird reads options.conf from its working directory; options go in a fresh directory mounted as that
     directory, so nothing shared (the volume's own dir) can carry them into another run."""

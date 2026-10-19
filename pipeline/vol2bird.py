@@ -4,7 +4,9 @@ from __future__ import annotations
 import contextlib, datetime as dt, gzip, math, os, re, shutil, subprocess, tempfile
 from pathlib import Path
 
-IMAGE = "adokter/vol2bird"
+# pinned by digest so the nightly numbers cannot change under a silent `latest` pull; this is vol2bird
+# 0.5.0.9169 (image built 2021-02-05), the build every stored profile and docs/analysis result came from.
+IMAGE = "adokter/vol2bird@sha256:fdead127f0271358c18ca73d99a41faa5d61ae6dfe988629831b705f49e47e95"
 MAX_HEIGHT_M = 3000
 
 _OPT_KEY, _OPT_VALUE = re.compile(r"[A-Z][A-Z0-9_]*"), re.compile(r"[A-Za-z0-9_.+-]+")
