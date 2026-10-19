@@ -1,0 +1,723 @@
+{
+ "threshold": 0.55,
+ "scan_balanced_accuracy": 0.911067815665398,
+ "scan_counts": {
+  "rain": 621,
+  "dry": 5884
+ },
+ "night_balanced_accuracy": 0.8435897435897436,
+ "night_counts": {
+  "rain": 20,
+  "dry": 78
+ },
+ "enough": true,
+ "keep": true,
+ "gauges": {
+  "KBUF": [
+   "BUF",
+   0.9051195139224424
+  ],
+  "KFFC": [
+   "FFC",
+   0.9285562986371966
+  ],
+  "KGRR": [
+   "GRR",
+   2.214731507815665
+  ],
+  "KILN": [
+   "ILN",
+   0.0
+  ],
+  "KLOT": [
+   "LOT",
+   1.036562557802893
+  ],
+  "KOHX": [
+   "BNA",
+   18.243722184363968
+  ]
+ },
+ "per_site": {
+  "KBUF": {
+   "threshold": 0.55,
+   "scan_balanced_accuracy": 0.8733033276416943,
+   "scan_counts": {
+    "rain": 167,
+    "dry": 761
+   },
+   "night_balanced_accuracy": 0.7857142857142857,
+   "night_counts": {
+    "rain": 7,
+    "dry": 10
+   },
+   "enough": false,
+   "keep": false
+  },
+  "KFFC": {
+   "threshold": 0.55,
+   "scan_balanced_accuracy": 0.9664188661154637,
+   "scan_counts": {
+    "rain": 127,
+    "dry": 1199
+   },
+   "night_balanced_accuracy": 0.8333333333333333,
+   "night_counts": {
+    "rain": 3,
+    "dry": 16
+   },
+   "enough": false,
+   "keep": false
+  },
+  "KGRR": {
+   "threshold": 0.55,
+   "scan_balanced_accuracy": 0.9486407134198712,
+   "scan_counts": {
+    "rain": 181,
+    "dry": 907
+   },
+   "night_balanced_accuracy": 0.875,
+   "night_counts": {
+    "rain": 4,
+    "dry": 12
+   },
+   "enough": false,
+   "keep": false
+  },
+  "KILN": {
+   "threshold": 0.55,
+   "scan_balanced_accuracy": 0.9814323607427056,
+   "scan_counts": {
+    "rain": 24,
+    "dry": 754
+   },
+   "night_balanced_accuracy": 1.0,
+   "night_counts": {
+    "rain": 1,
+    "dry": 10
+   },
+   "enough": false,
+   "keep": false
+  },
+  "KLOT": {
+   "threshold": 0.55,
+   "scan_balanced_accuracy": 0.9102822435556067,
+   "scan_counts": {
+    "rain": 61,
+    "dry": 1139
+   },
+   "night_balanced_accuracy": 0.9666666666666667,
+   "night_counts": {
+    "rain": 3,
+    "dry": 15
+   },
+   "enough": false,
+   "keep": false
+  },
+  "KOHX": {
+   "threshold": 0.55,
+   "scan_balanced_accuracy": 0.7842162067557319,
+   "scan_counts": {
+    "rain": 61,
+    "dry": 1124
+   },
+   "night_balanced_accuracy": 0.75,
+   "night_counts": {
+    "rain": 2,
+    "dry": 15
+   },
+   "enough": false,
+   "keep": false
+  }
+ },
+ "nights": [
+  {
+   "site": "KBUF",
+   "night": "2026-09-27",
+   "share": 0.21118404170490648,
+   "label": "rain"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-09-29",
+   "share": 0.9106696490859322,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-09-30",
+   "share": 0.2879860597534425,
+   "label": "rain"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-01",
+   "share": 0.3161907709731602,
+   "label": "rain"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-02",
+   "share": 0.9341412052498187,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-03",
+   "share": 0.8691391445115487,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-05",
+   "share": 0.910882491925523,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-06",
+   "share": 0.7144854598961119,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-07",
+   "share": 0.6619022738534341,
+   "label": "rain"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-08",
+   "share": 0.8697545455994886,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-09",
+   "share": 0.9076486495885684,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-10",
+   "share": 0.7905820883480069,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-12",
+   "share": 0.6575260845714956,
+   "label": "rain"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-13",
+   "share": 0.835062616262913,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-14",
+   "share": 0.9167798811443055,
+   "label": "dry"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-15",
+   "share": 0.5376547363764795,
+   "label": "rain"
+  },
+  {
+   "site": "KBUF",
+   "night": "2026-10-16",
+   "share": 0.6865554772886804,
+   "label": "rain"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-09-27",
+   "share": 0.9551711348023992,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-09-28",
+   "share": 0.9563741410932526,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-09-29",
+   "share": 0.9109943189062387,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-09-30",
+   "share": 0.9047864482187417,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-01",
+   "share": 0.894919066195915,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-03",
+   "share": 0.8855617017877465,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-04",
+   "share": 0.46923174213992963,
+   "label": "rain"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-05",
+   "share": 0.8732613093271775,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-06",
+   "share": 0.9388430243356274,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-07",
+   "share": 0.9743698199591468,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-08",
+   "share": 0.937149892294425,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-09",
+   "share": 0.05161847709094432,
+   "label": "rain"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-10",
+   "share": 0.64978887898895,
+   "label": "rain"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-11",
+   "share": 0.94146128485562,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-12",
+   "share": 0.9560882991803683,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-13",
+   "share": 0.9654686092863538,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-14",
+   "share": 0.9675091545933625,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-15",
+   "share": 0.9464523032223652,
+   "label": "dry"
+  },
+  {
+   "site": "KFFC",
+   "night": "2026-10-16",
+   "share": 0.8213161427241915,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-09-27",
+   "share": 0.8860988858730307,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-09-28",
+   "share": 0.8231916800606967,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-09-29",
+   "share": 0.6742511285013013,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-09-30",
+   "share": 0.10414848572323337,
+   "label": "rain"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-01",
+   "share": 0.31541030816981197,
+   "label": "rain"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-02",
+   "share": 0.8703968836417472,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-03",
+   "share": 0.5656115823145721,
+   "label": "rain"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-04",
+   "share": 0.8494416877980118,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-06",
+   "share": 0.7612260735945816,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-07",
+   "share": 0.8360369158108012,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-08",
+   "share": 0.7807617205328935,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-09",
+   "share": 0.7210516464963085,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-10",
+   "share": 0.7922881577962364,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-11",
+   "share": 0.7230746987105366,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-14",
+   "share": 0.8838074085580641,
+   "label": "dry"
+  },
+  {
+   "site": "KGRR",
+   "night": "2026-10-15",
+   "share": 0.18499891160407075,
+   "label": "rain"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-09-28",
+   "share": 0.8141358647067548,
+   "label": "dry"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-09-29",
+   "share": 0.7054341033762943,
+   "label": "dry"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-09-30",
+   "share": 0.7033917881480372,
+   "label": "dry"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-10-03",
+   "share": 0.7475326698254133,
+   "label": "dry"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-10-04",
+   "share": 0.836517128553874,
+   "label": "dry"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-10-08",
+   "share": 0.8270071762502655,
+   "label": "dry"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-10-09",
+   "share": 0.8001485126916436,
+   "label": "dry"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-10-10",
+   "share": 0.33960698631043146,
+   "label": "rain"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-10-11",
+   "share": 0.7051677828041145,
+   "label": "dry"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-10-12",
+   "share": 0.6473441350072596,
+   "label": "dry"
+  },
+  {
+   "site": "KILN",
+   "night": "2026-10-13",
+   "share": 0.6326447795263739,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-09-27",
+   "share": 0.8586957211524022,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-09-28",
+   "share": 0.8042040941988524,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-09-29",
+   "share": 0.4547790236912245,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-09-30",
+   "share": 0.17619422757808284,
+   "label": "rain"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-01",
+   "share": 0.45167400371891037,
+   "label": "rain"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-02",
+   "share": 0.8629941675664242,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-03",
+   "share": 0.7754501425642757,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-04",
+   "share": 0.8503849454475082,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-05",
+   "share": 0.8139242211698164,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-07",
+   "share": 0.8761505167426359,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-08",
+   "share": 0.8094545967573556,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-09",
+   "share": 0.6836894002382781,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-10",
+   "share": 0.7133344697649427,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-11",
+   "share": 0.6897784305012614,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-13",
+   "share": 0.7071762157536183,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-14",
+   "share": 0.8455319426068114,
+   "label": "dry"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-15",
+   "share": 0.4574003466554206,
+   "label": "rain"
+  },
+  {
+   "site": "KLOT",
+   "night": "2026-10-16",
+   "share": 0.8174619613282073,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-09-27",
+   "share": 0.9135735441271366,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-09-28",
+   "share": 0.9276721334612661,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-09-29",
+   "share": 0.919638091262791,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-09-30",
+   "share": 0.8941142930146739,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-01",
+   "share": 0.8858284276841007,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-02",
+   "share": 0.757543590855712,
+   "label": "rain"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-04",
+   "share": 0.9320447620670845,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-05",
+   "share": 0.9279657342105797,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-06",
+   "share": 0.9155893220362398,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-07",
+   "share": 0.9315895655074897,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-08",
+   "share": 0.937037991443161,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-10",
+   "share": 0.4272654377482614,
+   "label": "rain"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-11",
+   "share": 0.9360633374418086,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-12",
+   "share": 0.9368660937183576,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-13",
+   "share": 0.9170696151344315,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-14",
+   "share": 0.7785619045648667,
+   "label": "dry"
+  },
+  {
+   "site": "KOHX",
+   "night": "2026-10-15",
+   "share": 0.9173706407955033,
+   "label": "dry"
+  }
+ ]
+}
