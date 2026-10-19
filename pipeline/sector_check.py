@@ -11,7 +11,7 @@ import datetime as dt
 import json
 import statistics
 from pathlib import Path
-from .pair_check import site_nights
+from .pair_check import fmt, site_nights
 
 SECTOR_RADARS = ("KOKX", "KMHX", "KMLB", "KLTX", "KTBW")
 FALSIFIED_BELOW = 1.1
@@ -54,11 +54,11 @@ def main(argv=None):
         factors[sid] = radar_factor(land, full)
         per_night[sid] = {"land": land, "full": full}
     v = verdict(factors, {sid: geo[sid]["sea_share"] for sid in SECTOR_RADARS})
-    for sid, r in v["radars"].items():
-        print(f"{sid} sea {geo[sid]['sea_share']:.2f} sector {geo[sid]['sector']} factor {r['factor']:.2f} "
-              f"(mt {factors[sid]['new']:.2f}) predicted {r['predicted']:.2f} needed {r['needed']:.2f} nights {factors[sid]['nights']}")
-    print("verdict:", v["verdict"])
     a.out.write_text(json.dumps({"verdict": v, "factors": factors, "per_night": per_night}, indent=1) + "\n")
+    for sid, r in v["radars"].items():      # a radar with no usable night pair has factor None: printed as '-'
+        print(f"{sid} sea {geo[sid]['sea_share']:.2f} sector {geo[sid]['sector']} factor {fmt(r['factor'])} "
+              f"(mt {fmt(factors[sid]['new'])}) predicted {r['predicted']:.2f} needed {r['needed']:.2f} nights {factors[sid]['nights']}")
+    print("verdict:", v["verdict"])
 
 if __name__ == "__main__":
     main()

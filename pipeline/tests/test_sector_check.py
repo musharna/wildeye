@@ -18,3 +18,24 @@ def test_verdict_follows_the_rule_fixed_before_the_run():
     assert run([1.1, 1.05, 1.09, 0.9, 1.6]) == "mixed"                 # 1.1 is not below 1.1
     v = verdict({"A": {"old": 1.5}}, {"A": 0.5})
     assert v["radars"]["A"]["predicted"] == pytest.approx(2.0) and v["radars"]["A"]["needed"] == pytest.approx(1.5)
+
+def test_main_writes_every_radar_when_one_has_no_common_nights(tmp_path, monkeypatch, capsys):
+    """Review of #103: a radar with no usable night pair made the print loop format None and raise before the
+    JSON was written, so one empty radar lost all five. It now reads '-' and the others are kept."""
+    import json
+    import pipeline.sector_check as sc
+    def fake_site_nights(root, site, nights):
+        val = None if (root.name == "sector" and site["id"] == "KOKX") else (20.0 if root.name == "sector" else 10.0)
+        return {"2026-10-16": {"old": val, "new": val}}
+    monkeypatch.setattr(sc, "site_nights", fake_site_nights)
+    sectors = tmp_path / "sectors.json"
+    sectors.write_text(json.dumps({s: {"sea_share": 0.5, "sector": [0, 90]} for s in sc.SECTOR_RADARS}))
+    out = tmp_path / "out.json"
+    sc.main(["--full-vp", str(tmp_path / "full"), "--sector-vp", str(tmp_path / "sector"), "--sectors", str(sectors),
+             "--first-night", "2026-10-16", "--last-night", "2026-10-16", "--out", str(out)])
+    doc = json.loads(out.read_text())
+    assert doc["verdict"]["radars"]["KOKX"]["factor"] is None and doc["factors"]["KOKX"]["nights"] == 0
+    assert all(doc["verdict"]["radars"][s]["factor"] == 2.0 for s in sc.SECTOR_RADARS if s != "KOKX")   # the rest kept
+    assert doc["verdict"]["verdict"] == "supported"                       # 4 of 5 reach 1.5
+    printed = capsys.readouterr().out
+    assert "KOKX sea 0.50 sector [0, 90] factor - (mt -)" in printed and "KMHX sea 0.50 sector [0, 90] factor 2.00" in printed
