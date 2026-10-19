@@ -8,6 +8,7 @@ flagged). t is the grid value with the best balanced accuracy on the first ten n
 ten; the flag ships if held-out balanced accuracy >= 0.75 with >= 30 scans of each label."""
 from __future__ import annotations
 import argparse
+import collections
 import csv
 import datetime as dt
 import io
@@ -52,10 +53,22 @@ def label(scan: dt.datetime, reports: list[tuple[dt.datetime, float | str | None
     lo, hi = sunset - NIGHT_PAD, sunrise + NIGHT_PAD
     night = [(t, v) for t, v in reports if lo <= t <= hi]
     hours = {t.replace(minute=0) for t, v in night if v is not None}
-    want = math.floor((hi - lo).total_seconds() / 3600)
-    if len(hours) >= want and all(v == 0.0 for _, v in night if v is not None):
+    if hourly_slots(reports, lo, hi) <= hours and all(v == 0.0 for _, v in night if v is not None):
         return "dry"
     return None
+
+def hourly_slots(reports: list[tuple[dt.datetime, float | str | None]], lo: dt.datetime, hi: dt.datetime) -> set:
+    """The clock hours whose routine report falls in [lo, hi]. The station reports once an hour at its own minute
+    (the commonest minute among its reports), so an off-the-hour window can hold one slot more than its length."""
+    if not reports:
+        return {lo.replace(minute=0, second=0, microsecond=0)}        # nothing reported: never fully reported
+    minute = collections.Counter(t.minute for t, _ in reports).most_common(1)[0][0]
+    out, h = set(), lo.replace(minute=0, second=0, microsecond=0)
+    while h <= hi:
+        if lo <= h + dt.timedelta(minutes=minute) <= hi:
+            out.add(h)
+        h += dt.timedelta(hours=1)
+    return out
 
 def balanced_accuracy(scans: list[tuple[float, str]], t: float) -> float | None:
     rain = [s for s, lab in scans if lab == "rain"]

@@ -39,6 +39,14 @@ def test_label_rain_within_an_hour_dry_only_on_a_fully_reported_dry_night():
     assert label(scan, [(t, "T" if i == 3 else v) for i, (t, v) in enumerate(dry)], ss, sr) is None   # a trace
     assert label(scan, [(t, None if i == 8 else v) for i, (t, v) in enumerate(dry)], ss, sr) is None  # a missing hour
     assert label(scan, dry[:8] + dry[9:], ss, sr) is None                                             # an absent hour
+    # review of #104: sunset/sunrise are off the hour, so the window can hold one slot more than its length in
+    # hours; 19:45-10:55 holds the 16 reports 19:51-10:51, and any one absent is not a fully reported night
+    ss2, sr2 = dt.datetime(2026, 10, 1, 21, 45, tzinfo=U), dt.datetime(2026, 10, 2, 8, 55, tzinfo=U)
+    assert label(scan, dry, ss2, sr2) == "dry"
+    assert label(scan, dry[:8] + dry[9:], ss2, sr2) is None                                           # interior slot
+    assert label(scan, dry[:1] + dry[2:], ss2, sr2) is None                                           # first slot, 19:51
+    assert label(scan, dry[:16], ss2, sr2) is None                                                    # last slot, 10:51
+    assert label(scan, [], ss2, sr2) is None                                                          # a silent gauge
 
 def test_balanced_accuracy_and_the_threshold_choice():
     scans = [(0.01, "rain"), (0.2, "rain"), (0.6, "rain"), (0.7, "dry"), (0.8, "dry"), (0.15, "dry")]

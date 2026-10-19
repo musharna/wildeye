@@ -10,7 +10,8 @@ below which the globe marks a scan as unreliable, against airport rain gauges. R
 - **Scans.** Every stored scan of the 14 radars in the adjacent-radar store, nights 27 Sep – 16 Oct 2026.
 - **Gauge.** The nearest IEM ASOS station within 40 km of the radar; hourly METAR `p01i`.
 - **Labels.** Rain: a report of ≥ 0.01 in within 60 min of the scan. Dry: the gauge reported nothing at all, not even
-  a trace, in every hour from sunset − 2 h to sunrise + 2 h. Everything else is left out.
+  a trace, in every hourly slot from sunset − 2 h to sunrise + 2 h (the station's own report minute). Everything else
+  is left out.
 - **Threshold.** Flag when share < t; t is the grid value (0.05–0.95) with the best balanced accuracy on the first ten
   nights, scored once on the last ten. Ships if held-out balanced accuracy ≥ 0.75 with ≥ 30 scans of each label.
 
@@ -18,21 +19,23 @@ below which the globe marks a scan as unreliable, against airport rain gauges. R
 
 ![threshold curve](bird_rain.png)
 
-Held out: balanced accuracy **0.90**; 89.5 % of 1,162 rain scans flagged, 9.1 % of 6,169 dry scans flagged.
+Held out: balanced accuracy **0.90**; 89.5 % of 1,162 rain scans flagged, 9.3 % of 5,712 dry scans flagged.
+(First version counted a night as fully reported with one hourly report missing; fixed in review, 457 held-out
+dry scans dropped, threshold and verdict unchanged.)
 
 | radar | gauge | rain scans | flagged | dry scans | flagged |
 |---|---|---|---|---|---|
 | KAKQ | AKQ 0 km | 107 | 0.64 | 1126 | 0.02 |
 | KBOX | 1B9 7 km | 62 | 0.95 | 759 | 0.23 |
 | KCLE | CLE 1 km | 210 | 0.93 | 825 | 0.00 |
-| KCLX | 3J1 18 km | 99 | 1.00 | 1278 | 0.11 |
+| KCLX | 3J1 18 km | 99 | 1.00 | 974 | 0.12 |
 | KDIX | MJX 10 km | 260 | 0.90 | 827 | 0.03 |
 | KJAX | JAX 2 km | 302 | 0.84 | 611 | 0.02 |
 | KLTX | SUT 33 km | 106 | 1.00 | 1200 | 0.21 |
 | KLWX | IAD 5 km | 201 | 0.86 | 826 | 0.02 |
 | KMHX | NKT 14 km | 77 | 0.99 | 1188 | 0.04 |
 | KMLB | MLB 1 km | 247 | 0.96 | 817 | 0.17 |
-| KOKX | HWV 5 km | 185 | 1.00 | 153 | 0.01 |
+| KOKX | HWV 5 km | 185 | 1.00 | 0 | – |
 | KPBZ | PIT 5 km | 99 | 0.95 | 901 | 0.00 |
 | KRAX | JNX 17 km | 37 | 1.00 | 1200 | 0.01 |
 | KTBW | MCF 20 km | 134 | 0.71 | 894 | 0.03 |
