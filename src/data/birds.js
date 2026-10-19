@@ -48,7 +48,8 @@ export function drapeFade(heightM) {
 
 // A scan whose bio_gate_share (share of the reflective gates vol2bird kept as birds) is below this is mostly
 // rain or clutter, and its bird numbers rest on the few gates left. 0.55 was chosen on 10 nights against airport
-// rain gauges and held 0.90 balanced accuracy on 10 more (docs/analysis/bird-rain.md, bird_rain.json).
+// rain gauges and held 0.90 balanced accuracy on 10 more (docs/analysis/bird-rain.md, bird_rain.json). On a night's
+// time-weighted share (birds_nights.json) the same 0.55 was tested separately: 0.83 (bird_rain_nights.json).
 export const RAIN_SHARE = 0.55;
 
 /** True when the scan's echo was mostly not birds; false with no share (no echo, or a source without it). */
@@ -127,6 +128,7 @@ export function nightText(n) {
   if (Number.isFinite(n.peak_mtr_birds_km_h) && n.peak_time) {
     t += `, peak ${fmtCount(n.peak_mtr_birds_km_h)}/km/h at ${String(n.peak_time).slice(11, 16)} UTC`;
   }
+  // the night's share is a time-weighted mean, not a scan; 0.55 was checked on it too (bird_rain_nights.json)
   if (mostlyNotBirds(n)) t += '; mostly rain or clutter, unreliable';
   // coverage is the share of the whole night; until sunrise it only says how far the night has got
   if (n.complete && Number.isFinite(n.coverage) && n.coverage < NIGHT_COVERAGE_MIN) t += `; scans cover ${Math.round(100 * n.coverage)}% of the night`;

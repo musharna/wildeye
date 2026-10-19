@@ -135,6 +135,10 @@ test('birds: a scan whose echo was mostly not birds is flagged at the gauge-chec
   const doc = JSON.parse(readFileSync(new URL('../../docs/analysis/bird_rain.json', import.meta.url)));
   assert.equal(RAIN_SHARE, doc.threshold, 'the globe uses the threshold the gauge check chose');
   assert.equal(doc.ships, true);
+  // the popup's night marker uses the same threshold on a night's weighted share: kept only while that use passes
+  const nights = JSON.parse(readFileSync(new URL('../../docs/analysis/bird_rain_nights.json', import.meta.url)));
+  assert.equal(nights.threshold, RAIN_SHARE);
+  assert.equal(nights.keep_marker, true);
   assert.equal(mostlyNotBirds({ bio_gate_share: 0.003 }), true);
   assert.equal(mostlyNotBirds({ bio_gate_share: 0.549 }), true);
   assert.equal(mostlyNotBirds({ bio_gate_share: 0.55 }), false, 'the threshold itself is birds');
