@@ -148,3 +148,28 @@ def test_bio_gate_share_is_kept_gates_over_all_reflective_gates():
     old = "# date time HGHT u v w ff dd sd_vvp gap dbz eta dens DBZH\n20261017 0100 0 nan nan nan nan nan nan T nan nan nan 0.0\n"
     with pytest.raises(ValueError, match="no n_dbz"):                     # a vol2bird without the counts
         bio_gate_share(parse_profile(old))
+
+def test_run_vol2bird_with_options_uses_a_private_options_conf_and_without_is_unchanged(tmp_path: Path, monkeypatch):
+    """vol2bird reads options.conf from its working directory; options go in a fresh directory mounted as that
+    directory, so nothing shared (the volume's own dir) can carry them into another run."""
+    import subprocess
+    import pipeline.vol2bird as v
+    vol = tmp_path / "KOKX20261017_051535_V06"
+    vol.write_bytes(b"x")
+    seen = []
+    def fake_run(cmd, **kw):
+        conf = [c.split(":")[0] for c in cmd if c.endswith(":/conf")]
+        seen.append((cmd, (Path(conf[0]) / "options.conf").read_text() if conf else None))
+        return subprocess.CompletedProcess(cmd, 0, stdout="profile", stderr="")
+    monkeypatch.setattr(v.subprocess, "run", fake_run)
+    assert v.run_vol2bird(vol) == "profile"
+    assert seen[0] == (["docker", "run", "--rm", "-v", f"{tmp_path}:/data", v.IMAGE, "vol2bird",
+                        "/data/KOKX20261017_051535_V06"], None)                     # unchanged without options
+    v.run_vol2bird(vol, options={"AZIMMIN": "239", "AZIMMAX": "279"})
+    cmd, conf = seen[1]
+    assert conf == "AZIMMIN = 239\nAZIMMAX = 279\n"
+    assert cmd[-3:] == [v.IMAGE, "vol2bird", "/data/KOKX20261017_051535_V06"] and "-w" in cmd and "/conf" in cmd
+    assert not list(tmp_path.glob("*options*"))                                     # nothing left beside the volume
+    for bad in ({"AZIMMIN\nDUALPOL": "0"}, {"azimmin": "1"}, {"AZIMMIN": "1\nDUALPOL = FALSE"}):
+        with pytest.raises(ValueError, match="vol2bird option"):
+            v.run_vol2bird(vol, options=bad)

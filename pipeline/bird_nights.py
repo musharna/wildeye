@@ -164,9 +164,10 @@ def build_nights(root: Path, sites: list[dict], out: Path, now: dt.datetime, nig
 # --- backfill a past night from the NEXRAD archive -------------------------------------------------
 
 def backfill_night(site: dict, night: dt.date, root: Path, workdir: Path, workers: int = 4,
-                   every_min: float | None = None) -> list[str]:
+                   every_min: float | None = None, options: dict[str, str] | None = None) -> list[str]:
     """Run vol2bird on every archived volume of `site` in the night's window and store the profiles;
     with every_min, only the first volume of each every_min slot from sunset (the cron's sampling).
+    options are vol2bird settings for every volume (run_vol2bird); keep their profiles in their own vp root.
     Scans already stored are skipped. Returns the keys that failed (logged)."""
     from .nexrad import list_day_keys, key_time, download_volume
     sunset, sunrise = night_window(night, site["lon"], site["lat"])
@@ -186,7 +187,7 @@ def backfill_night(site: dict, night: dt.date, root: Path, workdir: Path, worker
     def one(key):
         vol = download_volume(key, workdir / site["id"])
         try:
-            save_profile(run_vol2bird(vol), site["id"], key, root)
+            save_profile(run_vol2bird(vol, options=options), site["id"], key, root)
         finally:
             vol.unlink(missing_ok=True)
 
@@ -213,15 +214,20 @@ def main(argv=None):
     ap.add_argument("--out", type=Path, default=Path("public/data/birds_nights.json"))
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--every-min", type=float, help="backfill: first volume of each slot from sunset (cron ~10)")
+    ap.add_argument("--vol2bird-option", action="append", default=[], help="backfill: KEY=VALUE for options.conf")
     a = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     unknown = set(a.site or []) - {s["id"] for s in SITES}
     if unknown:
         raise SystemExit(f"unknown site(s): {sorted(unknown)}")
     sites = [s for s in SITES if not a.site or s["id"] in a.site]
+    if any("=" not in o for o in a.vol2bird_option):
+        raise SystemExit(f"--vol2bird-option needs KEY=VALUE, got {a.vol2bird_option}")
+    options = dict(o.split("=", 1) for o in a.vol2bird_option) or None
     failed = []
     if a.command == "backfill":
-        failed = [k for s in sites for n in a.night for k in backfill_night(s, n, a.vp_dir, a.workdir, a.workers, every_min=a.every_min)]
+        failed = [k for s in sites for n in a.night for k in backfill_night(s, n, a.vp_dir, a.workdir, a.workers,
+                                                                         every_min=a.every_min, options=options)]
     # rebuilt even when some volumes failed: the ones that landed are stored and count
     doc = build_nights(a.vp_dir, sites, a.out, dt.datetime.now(dt.UTC), nights=a.night)
     if failed or doc["failures"]:
