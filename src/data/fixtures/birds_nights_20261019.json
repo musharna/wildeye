@@ -1,0 +1,148 @@
+{
+ "generated_at": "2026-10-19T02:00:58Z",
+ "method": "bioRad 0.12.0 integrate_profile (0 m to profile top, ASL) over each night's stored vol2bird profiles; night = bioRad sunset to sunrise (sun -0.268 deg)",
+ "failures": {},
+ "sites": {
+  "KAKQ": [
+   {
+    "sunset": "2026-10-16T22:26:57Z",
+    "sunrise": "2026-10-17T11:20:28Z",
+    "profiles": 34,
+    "profiles_without_density": 3,
+    "coverage": 0.4046634683160094,
+    "measured_coverage": 0.3664673425008093,
+    "mt_birds_km": 1780.4814109090912,
+    "peak_mtr_birds_km_h": 1195.249536,
+    "peak_time": "2026-10-17T05:53:00Z",
+    "speedless_share": 0.23990942520743908,
+    "bio_gate_share": 0.18704972970200232,
+    "night": "2026-10-16",
+    "complete": true
+   },
+   {
+    "sunset": "2026-10-17T22:25:37Z",
+    "sunrise": "2026-10-18T11:21:24Z",
+    "profiles": 78,
+    "profiles_without_density": 0,
+    "coverage": 0.9211082039606181,
+    "measured_coverage": 0.9211082039606181,
+    "mt_birds_km": 125821.4593908468,
+    "peak_mtr_birds_km_h": 20098.904472000002,
+    "peak_time": "2026-10-18T02:10:00Z",
+    "speedless_share": 0.00012142076536926941,
+    "bio_gate_share": 0.8737070573853525,
+    "night": "2026-10-17",
+    "complete": true
+   },
+   {
+    "sunset": "2026-10-18T22:24:17Z",
+    "sunrise": "2026-10-19T11:22:21Z",
+    "profiles": 21,
+    "profiles_without_density": 0,
+    "coverage": 0.2339146046632809,
+    "measured_coverage": 0.2339146046632809,
+    "mt_birds_km": 5969.297751,
+    "peak_mtr_birds_km_h": 3575.4861600000004,
+    "peak_time": "2026-10-19T01:46:00Z",
+    "speedless_share": 0.000976975526996343,
+    "bio_gate_share": 0.8193988339996531,
+    "night": "2026-10-18",
+    "complete": false
+   }
+  ],
+  "KLOT": [
+   {
+    "sunset": "2026-10-16T23:06:17Z",
+    "sunrise": "2026-10-17T12:09:51Z",
+    "profiles": 39,
+    "profiles_without_density": 0,
+    "coverage": 0.4515789957304963,
+    "measured_coverage": 0.4515789957304963,
+    "mt_birds_km": 13666.449561157897,
+    "peak_mtr_birds_km_h": 8030.439792000001,
+    "peak_time": "2026-10-17T05:50:00Z",
+    "speedless_share": 0.00015293176143611496,
+    "bio_gate_share": 0.7806958803470191,
+    "night": "2026-10-16",
+    "complete": true
+   },
+   {
+    "sunset": "2026-10-17T23:04:45Z",
+    "sunrise": "2026-10-18T12:11:00Z",
+    "profiles": 79,
+    "profiles_without_density": 0,
+    "coverage": 0.9438599613240006,
+    "measured_coverage": 0.9438599613240006,
+    "mt_birds_km": 863.1227652153846,
+    "peak_mtr_birds_km_h": 599.9836320000001,
+    "peak_time": "2026-10-18T12:09:00Z",
+    "speedless_share": 0.0012153487059986328,
+    "bio_gate_share": 0.7623038101944165,
+    "night": "2026-10-17",
+    "complete": true
+   },
+   {
+    "sunset": "2026-10-18T23:03:13Z",
+    "sunrise": "2026-10-19T12:12:09Z",
+    "profiles": 17,
+    "profiles_without_density": 0,
+    "coverage": 0.19995276831685765,
+    "measured_coverage": 0.19995276831685765,
+    "mt_birds_km": 75.43535077500002,
+    "peak_mtr_birds_km_h": 68.19098400000003,
+    "peak_time": "2026-10-18T23:08:00Z",
+    "speedless_share": 0.0006059836092020779,
+    "bio_gate_share": 0.6756373468194363,
+    "night": "2026-10-18",
+    "complete": false
+   }
+  ],
+  "KMLB": [
+   {
+    "sunset": "2026-10-16T22:49:31Z",
+    "sunrise": "2026-10-17T11:26:53Z",
+    "profiles": 34,
+    "profiles_without_density": 0,
+    "coverage": 0.4262938737518786,
+    "measured_coverage": 0.4262938737518786,
+    "mt_birds_km": 5433.717752527274,
+    "peak_mtr_birds_km_h": 1433.0927519999998,
+    "peak_time": "2026-10-17T09:13:00Z",
+    "speedless_share": 0.00015220589110342947,
+    "bio_gate_share": 0.6932351185775452,
+    "night": "2026-10-16",
+    "complete": true
+   },
+   {
+    "sunset": "2026-10-17T22:48:30Z",
+    "sunrise": "2026-10-18T11:27:29Z",
+    "profiles": 76,
+    "profiles_without_density": 0,
+    "coverage": 0.9412780735867312,
+    "measured_coverage": 0.9412780735867312,
+    "mt_birds_km": 95154.80152779998,
+    "peak_mtr_birds_km_h": 17352.283896,
+    "peak_time": "2026-10-18T07:21:00Z",
+    "speedless_share": 8.952384571578584e-05,
+    "bio_gate_share": 0.7588251812927129,
+    "night": "2026-10-17",
+    "complete": true
+   },
+   {
+    "sunset": "2026-10-18T22:47:31Z",
+    "sunrise": "2026-10-19T11:28:06Z",
+    "profiles": 19,
+    "profiles_without_density": 0,
+    "coverage": 0.22563045618606803,
+    "measured_coverage": 0.22563045618606803,
+    "mt_birds_km": 20596.057752,
+    "peak_mtr_birds_km_h": 13135.662792000003,
+    "peak_time": "2026-10-19T00:05:00Z",
+    "speedless_share": 0.0014720261438990747,
+    "bio_gate_share": 0.438432514712428,
+    "night": "2026-10-18",
+    "complete": false
+   }
+  ]
+ }
+}

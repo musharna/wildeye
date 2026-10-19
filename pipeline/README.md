@@ -44,6 +44,10 @@ checks the port). Per site and night: `mt_birds_km` (birds crossing 1 km over th
 `speedless_share` (share of the night's birds with no speed, which mt cannot count), `bio_gate_share`
 (the profiles' share weighted by the time each stands for: the night's rain readout), `complete` (sunrise passed).
 Kept 60 nights; a site-night that fails is listed in `failures` and the rest still written.
+The globe's radar popup shows tonight (once the sun has set) and the last complete night from this file: mt, peak
+mtr and its time, marked "mostly rain or clutter" when the night's `bio_gate_share` < 0.55 (the scan threshold of
+`docs/analysis/bird-rain.md`, applied to the night's weighted share) and with its coverage when a complete night is
+under half covered. Replay frames show no night lines.
 Past nights from the archive: `python3 -m pipeline.bird_nights backfill --site KOKX --night 2026-10-16`
 (~140 volumes a night, vol2bird in Docker); `build` recomputes nights from what is stored.
 

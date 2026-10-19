@@ -8,6 +8,7 @@ import { buildSpawnCdf, sampleCell, idwVelocity, stepParticle, seededRandom, fra
  * radar: height ∝ density, hue = heading. Static geometry between polls.
  */
 const DATA_URL = 'data/birds.geojson';
+const NIGHTS_URL = 'data/birds_nights.json';
 const FIELD_URL = 'data/birds_field.json';
 const MANIFEST_URL = 'data/birds_archive/manifest.json';
 const SEEK_DEBOUNCE_MS = 150;
@@ -116,7 +117,34 @@ export function columnEntity(f, idPrefix = 'birds', describeFn = describe) {
   };
 }
 
-export function describe(p, h) {
+const NIGHT_COVERAGE_MIN = 0.5;
+const fmtCount = (v) => new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 }).format(v);
+
+/** One night of birds_nights.json as popup text: bioRad migration traffic and what limits it. */
+export function nightText(n) {
+  if (!Number.isFinite(n?.mt_birds_km)) return 'no scans';
+  let t = `${fmtCount(n.mt_birds_km)} birds crossed each km`;
+  if (Number.isFinite(n.peak_mtr_birds_km_h) && n.peak_time) {
+    t += `, peak ${fmtCount(n.peak_mtr_birds_km_h)}/km/h at ${String(n.peak_time).slice(11, 16)} UTC`;
+  }
+  if (mostlyNotBirds(n)) t += '; mostly rain or clutter, unreliable';
+  // coverage is the share of the whole night; until sunrise it only says how far the night has got
+  if (n.complete && Number.isFinite(n.coverage) && n.coverage < NIGHT_COVERAGE_MIN) t += `; scans cover ${Math.round(100 * n.coverage)}% of the night`;
+  return t;
+}
+
+/** Popup lines for a radar's nights (pipeline/bird_nights.py): tonight once the sun has set, and the last complete night. */
+export function nightLines(nights, nowMs = Date.now()) {
+  if (!Array.isArray(nights)) return [];
+  const tonight = nights.filter((n) => !n.complete && Date.parse(n.sunset) <= nowMs).at(-1);
+  const last = nights.filter((n) => n.complete).at(-1);
+  const out = [];
+  if (tonight) out.push(`Tonight so far: ${nightText(tonight)}`);
+  if (last) out.push(`Last night (${last.night}): ${nightText(last)}`);
+  return out;
+}
+
+export function describe(p, h, nights = null, nowMs = Date.now()) {
   const head = `<b>${p.name ?? p.site}</b> (${p.site})<br>`;
   const body = h > 0
     ? `${Number(p.density_birds_km3).toFixed(1)} birds/km³, heading ${Math.round(p.heading_deg)}°, ` +
@@ -126,7 +154,9 @@ export function describe(p, h) {
     ? `Mostly rain or clutter: only ${Math.round(100 * p.bio_gate_share)}% of the echo passed the bird filter, so this count is unreliable<br>`
     : '';
   const note = h > 0 ? '<br>Compare nights at this radar, not radars with each other (neighbours differ by a median 1.7×).' : '';
-  return `${head}${warn}${body}<br>scan ${p.scan_time}${p.stale ? ' (stale, last good)' : ''}${note}`;
+  const lines = nightLines(nights, nowMs);
+  const night = lines.length ? `<br>${lines.join('<br>')}` : '';
+  return `${head}${warn}${body}<br>scan ${p.scan_time}${p.stale ? ' (stale, last good)' : ''}${night}${note}`;
 }
 
 export function createBirdsLayer() {
@@ -135,6 +165,8 @@ export function createBirdsLayer() {
   let _lastUpdate = null;
   let _lastError = null;
   let _generatedAt = null;
+  let _nights = null;          // birds_nights.json, last good; live only (replay frames have no night totals)
+  let _nightsError = null;
   let _viewer = null;
   let _imagery = [];          // Cesium.ImageryLayer per radar (drape)
   let _points = null;         // PointPrimitiveCollection (particles)
@@ -358,12 +390,12 @@ export function createBirdsLayer() {
     setRowControlsListener(listener) { _rowControlsListener = typeof listener === 'function' ? listener : null; },
 
     /** Rebuild the per-radar columns from a FeatureCollection. Returns the count. */
-    _renderColumns(gj) {
+    _renderColumns(gj, nights = null) {
         _dataSource.entities.removeAll();
         let count = 0;
         for (const f of gj.features) {
           count++;
-          _dataSource.entities.add(columnEntity(f, 'birds'));
+          _dataSource.entities.add(columnEntity(f, 'birds', (p, h) => describe(p, h, nights?.sites?.[p.site] ?? null)));
         }
         return count;
     },
@@ -375,7 +407,8 @@ export function createBirdsLayer() {
         if (!res.ok) { _lastError = `birds.geojson HTTP ${res.status}`; return false; }
         const gj = await res.json();
         if (!gj || !Array.isArray(gj.features)) { _lastError = 'Malformed birds.geojson'; return false; }
-        _count = this._renderColumns(gj);
+        await this._loadNights();
+        _count = this._renderColumns(gj, _nights);
         _generatedAt = gj.generated_at ?? null;
         await this._updateField();
         if (_manifest !== null) await this._loadManifest(true); // pick up frames the cron added since load
@@ -387,6 +420,20 @@ export function createBirdsLayer() {
         console.warn('[Data:Birds] Fetch error:', e);
         _lastError = 'birds.geojson network error';
         return false;
+      }
+    },
+
+    /** Night totals for the popups. A failed fetch keeps the last good file and is reported in getStats(). */
+    async _loadNights() {
+      try {
+        const res = await fetch(`${NIGHTS_URL}?t=${Date.now()}`);
+        if (!res.ok) { _nightsError = `birds_nights.json HTTP ${res.status}`; return; }
+        const doc = await res.json();
+        if (!doc || typeof doc.sites !== 'object' || doc.sites === null) { _nightsError = 'Malformed birds_nights.json'; return; }
+        _nights = doc; _nightsError = null;
+      } catch (e) {
+        console.warn('[Data:Birds] Nights fetch error:', e);
+        _nightsError = 'birds_nights.json network error';
       }
     },
 
@@ -537,6 +584,7 @@ export function createBirdsLayer() {
       if (_dataSource) { viewer.dataSources.remove(_dataSource, true); _dataSource = null; }
       _viewer = null;
       _count = 0; _lastUpdate = null; _lastError = null; _generatedAt = null;
+      _nights = null; _nightsError = null;
     },
 
     getAnalystRecords(maxCount = 2000) {
@@ -555,7 +603,8 @@ export function createBirdsLayer() {
 
     getStats() {
       return { count: _count, lastUpdate: _lastUpdate, error: _lastError, generatedAt: _generatedAt,
-        drapes: _imagery.length, particles: _field && _field.total > 0 ? PARTICLE_COUNT : 0, mode: _mode };
+        drapes: _imagery.length, particles: _field && _field.total > 0 ? PARTICLE_COUNT : 0, mode: _mode,
+        nightsError: _nightsError };
     },
   };
   return layer;
