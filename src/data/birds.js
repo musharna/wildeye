@@ -45,6 +45,17 @@ export function drapeFade(heightM) {
   return 1 - (h - FADE_NEAR_M) / (FADE_FAR_M - FADE_NEAR_M);
 }
 
+// A scan whose bio_gate_share (share of the reflective gates vol2bird kept as birds) is below this is mostly
+// rain or clutter, and its bird numbers rest on the few gates left. 0.55 was chosen on 10 nights against airport
+// rain gauges and held 0.90 balanced accuracy on 10 more (docs/analysis/bird-rain.md, bird_rain.json).
+export const RAIN_SHARE = 0.55;
+
+/** True when the scan's echo was mostly not birds; false with no share (no echo, or a source without it). */
+export function mostlyNotBirds(p) {
+  const s = p?.bio_gate_share;
+  return Number.isFinite(s) && s < RAIN_SHARE;
+}
+
 const DEFAULT_PARAMS = Object.freeze({ columns: false, drape: true, particles: true });
 
 export function headingColor(deg) {
@@ -61,7 +72,7 @@ export function birdsLegend(params = DEFAULT_PARAMS) {
       items.push({ label, color: headingColor(deg).toCssColorString(), count: null });
     }
   }
-  if (params.columns) items.push({ label: 'column height = log(birds/km³), 5 km per e-fold, faded = stale scan', color: 'transparent', count: null });
+  if (params.columns) items.push({ label: 'column height = log(birds/km³), 5 km per e-fold; compare nights at one radar, not radars; faded = stale or mostly rain', color: 'transparent', count: null });
   if (params.drape) items.push({ label: 'radar: probable biological echo (rain masked)', color: 'transparent', count: null });
   return items;
 }
@@ -88,7 +99,7 @@ export function columnEntity(f, idPrefix = 'birds', describeFn = describe) {
   const [lon, lat] = f.geometry.coordinates;
   const p = f.properties || {};
   const h = birdColumn(p.density_birds_km3);
-  const color = headingColor(p.heading_deg).withAlpha(p.stale ? 0.25 : 0.6);
+  const color = headingColor(p.heading_deg).withAlpha(p.stale || mostlyNotBirds(p) ? 0.25 : 0.6);
   return {
     id: `${idPrefix}:${p.site}`,
     position: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(h, 500) / 2),
@@ -111,7 +122,11 @@ export function describe(p, h) {
     ? `${Number(p.density_birds_km3).toFixed(1)} birds/km³, heading ${Math.round(p.heading_deg)}°, ` +
       `${Number(p.speed_ms ?? 0).toFixed(0)} m/s, peak ${p.peak_altitude_m} m`
     : 'Quiet — no biological echo (daytime or clear)';
-  return `${head}${body}<br>scan ${p.scan_time}${p.stale ? ' (stale, last good)' : ''}`;
+  const warn = mostlyNotBirds(p)
+    ? `Mostly rain or clutter: only ${Math.round(100 * p.bio_gate_share)}% of the echo passed the bird filter, so this count is unreliable<br>`
+    : '';
+  const note = h > 0 ? '<br>Compare nights at this radar, not radars with each other (neighbours differ by a median 1.7×).' : '';
+  return `${head}${warn}${body}<br>scan ${p.scan_time}${p.stale ? ' (stale, last good)' : ''}${note}`;
 }
 
 export function createBirdsLayer() {
