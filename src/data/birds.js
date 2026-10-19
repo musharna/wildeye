@@ -119,12 +119,18 @@ export function columnEntity(f, idPrefix = 'birds', describeFn = describe) {
 }
 
 const NIGHT_COVERAGE_MIN = 0.5;
+// A night's total comes from one scan per 10 minutes. Against every scan the radar made, |error| was <= 8.4% on
+// 90% of 57 nights at 6 radars, and held on 93% of 57 later nights (docs/analysis/bird-sampling.md,
+// bird_sampling.json). Sampling only: it says nothing about how many birds the radar misses or invents.
+export const SAMPLING_ERROR = 0.084;
 const fmtCount = (v) => new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 }).format(v);
 
 /** One night of birds_nights.json as popup text: bioRad migration traffic and what limits it. */
 export function nightText(n) {
   if (!Number.isFinite(n?.mt_birds_km)) return 'no scans';
   let t = `${fmtCount(n.mt_birds_km)} birds crossed each km`;
+  // the error was measured on finished nights; on a mostly-rain night the total is flagged unreliable instead
+  if (n.complete && !mostlyNotBirds(n)) t += ` (± ${Math.round(100 * SAMPLING_ERROR)}% from 10-minute sampling)`;
   if (Number.isFinite(n.peak_mtr_birds_km_h) && n.peak_time) {
     t += `, peak ${fmtCount(n.peak_mtr_birds_km_h)}/km/h at ${String(n.peak_time).slice(11, 16)} UTC`;
   }
@@ -146,6 +152,33 @@ export function nightLines(nights, nowMs = Date.now()) {
   return out;
 }
 
+const SPARK = '▁▂▃▄▅▆▇█';
+const SPARK_NIGHTS = 14;
+const SPARK_DECADES = 3;
+
+/**
+ * The radar's last complete nights as a text sparkline, oldest first: bar height = log10(mt) over the radar's own
+ * highest night shown, the bottom bar SPARK_DECADES below it; '·' = no scans, '×' = mostly rain or clutter.
+ * Null with fewer than 3 complete nights. Per radar only: radars are not comparable with each other.
+ */
+export function nightSpark(nights) {
+  if (!Array.isArray(nights)) return null;
+  const done = nights.filter((n) => n.complete).slice(-SPARK_NIGHTS);
+  if (done.length < 3) return null;
+  const good = done.filter((n) => Number.isFinite(n.mt_birds_km) && n.mt_birds_km > 0 && !mostlyNotBirds(n));
+  if (!good.length) return null;
+  const top = good.reduce((a, n) => (n.mt_birds_km > a.mt_birds_km ? n : a));
+  const hi = Math.log10(top.mt_birds_km);
+  const bars = done.map((n) => {
+    if (!Number.isFinite(n.mt_birds_km)) return '·';
+    if (mostlyNotBirds(n)) return '×';
+    if (n.mt_birds_km <= 0) return SPARK[0];
+    const f = 1 - (hi - Math.log10(n.mt_birds_km)) / SPARK_DECADES;
+    return SPARK[Math.max(0, Math.min(SPARK.length - 1, Math.round(f * (SPARK.length - 1))))];
+  }).join('');
+  return `Last ${done.length} nights: ${bars} (high ${fmtCount(top.mt_birds_km)} on ${top.night.slice(5)}; log scale; × rain)`;
+}
+
 export function describe(p, h, nights = null, nowMs = Date.now()) {
   const head = `<b>${p.name ?? p.site}</b> (${p.site})<br>`;
   const body = h > 0
@@ -156,7 +189,8 @@ export function describe(p, h, nights = null, nowMs = Date.now()) {
     ? `Mostly rain or clutter: only ${Math.round(100 * p.bio_gate_share)}% of the echo passed the bird filter, so this count is unreliable<br>`
     : '';
   const note = h > 0 ? '<br>Compare nights at this radar, not radars with each other (neighbours differ by a median 1.7×).' : '';
-  const lines = nightLines(nights, nowMs);
+  const spark = nightSpark(nights);
+  const lines = [...nightLines(nights, nowMs), ...(spark ? [spark] : [])];
   const night = lines.length ? `<br>${lines.join('<br>')}` : '';
   return `${head}${warn}${body}<br>scan ${p.scan_time}${p.stale ? ' (stale, last good)' : ''}${night}${note}`;
 }

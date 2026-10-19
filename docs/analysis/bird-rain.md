@@ -64,9 +64,25 @@ marked. The missed rain nights are the briefly wet ones (median 2 wet gauge hour
 18 had two or fewer), where the night's share stays high; the scan flags still show those hours. `python3 -m pipeline.rain_nights --pairs bird_pairs.json --threshold-from
 bird_rain.json --states … --cache <dir> --out bird_rain_nights.json`.
 
+## The six other live radars
+
+KBUF, KGRR, KILN, KLOT, KFFC and KOHX were not in the store above. Rules fixed in the ledger (2026-10-18) before
+their scans existed: on their 10-minute scans (backfilled at full resolution, `bird-sampling.md`), score the
+existing 0.55 per scan and per night with the labels above, no fitting; the markers stay on these radars if both
+balanced accuracies are ≥ 0.75 with ≥ 30 scans and ≥ 15 nights of each label. Nearest gauges are 0-2.2 km away, except
+BNA, 18 km from KOHX.
+
+![Balanced accuracy at 0.55 per radar and pooled](bird_rain_new_radars.png)
+
+Result: kept. Scans **0.91** (621 rain, 5,884 dry); nights **0.84** (20 rain, 78 dry). The verdict is pooled: per
+radar there are only 1-7 rain nights. KOHX is lowest (scans 0.78, nights 0.75 on 2 rain nights).
+`python3 -m pipeline.rain_recheck --vp-dir <10-minute store> --first-night 2026-09-27 --last-night 2026-10-16
+--states NY,MI,OH,IL,IN,WI,GA,TN,KY,PA --cache <dir> --threshold-from bird_rain.json --out bird_rain_new_radars.json`
+and `Rscript docs/analysis/bird_rain_new_radars_figure.R`.
+
 ## Not shown
 
-The six live radars outside the adjacent-radar store (no stored scans for these nights), and daytime scans.
+Daytime scans.
 
 Reproduce: `python3 -m pipeline.rain_check --vp-dir <store> --first-night 2026-09-27 --last-night 2026-10-16
 --states NY,NJ,CT,NC,OH,PA,FL,MA,RI,VA,SC,GA,MD,DE --cache <dir> --out bird_rain.json` and

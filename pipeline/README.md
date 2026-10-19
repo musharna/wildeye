@@ -47,7 +47,9 @@ Kept 60 nights; a site-night that fails is listed in `failures` and the rest sti
 The globe's radar popup shows tonight (once the sun has set) and the last complete night from this file: mt, peak
 mtr and its time, marked "mostly rain or clutter" when the night's `bio_gate_share` < 0.55 (the scan threshold of
 `docs/analysis/bird-rain.md`; checked separately on the night's weighted share: balanced accuracy 0.83) and with its coverage when a complete night is
-under half covered. Replay frames show no night lines.
+under half covered. A finished night not marked rain carries "± 8% from 10-minute sampling" (`docs/analysis/bird-sampling.md`:
+the cadence's error only, not calibration). Below them, the last 14 complete nights as a log-scale text sparkline
+(× = mostly rain, · = no scans). Replay frames show no night lines.
 Past nights from the archive: `python3 -m pipeline.bird_nights backfill --site KOKX --night 2026-10-16`
 (~140 volumes a night, vol2bird in Docker); `build` recomputes nights from what is stored.
 

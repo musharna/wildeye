@@ -34,3 +34,8 @@
   `pipeline/bird_nights.py` wrote it at 2026-10-19 02:00 UTC, cut to KAKQ, KLOT
   and KMLB (three nights each: two complete, tonight in progress). Used ONLY by
   `src/data/birds.test.mjs` for the popup's night lines.
+- `birds_nights_history_20261019.json` — `public/data/birds_nights.json` at
+  2026-10-19 02:49 UTC, after 20 past nights (27 Sep – 16 Oct) were built from
+  the adjacent-radar store, cut to KAKQ (22 nights) and KBUF (not yet seeded,
+  so its past nights have no scans). Used ONLY by `src/data/birds.test.mjs` for
+  the popup sparkline.
