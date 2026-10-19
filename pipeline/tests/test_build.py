@@ -34,6 +34,18 @@ def test_write_atomic(tmp_path: Path):
     assert json.loads(p.read_text()) == {"a": 1}
     assert not list(tmp_path.glob("*.tmp"))
 
+def test_write_atomic_failed_write_leaves_no_temp_file_and_the_old_file(tmp_path: Path):
+    """A write that raises half-way kept its tmp*.tmp beside the target, and deploy_pages shipped it."""
+    import pytest
+    p = tmp_path / "b.geojson"
+    write_atomic(p, {"a": 1})
+    with pytest.raises(TypeError, match="not JSON serializable"):
+        write_atomic(p, {"a": 2, "b": object()})   # fails after '{"a":2,' is already in the buffer
+    assert json.loads(p.read_text()) == {"a": 1}, "the last good file stays"
+    assert sorted(x.name for x in tmp_path.iterdir()) == ["b.geojson"]
+    write_atomic(p, {"a": 3})
+    assert json.loads(p.read_text()) == {"a": 3}
+
 def test_process_site_unlinks_volume_after_processing(tmp_path: Path, monkeypatch):
     """Workdir is transient input, not a cache: keys are timestamped so nothing ever
     re-hits, and leaving volumes behind grew /tmp by ~23 GB/day (2026-09-15)."""
