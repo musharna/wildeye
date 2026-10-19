@@ -146,6 +146,33 @@ export function nightLines(nights, nowMs = Date.now()) {
   return out;
 }
 
+const SPARK = '▁▂▃▄▅▆▇█';
+const SPARK_NIGHTS = 14;
+const SPARK_DECADES = 3;
+
+/**
+ * The radar's last complete nights as a text sparkline, oldest first: bar height = log10(mt) over the radar's own
+ * highest night shown, the bottom bar SPARK_DECADES below it; '·' = no scans, '×' = mostly rain or clutter.
+ * Null with fewer than 3 complete nights. Per radar only: radars are not comparable with each other.
+ */
+export function nightSpark(nights) {
+  if (!Array.isArray(nights)) return null;
+  const done = nights.filter((n) => n.complete).slice(-SPARK_NIGHTS);
+  if (done.length < 3) return null;
+  const good = done.filter((n) => Number.isFinite(n.mt_birds_km) && n.mt_birds_km > 0 && !mostlyNotBirds(n));
+  if (!good.length) return null;
+  const top = good.reduce((a, n) => (n.mt_birds_km > a.mt_birds_km ? n : a));
+  const hi = Math.log10(top.mt_birds_km);
+  const bars = done.map((n) => {
+    if (!Number.isFinite(n.mt_birds_km)) return '·';
+    if (mostlyNotBirds(n)) return '×';
+    if (n.mt_birds_km <= 0) return SPARK[0];
+    const f = 1 - (hi - Math.log10(n.mt_birds_km)) / SPARK_DECADES;
+    return SPARK[Math.max(0, Math.min(SPARK.length - 1, Math.round(f * (SPARK.length - 1))))];
+  }).join('');
+  return `Last ${done.length} nights: ${bars} (high ${fmtCount(top.mt_birds_km)} on ${top.night.slice(5)}; log scale; × rain)`;
+}
+
 export function describe(p, h, nights = null, nowMs = Date.now()) {
   const head = `<b>${p.name ?? p.site}</b> (${p.site})<br>`;
   const body = h > 0
@@ -156,7 +183,8 @@ export function describe(p, h, nights = null, nowMs = Date.now()) {
     ? `Mostly rain or clutter: only ${Math.round(100 * p.bio_gate_share)}% of the echo passed the bird filter, so this count is unreliable<br>`
     : '';
   const note = h > 0 ? '<br>Compare nights at this radar, not radars with each other (neighbours differ by a median 1.7×).' : '';
-  const lines = nightLines(nights, nowMs);
+  const spark = nightSpark(nights);
+  const lines = [...nightLines(nights, nowMs), ...(spark ? [spark] : [])];
   const night = lines.length ? `<br>${lines.join('<br>')}` : '';
   return `${head}${warn}${body}<br>scan ${p.scan_time}${p.stale ? ' (stale, last good)' : ''}${night}${note}`;
 }
