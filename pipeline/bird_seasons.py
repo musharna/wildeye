@@ -103,6 +103,9 @@ def main(argv=None):
         return
     if not a.vp_dir or not a.season:
         raise SystemExit("build needs --vp-dir and --season")
+    unknown = set(a.site or []) - {s["id"] for s in SITES}
+    if unknown:   # a misspelt radar would otherwise archive nothing and exit 0
+        raise SystemExit(f"unknown site(s): {sorted(unknown)}")
     sites = [s for s in SITES if not a.site or s["id"] in a.site]
     doc, failures, added = load(a.out), {}, 0
     for season in a.season:

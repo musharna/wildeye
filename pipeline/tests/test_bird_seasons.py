@@ -3,7 +3,8 @@ import json
 import shutil
 from pathlib import Path
 from pipeline.bird_nights import night_total, night_window, stored_profiles
-from pipeline.bird_seasons import SITES, archive, archive_file, build, load, season_nights, season_of
+import pytest
+from pipeline.bird_seasons import SITES, archive, archive_file, build, load, main, season_nights, season_of
 
 U = dt.UTC
 KLOT_FIX = Path(__file__).parent / "fixtures" / "vp_KLOT_night_20261016"   # 39 real KLOT profiles, 05:50-12:06 UTC 17 Oct
@@ -67,3 +68,11 @@ def test_build_freezes_a_past_night_from_real_profiles_and_skips_empty_ones(tmp_
     want = night_total(stored_profiles(tmp_path / "vp", "KLOT", sunset, sunrise), sunset, sunrise)
     assert doc["seasons"]["fall-2026"]["KLOT"] == {"2026-10-16": {k: want[k] for k in ("mt_birds_km", "bio_gate_share", "coverage")}}
     assert want["mt_birds_km"] > 0
+
+def test_build_cli_refuses_an_unknown_radar_and_runs_a_known_one(tmp_path):
+    out = tmp_path / "seasons.json"
+    with pytest.raises(SystemExit, match=r"unknown site\(s\): \['KXYZ'\]"):
+        main(["build", "--vp-dir", str(tmp_path), "--season", "fall-2026", "--site", "KLOT", "--site", "KXYZ", "--out", str(out)])
+    assert not out.exists()
+    main(["build", "--vp-dir", str(tmp_path), "--season", "fall-2026", "--site", "KLOT", "--out", str(out)])
+    assert load(out)["seasons"] == {}, "a known radar with an empty store runs and archives nothing"
