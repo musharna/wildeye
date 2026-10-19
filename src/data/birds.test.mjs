@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, seasonLines, SEASON_COMPARE, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
 
 test('birds: analyst record maps fields and nulls', () => {
   const r = mapBirdRecord({ site: 'KOKX', name: 'Upton NY', density_birds_km3: 12.5, heading_deg: 200, speed_ms: 9, peak_altitude_m: 600, scan_time: '2026-09-11T00:12:10Z', stale: false, lat: 40.9, lon: -72.9 }, 0);
@@ -217,6 +217,33 @@ test('birds: night dates and the error bar cannot wrap inside themselves in the 
   assert.match(particleText(0, 0, 0, undefined), /nearest radar n\/a · scan n\/a<br>/);
 });
 
+test('birds: the season line totals the archived nights and says how many it rests on', () => {
+  // birds_seasons.json from the archive's first real run, 2026-10-19 21:07 UTC, cut to KAKQ and KILN (fixtures/README.md)
+  const doc = JSON.parse(readFileSync(new URL('./fixtures/birds_seasons_20261019.json', import.meta.url)));
+  // KAKQ: 22 nights archived (Sep 27 - Oct 18, the archive starts where the live store did), 3 under the rain share
+  assert.deepEqual(seasonLines(doc, 'KAKQ', false),
+    ['Fall 2026 so far: 592,000 birds crossed each km (Aug\u00a01 – Oct\u00a018: 22 of 79 nights, 3 mostly rain)']);
+  // KILN went off the air: its season runs to its last night, and the outage nights are not counted
+  assert.deepEqual(seasonLines(doc, 'KILN', false),
+    ['Fall 2026 so far: 328,000 birds crossed each km (Aug\u00a01 – Oct\u00a014: 14 of 75 nights, 1 mostly rain)']);
+  assert.deepEqual(seasonLines(doc, 'KXXX'), [], 'a radar with no archived nights');
+  assert.deepEqual(seasonLines(null, 'KAKQ'), []);
+  // the comparison with last fall: matched by date, only nights both falls have, only when compare is on
+  const rec = (mt, share = 0.8) => ({ mt_birds_km: mt, bio_gate_share: share, coverage: 0.9 });
+  const two = { windows: { fall: ['08-01', '11-15'] }, seasons: {
+    'fall-2025': { KAKQ: { '2025-08-01': rec(100), '2025-08-02': rec(50), '2025-08-03': rec(900) } },
+    'fall-2026': { KAKQ: { '2026-08-01': rec(300), '2026-08-02': rec(null), '2026-08-03': rec(20, 0.1), '2026-08-04': rec(5) } } } };
+  assert.deepEqual(seasonLines(two, 'KAKQ', true), [
+    'Fall 2026 so far: 325 birds crossed each km (Aug\u00a01 – Aug\u00a04: 3 of 4 nights, 1 mostly rain)',
+    'Last fall on the same 2 nights: 1,000 (this fall 320)',
+  ]);
+  assert.equal(seasonLines(two, 'KAKQ', false).length, 1, 'no comparison unless the year-on-year check passed');
+  // a finished season drops "so far"; the latest season is picked by date, not by key order
+  const done = { windows: two.windows, seasons: { 'fall-2026': { KAKQ: { '2026-11-15': rec(10) } }, 'fall-2025': { KAKQ: { '2025-11-15': rec(1) } } } };
+  assert.match(seasonLines(done, 'KAKQ', false)[0], /^Fall 2026: 10 birds .*Nov\u00a015: 1 of 107 nights\)$/);
+  assert.equal(SEASON_COMPARE, false, 'until season_check has run on both falls');
+});
+
 test('birds: update() feeds the night totals into the popups and keeps the last good file on failure', async () => {
   const l = createBirdsLayer();
   const doc = JSON.parse(readFileSync(new URL('./fixtures/birds_nights_20261019.json', import.meta.url)));
@@ -244,6 +271,40 @@ test('birds: update() feeds the night totals into the popups and keeps the last 
     assert.equal(l.getStats().nightsError, 'birds_nights.json HTTP 503');
     assert.match(popup(), /Last night \(Oct\u00a017\): 126,000/, 'the last good night totals are kept');
   } finally { globalThis.fetch = saved; l.destroy({ dataSources: { remove() {} }, scene: {} }); }
+});
+
+test('birds: update() adds the season line, refetches the archive hourly and keeps the last good one', async () => {
+  const l = createBirdsLayer();
+  const seasons = JSON.parse(readFileSync(new URL('./fixtures/birds_seasons_20261019.json', import.meta.url)));
+  const gj = { generated_at: 'g', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [-77.0, 36.98] },
+    properties: { site: 'KAKQ', name: 'Wakefield VA', density_birds_km3: 3.2, heading_deg: 200, speed_ms: 9, peak_altitude_m: 400, scan_time: 't', bio_gate_share: 0.8 } }] };
+  let seasonsOk = true; let seasonFetches = 0;
+  const saved = globalThis.fetch; const savedNow = Date.now; let now = Date.parse('2026-10-19T22:00:00Z');
+  Date.now = () => now;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('birds_seasons.json')) { seasonFetches++; return seasonsOk ? { ok: true, json: async () => seasons } : { ok: false, status: 503 }; }
+    if (u.includes('birds.geojson')) return { ok: true, json: async () => gj };
+    return { ok: false, status: 404 };
+  };
+  let ds = null;
+  const viewer = { dataSources: { add(d) { ds = d; }, remove() {} }, scene: {} };
+  try {
+    l.init(viewer);
+    l._updateField = async () => {};
+    const popup = () => ds.entities.getById('birds:KAKQ').description.getValue();
+    assert.equal(await l.update(), true, `update failed: ${l.getStats().error}`);
+    assert.equal(l.getStats().seasonsError, null);
+    assert.match(popup(), /<br>Fall 2026 so far: 592,000 birds crossed each km \(Aug\u00a01 – Oct\u00a018: 22 of 79 nights/);
+    now += 59 * 60_000;
+    await l.update();
+    assert.equal(seasonFetches, 1, 'not refetched within the hour');
+    seasonsOk = false; now += 2 * 60_000;
+    assert.equal(await l.update(), true, 'a seasons failure does not fail the layer');
+    assert.equal(seasonFetches, 2);
+    assert.equal(l.getStats().seasonsError, 'birds_seasons.json HTTP 503');
+    assert.match(popup(), /Fall 2026 so far: 592,000/, 'the last good archive is kept');
+  } finally { globalThis.fetch = saved; Date.now = savedNow; l.destroy({ dataSources: { remove() {} }, scene: {} }); }
 });
 
 test('birds: the popup sparkline is the radar against its own nights, log scale, rain and gaps marked', () => {
