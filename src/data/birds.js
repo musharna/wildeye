@@ -124,13 +124,22 @@ const NIGHT_COVERAGE_MIN = 0.5;
 // bird_sampling.json). Sampling only: it says nothing about how many birds the radar misses or invents.
 export const SAMPLING_ERROR = 0.084;
 const fmtCount = (v) => new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 }).format(v);
+// The popup wraps its lines: a plain space or a hyphen inside "± 8%" or "10-16" let the line break inside them.
+const NBSP = '\u00a0';
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** A night's date (YYYY-MM-DD) as "Oct 17", joined by a no-break space so it stays on one line. */
+export function nightDate(night) {
+  const [, m, d] = String(night).split('-').map(Number);
+  return `${MONTHS[m - 1]}${NBSP}${d}`;
+}
 
 /** One night of birds_nights.json as popup text: bioRad migration traffic and what limits it. */
 export function nightText(n) {
   if (!Number.isFinite(n?.mt_birds_km)) return 'no scans';
   let t = `${fmtCount(n.mt_birds_km)} birds crossed each km`;
   // the error was measured on finished nights; on a mostly-rain night the total is flagged unreliable instead
-  if (n.complete && !mostlyNotBirds(n)) t += ` (± ${Math.round(100 * SAMPLING_ERROR)}% from 10-minute sampling)`;
+  if (n.complete && !mostlyNotBirds(n)) t += ` (±${NBSP}${Math.round(100 * SAMPLING_ERROR)}% from 10-minute sampling)`;
   if (Number.isFinite(n.peak_mtr_birds_km_h) && n.peak_time) {
     t += `, peak ${fmtCount(n.peak_mtr_birds_km_h)}/km/h at ${String(n.peak_time).slice(11, 16)} UTC`;
   }
@@ -148,7 +157,7 @@ export function nightLines(nights, nowMs = Date.now()) {
   const last = nights.filter((n) => n.complete).at(-1);
   const out = [];
   if (tonight) out.push(`Tonight so far: ${nightText(tonight)}`);
-  if (last) out.push(`Last night (${last.night}): ${nightText(last)}`);
+  if (last) out.push(`Last night (${nightDate(last.night)}): ${nightText(last)}`);
   return out;
 }
 
@@ -176,7 +185,7 @@ export function nightSpark(nights) {
     const f = 1 - (hi - Math.log10(n.mt_birds_km)) / SPARK_DECADES;
     return SPARK[Math.max(0, Math.min(SPARK.length - 1, Math.round(f * (SPARK.length - 1))))];
   }).join('');
-  return `Last ${done.length} nights: ${bars} (high ${fmtCount(top.mt_birds_km)} on ${top.night.slice(5)}; log scale; × rain)`;
+  return `Last ${done.length} nights: ${bars} (high ${fmtCount(top.mt_birds_km)} on ${nightDate(top.night)}; log scale; × rain)`;
 }
 
 export function describe(p, h, nights = null, nowMs = Date.now()) {
