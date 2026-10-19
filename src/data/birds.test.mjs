@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
 
 test('birds: analyst record maps fields and nulls', () => {
   const r = mapBirdRecord({ site: 'KOKX', name: 'Upton NY', density_birds_km3: 12.5, heading_deg: 200, speed_ms: 9, peak_altitude_m: 600, scan_time: '2026-09-11T00:12:10Z', stale: false, lat: 40.9, lon: -72.9 }, 0);
@@ -203,6 +203,18 @@ test('birds: night dates and the error bar cannot wrap inside themselves in the 
   for (const line of nightLines([{ night: '2026-10-17', complete: true, mt_birds_km: 4000, bio_gate_share: 0.8 }])) {
     assert.doesNotMatch(line, /\d-\d/, 'no hyphenated date left to break at');
   }
+  // the scan line had the same raw ISO date (PR #107 review); every popup test used scan_time 't'
+  assert.equal(scanTime('2026-10-19T08:38:17Z'), 'Oct\u00a019\u00a008:38\u00a0UTC');
+  for (const v of ['t', null, undefined]) assert.equal(scanTime(v), v == null ? 'n/a' : v, 'not ISO: shown as given');
+  const p = { site: 'KBUF', name: 'Buffalo NY', density_birds_km3: 0.5, heading_deg: 66, speed_ms: 5, peak_altitude_m: 200,
+    scan_time: '2026-10-19T08:38:17Z', bio_gate_share: 0.8 };
+  const nights = [{ night: '2026-10-17', complete: true, mt_birds_km: 4110, bio_gate_share: 0.8 }];
+  const html = describe(p, 6000, nights, Date.parse('2026-10-19T09:00:00Z'));
+  assert.match(html, /scan Oct\u00a019\u00a008:38\u00a0UTC/);
+  assert.doesNotMatch(html.replace(/<[^>]*>/g, ' '), /\d-\d|± /, 'no break point inside a date or the error bar anywhere');
+  const contact = particleText(1.25, 66.4, 5.2, { site: 'KBUF', name: 'Buffalo NY', scan_time: '2026-10-19T08:38:17Z' });
+  assert.match(contact, /≈ 1\.3 birds\/km³.*heading 66° · ground speed 5 m\/s<br>nearest radar KBUF \(Buffalo NY\) · scan Oct\u00a019\u00a008:38\u00a0UTC<br>/);
+  assert.match(particleText(0, 0, 0, undefined), /nearest radar n\/a · scan n\/a<br>/);
 });
 
 test('birds: update() feeds the night totals into the popups and keeps the last good file on failure', async () => {

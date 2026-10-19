@@ -134,6 +134,12 @@ export function nightDate(night) {
   return `${MONTHS[m - 1]}${NBSP}${d}`;
 }
 
+/** A scan time (ISO, UTC) as "Oct 19 08:38 UTC" that cannot wrap; anything else is shown as given. */
+export function scanTime(v) {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(String(v ?? ''));
+  return m ? `${nightDate(m[1])}${NBSP}${m[2]}${NBSP}UTC` : String(v ?? 'n/a');
+}
+
 /** One night of birds_nights.json as popup text: bioRad migration traffic and what limits it. */
 export function nightText(n) {
   if (!Number.isFinite(n?.mt_birds_km)) return 'no scans';
@@ -188,6 +194,15 @@ export function nightSpark(nights) {
   return `Last ${done.length} nights: ${bars} (high ${fmtCount(top.mt_birds_km)} on ${nightDate(top.night)}; log scale; × rain)`;
 }
 
+/** Popup for a clicked flow particle: its local density, velocity and the radar it was drawn from. */
+export function particleText(dens, heading, speed, nearest) {
+  return `<b>Ensemble contact</b> (illustrative)<br>` +
+    `probable biological echo · local density ≈ ${dens.toFixed(1)} birds/km³ at the radar profile scale<br>` +
+    `heading ${Math.round(heading)}° · ground speed ${speed.toFixed(0)} m/s<br>` +
+    `nearest radar ${nearest ? `${nearest.site} (${nearest.name})` : 'n/a'} · scan ${scanTime(nearest?.scan_time)}<br>` +
+    `<i>Weather radar resolves crowds, not individuals. Dots are drawn in proportion to echo strength and move at the radar-measured velocity; the count of birds per dot is not calibrated.</i>`;
+}
+
 export function describe(p, h, nights = null, nowMs = Date.now()) {
   const head = `<b>${p.name ?? p.site}</b> (${p.site})<br>`;
   const body = h > 0
@@ -201,7 +216,7 @@ export function describe(p, h, nights = null, nowMs = Date.now()) {
   const spark = nightSpark(nights);
   const lines = [...nightLines(nights, nowMs), ...(spark ? [spark] : [])];
   const night = lines.length ? `<br>${lines.join('<br>')}` : '';
-  return `${head}${warn}${body}<br>scan ${p.scan_time}${p.stale ? ' (stale, last good)' : ''}${night}${note}`;
+  return `${head}${warn}${body}<br>scan ${scanTime(p.scan_time)}${p.stale ? ' (stale, last good)' : ''}${night}${note}`;
 }
 
 export function createBirdsLayer() {
@@ -338,11 +353,7 @@ export function createBirdsLayer() {
     const dens = nearest ? nearest.density_birds_km3 * (weight / 255) : 0;
     const speed = Math.hypot(p.u, p.v);
     const heading = ((Math.atan2(p.u, p.v) * 180) / Math.PI + 360) % 360;
-    return `<b>Ensemble contact</b> (illustrative)<br>` +
-      `probable biological echo · local density ≈ ${dens.toFixed(1)} birds/km³ at the radar profile scale<br>` +
-      `heading ${Math.round(heading)}° · ground speed ${speed.toFixed(0)} m/s<br>` +
-      `nearest radar ${nearest ? `${nearest.site} (${nearest.name})` : 'n/a'} · scan ${nearest?.scan_time ?? 'n/a'}<br>` +
-      `<i>Weather radar resolves crowds, not individuals. Dots are drawn in proportion to echo strength and move at the radar-measured velocity; the count of birds per dot is not calibrated.</i>`;
+    return particleText(dens, heading, speed, nearest);
   }
 
   function installClick(viewer) {
