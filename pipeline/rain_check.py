@@ -50,12 +50,14 @@ def label(scan: dt.datetime, reports: list[tuple[dt.datetime, float | str | None
           sunset: dt.datetime, sunrise: dt.datetime) -> str | None:
     if any(isinstance(v, float) and v >= 0.01 and abs(t - scan) <= WINDOW for t, v in reports):
         return "rain"
+    return "dry" if dry_night(reports, sunset, sunrise) else None
+
+def dry_night(reports: list[tuple[dt.datetime, float | str | None]], sunset: dt.datetime, sunrise: dt.datetime) -> bool:
+    """Every hourly slot from sunset - 2 h to sunrise + 2 h reported, and every report exactly 0 (no trace)."""
     lo, hi = sunset - NIGHT_PAD, sunrise + NIGHT_PAD
     night = [(t, v) for t, v in reports if lo <= t <= hi]
     hours = {t.replace(minute=0) for t, v in night if v is not None}
-    if hourly_slots(reports, lo, hi) <= hours and all(v == 0.0 for _, v in night if v is not None):
-        return "dry"
-    return None
+    return hourly_slots(reports, lo, hi) <= hours and all(v == 0.0 for _, v in night if v is not None)
 
 def hourly_slots(reports: list[tuple[dt.datetime, float | str | None]], lo: dt.datetime, hi: dt.datetime) -> set:
     """The clock hours whose routine report falls in [lo, hi]. The station reports once an hour at its own minute

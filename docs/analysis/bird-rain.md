@@ -52,6 +52,18 @@ All 20 nights; summary and curve in `bird_rain.json`.
 - A gauge is one point; rain in the ring that misses it is labelled neither, so these rates are against what one
   gauge can see.
 
+## Nights (the popup's night marker)
+
+The globe also marks a whole night from its time-weighted share (`birds_nights.json`), a different statistic from a
+scan's. Tested separately, rule fixed in the ledger at 2026-10-18 22:55 EDT before any night label: the same 14 radars
+× 20 nights; rain night = a gauge report ≥ 0.01 in between sunset and sunrise, dry night = the scan rule's dry night;
+the existing 0.55, no fitting; kept if balanced accuracy ≥ 0.75 with ≥ 15 nights of each label.
+
+Result: kept. Balanced accuracy **0.83** on 67 rain and 163 dry nights; 73 % of rain nights and 6 % of dry nights
+marked. The missed rain nights are the briefly wet ones (median 2 wet gauge hours against 4 for marked nights; 13 of
+18 had two or fewer), where the night's share stays high; the scan flags still show those hours. `python3 -m pipeline.rain_nights --pairs bird_pairs.json --threshold-from
+bird_rain.json --states … --cache <dir> --out bird_rain_nights.json`.
+
 ## Not shown
 
 The six live radars outside the adjacent-radar store (no stored scans for these nights), and daytime scans.

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, mostlyNotBirds, describe, columnEntity } from './birds.js';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, mostlyNotBirds, describe, columnEntity, nightText, nightLines } from './birds.js';
 
 test('birds: analyst record maps fields and nulls', () => {
   const r = mapBirdRecord({ site: 'KOKX', name: 'Upton NY', density_birds_km3: 12.5, heading_deg: 200, speed_ms: 9, peak_altitude_m: 600, scan_time: '2026-09-11T00:12:10Z', stale: false, lat: 40.9, lon: -72.9 }, 0);
@@ -135,6 +135,10 @@ test('birds: a scan whose echo was mostly not birds is flagged at the gauge-chec
   const doc = JSON.parse(readFileSync(new URL('../../docs/analysis/bird_rain.json', import.meta.url)));
   assert.equal(RAIN_SHARE, doc.threshold, 'the globe uses the threshold the gauge check chose');
   assert.equal(doc.ships, true);
+  // the popup's night marker uses the same threshold on a night's weighted share: kept only while that use passes
+  const nights = JSON.parse(readFileSync(new URL('../../docs/analysis/bird_rain_nights.json', import.meta.url)));
+  assert.equal(nights.threshold, RAIN_SHARE);
+  assert.equal(nights.keep_marker, true);
   assert.equal(mostlyNotBirds({ bio_gate_share: 0.003 }), true);
   assert.equal(mostlyNotBirds({ bio_gate_share: 0.549 }), true);
   assert.equal(mostlyNotBirds({ bio_gate_share: 0.55 }), false, 'the threshold itself is birds');
@@ -153,4 +157,55 @@ test('birds: a scan whose echo was mostly not birds is flagged at the gauge-chec
   assert.equal(alpha({ bio_gate_share: 0.003 }), 0.25, 'mostly rain: faded like a stale scan');
   assert.equal(alpha({ bio_gate_share: 0.78 }), 0.6);
   assert.equal(alpha({}), 0.6, 'no share (Aloft profiles) is not faded');
+});
+
+test('birds: popups carry the night totals as the pipeline wrote them', () => {
+  // birds_nights.json as served 2026-10-19 02:00 UTC, three radars (fixtures/README.md)
+  const doc = JSON.parse(readFileSync(new URL('./fixtures/birds_nights_20261019.json', import.meta.url)));
+  const now = Date.parse(doc.generated_at);
+  assert.deepEqual(nightLines(doc.sites.KAKQ, now), [
+    'Tonight so far: 5,970 birds crossed each km, peak 3,580/km/h at 01:46 UTC',
+    'Last night (2026-10-17): 126,000 birds crossed each km, peak 20,100/km/h at 02:10 UTC',
+  ]);
+  // tonight at 23% coverage gets no coverage note (the night is not over); its share 0.438 is mostly rain
+  assert.equal(nightLines(doc.sites.KMLB, now)[0], 'Tonight so far: 20,600 birds crossed each km, peak 13,100/km/h at 00:05 UTC; mostly rain or clutter, unreliable');
+  // a complete night that was rainy and 40% covered says both
+  assert.equal(nightText(doc.sites.KAKQ[0]), '1,780 birds crossed each km, peak 1,200/km/h at 05:53 UTC; mostly rain or clutter, unreliable; scans cover 40% of the night');
+  // before sunset there is no "tonight", only last night
+  assert.deepEqual(nightLines(doc.sites.KLOT, Date.parse('2026-10-18T22:00:00Z')).map((l) => l.split(':')[0]), ['Last night (2026-10-17)']);
+  assert.equal(nightText({ mt_birds_km: null, complete: false }), 'no scans');
+  assert.deepEqual(nightLines(null, now), []);
+  const p = { site: 'KAKQ', name: 'Wakefield VA', density_birds_km3: 3.2, heading_deg: 200, speed_ms: 9, peak_altitude_m: 400, scan_time: 't', bio_gate_share: 0.8 };
+  const html = describe(p, 6000, doc.sites.KAKQ, now);
+  assert.match(html, /scan t<br>Tonight so far: 5,970 birds crossed each km.*<br>Last night \(2026-10-17\): 126,000/);
+  assert.doesNotMatch(describe(p, 6000), /Tonight|Last night/, 'no nights (replay frames): no night lines');
+});
+
+test('birds: update() feeds the night totals into the popups and keeps the last good file on failure', async () => {
+  const l = createBirdsLayer();
+  const doc = JSON.parse(readFileSync(new URL('./fixtures/birds_nights_20261019.json', import.meta.url)));
+  const gj = { generated_at: 'g', features: [{ type: 'Feature', geometry: { type: 'Point', coordinates: [-77.0, 36.98] },
+    properties: { site: 'KAKQ', name: 'Wakefield VA', density_birds_km3: 3.2, heading_deg: 200, speed_ms: 9, peak_altitude_m: 400, scan_time: 't', bio_gate_share: 0.8 } }] };
+  let nightsOk = true;
+  const saved = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('birds_nights.json')) return nightsOk ? { ok: true, json: async () => doc } : { ok: false, status: 503 };
+    if (u.includes('birds.geojson')) return { ok: true, json: async () => gj };
+    return { ok: false, status: 404 };
+  };
+  let ds = null;
+  const viewer = { dataSources: { add(d) { ds = d; }, remove() {} }, scene: {} };
+  try {
+    l.init(viewer);
+    l._updateField = async () => {};
+    const popup = () => ds.entities.getById('birds:KAKQ').description.getValue();
+    assert.equal(await l.update(), true, `update failed: ${l.getStats().error}`);
+    assert.equal(l.getStats().nightsError, null);
+    assert.match(popup(), /Last night \(2026-10-17\): 126,000 birds crossed each km/);
+    nightsOk = false;
+    assert.equal(await l.update(), true, 'a nights failure does not fail the layer');
+    assert.equal(l.getStats().nightsError, 'birds_nights.json HTTP 503');
+    assert.match(popup(), /Last night \(2026-10-17\): 126,000/, 'the last good night totals are kept');
+  } finally { globalThis.fetch = saved; l.destroy({ dataSources: { remove() {} }, scene: {} }); }
 });
