@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, mostlyNotBirds, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
 
 test('birds: analyst record maps fields and nulls', () => {
   const r = mapBirdRecord({ site: 'KOKX', name: 'Upton NY', density_birds_km3: 12.5, heading_deg: 200, speed_ms: 9, peak_altitude_m: 600, scan_time: '2026-09-11T00:12:10Z', stale: false, lat: 40.9, lon: -72.9 }, 0);
@@ -165,11 +165,11 @@ test('birds: popups carry the night totals as the pipeline wrote them', () => {
   const now = Date.parse(doc.generated_at);
   assert.deepEqual(nightLines(doc.sites.KAKQ, now), [
     'Tonight so far: 5,970 birds crossed each km, peak 3,580/km/h at 01:46 UTC',
-    'Last night (2026-10-17): 126,000 birds crossed each km, peak 20,100/km/h at 02:10 UTC',
+    'Last night (2026-10-17): 126,000 birds crossed each km (± 8% from 10-minute sampling), peak 20,100/km/h at 02:10 UTC',
   ]);
   // tonight at 23% coverage gets no coverage note (the night is not over); its share 0.438 is mostly rain
   assert.equal(nightLines(doc.sites.KMLB, now)[0], 'Tonight so far: 20,600 birds crossed each km, peak 13,100/km/h at 00:05 UTC; mostly rain or clutter, unreliable');
-  // a complete night that was rainy and 40% covered says both
+  // a complete night that was rainy and 40% covered says both, and carries no error bar (the total is unreliable)
   assert.equal(nightText(doc.sites.KAKQ[0]), '1,780 birds crossed each km, peak 1,200/km/h at 05:53 UTC; mostly rain or clutter, unreliable; scans cover 40% of the night');
   // before sunset there is no "tonight", only last night
   assert.deepEqual(nightLines(doc.sites.KLOT, Date.parse('2026-10-18T22:00:00Z')).map((l) => l.split(':')[0]), ['Last night (2026-10-17)']);
@@ -179,6 +179,17 @@ test('birds: popups carry the night totals as the pipeline wrote them', () => {
   const html = describe(p, 6000, doc.sites.KAKQ, now);
   assert.match(html, /scan t<br>Tonight so far: 5,970 birds crossed each km.*<br>Last night \(2026-10-17\): 126,000/);
   assert.doesNotMatch(describe(p, 6000), /Tonight|Last night/, 'no nights (replay frames): no night lines');
+});
+
+test('birds: the night error bar is the sampling check\'s q, shown only while that check passes', () => {
+  const doc = JSON.parse(readFileSync(new URL('../../docs/analysis/bird_sampling.json', import.meta.url)));
+  assert.equal(doc.ships, true, 'the error bar ships only while the held-out nights pass');
+  assert.equal(SAMPLING_ERROR, Math.round(doc.q * 1000) / 1000);
+  const night = { mt_birds_km: 4000, complete: true, bio_gate_share: 0.8 };
+  assert.equal(nightText(night), '4,000 birds crossed each km (± 8% from 10-minute sampling)');
+  assert.equal(nightText({ ...night, complete: false }), '4,000 birds crossed each km', 'tonight is not finished');
+  assert.equal(nightText({ ...night, bio_gate_share: 0.3 }), '4,000 birds crossed each km; mostly rain or clutter, unreliable');
+  assert.equal(nightText({ ...night, bio_gate_share: undefined }), '4,000 birds crossed each km (± 8% from 10-minute sampling)');
 });
 
 test('birds: update() feeds the night totals into the popups and keeps the last good file on failure', async () => {

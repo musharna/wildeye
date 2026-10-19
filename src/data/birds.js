@@ -119,12 +119,18 @@ export function columnEntity(f, idPrefix = 'birds', describeFn = describe) {
 }
 
 const NIGHT_COVERAGE_MIN = 0.5;
+// A night's total comes from one scan per 10 minutes. Against every scan the radar made, |error| was <= 8.4% on
+// 90% of 57 nights at 6 radars, and held on 93% of 57 later nights (docs/analysis/bird-sampling.md,
+// bird_sampling.json). Sampling only: it says nothing about how many birds the radar misses or invents.
+export const SAMPLING_ERROR = 0.084;
 const fmtCount = (v) => new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 }).format(v);
 
 /** One night of birds_nights.json as popup text: bioRad migration traffic and what limits it. */
 export function nightText(n) {
   if (!Number.isFinite(n?.mt_birds_km)) return 'no scans';
   let t = `${fmtCount(n.mt_birds_km)} birds crossed each km`;
+  // the error was measured on finished nights; on a mostly-rain night the total is flagged unreliable instead
+  if (n.complete && !mostlyNotBirds(n)) t += ` (± ${Math.round(100 * SAMPLING_ERROR)}% from 10-minute sampling)`;
   if (Number.isFinite(n.peak_mtr_birds_km_h) && n.peak_time) {
     t += `, peak ${fmtCount(n.peak_mtr_birds_km_h)}/km/h at ${String(n.peak_time).slice(11, 16)} UTC`;
   }
