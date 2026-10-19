@@ -4,7 +4,7 @@ Turns the newest NEXRAD Level II volume per radar into one migration record
 per site, written to `public/data/birds.geojson` for the `birds` globe layer.
 
 ## Prerequisites
-- Docker (image `adokter/vol2bird`, pulled on first run)
+- Docker (image `adokter/vol2bird` pinned by digest in `vol2bird.IMAGE`, pulled on first run)
 - Python 3.11+ with `boto3` (anonymous S3; no AWS credentials needed)
 
 ## Run
@@ -27,7 +27,7 @@ Downloads cache in `$WILDEYE_WORK` (default `/tmp/wildeye-nexrad`).
 | `vid_birds_km2` | birds per km² of ground, whole column: Σ `dens`·Δh (bioRad `integrate_profile` vid) |
 | `mtr_birds_km_h` | migration traffic rate, birds crossing 1 km per hour: Σ `dens`·`ff`·3.6·Δh (bioRad mtr; gap bins drop out) |
 | `speedless_share` | part of `vid` in gap bins with no `ff`, which `mtr` cannot count (null when `vid` is 0) |
-| `bio_gate_share` | Σ `n_dbz` / Σ `n_dbz_all`: share of the reflective gates vol2bird kept as birds after its dual-pol rain filter and clutter screen (near 0 in rain, where `dens` rests on the few gates left; ~0.6–0.9 on a clear night; null with no echo) |
+| `bio_gate_share` | Σ `n_dbz` / Σ `n_dbz_all`: share of the reflective gates vol2bird kept as birds after its dual-pol rain filter and clutter screen (near 0 in rain, where `dens` rests on the few gates left; ~0.6–0.9 on a clear night; null with no echo). Below 0.55 the globe marks the scan as mostly not birds (threshold checked against airport rain gauges: `docs/analysis/bird-rain.md`) |
 | `scan_time` | volume timestamp, UTC ISO |
 | `stale` | true when this run failed for the site and the last good record was kept |
 Top level: `generated_at`, `site_count`, `fresh_count`, `failures` (site → error).
@@ -116,7 +116,9 @@ Gitignored; ~460 MB for 30 nights × 13 h.
 CONUS only (20 eastern-flyway sites in `sites.json`; 143 exist). Signal is
 nocturnal and seasonal; daytime shows near-zero density, which the layer
 labels "Quiet". vol2bird's biological filter is not perfect: heavy rain or
-insects can leak through.
+insects can leak through. A scan with `bio_gate_share` < 0.55 is drawn faded and its popup says the count
+is mostly rain or clutter (`docs/analysis/bird-rain.md`). Levels are not comparable between radars
+(`docs/analysis/bird-pairs.md`, `bird-sectors.md`): read each radar against its own nights.
 
 ## Storage policy (2026-09-11)
 Live outputs in `public/data/` (`birds.geojson`, `aloft.geojson`, `occurrences.geojson`,

@@ -1,7 +1,8 @@
 // src/data/birds.test.mjs — pure helpers + layer contract for the radar bird layer.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore } from './birds.js';
+import { readFileSync } from 'node:fs';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, mostlyNotBirds, describe, columnEntity } from './birds.js';
 
 test('birds: analyst record maps fields and nulls', () => {
   const r = mapBirdRecord({ site: 'KOKX', name: 'Upton NY', density_birds_km3: 12.5, heading_deg: 200, speed_ms: 9, peak_altitude_m: 600, scan_time: '2026-09-11T00:12:10Z', stale: false, lat: 40.9, lon: -72.9 }, 0);
@@ -128,4 +129,28 @@ test('birdsLegend: heading wheel only when a heading-coloured component is on; h
   assert.deepEqual(birdsLegend({ columns: false, drape: false, particles: false }), []);
   // the layer itself must surface it (default params: drape + flow on)
   assert.equal(createBirdsLayer().getRowControls().legend.length, 5);
+});
+
+test('birds: a scan whose echo was mostly not birds is flagged at the gauge-checked threshold', () => {
+  const doc = JSON.parse(readFileSync(new URL('../../docs/analysis/bird_rain.json', import.meta.url)));
+  assert.equal(RAIN_SHARE, doc.threshold, 'the globe uses the threshold the gauge check chose');
+  assert.equal(doc.ships, true);
+  assert.equal(mostlyNotBirds({ bio_gate_share: 0.003 }), true);
+  assert.equal(mostlyNotBirds({ bio_gate_share: 0.549 }), true);
+  assert.equal(mostlyNotBirds({ bio_gate_share: 0.55 }), false, 'the threshold itself is birds');
+  assert.equal(mostlyNotBirds({ bio_gate_share: 0.78 }), false);
+  for (const p of [{ bio_gate_share: null }, {}, null, { bio_gate_share: '0.1' }]) assert.equal(mostlyNotBirds(p), false);
+  const base = { site: 'KDIX', name: 'Fort Dix NJ', density_birds_km3: 3.2, heading_deg: 200, speed_ms: 9, peak_altitude_m: 400, scan_time: 't' };
+  const rain = describe({ ...base, bio_gate_share: 0.003 }, 6000);
+  assert.match(rain, /Mostly rain or clutter: only 0% of the echo/);
+  assert.match(rain, /3\.2 birds\/km³/, 'the count is still shown');
+  const clear = describe({ ...base, bio_gate_share: 0.78 }, 6000);
+  assert.doesNotMatch(clear, /Mostly rain/);
+  assert.match(clear, /Compare nights at this radar/);
+  assert.match(describe({ ...base, density_birds_km3: 0, bio_gate_share: 0.01 }, 0), /Mostly rain or clutter.*Quiet/);
+  const alpha = (props) => columnEntity({ geometry: { coordinates: [-74.4, 40.0] }, properties: { ...base, ...props } })
+    .cylinder.material.color.getValue().alpha;
+  assert.equal(alpha({ bio_gate_share: 0.003 }), 0.25, 'mostly rain: faded like a stale scan');
+  assert.equal(alpha({ bio_gate_share: 0.78 }), 0.6);
+  assert.equal(alpha({}), 0.6, 'no share (Aloft profiles) is not faded');
 });
