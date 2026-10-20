@@ -47,6 +47,7 @@
   },
   "devDependencies": {
     "@mapbox/vector-tile": "^3.0.0",
+    "axe-core": "4.14.0",
     "egm96-universal": "^1.1.1",
     "pbf": "^5.1.2",
     "postcss": "^8.5.30",
