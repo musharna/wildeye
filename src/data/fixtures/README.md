@@ -38,4 +38,9 @@
   2026-10-19 02:49 UTC, after 20 past nights (27 Sep – 16 Oct) were built from
   the adjacent-radar store, cut to KAKQ (22 nights) and KBUF (not yet seeded,
   so its past nights have no scans). Used ONLY by `src/data/birds.test.mjs` for
-  the popup sparkline.
+  the popup sparkline, and by `pipeline/tests/test_bird_seasons.py` as the
+  archive's input.
+- `birds_seasons_20261019.json` — the season archive (`pipeline/bird_seasons.py
+  archive`) from its first real run on the live `birds_nights.json`, 2026-10-19
+  21:07 UTC, cut to KAKQ (22 nights) and KILN (14: off the air since 15 Oct).
+  Used ONLY by `src/data/birds.test.mjs` for the popup's season line.

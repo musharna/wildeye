@@ -8,6 +8,7 @@ from .nexrad import latest_volume_key, download_volume
 from .vol2bird import (run_vol2bird, parse_profile, reduce_profile, integrate_profile, bio_gate_share,
                        save_profile, prune_profiles)
 from .bird_nights import build_nights
+from .bird_seasons import archive_file
 from .ppi import ppi_for_volume
 from .field import composite, write_field_png
 
@@ -149,6 +150,10 @@ def main(argv=None):
              len(fc["features"]) - len(new), time.time() - t0)
     nights = build_nights(a.vp_dir, sites, a.out.parent / "birds_nights.json", dt.datetime.now(dt.UTC))
     log.info("wrote birds_nights.json, %d night failures", len(nights["failures"]))
+    # whole seasons outlive the 60-night window and the pruned profiles: freeze each night once it is over
+    added = archive_file(a.out.parent / "birds_seasons.json", nights, dt.datetime.now(dt.UTC))
+    if added:
+        log.info("archived %d nights into birds_seasons.json", added)
     pruned = prune_profiles(a.vp_dir, a.vp_keep_days)
     if pruned:
         log.info("pruned %d profile day dirs older than %d days", len(pruned), a.vp_keep_days)
