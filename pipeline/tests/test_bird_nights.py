@@ -2,6 +2,7 @@ import csv
 import datetime as dt
 import gzip
 import json
+import shutil
 from pathlib import Path
 import pytest
 from pipeline.bird_nights import sun_event, night_window, stored_profiles, night_total, build_nights, main
@@ -99,10 +100,12 @@ def test_build_nights_merges_marks_complete_prunes_and_isolates_a_bad_site(tmp_p
 def test_a_site_without_its_antenna_height_is_listed_and_the_others_still_built(tmp_path: Path):
     store, out = tmp_path / "vp", tmp_path / "birds_nights.json"
     store_night(store)
+    shutil.copytree(store / "KOKX", store / "KTWO")          # a second radar with the same real night
+    two = {**KOKX, "id": "KTWO"}
     noant = {k: v for k, v in KOKX.items() if k != "antenna_m"}
-    doc = build_nights(store, [noant], out, dt.datetime(2026, 10, 17, 6, 0, tzinfo=UTC))
+    doc = build_nights(store, [noant, two], out, dt.datetime(2026, 10, 17, 6, 0, tzinfo=UTC))
     assert list(doc["failures"]) == ["KOKX 2026-10-16"] and "antenna_m" in doc["failures"]["KOKX 2026-10-16"]
-    assert "KOKX" not in doc["sites"]
+    assert "KOKX" not in doc["sites"] and doc["sites"]["KTWO"][0]["antenna_m"] == 60   # the other radar is built
     ok = build_nights(store, [KOKX], out, dt.datetime(2026, 10, 17, 6, 0, tzinfo=UTC))
     assert ok["failures"] == {} and ok["sites"]["KOKX"][0]["antenna_m"] == 60
 
