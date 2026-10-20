@@ -92,6 +92,55 @@ repos:
         # scripts/lint-qa-waits.mjs is the statement-level version.
         entry: '^[ \t]*await[ \t]+(?:(?:sleep|delay|wait|pause)\([^()\n]*\)|new[ \t]+Promise\([^\n]*setTimeout[^\n]*|[\w.$]+\.waitForTimeout\([^()\n]*\))(?![^\n]*qa-wait-ok:[ \t]*\S)[^\n]*\n[^\n]*\.(?:click|focus|hover|tap|press|type)\('
 
+      - id: no-fixed-wait-py
+        name: "Python: Playwright wait_for_timeout, or a sleep then a click/key press: wait for the state instead"
+        language: system
+        types: [python]
+        entry: python3 scripts/guardrails-hooks.py --fixed-wait
+        # plant-genomics-mcp #234 (2026-10-16): a README card renderer ported in
+        # from another project slept `page.wait_for_timeout(800)` and then
+        # measured layout; review caught it, not this file, because the JS hook
+        # above reads no .py and only flags a sleep before an interaction.
+        # Playwright documents wait_for_timeout as for debugging only, so in
+        # Python it is flagged wherever it is called; time.sleep / asyncio.sleep
+        # are flagged only when the NEXT statement interacts (a backoff before an
+        # HTTP retry is not a browser wait). Same escape as the JS hook, as a
+        # comment on any line of the call: `# qa-wait-ok: <why>`.
+        # AST, not pygrep, since taxon3d #221 (2026-10-17): ruff wrapped a call
+        # over three lines and the regex stopped seeing it, and pygrep
+        # --multiline reports only the first hit in a file.
+
+      - id: no-ignored-mutmut-pragma
+        name: "mutmut: a trailing '# pragma: no mutate' inside brackets or after a multi-line statement is ignored"
+        language: system
+        types: [python]
+        entry: python3 scripts/guardrails-hooks.py --mutmut-pragma
+        # data-aggregator-mcp #342 (2026-10-19): two pragmas sat inside a call's
+        # arguments and an `or` chain. mutmut 3 reads a trailing pragma only on
+        # the line its statement starts on, at the statement's end, so both
+        # suppressed nothing, and the PR checked them with a harness that never
+        # reads pragmas. Checked against mutmut 3.7's own PragmaVisitor: 25 of
+        # 25 trailing pragmas across the fleet agree. Several lines take a
+        # `# pragma: no mutate start` / `end` pair on lines of their own.
+
+      - id: no-pathscoped-write-rule
+        name: "Claude --allowed-tools: Write(path) matches nothing (use Edit(path)); Edit(/x) is project-relative (real root is //x)"
+        language: pygrep
+        files: '^(\.github/workflows|templates/workflows)/.*\.ya?ml$'
+        # 2026-09-30: the nightly fuzz step allowed Write(fuzz_scratch/**) and
+        # triage Write(/tmp/*). Path-scoped file-write rules are spelled Edit(...)
+        # (it governs the Write tool too); a path-scoped Write(...) rule matches
+        # nothing, and a single leading slash is relative to the project. Every
+        # fuzz test file was denied, fleet-wide, since the step was written.
+        # Read(...) is in scope on evidence, not by analogy: probed 2026-09-30
+        # (claude -p 2.1.286, file outside the project) Read(/tmp/x/**) was
+        # denied like no rule at all; Read(//tmp/x/**) and bare Read read it.
+        # Anchored INSIDE the --allowed-tools list (quoted: up to the closing
+        # quote; unquoted: up to a `#` comment, since `Read, Write(x)` with
+        # spaces is still one list), so a comment explaining the rule is not a
+        # hit. Bare `Write` (no path) is fine.
+        entry: '--allowed-?[Tt]ools[ =]+(["''][^"'']*|[^"''#]*)(\bWrite\(|\b(Edit|Read)\(/[^/])'
+
       - id: no-dev-paths
         name: "absolute developer-machine paths in tracked files (real machine names only; placeholder homes pass)"
         language: pygrep
