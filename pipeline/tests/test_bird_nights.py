@@ -9,7 +9,7 @@ from pipeline.vol2bird import save_profile
 
 FIX = Path(__file__).parent / "fixtures"
 NIGHT = FIX / "vp_KOKX_20261017"            # eight real KOKX profiles, 01:01-03:28 UTC on 10-17
-KOKX = {"id": "KOKX", "name": "Upton NY", "lat": 40.8655, "lon": -72.8639}
+KOKX = {"id": "KOKX", "name": "Upton NY", "lat": 40.8655, "lon": -72.8639, "antenna_m": 60}
 UTC = dt.UTC
 HDR = "# date   time HGHT    u      v       w     ff    dd  sd_vvp gap dbz     eta   dens   DBZH   n   n_dbz n_all n_dbz_all\n"
 
@@ -90,10 +90,19 @@ def test_build_nights_merges_marks_complete_prunes_and_isolates_a_bad_site(tmp_p
     kokx, = doc["sites"]["KOKX"]                                          # 07-01 pruned; 10-17 not begun
     assert kokx["night"] == "2026-10-16" and kokx["complete"] is False
     assert kokx["mt_birds_km"] == pytest.approx(11.3739864, rel=1e-9)
+    assert kokx["antenna_m"] == 60 and len(kokx["height_quartiles_m"]) == 3
     assert doc["sites"]["KGRR"][0]["mt_birds_km"] == 2.0                  # other sites kept
     assert list(doc["failures"]) == ["KBAD 2026-10-16"] and "KBAD" not in doc["sites"]
     later = build_nights(store, [KOKX], out, dt.datetime(2026, 10, 17, 12, 0, tzinfo=UTC))
     assert later["sites"]["KOKX"][0]["complete"] is True and later["failures"] == {}
+
+def test_every_radar_carries_its_antenna_height():
+    # read 2026-10-20 from each radar's Level II volume (Py-ART radar.altitude, unidata-nexrad-level2); the popup
+    # gives it beside the flight heights, which are m above sea level
+    sites = json.loads((FIX.parent.parent / "sites.json").read_text())
+    assert len(sites) == 20 and all(isinstance(s["antenna_m"], int) and 0 < s["antenna_m"] < 500 for s in sites)
+    by = {s["id"]: s["antenna_m"] for s in sites}
+    assert (by["KTBW"], by["KOKX"], by["KPBZ"]) == (36, 60, 385)
 
 def test_main_refuses_unknown_site(tmp_path: Path):
     with pytest.raises(SystemExit, match="unknown site"):
