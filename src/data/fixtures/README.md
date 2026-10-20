@@ -44,3 +44,7 @@
   archive`) from its first real run on the live `birds_nights.json`, 2026-10-19
   21:07 UTC, cut to KAKQ (22 nights) and KILN (14: off the air since 15 Oct).
   Used ONLY by `src/data/birds.test.mjs` for the popup's season line.
+- `birds_nights_heights_20261020.json` — `pipeline/bird_nights.py` rebuilt on
+  2026-10-20 from the live profile store for the night of 19 Oct, with flight
+  heights and antenna heights, cut to KAKQ, KBUF, KMLB and KILN (off the air:
+  no profiles). Used ONLY by `src/data/birds.test.mjs` for the height line.
