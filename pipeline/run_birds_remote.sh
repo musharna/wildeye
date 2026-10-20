@@ -20,5 +20,5 @@ rsync -a --exclude '*.tmp.png' -e "$SSH" "$HOST:$RDIR/public/data/birds_ppi/" pu
 for f in birds_field.png birds_field.json birds.geojson birds_nights.json birds_seasons.json; do
   rsync -a -e "$SSH" "$HOST:$RDIR/public/data/$f" public/data/
 done
-# mirror: the remote run prunes profiles past --vp-keep-days
-rsync -a --delete -e "$SSH" "$HOST:.cache/wildeye/vp/" "$HOME/.cache/wildeye/vp/"
+# no --delete: a wiped remote cache must not empty this one, which is the backup (~3 MB/day of growth)
+rsync -a -e "$SSH" "$HOST:.cache/wildeye/vp/" "$HOME/.cache/wildeye/vp/"
