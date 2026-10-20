@@ -234,3 +234,19 @@ def test_height_quantile_edges_follow_biorad():
     assert height_quantile(hs, [1.0, 0.0, 1.0, 0.0], 0.5) == 400
     # all weight in the top bin: bioRad clamps to the last bottom and its 0/0 is 0
     assert height_quantile(hs, [0.0, 0.0, 0.0, 1.0], 0.5) == 600
+
+def test_height_quantiles_refuse_bins_integrate_profile_refuses():
+    _, profiles = _klot()
+    bins = profiles[0]
+    assert profile_height_quantile(bins, 0.5) is not None   # the real profile passes
+    dup = [dict(b) for b in bins]
+    dup[1]["height_m"] = dup[0]["height_m"]               # two rows at 0 m
+    for bad, why in ((dup, "duplicate height bins|uneven"), (bins[:1], "at least two height bins")):
+        with pytest.raises(ValueError, match=why):
+            profile_height_quantile(bad, 0.5)
+        with pytest.raises(ValueError, match=why):
+            pooled_height_quantiles([bad], [1.0])
+    # every row at one height: steps {0}, which the even-spacing check alone let through
+    flat = [dict(b, height_m=0.0) for b in bins]
+    with pytest.raises(ValueError, match="duplicate height bins"):
+        profile_height_quantile(flat, 0.5)

@@ -103,14 +103,10 @@ def profile_time(text: str) -> dt.datetime:
     (day, hhmm), = stamps
     return dt.datetime.strptime(day + hhmm.zfill(4), "%Y%m%d%H%M").replace(tzinfo=dt.UTC)
 
-def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float = math.inf) -> dict:
-    """bioRad integrate_profile for one vp, defaults included (heights are bin bottoms, m ASL).
-    vid (birds/km2) = sum dens*dh; mtr (birds/km/h) = sum dens*ff*3.6*dh. A bin with dens but no
-    ff (vol2bird gap) counts in vid and drops out of mtr, as bioRad's na.rm does; speedless_share
-    is the part of vid that mtr cannot see."""
-    if all(b.get("dens") is None for b in bins):
-        return {"vid_birds_km2": None, "mtr_birds_km_h": None, "speedless_share": None}
-    hs = sorted(b["height_m"] for b in bins)
+def bin_interval(heights: list[float]) -> float:
+    """The one height step of a profile's bins (m): bioRad assumes a single interval. Raises on fewer than
+    two bins, uneven steps, or duplicate heights (step 0)."""
+    hs = sorted(heights)
     if len(hs) < 2:
         raise ValueError(f"need at least two height bins to know the interval, got {len(hs)}")
     steps = {round(b - a, 6) for a, b in zip(hs, hs[1:])}
@@ -119,6 +115,16 @@ def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float
     interval, = steps
     if interval <= 0:
         raise ValueError(f"duplicate height bins (step {interval} m)")
+    return interval
+
+def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float = math.inf) -> dict:
+    """bioRad integrate_profile for one vp, defaults included (heights are bin bottoms, m ASL).
+    vid (birds/km2) = sum dens*dh; mtr (birds/km/h) = sum dens*ff*3.6*dh. A bin with dens but no
+    ff (vol2bird gap) counts in vid and drops out of mtr, as bioRad's na.rm does; speedless_share
+    is the part of vid that mtr cannot see."""
+    if all(b.get("dens") is None for b in bins):
+        return {"vid_birds_km2": None, "mtr_birds_km_h": None, "speedless_share": None}
+    interval = bin_interval([b["height_m"] for b in bins])
     vid = mtr = speedless = 0.0
     for b in bins:
         if b.get("dens") is None:
@@ -158,9 +164,7 @@ def height_quantile(heights: list[float], weights: list[float | None], q: float)
 
 def _height_weights(bins: list[dict]) -> tuple[list[float], list[float]]:
     hs = [b["height_m"] for b in bins]
-    steps = {round(b - a, 6) for a, b in zip(hs, hs[1:])}
-    if len(hs) < 2 or len(steps) != 1:
-        raise ValueError(f"need evenly spaced height bins, got steps {sorted(steps)}")
+    bin_interval(hs)   # the checks integrate_profile makes, duplicate heights included
     return hs, [b["dens"] or 0.0 for b in bins]
 
 def profile_height_quantile(bins: list[dict], q: float) -> float | None:
