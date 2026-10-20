@@ -52,7 +52,7 @@ test('occurrences: layer contract and group chips', () => {
 
 test('update: records that collide at 4 decimals still load (duplicate-id regression)', async () => {
   // 36.80545 and 36.80554 sit in different 0.001° pipeline dedupe cells but both
-  // print as 36.8055 — a coordinate-hash id made Cesium throw and the layer read LOAD FAILED.
+  // print as 36.8055 — a coordinate-hash id made Cesium throw and the layer read Load failed.
   const mk = (lat) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [-121.9413, lat] },
     properties: { taxon: 'orca', group: 'whales', date: '2026-06-03', name: 'Orca', sci: 'Orcinus orca' } });
   const gj = { type: 'FeatureCollection', window_days: 120, features: [mk(36.80545), mk(36.80554)] };

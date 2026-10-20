@@ -69,13 +69,13 @@ test('a spider of a passing collection gets the switch, off; on draws its modele
   await settle();
   assert.equal(box.hidden, false);
   assert.equal(toggle.hidden, false);
-  assert.equal(toggle.textContent, 'MODELED RANGE OFF');
+  assert.equal(toggle.textContent, 'Modeled range off');
   assert.equal(toggle.attrs['aria-checked'], 'false');
   assert.equal(note.textContent, 'iNaturalist Geomodel · Arachnida passed validation September 2026');
   assert.equal(viewer.imageryLayers.list.length, 0, 'off by default (grill Q7)');
   toggle.listeners.click();
   assert.equal(layer.isEnabled(), true);
-  assert.equal(toggle.textContent, 'MODELED RANGE ON');
+  assert.equal(toggle.textContent, 'Modeled range on');
   assert.equal(toggle.attrs['aria-checked'], 'true');
   assert.equal(viewer.imageryLayers.list.length, 1);
   assert.match(viewer.imageryLayers.list[0].provider.url, /geomodel\/298342\//);
@@ -97,7 +97,7 @@ test('a bird of a failed collection gets no switch and the reason; picking it tu
   dataManager.pick(2148457);
   await settle();
   assert.equal(toggle.hidden, false);
-  assert.equal(toggle.textContent, 'MODELED RANGE OFF');
+  assert.equal(toggle.textContent, 'Modeled range off');
 });
 
 test('a slow lookup for an earlier pick never overwrites the later one', async () => {
@@ -149,13 +149,13 @@ test('iNaturalist throttling shows in the card while the range is on', async () 
   assert.equal(note.textContent, THROTTLED_MESSAGE);
 });
 
-test('markup: the switch row follows WHAT LIVES HERE, outside the chosen block (phone-landscape fold), a switch with a live note', () => {
+test('markup: the switch row follows What lives here, outside the chosen block (phone-landscape fold), a switch with a live note', () => {
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const chosen = html.slice(html.indexOf('id="species-chosen"'), html.indexOf('id="species-what-lives-here"'));
   assert.doesNotMatch(chosen, /species-modeled/);
   assert.match(chosen, /id="species-chosen-note"/); // positive control: the slice is the chosen block
   const after = html.slice(html.indexOf('id="species-what-lives-here"'), html.indexOf('class="species-chip-group"'));
   assert.match(after, /<div id="species-modeled" class="species-modeled" hidden>/);
-  assert.match(after, /<button type="button" id="species-modeled-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Modeled range" hidden>MODELED RANGE OFF<\/button>/);
+  assert.match(after, /<button type="button" id="species-modeled-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Modeled range" hidden>Modeled range off<\/button>/);
   assert.match(after, /<span id="species-modeled-note" class="species-modeled-note" role="status" aria-live="polite"><\/span>/);
 });

@@ -149,7 +149,7 @@ try {
     const want = k.lo === 255 ? { status: "nodata", text: null } : { status: "value", text: outlookText(k.lo, k.hi, o.probabilities) };
     report(`readout ${k.what}`, got?.status === want.status && got?.text === want.text && got?.date === date, { cell: k, want, got });
   }
-  // the same cell through the WHAT LIVES HERE path (main.js readGibsLayers), which is what a click on the globe reads
+  // the same cell through the What lives here path (main.js readGibsLayers), which is what a click on the globe reads
   const first = KNOWN[0];
   if (!first.missing) {
     const rows = await page.evaluate((lat, lon) => window.__godsEyeView.readoutAt(lat, lon), first.lat, first.lon);

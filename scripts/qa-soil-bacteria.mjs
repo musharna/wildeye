@@ -168,7 +168,7 @@ try {
   const seen = Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, text.includes(v)]));
   report('legend-and-credit', Object.values(seen).every(Boolean), seen);
 
-  // One real click: arm WHAT LIVES HERE, click the globe straight below the camera over the Sahara cell's centre,
+  // One real click: arm What lives here, click the globe straight below the camera over the Sahara cell's centre,
   // and the card lists the soil row with the truth's numbers.
   const sahara = TRUTH.points.find((p) => p.name === 'Sahara');
   await page.evaluate(([lat, lon]) => {

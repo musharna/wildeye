@@ -86,7 +86,7 @@ test('choosing an iNaturalist suggestion matches it in GBIF, sets the taxon and 
   assert.deepEqual(calls.params.at(-1), { id: 'species', p: { taxonKey: 5133088, name: 'Monarch' }, origin: 'user' });
   assert.deepEqual(calls.enable, [{ id: 'species', on: true, origin: 'user' }]);
   assert.equal(els['species-chosen-name'].textContent, 'Monarch');
-  assert.equal(els['species-toggle'].textContent, 'MAP ON');
+  assert.equal(els['species-toggle'].textContent, 'Map on');
   // A switch: aria-checked carries the state; its accessible name stays "Species map" (index.html) while the words change.
   assert.equal(els['species-toggle'].attrs['aria-checked'], 'true');
   assert.equal(Object.hasOwn(els['species-toggle'].attrs, 'aria-pressed'), false, 'a switch carries aria-checked, not aria-pressed');
@@ -313,7 +313,7 @@ test('a pick landing while a choice waits for the map switch keeps the box text 
 });
 
 // M2 (final review), R12-M2 (re-review): Escape in the search box does one thing at a time and marks it handled (a recorded keydown), so the
-// details card and WHAT LIVES HERE, which listen on the document after it, leave that key alone. With a list showing it hides the list and keeps
+// details card and What lives here, which listen on the document after it, leave that key alone. With a list showing it hides the list and keeps
 // the text; with text and no list it clears the text; either way it ends the name search. With neither, Escape is theirs.
 test('Escape hides a visible list, then clears the text, each marked handled and ending the search; with neither it is left unhandled', async () => {
   const timers = fakeTimers();
@@ -343,11 +343,11 @@ test('Escape hides a visible list, then clears the text, each marked handled and
   assert.equal(els['species-suggestions'].hidden, true, 'no list comes back');
   const third = keydown('Escape');
   input.listeners.keydown(third);
-  assert.equal(third.prevented, 0, 'with no list and no text, Escape is left for the card and WHAT LIVES HERE');
+  assert.equal(third.prevented, 0, 'with no list and no text, Escape is left for the card and What lives here');
 });
 
 // R13-M5: the search box and its suggestion list are one combobox, so Escape with focus on a suggestion (Tab from the box) is the combobox's too:
-// it hides the list, returns focus to the box, keeps the text and marks the key handled, so the card and WHAT LIVES HERE leave it alone. The
+// it hides the list, returns focus to the box, keeps the text and marks the key handled, so the card and What lives here leave it alone. The
 // suggestion's own keys stay its own: Enter on it is not taken by the list.
 test('Escape on a focused suggestion hides the list, returns focus to the box and does nothing else', async () => {
   const timers = fakeTimers();
@@ -370,7 +370,7 @@ test('Escape on a focused suggestion hides the list, returns focus to the box an
   assert.equal(list.hidden, true, 'Escape on a suggestion hides the list');
   assert.equal(doc.activeElement, input, 'and returns focus to the box');
   assert.equal(input.value, 'monarch', 'and keeps the text');
-  assert.equal(escape.prevented, 1, 'and marks the key handled, so the card and WHAT LIVES HERE leave it alone');
+  assert.equal(escape.prevented, 1, 'and marks the key handled, so the card and What lives here leave it alone');
   assert.equal(timers.pending(), 0);
   const next = { key: 'Escape', target: input, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
   input.listeners.keydown(next);
@@ -574,11 +574,11 @@ test('the colour legend shows only while the map of a chosen species is on', asy
   const { panel, els } = panelRig();
   assert.equal(els['species-legend'].hidden, true, 'no species chosen, map off');
   await panel.choose({ gbifKey: 5133088, scientificName: 'Danaus plexippus', commonName: 'Monarch', rank: 'species' });
-  assert.equal(els['species-toggle'].textContent, 'MAP ON');
+  assert.equal(els['species-toggle'].textContent, 'Map on');
   assert.equal(els['species-legend'].hidden, false, 'map on');
   els['species-toggle'].listeners.click();
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(els['species-toggle'].textContent, 'MAP OFF');
+  assert.equal(els['species-toggle'].textContent, 'Map off');
   assert.equal(els['species-toggle'].attrs['aria-checked'], 'false');
   assert.equal(els['species-legend'].hidden, true, 'map off again');
 });
@@ -890,8 +890,8 @@ test('SPECIES panel markup, CSS, startup wiring and credits are in place', () =>
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
   const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
-  const stackEnd = html.indexOf('<!-- Intelligence HUD Overlay -->');
-  assert.ok(stackEnd > 0, 'the HUD comment closes the left stack slice');
+  const stackEnd = html.indexOf('<!-- Latitude and longitude under the pointer -->');
+  assert.ok(stackEnd > 0, 'the pointer-readout comment closes the left stack slice');
   const stack = html.slice(html.indexOf('<div id="left-panel-stack">'), stackEnd);
   assert.match(stack, /<div id="species-panel" class="panel-collapsible collapsed" data-panel-id="species-panel">/);
   for (const id of PANEL_IDS) assert.match(stack, new RegExp(`id="${id}"`), id);
@@ -903,9 +903,9 @@ test('SPECIES panel markup, CSS, startup wiring and credits are in place', () =>
   const panelHtml = stack.slice(stack.indexOf('id="species-panel"'));
   // The legend's content is rendered from SPECIES_MAP_LEGEND (speciesPanel.js), so the markup holds an empty container.
   // Modeled range (spec 2026-09-30-modeled-range-design.md): its row follows the action, outside the chosen block. Inside it, it cost the
-  // chosen row 34 px, and at 667x375 the body's whole view is 121.5 px: WHAT LIVES HERE fell below the fold (qa-species panel-fold, 09-30).
+  // chosen row 34 px, and at 667x375 the body's whole view is 121.5 px: What lives here fell below the fold (qa-species panel-fold, 09-30).
   // Recording effort (spec 2026-09-30-effort-layer-design.md) follows the modeled row, for the same reason.
-  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>MAP OFF<\/button>\s*<span id="species-chosen-note" class="species-chosen-note" hidden><\/span>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>WHAT LIVES HERE<\/button>\s*<div id="species-modeled"[^>]*>\s*<button [^>]*id="species-modeled-toggle"[^>]*>MODELED RANGE OFF<\/button>\s*<span id="species-modeled-note"[^>]*><\/span>\s*<\/div>\s*<div id="species-effort"[^>]*>\s*<button [^>]*id="species-effort-toggle"[^>]*>RECORDING EFFORT OFF<\/button>\s*<span id="species-effort-note"[^>]*><\/span>\s*<\/div>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
+  assert.match(panelHtml, /<div id="species-chosen"[^>]*>\s*<span id="species-chosen-name"[^>]*><\/span>\s*<button [^>]*id="species-toggle"[^>]*>Map off<\/button>\s*<span id="species-chosen-note" class="species-chosen-note" hidden><\/span>\s*<\/div>\s*<button [^>]*id="species-what-lives-here"[^>]*>What lives here<\/button>\s*<div id="species-modeled"[^>]*>\s*<button [^>]*id="species-modeled-toggle"[^>]*>Modeled range off<\/button>\s*<span id="species-modeled-note"[^>]*><\/span>\s*<\/div>\s*<div id="species-effort"[^>]*>\s*<button [^>]*id="species-effort-toggle"[^>]*>Recording effort off<\/button>\s*<span id="species-effort-note"[^>]*><\/span>\s*<\/div>\s*<div class="species-chip-group">\s*<span id="species-years-label"/);
   // Brief B fix round 1: on a phone-width window an open SPECIES panel is the only panel the left stack shows (an accordion), so its body has
   // the view the collapsed DATA LAYERS and SCENES pills took (116 px at 375x667).
   assert.match(css, /@media \(max-width: 720px\) \{[^@]*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) > \[data-panel-id\]\.collapsed \{ display: none !important; \}/);
@@ -935,7 +935,7 @@ test('SPECIES panel markup, CSS, startup wiring and credits are in place', () =>
   // B1: the scroll cue is a row after the scrolling body, inside the panel, hidden from screen readers.
   assert.match(panelHtml, /<div id="species-body" class="species-body">/);
   assert.match(panelHtml, /<p class="species-credit">[\s\S]*?<\/p>\s*<\/div>\s*<div id="species-more" class="species-more" aria-hidden="true">more ↓<\/div>\s*<\/div>\s*<\/div>/);
-  // R-7o: each chip row has a visible label directly above it that also names its group, so "1 / 10 / 50 KM" does not read as a
+  // R-7o: each chip row has a visible label directly above it that also names its group, so "1 / 10 / 50 km" does not read as a
   // map feature size.
   for (const [group, text] of [['species-years', 'Years'], ['species-radius', 'What lives here radius']]) {
     assert.match(panelHtml, new RegExp(`<span id="${group}-label" class="species-label">${text}</span>\\s*<div id="${group}"`), `${group}: its visible label comes first`);
@@ -967,7 +967,7 @@ test('SPECIES panel markup, CSS, startup wiring and credits are in place', () =>
   assert.doesNotMatch(css, /dataset-list-heading \{[^}]*sticky/);
   assert.match(css, /\.species-legend \{[^}]*background: rgb\(13, 15, 22\);/);
   assert.match(css, /\.species-chip-group \{ display: flex; flex-wrap: wrap;/);
-  // In a group the chips take their text's width: the shared .scene-btn flex: 1 squeezed LAST 10 YEARS below its text on the desktop panel.
+  // In a group the chips take their text's width: the shared .scene-btn flex: 1 squeezed Last 10 years below its text on the desktop panel.
   assert.match(css, /\.species-chip-group \.scene-btn\.species-chip \{ flex: 0 0 auto; \}/);
   assert.match(css, /@media \(max-width: 720px\) \{[^@]*#species-panel \.scene-btn\.species-chip \{[^}]*min-width: 0;/);
   assert.match(css, /\.species-suggestions\[hidden\] \{ display: none; \}/);

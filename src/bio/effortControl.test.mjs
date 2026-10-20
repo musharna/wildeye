@@ -57,17 +57,17 @@ test('effort row: hidden with no species; a species with a class gets the switch
   assert.equal(r.toggle.hidden, true, 'no switch until the class is known');
   await settle();
   assert.equal(r.toggle.hidden, false);
-  assert.equal(r.toggle.textContent, 'RECORDING EFFORT OFF');
+  assert.equal(r.toggle.textContent, 'Recording effort off');
   assert.equal(r.toggle.attrs['aria-checked'], 'false');
   assert.equal(r.note.textContent, 'Darker = fewer records of spiders and other arachnids, darkest = none · GBIF CC0/CC BY, 2017–2026');
   assert.equal(r.providers.length, 0, 'off: no tiles asked');
   r.toggle.listeners.click();
-  assert.equal(r.toggle.textContent, 'RECORDING EFFORT ON');
+  assert.equal(r.toggle.textContent, 'Recording effort on');
   assert.equal(r.toggle.attrs['aria-checked'], 'true');
   assert.equal(new URL(r.providers[0].url.replace('{z}/{x}/{y}', '0/0/0')).searchParams.get('taxonKey'), '367');
 });
 
-test('effort row: ALL YEARS redraws in all years and the note follows; another class switches it off', async () => {
+test('effort row: All years redraws in all years and the note follows; another class switches it off', async () => {
   const r = rig();
   r.dataManager.set({ taxonKey: 2148457 });
   await settle();
@@ -78,7 +78,7 @@ test('effort row: ALL YEARS redraws in all years and the note follows; another c
   r.dataManager.set({ taxonKey: 2498205 });
   assert.equal(r.layer.isEnabled(), false, 'a new species starts off');
   await settle();
-  assert.equal(r.toggle.textContent, 'RECORDING EFFORT OFF');
+  assert.equal(r.toggle.textContent, 'Recording effort off');
   assert.match(r.note.textContent, /^Darker = fewer records of birds, darkest = none · GBIF CC0\/CC BY, all years/);
 });
 
@@ -111,7 +111,7 @@ test('effort row: the markup has the row after the modeled-range row, the switch
   const html = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
   const modeled = html.indexOf('id="species-modeled"');
   const effort = html.indexOf('id="species-effort"');
-  assert.ok(modeled > 0 && effort > modeled, 'below the modeled row, so it cannot push WHAT LIVES HERE down');
-  assert.match(html, /<button type="button" id="species-effort-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Recording effort" hidden>RECORDING EFFORT OFF<\/button>/);
+  assert.ok(modeled > 0 && effort > modeled, 'below the modeled row, so it cannot push What lives here down');
+  assert.match(html, /<button type="button" id="species-effort-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Recording effort" hidden>Recording effort off<\/button>/);
   assert.match(html, /<span id="species-effort-note" class="species-modeled-note" role="status" aria-live="polite"><\/span>/);
 });

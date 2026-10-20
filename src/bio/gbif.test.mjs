@@ -96,8 +96,8 @@ test('the species map legend is the record-count classes of the style the tiles 
   assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.upTo, c.widthPx, c.fill, c.opacity, c.lineColor, c.lineWidthPx]), STYLE_CLASSES[style]);
   // B2 / S4: each swatch is its class's circles as the globe draws them at the default 12,000 km view (camera straight down over lon -90,
   // lat 30, 1400x900, Esri World Imagery), measured with scripts/species-legend-probe.mjs and species-legend-colours.py, each circle's class
-  // read from its tile's own record count: the three lowest classes in the default LAST 10 YEARS map ('centre' sampling, 3 runs), and the two
-  // highest, which have no circle there, in the ALL YEARS map ('single' sampling: the pixels no other circle covers, 2 runs). `years` names
+  // read from its tile's own record count: the three lowest classes in the default Last 10 years map ('centre' sampling, 3 runs), and the two
+  // highest, which have no circle there, in the All years map ('single' sampling: the pixels no other circle covers, 2 runs). `years` names
   // the map each colour was measured in; no colour is predicted any more.
   assert.deepEqual(SPECIES_MAP_LEGEND.classes.map((c) => [c.color, c.years]), [
     ['#e4d9ac', 'recent'], ['#d5aa78', 'recent'], ['#cea878', 'recent'], ['#be7861', 'all'], ['#ad5466', 'all'],

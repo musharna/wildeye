@@ -4,24 +4,16 @@ import { decodeLayerStateParams, encodeLayerStateParams } from './data/layerStat
 /**
  * Share Links — URL Hash State Management
  *
- * Encodes camera position + style into the URL hash so links can be shared.
- * Format: #v=2&lat=37.77&lon=-122.42&alt=800&heading=0&pitch=-35&roll=0&style=crt&hv=1&map=esri-imagery&l=…&lo=…&ui=…
+ * Encodes the camera position, basemap, layers and panels into the URL hash so links can be shared.
+ * Format: #v=2&lat=37.77&lon=-122.42&alt=800&heading=0&pitch=-35&roll=0&map=esri-imagery&l=…&lo=…&ui=…
  *
  * Retired fields that old links may still carry are ignored on parse: bloom, bi, bv, sharpen, si,
- * hud (layout), cr (celestial ring), sc/scf/sce (scope mask), sp (style parameters), and the
- * styles nvg/flir, which restore as normal (removed with the DISPLAY panel, 2026-09-26).
+ * hud (layout), cr (celestial ring), sc/scf/sce (scope mask), sp (style parameters) (removed with the
+ * DISPLAY panel, 2026-09-26), and style and hv (the visual presets and the camera HUD, removed with
+ * the plain scientific-tool look, 2026-10-20).
  */
 
 const DEBOUNCE_MS = 500;
-
-// Style name mapping: internal → URL-friendly
-const STYLE_TO_URL = {
-  normal: 'normal',
-  retro: 'crt',
-  anime: 'anime',
-  noir: 'noir',
-  snow: 'snow',
-};
 
 const SHARE_UI_STATE_PARAM = 'ui';
 const SHARE_CREATED_AT_PARAM = 'at';
@@ -38,10 +30,6 @@ const SHARE_PANEL_STATE_BY_TOKEN = Object.freeze(new Map(
   SHARE_PANEL_STATE_REGISTRY.map((entry) => [entry.token, entry]),
 ));
 
-const URL_TO_STYLE = Object.fromEntries(
-  Object.entries(STYLE_TO_URL).map(([k, v]) => [v, k])
-);
-
 export class ShareLinkManager {
   constructor(viewer, {
     onRestore,
@@ -49,16 +37,13 @@ export class ShareLinkManager {
     cancelOwnedNavigation,
   } = {}) {
     this.viewer = viewer;
-    this._onRestore = onRestore; // callback: ({ style, hudVisible, mapStack, panelState }) => void
+    this._onRestore = onRestore; // callback: ({ mapStack, panelState }) => void
     this._debounceTimer = null;
-    this._currentStyle = 'normal';
-    this._hudVisible = false;
     this._mapStack = 'esri-imagery';
     this._layerStateProvider = null;
     this._panelStateProvider = null;
     this._initialRestorePending = false;
     this._restoreAuthority = {
-      visual: 0,
       map: 0,
       panels: new Map(),
     };
@@ -99,7 +84,6 @@ export class ShareLinkManager {
       return Number.isFinite(num) ? num : fallback;
     };
 
-    const style = URL_TO_STYLE[params.get('style')] || 'normal';
     const decodedLayerState = decodeLayerStateParams(params);
     const state = {
       lat,
@@ -108,8 +92,6 @@ export class ShareLinkManager {
       heading: parseOr(params.get('heading'), 0),
       pitch: parseOr(params.get('pitch'), -35),
       roll: parseOr(params.get('roll'), 0),
-      style,
-      hudVisible: params.get('hv') === '1',
       mapStack: params.get('map') || 'esri-imagery',
       layerState: decodedLayerState,
       layerStateInvalid: params.get('v') === '2'
@@ -120,7 +102,6 @@ export class ShareLinkManager {
       sharedAtMs: decodeShareCreatedAtMs(params),
     };
     state.restoreAuthority = {
-      visual: this._restoreAuthority.visual,
       map: this._restoreAuthority.map,
       panels: new Map(this._restoreAuthority.panels),
     };
@@ -180,7 +161,6 @@ export class ShareLinkManager {
 
     // Notify the style manager via callback
     const reserved = state.restoreAuthority || null;
-    const visualCurrent = !reserved || reserved.visual === this._restoreAuthority.visual;
     const mapCurrent = !reserved || reserved.map === this._restoreAuthority.map;
     let panelState = state.panelState;
     if (reserved && panelState?.specs) {
@@ -194,8 +174,6 @@ export class ShareLinkManager {
     let restoreStatus = 'skipped';
     if (this._onRestore) {
       await this._onRestore({
-        style: visualCurrent ? state.style : undefined,
-        hudVisible: visualCurrent ? state.hudVisible : undefined,
         mapStack: mapCurrent ? state.mapStack : undefined,
         panelState,
       });
@@ -205,7 +183,6 @@ export class ShareLinkManager {
     return {
       succeeded: !this._destroyed,
       camera: camera.status,
-      visual: visualCurrent ? restoreStatus : 'superseded',
       map: mapCurrent ? restoreStatus : 'superseded',
       panels: panelState ? restoreStatus : (state.panelState ? 'superseded' : 'skipped'),
     };
@@ -223,8 +200,8 @@ export class ShareLinkManager {
     if (!this._initialRestorePending) return;
     if (lane === 'panel' && panelId) {
       this._restoreAuthority.panels.set(panelId, (this._restoreAuthority.panels.get(panelId) || 0) + 1);
-    } else if (lane === 'visual' || lane === 'map') {
-      this._restoreAuthority[lane] += 1;
+    } else if (lane === 'map') {
+      this._restoreAuthority.map += 1;
     }
   }
 
@@ -277,15 +254,8 @@ export class ShareLinkManager {
     else params.delete(SHARE_UI_STATE_PARAM);
   }
 
-  /** Called by StyleManager when style/toggles change */
-  onStyleChange(styleName) {
-    this._currentStyle = styleName;
-    this._scheduleUpdate();
-  }
-
-  /** Called by StyleManager when HUD visibility or the map stack changes. */
-  onVisualChange({ hudVisible, mapStack } = {}) {
-    if (typeof hudVisible === 'boolean') this._hudVisible = hudVisible;
+  /** Called by StyleManager when the map stack changes. */
+  onVisualChange({ mapStack } = {}) {
     if (typeof mapStack === 'string') this._mapStack = mapStack;
     this._scheduleUpdate();
   }
@@ -333,8 +303,6 @@ export class ShareLinkManager {
     params.set('heading', Math.round(Cesium.Math.toDegrees(camera.heading)).toString());
     params.set('pitch', Math.round(Cesium.Math.toDegrees(camera.pitch)).toString());
     params.set('roll', Math.round(Cesium.Math.toDegrees(camera.roll)).toString());
-    params.set('style', STYLE_TO_URL[this._currentStyle] || 'normal');
-    params.set('hv', this._hudVisible ? '1' : '0');
     params.set('map', this._mapStack);
     const layerState = this._layerStateProvider?.();
     if (layerState) encodeLayerStateParams(params, layerState);

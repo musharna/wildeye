@@ -160,7 +160,7 @@ if (CHECKS.has('off') || CHECKS.has('on')) {
   const before = await card();
   const offChecks = {
     switchShown: before.rowShown && before.toggleShown,
-    offByDefault: before.toggleText === 'RECORDING EFFORT OFF' && before.ariaChecked === 'false' && !before.enabled && before.effort.length === 0,
+    offByDefault: before.toggleText === 'Recording effort off' && before.ariaChecked === 'false' && !before.enabled && before.effort.length === 0,
     noTiles: tiles.size === 0,
     note: before.note === noteFor(SPIDER, 'recent'),
     labelFits: before.toggleFits,
@@ -182,7 +182,7 @@ if (CHECKS.has('off') || CHECKS.has('on')) {
     const recent = `${NOW.getUTCFullYear() - 9},${NOW.getUTCFullYear()}`;
     const checks = {
       ...tileChecks(SPIDER, recent),
-      on: after.enabled && after.toggleText === 'RECORDING EFFORT ON' && after.ariaChecked === 'true' && after.effort.length === 1,
+      on: after.enabled && after.toggleText === 'Recording effort on' && after.ariaChecked === 'true' && after.effort.length === 1,
       alpha: after.effort[0]?.alpha === EFFORT_ALPHA,
       underRecords: after.effort.length === 1 && after.species.length === 1 && after.effort[0].index < after.species[0].index,
       noError: after.status.error === null,
@@ -220,7 +220,7 @@ if (CHECKS.has('other-class')) {
   const settled = await settle();
   const checks = {
     positiveControl: wasOn.enabled && wasOn.effort.length === 1,
-    switchedOff: !after.enabled && after.effort.length === 0 && after.toggleText === 'RECORDING EFFORT OFF',
+    switchedOff: !after.enabled && after.effort.length === 0 && after.toggleText === 'Recording effort off',
     note: after.note === noteFor(BIRD, 'recent'),
     ...tileChecks(BIRD, `${NOW.getUTCFullYear() - 9},${NOW.getUTCFullYear()}`),
   };

@@ -64,14 +64,14 @@ test('the short-viewport condition is one query', () => {
 test('short viewport: the card folds the open panel, moves focus that was in it to the card, and gives both back when it closes', () => {
   const w = world();
   w.open('species-panel');
-  w.action.focus(); // WHAT LIVES HERE, armed with Enter
+  w.action.focus(); // What lives here, armed with Enter
   w.calls.length = 0;
   w.setCard(true); // the "Click a spot" card
   assert.deepEqual(w.calls, [['species-panel', true]]);
   assert.equal(w.doc.activeElement, w.close, 'focus goes to the card\'s close button, not BODY');
   w.setCard(false); // Escape or the ×: cancelled
   assert.deepEqual(w.calls, [['species-panel', true], ['species-panel', false]]);
-  assert.equal(w.doc.activeElement, w.action, 'focus back on WHAT LIVES HERE');
+  assert.equal(w.doc.activeElement, w.action, 'focus back on What lives here');
 });
 
 test('short viewport: opening a panel while the card shows closes the card (one tap on a pill after a pick)', () => {

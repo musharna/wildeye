@@ -97,7 +97,7 @@ test('the half-height boundary remains expanded', () => {
   }), []);
 });
 
-test('Tactical focus preserves the primary panel and collapses later competitors', () => {
+test('focus mode preserves the primary panel and collapses later competitors', () => {
   assert.deepEqual(panelStackAutoCollapseIndices({
     naturalHeights: [320, 240, 180],
     allocatedHeights: [220, 180, 140],
@@ -143,7 +143,9 @@ test('desktop panel lanes use per-panel allocations and presentation-only auto-c
     ui,
     /_scheduleLeftPanelLayout\(\{[\s\S]*?reconsiderAutoCollapse: this\._leftPanelStack\?\.contains\(panelEl\) === true/,
   );
-  assert.match(ui, /collapseLaterPanels: shouldFocus && this\.hud\.getVariant\(\) === 'tactical'/);
+  // With the camera HUD gone (2026-10-20), focus mode always lets later panels give way, as it did by default with the HUD on.
+  assert.match(ui, /collapseLaterPanels: shouldFocus,/);
+  assert.doesNotMatch(ui, /this\.hud\b/);
   assert.match(ui, /this\._leftStackPreferredPanelId = leftOwnerPanel\.id;/);
   assert.match(
     ui,
@@ -215,7 +217,7 @@ test('expanded left panels integrate their headers with the container shell', ()
   );
 });
 
-test('Map Source uses five compact tiles in the bottom Visual Presets tray', () => {
+test('Basemap uses five compact tiles in the bottom tray', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 

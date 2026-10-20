@@ -8,10 +8,10 @@
  * `items()` lists slots bottom-to-top; a slot is an element or an array of alternates that share one
  * place (the compare pill and its panel). A hidden item keeps its place but gives up its height.
  *
- * `beside()` lists boxes with their own CSS place near the bottom (the HUD's bottom corners). Each keeps
- * that place unless it overlaps, across, something below it (chrome or a placed item); then it sits
- * above the highest such thing. On a phone the corners each span half the row and sat under the
- * Compare pill; on a desktop they are far to the sides and stay where the CSS puts them.
+ * `beside()` lists boxes with their own CSS place near the bottom (the pointer readout; the camera HUD's
+ * bottom corners until 2026-10-20). Each keeps that place unless it overlaps, across, something below it
+ * (chrome or a placed item); then it sits above the highest such thing. On a phone a wide box sat under
+ * the Compare pill; on a desktop it is far to the side and stays where the CSS puts it.
  */
 // Any open tray takes its room, however it was opened. Counting pinned trays only let a tray opened by a
 // click or a hover cover the Compare pill but its bottom 11 px (1400 px, 2026-09-28).
@@ -65,7 +65,7 @@ export function stackAboveChrome({
         .map(([, , above]) => above);
       if (!clear.length) continue;
       // Only a box that must rise gets an inline bottom. One copied from its own CSS outlives the CSS state it
-      // was read in: the corner held its recording-mode place for a frame after the HUD variant changed.
+      // was read in: a HUD corner once held its recording-mode place for a frame after the HUD variant changed.
       const own = parseFloat(win?.getComputedStyle?.(e)?.bottom) || 0;
       const need = Math.max(...clear);
       if (need > own) e.style.bottom = `${need}px`;

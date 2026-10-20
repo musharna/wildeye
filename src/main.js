@@ -69,7 +69,6 @@ import { createObservedTime, attachObservedTime, installObservedTimeUi } from '.
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
 import { registerDataCredits } from './data/dataCredits.js';
 import { MapStackController } from './mapStackController.js';
-import { initLogoGaze } from './logoGaze.js';
 import {
   installRenderGovernor,
   getRenderGovernorDiagnostics,
@@ -77,8 +76,6 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from './renderGovernor.js';
-
-initLogoGaze();
 
 /**
  * Extract a human-readable error message from any thrown value.
@@ -115,7 +112,7 @@ async function init() {
   const loaderStatus = loadingScreen.querySelector('.loader-status');
 
   try {
-    loaderStatus.textContent = 'Configuring viewer...';
+    loaderStatus.textContent = 'Loading the globe…';
 
     // Create the Cesium viewer with minimal chrome
     const viewer = new Cesium.Viewer('cesiumContainer', {
@@ -131,13 +128,9 @@ async function init() {
       selectionIndicator: false,
       infoBox: false,
       baseLayer: false,
-      // Cesium's own Tycho-2 star box re-encoded as WebP q60 (public/skybox): the six 1024 px JPEG faces were 849 KB of a first
-      // visit, and blocking them took ~5 s off a slow-4G wait for the globe (grill_wildeye_cesium A10). 276 KB, same 1024 px:
-      // halving the size instead averaged every one-pixel star into a smudge.
-      skyBox: new Cesium.SkyBox({
-        sources: Object.fromEntries(['positiveX', 'negativeX', 'positiveY', 'negativeY', 'positiveZ', 'negativeZ']
-          .map((k) => [k, `${import.meta.env.BASE_URL}skybox/tycho2t3_80_${k[0] === 'p' ? 'p' : 'm'}${k.at(-1).toLowerCase()}.webp`])),
-      }),
+      // No star box: the globe sits on the page colour, as a map in a figure does (grill_wildeye_visual_update_2026-10-20, Q4).
+      // It also takes the six star faces (276 KB) out of a first visit.
+      skyBox: false,
       // Visible attribution container (styled subtly via #cesium-credits). The
       // credit line stays visible in clean-view AND recording modes too, since
       // the basemap and data terms require attribution while their content is
@@ -173,15 +166,18 @@ async function init() {
     // clutter the on-globe line. See docs/pre-ship-audit-2026-07-01.md H11.
     registerDataCredits(viewer);
 
-    // A soft sky behind the globe: Cesium's default atmosphere is bright enough
-    // to read as a hard cyan seam at the limb.
+    // The page colour behind the globe (style.css --page) and no sun or moon discs floating on it. The atmosphere stays,
+    // softened: Cesium's default is bright enough to read as a hard cyan seam at the limb.
+    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#f1f5f8');
+    viewer.scene.sun.show = false;
+    viewer.scene.moon.show = false;
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
     viewer.scene.skyAtmosphere.saturationShift = -0.12;
     viewer.scene.skyAtmosphere.brightnessShift = -0.08;
     viewer.scene.globe.show = true;
 
-    loaderStatus.textContent = 'Initializing systems...';
+    loaderStatus.textContent = 'Loading map layers…';
 
     const mapStackController = new MapStackController(viewer, {
       // Rebroadcast stack changes as a window CustomEvent so the UI can follow
@@ -201,7 +197,7 @@ async function init() {
     if (!styleManager.hasShareState) {
       showWholeGlobe(viewer);
     } else {
-      loaderStatus.textContent = 'Restoring shared view...';
+      loaderStatus.textContent = 'Opening the shared view…';
     }
 
     // Initialize data layer manager
@@ -312,7 +308,7 @@ async function init() {
       observedTime,
     });
     // Bottom-centre is one stack above the dock and the map credits: time bar, then compare pill | panel.
-    // The HUD's bottom corners sit beside it and rise above it only where they overlap it (a phone).
+    // The pointer readout sits beside it and rises above it only where it overlaps it (a phone).
     stackAboveChrome({
       doc: document,
       below: () => [document.getElementById('command-dock'), document.getElementById('cesium-credits')],
@@ -320,7 +316,7 @@ async function init() {
         document.getElementById('observed-time'),
         [compareUi.toggle, compareUi.panel],
       ],
-      beside: () => [...document.querySelectorAll('#intel-hud .hud-bottom-left, #intel-hud .hud-bottom-right')],
+      beside: () => [document.getElementById('pointer-readout')].filter(Boolean),
     });
     // Restoration starts only after the complete production registry is sealed.
     dataManager.finalizeRegistrations(LAYER_STATE_REGISTRY);

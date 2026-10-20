@@ -22,7 +22,7 @@ export function createModeledRangeControl({ doc = document, dataManager, client,
     const shown = place?.state === 'shown';
     const on = shown && layer.isEnabled();
     toggle.hidden = !shown;
-    toggle.textContent = on ? 'MODELED RANGE ON' : 'MODELED RANGE OFF';
+    toggle.textContent = on ? 'Modeled range on' : 'Modeled range off';
     toggle.setAttribute('aria-checked', String(on));
     const error = shown ? layer.getStatus().error : null;
     note.textContent = place ? error ?? modeledNote(place) : '';

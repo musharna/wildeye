@@ -171,7 +171,7 @@ try {
   report("legend:illness-totals-equal-archive", JSON.stringify(legendCounts) === JSON.stringify(ORDER.map((k) => all[k] || 0)),
     { legend: legendCounts, archive: ORDER.map((k) => all[k] || 0), caption: legend.at(-1)?.label });
 
-  // clicks through the WHAT LIVES HERE path (main.js readGibsLayers): a monitoring point, inside a ring, open ocean
+  // clicks through the What lives here path (main.js readGibsLayers): a monitoring point, inside a ring, open ocean
   const read = async (lat, lon) => (await page.evaluate((a, b) => window.__godsEyeView.readoutAt(a, b), lat, lon)).find((r) => r?.id === ID) ?? null;
   const ring = [...positions.values()].find((p) => p.km > 300 && scope(p, null).length);
   const spots = [

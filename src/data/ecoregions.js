@@ -49,20 +49,20 @@ export const NNH = Object.freeze({
 
 /** Short chip labels for the 14 biomes (the full names are 40–55 characters). */
 const CHIP_LABELS = Object.freeze({
-  1: "TROP MOIST FOREST",
-  2: "TROP DRY FOREST",
-  3: "TROP CONIFER",
-  4: "TEMP BROADLEAF",
-  5: "TEMP CONIFER",
-  6: "BOREAL",
-  7: "TROP GRASSLAND",
-  8: "TEMP GRASSLAND",
-  9: "FLOODED GRASSLAND",
-  10: "MONTANE GRASSLAND",
-  11: "TUNDRA",
-  12: "MEDITERRANEAN",
-  13: "DESERT",
-  14: "MANGROVES",
+  1: "Trop. moist forest",
+  2: "Trop. dry forest",
+  3: "Trop. conifer",
+  4: "Temp. broadleaf",
+  5: "Temp. conifer",
+  6: "Boreal",
+  7: "Trop. grassland",
+  8: "Temp. grassland",
+  9: "Flooded grassland",
+  10: "Montane grassland",
+  11: "Tundra",
+  12: "Mediterranean",
+  13: "Desert",
+  14: "Mangroves",
 });
 
 export function biomeOf(num) {
