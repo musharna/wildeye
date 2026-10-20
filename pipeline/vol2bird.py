@@ -103,14 +103,10 @@ def profile_time(text: str) -> dt.datetime:
     (day, hhmm), = stamps
     return dt.datetime.strptime(day + hhmm.zfill(4), "%Y%m%d%H%M").replace(tzinfo=dt.UTC)
 
-def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float = math.inf) -> dict:
-    """bioRad integrate_profile for one vp, defaults included (heights are bin bottoms, m ASL).
-    vid (birds/km2) = sum dens*dh; mtr (birds/km/h) = sum dens*ff*3.6*dh. A bin with dens but no
-    ff (vol2bird gap) counts in vid and drops out of mtr, as bioRad's na.rm does; speedless_share
-    is the part of vid that mtr cannot see."""
-    if all(b.get("dens") is None for b in bins):
-        return {"vid_birds_km2": None, "mtr_birds_km_h": None, "speedless_share": None}
-    hs = sorted(b["height_m"] for b in bins)
+def bin_interval(heights: list[float]) -> float:
+    """The one height step of a profile's bins (m): bioRad assumes a single interval. Raises on fewer than
+    two bins, uneven steps, or duplicate heights (step 0)."""
+    hs = sorted(heights)
     if len(hs) < 2:
         raise ValueError(f"need at least two height bins to know the interval, got {len(hs)}")
     steps = {round(b - a, 6) for a, b in zip(hs, hs[1:])}
@@ -119,6 +115,16 @@ def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float
     interval, = steps
     if interval <= 0:
         raise ValueError(f"duplicate height bins (step {interval} m)")
+    return interval
+
+def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float = math.inf) -> dict:
+    """bioRad integrate_profile for one vp, defaults included (heights are bin bottoms, m ASL).
+    vid (birds/km2) = sum dens*dh; mtr (birds/km/h) = sum dens*ff*3.6*dh. A bin with dens but no
+    ff (vol2bird gap) counts in vid and drops out of mtr, as bioRad's na.rm does; speedless_share
+    is the part of vid that mtr cannot see."""
+    if all(b.get("dens") is None for b in bins):
+        return {"vid_birds_km2": None, "mtr_birds_km_h": None, "speedless_share": None}
+    interval = bin_interval([b["height_m"] for b in bins])
     vid = mtr = speedless = 0.0
     for b in bins:
         if b.get("dens") is None:
@@ -132,6 +138,55 @@ def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float
             mtr += b["dens"] * b["ff"] * 3.6 * dh
     return {"vid_birds_km2": vid, "mtr_birds_km_h": mtr,
             "speedless_share": speedless / vid if vid > 0 else None}
+
+def height_quantile(heights: list[float], weights: list[float | None], q: float) -> float | None:
+    """bioRad integrate_profile(height_quantile = q): the height (m ASL) below which a share q of the
+    weight lies, linear within the bin it falls in. heights are the bin bottoms in order and weights
+    the bins' dens (None as 0; bioRad's dens*dh has one dh, which cancels), so the interpolation runs from a
+    bin's bottom to the next bin's bottom,
+    and bioRad's NaN (q exactly at the top of the last bin) is 0. None when there is no weight."""
+    w = [x or 0.0 for x in weights]
+    total = sum(w)
+    if total <= 0:
+        return None
+    cum, c = [], 0.0
+    for x in w:
+        c += x / total
+        cum.append(c)
+    n = len(cum)
+    idx = sum(1 for c in cum if c <= q)   # R findInterval on a non-decreasing vector
+    lower, upper = heights[min(idx, n - 1)], heights[min(idx + 1, n - 1)]
+    q_lower = 0.0 if idx == 0 else cum[idx - 1]
+    q_upper = cum[min(idx, n - 1)]
+    if q_upper == q_lower:   # only past the last bin (lower == upper), where bioRad's 0/0 becomes 0
+        return lower
+    return lower + (q - q_lower) * (upper - lower) / (q_upper - q_lower)
+
+def _height_weights(bins: list[dict]) -> tuple[list[float], list[float]]:
+    hs = [b["height_m"] for b in bins]
+    bin_interval(hs)   # the checks integrate_profile makes, duplicate heights included
+    return hs, [b["dens"] or 0.0 for b in bins]
+
+def profile_height_quantile(bins: list[dict], q: float) -> float | None:
+    """One profile's flight-height quantile, as bioRad's integrate_profile(height_quantile = q)."""
+    return height_quantile(*_height_weights(bins), q)
+
+def pooled_height_quantiles(profiles: list[list[dict]], hours: list[float],
+                            qs: tuple[float, ...] = (0.25, 0.5, 0.75)) -> list[float] | None:
+    """Where a night's birds flew: the quantiles of every profile's density pooled, each weighted by
+    the hours it stands for (profile_hours), so one profile alone gives bioRad's own quantiles."""
+    if len(profiles) != len(hours):
+        raise ValueError(f"{len(profiles)} profiles for {len(hours)} durations")
+    grids = [_height_weights(bins) for bins in profiles]
+    if not grids:
+        return None
+    hs = grids[0][0]
+    if any(g[0] != hs for g in grids):
+        raise ValueError("profiles of one night have different height bins")
+    pooled = [sum(h * g[1][i] for h, g in zip(hours, grids)) for i in range(len(hs))]
+    if sum(pooled) <= 0:
+        return None
+    return [height_quantile(hs, pooled, q) for q in qs]
 
 def bio_gate_share(bins: list[dict]) -> float | None:
     """Share of the profile's reflective gates vol2bird kept as biological, sum n_dbz / sum n_dbz_all.

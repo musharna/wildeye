@@ -158,6 +158,24 @@ export function nightText(n) {
   return t;
 }
 
+// "250–850 m" must not break at the dash: word joiners on both sides, a no-break space before the unit.
+const WJ = '\u2060';
+const fmtHeight = (m) => fmtCount(50 * Math.round(m / 50));
+
+/**
+ * Where a finished night's birds flew: the middle half of the night's density by height (bioRad's height quantile,
+ * pooled over the night's profiles), in m above sea level beside the radar's own height. Not on a mostly-rain night,
+ * where the density rests on the few gates the rain filter left.
+ */
+export function heightLine(n) {
+  const q = n?.height_quartiles_m;
+  if (!n?.complete || mostlyNotBirds(n) || !Array.isArray(q) || q.length !== 3 || !q.every(Number.isFinite)) return null;
+  // the antenna height is measured (Level II header), so it is shown as is; the quartiles come from 200 m bins
+  const radar = Number.isFinite(n.antenna_m) ? `; radar at ${fmtCount(Math.round(n.antenna_m))}${NBSP}m` : '';
+  return `Half of last night's birds flew ${fmtHeight(q[0])}${WJ}–${WJ}${fmtHeight(q[2])}${NBSP}m above sea level ` +
+    `(median ${fmtHeight(q[1])}${NBSP}m${radar})`;
+}
+
 /** Popup lines for a radar's nights (pipeline/bird_nights.py): tonight once the sun has set, and the last complete night. */
 export function nightLines(nights, nowMs = Date.now()) {
   if (!Array.isArray(nights)) return [];
@@ -166,6 +184,8 @@ export function nightLines(nights, nowMs = Date.now()) {
   const out = [];
   if (tonight) out.push(`Tonight so far: ${nightText(tonight)}`);
   if (last) out.push(`Last night (${nightDate(last.night)}): ${nightText(last)}`);
+  const height = heightLine(last);
+  if (height) out.push(height);
   return out;
 }
 

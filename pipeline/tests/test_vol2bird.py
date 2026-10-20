@@ -4,7 +4,8 @@ import gzip
 from pathlib import Path
 import pytest
 from pipeline.vol2bird import (parse_profile, reduce_profile, integrate_profile, migration_traffic,
-                               profile_time, save_profile, prune_profiles, bio_gate_share)
+                               profile_time, save_profile, prune_profiles, bio_gate_share, height_quantile,
+                               profile_height_quantile, pooled_height_quantiles, profile_hours)
 
 FIX = Path(__file__).parent / "fixtures" / "KOKX_profile.txt"
 # eight real KOKX profiles, 2026-10-17 01:01-03:28 UTC, with a 93-min hole (bioRad's interval cap)
@@ -179,3 +180,73 @@ def test_run_vol2bird_with_options_uses_a_private_options_conf_and_without_is_un
     for bad in ({"AZIMMIN\nDUALPOL": "0"}, {"azimmin": "1"}, {"AZIMMIN": "1\nDUALPOL = FALSE"}):
         with pytest.raises(ValueError, match="vol2bird option"):
             v.run_vol2bird(vol, options=bad)
+
+
+# --- flight heights. pipeline/biorad_height_golden.R runs bioRad 0.12.0's integrate_profile(height_quantile = q)
+# on the 39 real KLOT profiles of 17 Oct 05:50-12:06 UTC.
+KLOT = Path(__file__).parent / "fixtures" / "vp_KLOT_night_20261016"
+
+def _klot():
+    files = sorted(KLOT.glob("KLOT*.txt.gz"))
+    texts = [gzip.decompress(f.read_bytes()).decode() for f in files]
+    return [profile_time(t) for t in texts], [parse_profile(t) for t in texts]
+
+def test_profile_height_quantiles_match_biorad_on_39_klot_profiles():
+    times, profiles = _klot()
+    g = golden(KLOT / "biorad_height.csv")
+    assert len(profiles) == len(g) == 39
+    assert [t.strftime("%Y-%m-%dT%H:%M:%SZ") for t in times] == [r["datetime"] for r in g]
+    for bins, row in zip(profiles, g):
+        for q, col in ((0.25, "q25"), (0.5, "q50"), (0.75, "q75")):
+            assert profile_height_quantile(bins, q) == pytest.approx(float(row[col]), rel=1e-12)
+
+def test_pooled_heights_weight_each_profile_by_its_hours():
+    times, profiles = _klot()
+    hours = profile_hours(times)
+    # one profile alone is bioRad's own answer, whatever the hours it stands for
+    assert pooled_height_quantiles(profiles[:1], [0.1]) == pytest.approx([profile_height_quantile(profiles[0], q) for q in (0.25, 0.5, 0.75)], rel=1e-12)
+    q25, q50, q75 = pooled_height_quantiles(profiles, hours)
+    assert q25 < q50 < q75
+    # independent of the code under test: the share of the pooled bird-hours below q50, integrated bin by bin
+    hs = [b["height_m"] for b in profiles[0]]
+    w = [sum(h * (p[i]["dens"] or 0.0) for h, p in zip(hours, profiles)) for i in range(len(hs))]
+    below = sum(wi * min(max((q50 - lo) / 200, 0), 1) for wi, lo in zip(w, hs))
+    assert below / sum(w) == pytest.approx(0.5, abs=1e-9)
+    # the weights matter: the same profiles counted with a long first hour sink toward the first profile
+    lead = pooled_height_quantiles(profiles, [100.0] + hours[1:])
+    assert lead[1] == pytest.approx(profile_height_quantile(profiles[0], 0.5), abs=5) and abs(lead[1] - q50) > 5
+    assert pooled_height_quantiles([], []) is None
+    with pytest.raises(ValueError, match="different height bins"):
+        pooled_height_quantiles([profiles[0], profiles[1][1:]], [1.0, 1.0])
+
+def test_height_quantile_edges_follow_biorad():
+    # each value below was checked 2026-10-20 against bioRad 0.12.0 integrate_profile(height_quantile) on a real KLOT
+    # vp cut to these 4 bins with its dens replaced
+    hs = [0, 200, 400, 600]
+    assert height_quantile(hs, [None, 0.0, 0.0, 0.0], 0.5) is None
+    # all weight in the 200-400 bin: linear from its bottom to the next bin's bottom
+    assert height_quantile(hs, [0.0, 1.0, 0.0, 0.0], 0.25) == 250
+    assert height_quantile(hs, [0.0, 1.0, 0.0, 0.0], 0.5) == 300
+    # an even split over two bins puts the median at their shared edge
+    assert height_quantile(hs, [1.0, 1.0, 0.0, 0.0], 0.5) == 200
+    # half the weight below an empty bin: findInterval counts the cumulative shares <= q, so the median is the
+    # empty bin's top, not its bottom
+    assert height_quantile(hs, [1.0, 0.0, 1.0, 0.0], 0.5) == 400
+    # all weight in the top bin: bioRad clamps to the last bottom and its 0/0 is 0
+    assert height_quantile(hs, [0.0, 0.0, 0.0, 1.0], 0.5) == 600
+
+def test_height_quantiles_refuse_bins_integrate_profile_refuses():
+    _, profiles = _klot()
+    bins = profiles[0]
+    assert profile_height_quantile(bins, 0.5) is not None   # the real profile passes
+    dup = [dict(b) for b in bins]
+    dup[1]["height_m"] = dup[0]["height_m"]               # two rows at 0 m
+    for bad, why in ((dup, "duplicate height bins|uneven"), (bins[:1], "at least two height bins")):
+        with pytest.raises(ValueError, match=why):
+            profile_height_quantile(bad, 0.5)
+        with pytest.raises(ValueError, match=why):
+            pooled_height_quantiles([bad], [1.0])
+    # every row at one height: steps {0}, which the even-spacing check alone let through
+    flat = [dict(b, height_m=0.0) for b in bins]
+    with pytest.raises(ValueError, match="duplicate height bins"):
+        profile_height_quantile(flat, 0.5)

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, seasonLines, SEASON_COMPARE, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, heightLine, seasonLines, SEASON_COMPARE, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
 
 test('birds: analyst record maps fields and nulls', () => {
   const r = mapBirdRecord({ site: 'KOKX', name: 'Upton NY', density_birds_km3: 12.5, heading_deg: 200, speed_ms: 9, peak_altitude_m: 600, scan_time: '2026-09-11T00:12:10Z', stale: false, lat: 40.9, lon: -72.9 }, 0);
@@ -215,6 +215,23 @@ test('birds: night dates and the error bar cannot wrap inside themselves in the 
   const contact = particleText(1.25, 66.4, 5.2, { site: 'KBUF', name: 'Buffalo NY', scan_time: '2026-10-19T08:38:17Z' });
   assert.match(contact, /≈ 1\.3 birds\/km³.*heading 66° · ground speed 5 m\/s<br>nearest radar KBUF \(Buffalo NY\) · scan Oct\u00a019\u00a008:38\u00a0UTC<br>/);
   assert.match(particleText(0, 0, 0, undefined), /nearest radar n\/a · scan n\/a<br>/);
+});
+
+test('birds: last night\'s flight heights, middle half and median, beside the radar\'s own height', () => {
+  // birds_nights.json rebuilt from the live profile store for the night of 19 Oct (fixtures/README.md)
+  const doc = JSON.parse(readFileSync(new URL('./fixtures/birds_nights_heights_20261020.json', import.meta.url)));
+  const [akq] = doc.sites.KAKQ;   // quartiles 193.8 / 352.3 / 588.2 m ASL, antenna 77 m
+  assert.equal(heightLine(akq), 'Half of last night\'s birds flew 200\u2060–\u2060600\u00a0m above sea level (median 350\u00a0m; radar at 77\u00a0m)');
+  const [buf] = doc.sites.KBUF;   // 781.0 / 1216.2 / 1613.2, antenna 240
+  assert.equal(heightLine(buf), 'Half of last night\'s birds flew 800\u2060–\u20601,600\u00a0m above sea level (median 1,200\u00a0m; radar at 240\u00a0m)');
+  assert.equal(heightLine(doc.sites.KILN[0]), null, 'KILN was off the air: no heights');
+  // in the popup it follows the night's total; tonight (not finished) never gets one
+  assert.deepEqual(nightLines(doc.sites.KAKQ, Date.parse('2026-10-20T14:00:00Z')).at(-1), heightLine(akq));
+  assert.equal(heightLine({ ...akq, complete: false }), null);
+  assert.equal(heightLine({ ...akq, bio_gate_share: 0.3 }), null, 'a mostly-rain night has no heights');
+  assert.equal(heightLine({ ...akq, height_quartiles_m: null }), null, 'a night from before heights were kept');
+  assert.equal(heightLine({ ...akq, height_quartiles_m: [1, NaN, 3] }), null);
+  assert.match(heightLine({ ...akq, antenna_m: undefined }), /\(median 350\u00a0m\)$/);
 });
 
 test('birds: the season line totals the archived nights and says how many it rests on', () => {

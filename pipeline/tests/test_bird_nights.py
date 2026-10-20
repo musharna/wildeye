@@ -2,6 +2,7 @@ import csv
 import datetime as dt
 import gzip
 import json
+import shutil
 from pathlib import Path
 import pytest
 from pipeline.bird_nights import sun_event, night_window, stored_profiles, night_total, build_nights, main
@@ -9,7 +10,7 @@ from pipeline.vol2bird import save_profile
 
 FIX = Path(__file__).parent / "fixtures"
 NIGHT = FIX / "vp_KOKX_20261017"            # eight real KOKX profiles, 01:01-03:28 UTC on 10-17
-KOKX = {"id": "KOKX", "name": "Upton NY", "lat": 40.8655, "lon": -72.8639}
+KOKX = {"id": "KOKX", "name": "Upton NY", "lat": 40.8655, "lon": -72.8639, "antenna_m": 60}
 UTC = dt.UTC
 HDR = "# date   time HGHT    u      v       w     ff    dd  sd_vvp gap dbz     eta   dens   DBZH   n   n_dbz n_all n_dbz_all\n"
 
@@ -90,10 +91,47 @@ def test_build_nights_merges_marks_complete_prunes_and_isolates_a_bad_site(tmp_p
     kokx, = doc["sites"]["KOKX"]                                          # 07-01 pruned; 10-17 not begun
     assert kokx["night"] == "2026-10-16" and kokx["complete"] is False
     assert kokx["mt_birds_km"] == pytest.approx(11.3739864, rel=1e-9)
+    assert kokx["antenna_m"] == 60 and len(kokx["height_quartiles_m"]) == 3
     assert doc["sites"]["KGRR"][0]["mt_birds_km"] == 2.0                  # other sites kept
     assert list(doc["failures"]) == ["KBAD 2026-10-16"] and "KBAD" not in doc["sites"]
     later = build_nights(store, [KOKX], out, dt.datetime(2026, 10, 17, 12, 0, tzinfo=UTC))
     assert later["sites"]["KOKX"][0]["complete"] is True and later["failures"] == {}
+
+def test_a_site_without_its_antenna_height_is_listed_and_the_others_still_built(tmp_path: Path):
+    store, out = tmp_path / "vp", tmp_path / "birds_nights.json"
+    store_night(store)
+    shutil.copytree(store / "KOKX", store / "KTWO")          # a second radar with the same real night
+    two = {**KOKX, "id": "KTWO"}
+    noant = {k: v for k, v in KOKX.items() if k != "antenna_m"}
+    doc = build_nights(store, [noant, two], out, dt.datetime(2026, 10, 17, 6, 0, tzinfo=UTC))
+    assert list(doc["failures"]) == ["KOKX 2026-10-16"] and "antenna_m" in doc["failures"]["KOKX 2026-10-16"]
+    assert "KOKX" not in doc["sites"] and doc["sites"]["KTWO"][0]["antenna_m"] == 60   # the other radar is built
+    ok = build_nights(store, [KOKX], out, dt.datetime(2026, 10, 17, 6, 0, tzinfo=UTC))
+    assert ok["failures"] == {} and ok["sites"]["KOKX"][0]["antenna_m"] == 60
+
+def test_a_height_problem_keeps_the_night_totals():
+    t0 = dt.datetime(2026, 10, 17, 1, 0, tzinfo=UTC)
+    a = prof(t0, [(0, 2.0, 10.0), (200, 1.0, 10.0), (400, 0.0, 10.0)])
+    b = prof(t0 + dt.timedelta(minutes=10), [(0, 2.0, 10.0), (200, 1.0, 10.0), (400, 0.0, 10.0)])
+    odd = prof(t0 + dt.timedelta(minutes=10), [(0, 2.0, 10.0), (200, 1.0, 10.0)])   # a shorter grid
+    sunset, sunrise = t0 - dt.timedelta(hours=1), t0 + dt.timedelta(hours=10)
+    good = night_total([(t0, a), (t0 + dt.timedelta(minutes=10), b)], sunset, sunrise)
+    assert good["height_quartiles_m"] is not None and good["height_failure"] is None
+    bad = night_total([(t0, a), (t0 + dt.timedelta(minutes=10), odd)], sunset, sunrise)
+    assert bad["mt_birds_km"] == pytest.approx(good["mt_birds_km"]) and bad["peak_mtr_birds_km_h"] == good["peak_mtr_birds_km_h"]
+    assert bad["height_quartiles_m"] is None and "different height bins" in bad["height_failure"]
+    # a profile with no density adds nothing to the heights, so its grid is not held against the night
+    empty = prof(t0 + dt.timedelta(minutes=10), [(0, "nan", None), (200, "nan", None)])
+    quiet = night_total([(t0, a), (t0 + dt.timedelta(minutes=10), empty)], sunset, sunrise)
+    assert quiet["height_failure"] is None and quiet["height_quartiles_m"] is not None
+
+def test_every_radar_carries_its_antenna_height():
+    # read 2026-10-20 from each radar's Level II volume (Py-ART radar.altitude, unidata-nexrad-level2); the popup
+    # gives it beside the flight heights, which are m above sea level
+    sites = json.loads((FIX.parent.parent / "sites.json").read_text())
+    assert len(sites) == 20 and all(isinstance(s["antenna_m"], int) and 0 < s["antenna_m"] < 500 for s in sites)
+    by = {s["id"]: s["antenna_m"] for s in sites}
+    assert (by["KTBW"], by["KOKX"], by["KPBZ"]) == (36, 60, 385)
 
 def test_main_refuses_unknown_site(tmp_path: Path):
     with pytest.raises(SystemExit, match="unknown site"):

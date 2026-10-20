@@ -42,14 +42,19 @@ Night D runs from bioRad's sunset on D to its sunrise on D+1 (sun 0.268° below 
 checks the port). Per site and night: `mt_birds_km` (birds crossing 1 km over the night, bioRad mt),
 `peak_mtr_birds_km_h` and `peak_time`, `profiles`, `coverage` (share of the night the profiles stand for),
 `speedless_share` (share of the night's birds with no speed, which mt cannot count), `bio_gate_share`
-(the profiles' share weighted by the time each stands for: the night's rain readout), `complete` (sunrise passed).
+(the profiles' share weighted by the time each stands for: the night's rain readout), `height_quartiles_m` (the
+25th, 50th and 75th percentile heights of the night's birds, m ASL: bioRad's `integrate_profile(height_quantile)` rule
+on every profile's density pooled, each weighted by the time it stands for; `biorad_height_golden.R` checks the port),
+`antenna_m` (the radar's antenna height, read from its Level II header into `sites.json`), `complete` (sunrise passed).
 Kept 60 nights; a site-night that fails is listed in `failures` and the rest still written.
 The globe's radar popup shows tonight (once the sun has set) and the last complete night from this file: mt, peak
 mtr and its time, marked "mostly rain or clutter" when the night's `bio_gate_share` < 0.55 (the scan threshold of
 `docs/analysis/bird-rain.md`; checked separately on the night's weighted share: balanced accuracy 0.83) and with its coverage when a complete night is
 under half covered. A finished night not marked rain carries "± 8% from 10-minute sampling" (`docs/analysis/bird-sampling.md`:
 the cadence's error only, not calibration). Below them, the last 14 complete nights as a log-scale text sparkline
-(× = mostly rain, · = no scans). Replay frames show no night lines.
+(× = mostly rain, · = no scans). A finished night not marked rain also says where its birds flew: "Half of last
+night's birds flew 200–600 m above sea level (median 350 m; radar at 77 m)", rounded to 50 m (the bins are 200 m).
+Replay frames show no night lines.
 Past nights from the archive: `python3 -m pipeline.bird_nights backfill --site KOKX --night 2026-10-16`
 (~140 volumes a night, vol2bird in Docker); `build` recomputes nights from what is stored.
 
