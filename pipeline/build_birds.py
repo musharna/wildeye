@@ -5,8 +5,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from .atomic import write_atomic  # noqa: F401  (re-exported for build_archive/tests)
 from .nexrad import latest_volume_key, download_volume
-from .vol2bird import (run_vol2bird, parse_profile, reduce_profile, integrate_profile,
+from .vol2bird import (run_vol2bird, parse_profile, reduce_profile, integrate_profile, bio_gate_share,
                        save_profile, prune_profiles)
+from .bird_nights import build_nights
+from .bird_seasons import archive_file
 from .ppi import ppi_for_volume
 from .field import composite, write_field_png
 
@@ -54,7 +56,7 @@ def process_site(site: dict, workdir: Path, ppi_dir: Path | None, key: str | Non
     try:
         raw = run_vol2bird(vol)
         bins = parse_profile(raw)
-        rec = {**reduce_profile(bins), **integrate_profile(bins)}
+        rec = {**reduce_profile(bins), **integrate_profile(bins), "bio_gate_share": bio_gate_share(bins)}
         if vp_dir is not None:
             save_profile(raw, site["id"], key, vp_dir)
         if ppi_dir is None:
@@ -146,6 +148,12 @@ def main(argv=None):
         log.info("wrote %s %dx%d from %d sites", field_json, grid.shape[1], grid.shape[0], len(items))
     log.info("wrote %s fresh=%d stale=%d wall=%.0fs", a.out, len(new),
              len(fc["features"]) - len(new), time.time() - t0)
+    nights = build_nights(a.vp_dir, sites, a.out.parent / "birds_nights.json", dt.datetime.now(dt.UTC))
+    log.info("wrote birds_nights.json, %d night failures", len(nights["failures"]))
+    # whole seasons outlive the 60-night window and the pruned profiles: freeze each night once it is over
+    added = archive_file(a.out.parent / "birds_seasons.json", nights, dt.datetime.now(dt.UTC))
+    if added:
+        log.info("archived %d nights into birds_seasons.json", added)
     pruned = prune_profiles(a.vp_dir, a.vp_keep_days)
     if pruned:
         log.info("pruned %d profile day dirs older than %d days", len(pruned), a.vp_keep_days)

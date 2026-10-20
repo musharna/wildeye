@@ -1,5 +1,5 @@
 import * as Cesium from 'cesium';
-import { columnEntity, mapBirdRecord } from './birds.js';
+import { columnEntity, mapBirdRecord, scanTime } from './birds.js';
 
 /**
  * European bird migration from Aloft / BALTRAD vertical profiles (CC0).
@@ -8,13 +8,13 @@ import { columnEntity, mapBirdRecord } from './birds.js';
  */
 const DATA_URL = 'data/aloft.geojson';
 
-function describeAloft(p, h) {
+export function describeAloft(p, h) {
   const head = `<b>${p.name ?? p.site}</b> (${p.site}) — Aloft / BALTRAD profile<br>`;
   const body = h > 0
     ? `${Number(p.density_birds_km3).toFixed(1)} birds/km³ (0–3 km mean), heading ${Math.round(p.heading_deg)}°, ` +
       `${Number(p.speed_ms ?? 0).toFixed(0)} m/s, peak ${p.peak_altitude_m} m`
     : 'Quiet — no biological echo in the latest profile';
-  return `${head}${body}<br>profile ${p.scan_time} · published daily, 1–2 day lag · CC0`;
+  return `${head}${body}<br>profile ${scanTime(p.scan_time)} · published daily, 1–2 day lag · CC0`;
 }
 
 export function createAloftLayer() {

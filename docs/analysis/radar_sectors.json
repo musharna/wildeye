@@ -1,0 +1,162 @@
+{
+ "KOKX": {
+  "sea_share": 0.629578853046595,
+  "sector": [
+   239,
+   279
+  ],
+  "sector_deg": 40
+ },
+ "KBOX": {
+  "sea_share": 0.029108422939068124,
+  "sector": [
+   0,
+   179
+  ],
+  "sector_deg": 179
+ },
+ "KDIX": {
+  "sea_share": 0.08062724014336908,
+  "sector": [
+   142,
+   360
+  ],
+  "sector_deg": 218
+ },
+ "KLWX": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ },
+ "KAKQ": {
+  "sea_share": 0.04615591397849461,
+  "sector": [
+   80,
+   348
+  ],
+  "sector_deg": 268
+ },
+ "KRAX": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ },
+ "KMHX": {
+  "sea_share": 0.4550627240143369,
+  "sector": [
+   251,
+   340
+  ],
+  "sector_deg": 89
+ },
+ "KLTX": {
+  "sea_share": 0.3020250896057347,
+  "sector": [
+   232,
+   360
+  ],
+  "sector_deg": 128
+ },
+ "KCLX": {
+  "sea_share": 0.009578853046595004,
+  "sector": [
+   141,
+   360
+  ],
+  "sector_deg": 219
+ },
+ "KJAX": {
+  "sea_share": 0.08439068100358427,
+  "sector": [
+   120,
+   360
+  ],
+  "sector_deg": 240
+ },
+ "KMLB": {
+  "sea_share": 0.38034498207885303,
+  "sector": [
+   149,
+   344
+  ],
+  "sector_deg": 195
+ },
+ "KTBW": {
+  "sea_share": 0.21504928315412186,
+  "sector": [
+   2,
+   224
+  ],
+  "sector_deg": 222
+ },
+ "KBUF": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ },
+ "KCLE": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ },
+ "KPBZ": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ },
+ "KILN": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ },
+ "KLOT": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ },
+ "KGRR": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ },
+ "KOHX": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ },
+ "KFFC": {
+  "sea_share": 0.0,
+  "sector": [
+   0,
+   360
+  ],
+  "sector_deg": 360
+ }
+}
