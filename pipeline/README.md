@@ -53,6 +53,16 @@ the cadence's error only, not calibration). Below them, the last 14 complete nig
 Past nights from the archive: `python3 -m pipeline.bird_nights backfill --site KOKX --night 2026-10-16`
 (~140 volumes a night, vol2bird in Docker); `build` recomputes nights from what is stored.
 
+## Seasons (`public/data/birds_seasons.json`)
+`birds_nights.json` keeps 60 nights and the profiles behind them are pruned, so whole migration seasons are kept
+in an append-only archive (`pipeline/bird_seasons.py`): each bird run freezes every site-night of a season (fall =
+Aug 1 – Nov 15, BirdCast's window) 6 h after its sunrise, storing `mt_birds_km`, `bio_gate_share` and `coverage`, and
+never rewrites a night already there. A night with no profiles is not stored. Backfilled stores are added with
+`python3 -m pipeline.bird_seasons build --vp-dir <store> --season fall-2025 --out <file>`. The popup's season line
+totals the stored nights and says how many of the season's nights so far it rests on and how many were mostly rain.
+A comparison with last fall is shown only if `pipeline/season_check.py` finds adjacent radars agree on the change
+between years (median pair disagreement ≤ 1.5× over ≥ 6 of the 11 pairs; `SEASON_COMPARE` in `src/data/birds.js`).
+
 ## Field outputs (M2/M3)
 - `public/data/birds_ppi/<SITE>.png` + bounds: lowest sweep reflectivity with rain
   masked (RHOHV < 0.95, −10..35 dBZ, 5–150 km), 0.01° grid, viridis ramp.
