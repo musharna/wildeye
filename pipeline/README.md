@@ -4,7 +4,7 @@ Turns the newest NEXRAD Level II volume per radar into one migration record
 per site, written to `public/data/birds.geojson` for the `birds` globe layer.
 
 ## Prerequisites
-- Docker (image `adokter/vol2bird`, pulled on first run)
+- Docker (image `adokter/vol2bird` pinned by digest in `vol2bird.IMAGE`, pulled on first run)
 - Python 3.11+ with `boto3` (anonymous S3; no AWS credentials needed)
 
 ## Run
@@ -27,6 +27,7 @@ Downloads cache in `$WILDEYE_WORK` (default `/tmp/wildeye-nexrad`).
 | `vid_birds_km2` | birds per km² of ground, whole column: Σ `dens`·Δh (bioRad `integrate_profile` vid) |
 | `mtr_birds_km_h` | migration traffic rate, birds crossing 1 km per hour: Σ `dens`·`ff`·3.6·Δh (bioRad mtr; gap bins drop out) |
 | `speedless_share` | part of `vid` in gap bins with no `ff`, which `mtr` cannot count (null when `vid` is 0) |
+| `bio_gate_share` | Σ `n_dbz` / Σ `n_dbz_all`: share of the reflective gates vol2bird kept as birds after its dual-pol rain filter and clutter screen (near 0 in rain, where `dens` rests on the few gates left; ~0.6–0.9 on a clear night; null with no echo). Below 0.55 the globe marks the scan as mostly not birds (threshold checked against airport rain gauges: `docs/analysis/bird-rain.md`) |
 | `scan_time` | volume timestamp, UTC ISO |
 | `stale` | true when this run failed for the site and the last good record was kept |
 Top level: `generated_at`, `site_count`, `fresh_count`, `failures` (site → error).
@@ -34,6 +35,33 @@ Top level: `generated_at`, `site_count`, `fresh_count`, `failures` (site → err
 Each scan's raw vol2bird output is kept in `--vp-dir` (default `~/.cache/wildeye/vp/SITE/YYYYMMDD/*.txt.gz`,
 60 days). bioRad reads it as is: `Rscript pipeline/biorad_golden.R SITE out.csv <files>` writes bioRad's
 vid/mtr/mt for the same profiles (the tests' golden numbers come from this, bioRad 0.12.0).
+
+## Night totals (`public/data/birds_nights.json`)
+Every bird run rebuilds tonight and last night for each site from the profile store (`pipeline/bird_nights.py`).
+Night D runs from bioRad's sunset on D to its sunrise on D+1 (sun 0.268° below the horizon; `biorad_sun_golden.R`
+checks the port). Per site and night: `mt_birds_km` (birds crossing 1 km over the night, bioRad mt),
+`peak_mtr_birds_km_h` and `peak_time`, `profiles`, `coverage` (share of the night the profiles stand for),
+`speedless_share` (share of the night's birds with no speed, which mt cannot count), `bio_gate_share`
+(the profiles' share weighted by the time each stands for: the night's rain readout), `complete` (sunrise passed).
+Kept 60 nights; a site-night that fails is listed in `failures` and the rest still written.
+The globe's radar popup shows tonight (once the sun has set) and the last complete night from this file: mt, peak
+mtr and its time, marked "mostly rain or clutter" when the night's `bio_gate_share` < 0.55 (the scan threshold of
+`docs/analysis/bird-rain.md`; checked separately on the night's weighted share: balanced accuracy 0.83) and with its coverage when a complete night is
+under half covered. A finished night not marked rain carries "± 8% from 10-minute sampling" (`docs/analysis/bird-sampling.md`:
+the cadence's error only, not calibration). Below them, the last 14 complete nights as a log-scale text sparkline
+(× = mostly rain, · = no scans). Replay frames show no night lines.
+Past nights from the archive: `python3 -m pipeline.bird_nights backfill --site KOKX --night 2026-10-16`
+(~140 volumes a night, vol2bird in Docker); `build` recomputes nights from what is stored.
+
+## Seasons (`public/data/birds_seasons.json`)
+`birds_nights.json` keeps 60 nights and the profiles behind them are pruned, so whole migration seasons are kept
+in an append-only archive (`pipeline/bird_seasons.py`): each bird run freezes every site-night of a season (fall =
+Aug 1 – Nov 15, BirdCast's window) 6 h after its sunrise, storing `mt_birds_km`, `bio_gate_share` and `coverage`, and
+never rewrites a night already there. A night with no profiles is not stored. Backfilled stores are added with
+`python3 -m pipeline.bird_seasons build --vp-dir <store> --season fall-2025 --out <file>`. The popup's season line
+totals the stored nights and says how many of the season's nights so far it rests on and how many were mostly rain.
+A comparison with last fall is shown only if `pipeline/season_check.py` finds adjacent radars agree on the change
+between years (median pair disagreement ≤ 1.5× over ≥ 6 of the 11 pairs; `SEASON_COMPARE` in `src/data/birds.js`).
 
 ## Field outputs (M2/M3)
 - `public/data/birds_ppi/<SITE>.png` + bounds: lowest sweep reflectivity with rain
@@ -104,7 +132,9 @@ Gitignored; ~460 MB for 30 nights × 13 h.
 CONUS only (20 eastern-flyway sites in `sites.json`; 143 exist). Signal is
 nocturnal and seasonal; daytime shows near-zero density, which the layer
 labels "Quiet". vol2bird's biological filter is not perfect: heavy rain or
-insects can leak through.
+insects can leak through. A scan with `bio_gate_share` < 0.55 is drawn faded and its popup says the count
+is mostly rain or clutter (`docs/analysis/bird-rain.md`). Levels are not comparable between radars
+(`docs/analysis/bird-pairs.md`, `bird-sectors.md`): read each radar against its own nights.
 
 ## Storage policy (2026-09-11)
 Live outputs in `public/data/` (`birds.geojson`, `aloft.geojson`, `occurrences.geojson`,

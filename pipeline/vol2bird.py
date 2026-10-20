@@ -1,16 +1,29 @@
 """Run vol2bird (Docker), reduce its vertical profile to one record, and integrate it
 the way bioRad does (integrate_profile: vid, mtr, cumulative mt)."""
 from __future__ import annotations
-import datetime as dt, gzip, math, os, re, shutil, subprocess, tempfile
+import contextlib, datetime as dt, gzip, math, os, re, shutil, subprocess, tempfile
 from pathlib import Path
 
-IMAGE = "adokter/vol2bird"
+# pinned by digest so the nightly numbers cannot change under a silent `latest` pull; this is vol2bird
+# 0.5.0.9169 (image built 2021-02-05), the build every stored profile and docs/analysis result came from.
+IMAGE = "adokter/vol2bird@sha256:fdead127f0271358c18ca73d99a41faa5d61ae6dfe988629831b705f49e47e95"
 MAX_HEIGHT_M = 3000
 
-def run_vol2bird(volume: Path, timeout_s: int = 300) -> str:
-    cmd = ["docker", "run", "--rm", "-v", f"{volume.parent}:/data", IMAGE,
-           "vol2bird", f"/data/{volume.name}"]
-    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
+_OPT_KEY, _OPT_VALUE = re.compile(r"[A-Z][A-Z0-9_]*"), re.compile(r"[A-Za-z0-9_.+-]+")
+
+def run_vol2bird(volume: Path, timeout_s: int = 300, options: dict[str, str] | None = None) -> str:
+    """vol2bird on one volume. options (e.g. AZIMMIN) go in an options.conf in a fresh directory mounted
+    as vol2bird's working directory, where it looks for one; None runs vol2bird's defaults."""
+    for k, val in (options or {}).items():
+        if not (_OPT_KEY.fullmatch(k) and _OPT_VALUE.fullmatch(str(val))):
+            raise ValueError(f"bad vol2bird option {k!r} = {val!r}")
+    with tempfile.TemporaryDirectory() if options else contextlib.nullcontext() as conf_dir:
+        cmd = ["docker", "run", "--rm", "-v", f"{volume.parent}:/data"]
+        if options:
+            Path(conf_dir, "options.conf").write_text("".join(f"{k} = {val}\n" for k, val in options.items()))
+            cmd += ["-v", f"{conf_dir}:/conf", "-w", "/conf"]
+        cmd += [IMAGE, "vol2bird", f"/data/{volume.name}"]
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_s)
     if p.returncode != 0:
         raise RuntimeError(f"vol2bird failed rc={p.returncode} on {volume.name}: {p.stderr[-2000:]}")
     return p.stdout
@@ -46,6 +59,7 @@ def parse_profile(text: str) -> list[dict]:
             "dens": _f(col.get("dens")), "dbz": _f(col.get("dbz")),
             "eta": _f(col.get("eta")),
             "sd_vvp": _f(col.get("sd_vvp")), "gap": {"T": True, "F": False}.get(col.get("gap")),
+            "n_dbz": _f(col.get("n_dbz")), "n_dbz_all": _f(col.get("n_dbz_all")),
         })
     rows.sort(key=lambda b: b["height_m"] if b["height_m"] is not None else 1e9)
     return rows
@@ -119,6 +133,15 @@ def integrate_profile(bins: list[dict], alt_min_m: float = 0.0, alt_max_m: float
     return {"vid_birds_km2": vid, "mtr_birds_km_h": mtr,
             "speedless_share": speedless / vid if vid > 0 else None}
 
+def bio_gate_share(bins: list[dict]) -> float | None:
+    """Share of the profile's reflective gates vol2bird kept as biological, sum n_dbz / sum n_dbz_all.
+    Its dual-pol rain filter and clutter screen drop the rest, so a rain-filled volume reads near 0 and
+    its dens rests on the few gates left. None when no gate had reflectivity."""
+    if any(b.get("n_dbz") is None or b.get("n_dbz_all") is None for b in bins):
+        raise ValueError("no n_dbz / n_dbz_all gate counts in this vol2bird output")
+    kept, total = sum(b["n_dbz"] for b in bins), sum(b["n_dbz_all"] for b in bins)
+    return kept / total if total else None
+
 def migration_traffic(times: list[dt.datetime], mtr: list[float], interval_max_s: float = 3600.0) -> list[float]:
     """bioRad integrate_profile.vpts mt (birds/km), cumulative from the first profile: each profile
     stands for half the step on either side, capped at the mean of the steps shorter than
@@ -128,27 +151,35 @@ def migration_traffic(times: list[dt.datetime], mtr: list[float], interval_max_s
     missing = [i for i, m in enumerate(mtr) if m is None]
     if missing:
         raise ValueError(f"no migration traffic rate for profiles {missing}")
+    out, cum = [], 0.0
+    for h, m in zip(profile_hours(times, interval_max_s), mtr):
+        cum += h * m
+        out.append(cum)
+    return out
+
+def profile_hours(times: list[dt.datetime], interval_max_s: float = 3600.0) -> list[float]:
+    """Hours each profile stands for in bioRad's time integration: half the step on either side
+    (none past the ends), capped at the mean of the steps shorter than interval_max_s."""
     steps = [(b - a).total_seconds() for a, b in zip(times, times[1:])]
     if any(s <= 0 for s in steps):
         raise ValueError("profile times must be strictly increasing")
     short = [s for s in steps if s < interval_max_s]
     replace = sum(short) / len(short) if short else interval_max_s
-    out, cum = [], 0.0
-    for before, after, m in zip([0.0] + steps, steps + [0.0], mtr):
-        cum += min(replace, (before + after) / 2) / 3600 * m
-        out.append(cum)
-    return out
+    return [min(replace, (before + after) / 2) / 3600 for before, after in zip([0.0] + steps, steps + [0.0])]
 
 _SCAN = re.compile(r"(\d{8})_\d{6}")
 
-def save_profile(text: str, site: str, key: str, root: Path) -> Path:
-    """Keep one scan's raw vol2bird output as root/SITE/YYYYMMDD/<volume>.txt.gz (UTC day of the scan),
-    the input bioRad's read_stdout takes. A scan already stored is left as first written."""
+def profile_path(site: str, key: str, root: Path) -> Path:
     name = Path(key).name
     m = _SCAN.search(name)
     if not m:
         raise ValueError(f"no scan time in key {key}")
-    dest = root / site / m.group(1) / f"{name}.txt.gz"
+    return root / site / m.group(1) / f"{name}.txt.gz"
+
+def save_profile(text: str, site: str, key: str, root: Path) -> Path:
+    """Keep one scan's raw vol2bird output as root/SITE/YYYYMMDD/<volume>.txt.gz (UTC day of the scan),
+    the input bioRad's read_stdout takes. A scan already stored is left as first written."""
+    dest = profile_path(site, key, root)
     if dest.exists():
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)

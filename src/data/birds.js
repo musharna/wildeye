@@ -8,6 +8,9 @@ import { buildSpawnCdf, sampleCell, idwVelocity, stepParticle, seededRandom, fra
  * radar: height ∝ density, hue = heading. Static geometry between polls.
  */
 const DATA_URL = 'data/birds.geojson';
+const NIGHTS_URL = 'data/birds_nights.json';
+const SEASONS_URL = 'data/birds_seasons.json';
+const SEASONS_REFETCH_MS = 3_600_000;   // the archive gains nights once a day
 const FIELD_URL = 'data/birds_field.json';
 const MANIFEST_URL = 'data/birds_archive/manifest.json';
 const SEEK_DEBOUNCE_MS = 150;
@@ -45,6 +48,18 @@ export function drapeFade(heightM) {
   return 1 - (h - FADE_NEAR_M) / (FADE_FAR_M - FADE_NEAR_M);
 }
 
+// A scan whose bio_gate_share (share of the reflective gates vol2bird kept as birds) is below this is mostly
+// rain or clutter, and its bird numbers rest on the few gates left. 0.55 was chosen on 10 nights against airport
+// rain gauges and held 0.90 balanced accuracy on 10 more (docs/analysis/bird-rain.md, bird_rain.json). On a night's
+// time-weighted share (birds_nights.json) the same 0.55 was tested separately: 0.83 (bird_rain_nights.json).
+export const RAIN_SHARE = 0.55;
+
+/** True when the scan's echo was mostly not birds; false with no share (no echo, or a source without it). */
+export function mostlyNotBirds(p) {
+  const s = p?.bio_gate_share;
+  return Number.isFinite(s) && s < RAIN_SHARE;
+}
+
 const DEFAULT_PARAMS = Object.freeze({ columns: false, drape: true, particles: true });
 
 export function headingColor(deg) {
@@ -61,7 +76,7 @@ export function birdsLegend(params = DEFAULT_PARAMS) {
       items.push({ label, color: headingColor(deg).toCssColorString(), count: null });
     }
   }
-  if (params.columns) items.push({ label: 'column height = log(birds/km³), 5 km per e-fold, faded = stale scan', color: 'transparent', count: null });
+  if (params.columns) items.push({ label: 'column height = log(birds/km³), 5 km per e-fold; compare nights at one radar, not radars; faded = stale or mostly rain', color: 'transparent', count: null });
   if (params.drape) items.push({ label: 'radar: probable biological echo (rain masked)', color: 'transparent', count: null });
   return items;
 }
@@ -88,7 +103,7 @@ export function columnEntity(f, idPrefix = 'birds', describeFn = describe) {
   const [lon, lat] = f.geometry.coordinates;
   const p = f.properties || {};
   const h = birdColumn(p.density_birds_km3);
-  const color = headingColor(p.heading_deg).withAlpha(p.stale ? 0.25 : 0.6);
+  const color = headingColor(p.heading_deg).withAlpha(p.stale || mostlyNotBirds(p) ? 0.25 : 0.6);
   return {
     id: `${idPrefix}:${p.site}`,
     position: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(h, 500) / 2),
@@ -105,13 +120,150 @@ export function columnEntity(f, idPrefix = 'birds', describeFn = describe) {
   };
 }
 
-export function describe(p, h) {
+const NIGHT_COVERAGE_MIN = 0.5;
+// A night's total comes from one scan per 10 minutes. Against every scan the radar made, |error| was <= 8.4% on
+// 90% of 57 nights at 6 radars, and held on 93% of 57 later nights (docs/analysis/bird-sampling.md,
+// bird_sampling.json). Sampling only: it says nothing about how many birds the radar misses or invents.
+export const SAMPLING_ERROR = 0.084;
+const fmtCount = (v) => new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3 }).format(v);
+// The popup wraps its lines: a plain space or a hyphen inside "± 8%" or "10-16" let the line break inside them.
+const NBSP = '\u00a0';
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** A night's date (YYYY-MM-DD) as "Oct 17", joined by a no-break space so it stays on one line. */
+export function nightDate(night) {
+  const [, m, d] = String(night).split('-').map(Number);
+  return `${MONTHS[m - 1]}${NBSP}${d}`;
+}
+
+/** A scan time (ISO, UTC) as "Oct 19 08:38 UTC" that cannot wrap; anything else is shown as given. */
+export function scanTime(v) {
+  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(String(v ?? ''));
+  return m ? `${nightDate(m[1])}${NBSP}${m[2]}${NBSP}UTC` : String(v ?? 'n/a');
+}
+
+/** One night of birds_nights.json as popup text: bioRad migration traffic and what limits it. */
+export function nightText(n) {
+  if (!Number.isFinite(n?.mt_birds_km)) return 'no scans';
+  let t = `${fmtCount(n.mt_birds_km)} birds crossed each km`;
+  // the error was measured on finished nights; on a mostly-rain night the total is flagged unreliable instead
+  if (n.complete && !mostlyNotBirds(n)) t += ` (±${NBSP}${Math.round(100 * SAMPLING_ERROR)}% from 10-minute sampling)`;
+  if (Number.isFinite(n.peak_mtr_birds_km_h) && n.peak_time) {
+    t += `, peak ${fmtCount(n.peak_mtr_birds_km_h)}/km/h at ${String(n.peak_time).slice(11, 16)} UTC`;
+  }
+  // the night's share is a time-weighted mean, not a scan; 0.55 was checked on it too (bird_rain_nights.json)
+  if (mostlyNotBirds(n)) t += '; mostly rain or clutter, unreliable';
+  // coverage is the share of the whole night; until sunrise it only says how far the night has got
+  if (n.complete && Number.isFinite(n.coverage) && n.coverage < NIGHT_COVERAGE_MIN) t += `; scans cover ${Math.round(100 * n.coverage)}% of the night`;
+  return t;
+}
+
+/** Popup lines for a radar's nights (pipeline/bird_nights.py): tonight once the sun has set, and the last complete night. */
+export function nightLines(nights, nowMs = Date.now()) {
+  if (!Array.isArray(nights)) return [];
+  const tonight = nights.filter((n) => !n.complete && Date.parse(n.sunset) <= nowMs).at(-1);
+  const last = nights.filter((n) => n.complete).at(-1);
+  const out = [];
+  if (tonight) out.push(`Tonight so far: ${nightText(tonight)}`);
+  if (last) out.push(`Last night (${nightDate(last.night)}): ${nightText(last)}`);
+  return out;
+}
+
+const SPARK = '▁▂▃▄▅▆▇█';
+const SPARK_NIGHTS = 14;
+const SPARK_DECADES = 3;
+
+/**
+ * The radar's last complete nights as a text sparkline, oldest first: bar height = log10(mt) over the radar's own
+ * highest night shown, the bottom bar SPARK_DECADES below it; '·' = no scans, '×' = mostly rain or clutter.
+ * Null with fewer than 3 complete nights. Per radar only: radars are not comparable with each other.
+ */
+export function nightSpark(nights) {
+  if (!Array.isArray(nights)) return null;
+  const done = nights.filter((n) => n.complete).slice(-SPARK_NIGHTS);
+  if (done.length < 3) return null;
+  const good = done.filter((n) => Number.isFinite(n.mt_birds_km) && n.mt_birds_km > 0 && !mostlyNotBirds(n));
+  if (!good.length) return null;
+  const top = good.reduce((a, n) => (n.mt_birds_km > a.mt_birds_km ? n : a));
+  const hi = Math.log10(top.mt_birds_km);
+  const bars = done.map((n) => {
+    if (!Number.isFinite(n.mt_birds_km)) return '·';
+    if (mostlyNotBirds(n)) return '×';
+    if (n.mt_birds_km <= 0) return SPARK[0];
+    const f = 1 - (hi - Math.log10(n.mt_birds_km)) / SPARK_DECADES;
+    return SPARK[Math.max(0, Math.min(SPARK.length - 1, Math.round(f * (SPARK.length - 1))))];
+  }).join('');
+  return `Last ${done.length} nights: ${bars} (high ${fmtCount(top.mt_birds_km)} on ${nightDate(top.night)}; log scale; × rain)`;
+}
+
+/** Popup for a clicked flow particle: its local density, velocity and the radar it was drawn from. */
+export function particleText(dens, heading, speed, nearest) {
+  return `<b>Ensemble contact</b> (illustrative)<br>` +
+    `probable biological echo · local density ≈ ${dens.toFixed(1)} birds/km³ at the radar profile scale<br>` +
+    `heading ${Math.round(heading)}° · ground speed ${speed.toFixed(0)} m/s<br>` +
+    `nearest radar ${nearest ? `${nearest.site} (${nearest.name})` : 'n/a'} · scan ${scanTime(nearest?.scan_time)}<br>` +
+    `<i>Weather radar resolves crowds, not individuals. Dots are drawn in proportion to echo strength and move at the radar-measured velocity; the count of birds per dot is not calibrated.</i>`;
+}
+
+// A radar's fall against its last fall: shown only while season_check finds adjacent radars agree on the change
+// between years (docs/analysis/bird-season.md, bird_season.json; rule fixed before either season was in the archive).
+export const SEASON_COMPARE = false;
+
+const seasonOrder = (doc, key) => {
+  const [name, year] = key.split('-');
+  return `${year}-${doc.windows?.[name]?.[0] ?? '99-99'}`;
+};
+
+/**
+ * A radar's season from birds_seasons.json (pipeline/bird_seasons.py): the latest season's total so far, with the
+ * nights it rests on, and (compare) last year's same season on the nights both have a total for.
+ */
+export function seasonLines(doc, site, compare = SEASON_COMPARE) {
+  const keys = Object.keys(doc?.seasons ?? {}).filter((k) => doc.seasons[k]?.[site]);
+  if (!keys.length) return [];
+  const key = keys.sort((a, b) => seasonOrder(doc, a).localeCompare(seasonOrder(doc, b))).at(-1);
+  const [name, year] = key.split('-');
+  const window = doc.windows?.[name];
+  if (!window) return [];
+  const nights = doc.seasons[key][site];
+  const have = (n) => Number.isFinite(n?.mt_birds_km);
+  const dates = Object.keys(nights).sort();
+  const first = `${year}-${window[0]}`;
+  const through = dates.at(-1);
+  const expected = Math.round((Date.parse(through) - Date.parse(first)) / 86_400_000) + 1;
+  const counted = dates.filter((d) => have(nights[d]));
+  const total = counted.reduce((a, d) => a + nights[d].mt_birds_km, 0);
+  const rain = counted.filter((d) => mostlyNotBirds(nights[d])).length;
+  const label = `${name[0].toUpperCase()}${name.slice(1)} ${year}`;
+  const over = through >= `${year}-${window[1]}`;
+  const out = [`${label}${over ? '' : ' so far'}: ${fmtCount(total)} birds crossed each km (${nightDate(first)} – ` +
+    `${nightDate(through)}: ${counted.length} of ${expected} nights${rain ? `, ${rain} mostly rain` : ''})`];
+  const last = doc.seasons[`${name}-${Number(year) - 1}`]?.[site];
+  if (compare && last) {
+    const both = counted.filter((d) => have(last[`${Number(year) - 1}${d.slice(4)}`]));
+    if (both.length) {
+      const a = both.reduce((s, d) => s + nights[d].mt_birds_km, 0);
+      const b = both.reduce((s, d) => s + last[`${Number(year) - 1}${d.slice(4)}`].mt_birds_km, 0);
+      out.push(`Last ${name} on the same ${both.length} nights: ${fmtCount(b)} (this ${name} ${fmtCount(a)})`);
+    }
+  }
+  return out;
+}
+
+export function describe(p, h, nights = null, nowMs = Date.now(), seasons = null) {
   const head = `<b>${p.name ?? p.site}</b> (${p.site})<br>`;
   const body = h > 0
     ? `${Number(p.density_birds_km3).toFixed(1)} birds/km³, heading ${Math.round(p.heading_deg)}°, ` +
       `${Number(p.speed_ms ?? 0).toFixed(0)} m/s, peak ${p.peak_altitude_m} m`
     : 'Quiet — no biological echo (daytime or clear)';
-  return `${head}${body}<br>scan ${p.scan_time}${p.stale ? ' (stale, last good)' : ''}`;
+  const warn = mostlyNotBirds(p)
+    ? `Mostly rain or clutter: only ${Math.round(100 * p.bio_gate_share)}% of the echo passed the bird filter, so this count is unreliable<br>`
+    : '';
+  const note = h > 0 ? '<br>Compare nights at this radar, not radars with each other (neighbours differ by a median 1.7×).' : '';
+  const spark = nightSpark(nights);
+  const lines = [...nightLines(nights, nowMs), ...(spark ? [spark] : []), ...seasonLines(seasons, p.site)];
+  const night = lines.length ? `<br>${lines.join('<br>')}` : '';
+  return `${head}${warn}${body}<br>scan ${scanTime(p.scan_time)}${p.stale ? ' (stale, last good)' : ''}${night}${note}`;
 }
 
 export function createBirdsLayer() {
@@ -120,6 +272,11 @@ export function createBirdsLayer() {
   let _lastUpdate = null;
   let _lastError = null;
   let _generatedAt = null;
+  let _nights = null;          // birds_nights.json, last good; live only (replay frames have no night totals)
+  let _nightsError = null;
+  let _seasons = null;         // birds_seasons.json, last good; live only
+  let _seasonsAt = 0;
+  let _seasonsError = null;
   let _viewer = null;
   let _imagery = [];          // Cesium.ImageryLayer per radar (drape)
   let _points = null;         // PointPrimitiveCollection (particles)
@@ -246,11 +403,7 @@ export function createBirdsLayer() {
     const dens = nearest ? nearest.density_birds_km3 * (weight / 255) : 0;
     const speed = Math.hypot(p.u, p.v);
     const heading = ((Math.atan2(p.u, p.v) * 180) / Math.PI + 360) % 360;
-    return `<b>Ensemble contact</b> (illustrative)<br>` +
-      `probable biological echo · local density ≈ ${dens.toFixed(1)} birds/km³ at the radar profile scale<br>` +
-      `heading ${Math.round(heading)}° · ground speed ${speed.toFixed(0)} m/s<br>` +
-      `nearest radar ${nearest ? `${nearest.site} (${nearest.name})` : 'n/a'} · scan ${nearest?.scan_time ?? 'n/a'}<br>` +
-      `<i>Weather radar resolves crowds, not individuals. Dots are drawn in proportion to echo strength and move at the radar-measured velocity; the count of birds per dot is not calibrated.</i>`;
+    return particleText(dens, heading, speed, nearest);
   }
 
   function installClick(viewer) {
@@ -343,12 +496,12 @@ export function createBirdsLayer() {
     setRowControlsListener(listener) { _rowControlsListener = typeof listener === 'function' ? listener : null; },
 
     /** Rebuild the per-radar columns from a FeatureCollection. Returns the count. */
-    _renderColumns(gj) {
+    _renderColumns(gj, nights = null, seasons = null) {
         _dataSource.entities.removeAll();
         let count = 0;
         for (const f of gj.features) {
           count++;
-          _dataSource.entities.add(columnEntity(f, 'birds'));
+          _dataSource.entities.add(columnEntity(f, 'birds', (p, h) => describe(p, h, nights?.sites?.[p.site] ?? null, Date.now(), seasons)));
         }
         return count;
     },
@@ -360,7 +513,9 @@ export function createBirdsLayer() {
         if (!res.ok) { _lastError = `birds.geojson HTTP ${res.status}`; return false; }
         const gj = await res.json();
         if (!gj || !Array.isArray(gj.features)) { _lastError = 'Malformed birds.geojson'; return false; }
-        _count = this._renderColumns(gj);
+        await this._loadNights();
+        await this._loadSeasons();
+        _count = this._renderColumns(gj, _nights, _seasons);
         _generatedAt = gj.generated_at ?? null;
         await this._updateField();
         if (_manifest !== null) await this._loadManifest(true); // pick up frames the cron added since load
@@ -372,6 +527,35 @@ export function createBirdsLayer() {
         console.warn('[Data:Birds] Fetch error:', e);
         _lastError = 'birds.geojson network error';
         return false;
+      }
+    },
+
+    /** Night totals for the popups. A failed fetch keeps the last good file and is reported in getStats(). */
+    async _loadNights() {
+      try {
+        const res = await fetch(`${NIGHTS_URL}?t=${Date.now()}`);
+        if (!res.ok) { _nightsError = `birds_nights.json HTTP ${res.status}`; return; }
+        const doc = await res.json();
+        if (!doc || typeof doc.sites !== 'object' || doc.sites === null) { _nightsError = 'Malformed birds_nights.json'; return; }
+        _nights = doc; _nightsError = null;
+      } catch (e) {
+        console.warn('[Data:Birds] Nights fetch error:', e);
+        _nightsError = 'birds_nights.json network error';
+      }
+    },
+
+    /** Season totals for the popups, refetched at most hourly. A failed fetch keeps the last good file. */
+    async _loadSeasons() {
+      if (_seasons && Date.now() - _seasonsAt < SEASONS_REFETCH_MS) return;
+      try {
+        const res = await fetch(`${SEASONS_URL}?t=${Date.now()}`);
+        if (!res.ok) { _seasonsError = `birds_seasons.json HTTP ${res.status}`; return; }
+        const doc = await res.json();
+        if (!doc || typeof doc.seasons !== 'object' || doc.seasons === null) { _seasonsError = 'Malformed birds_seasons.json'; return; }
+        _seasons = doc; _seasonsAt = Date.now(); _seasonsError = null;
+      } catch (e) {
+        console.warn('[Data:Birds] Seasons fetch error:', e);
+        _seasonsError = 'birds_seasons.json network error';
       }
     },
 
@@ -522,6 +706,8 @@ export function createBirdsLayer() {
       if (_dataSource) { viewer.dataSources.remove(_dataSource, true); _dataSource = null; }
       _viewer = null;
       _count = 0; _lastUpdate = null; _lastError = null; _generatedAt = null;
+      _nights = null; _nightsError = null;
+      _seasons = null; _seasonsAt = 0; _seasonsError = null;
     },
 
     getAnalystRecords(maxCount = 2000) {
@@ -540,7 +726,8 @@ export function createBirdsLayer() {
 
     getStats() {
       return { count: _count, lastUpdate: _lastUpdate, error: _lastError, generatedAt: _generatedAt,
-        drapes: _imagery.length, particles: _field && _field.total > 0 ? PARTICLE_COUNT : 0, mode: _mode };
+        drapes: _imagery.length, particles: _field && _field.total > 0 ? PARTICLE_COUNT : 0, mode: _mode,
+        nightsError: _nightsError, seasonsError: _seasonsError };
     },
   };
   return layer;

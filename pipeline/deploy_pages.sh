@@ -24,6 +24,9 @@ npx vite build --base="$BASE" >/dev/null
 	echo "build produced no dist/index.html" >&2
 	exit 1
 }
+# A writer killed between mkstemp and os.replace (pipeline/atomic.py) leaves tmp*.tmp beside its data file, and
+# vite copies public/ whole: one shipped on 2026-10-17. It is never data. Name each so the dead writer is seen.
+find dist -type f -name 'tmp*.tmp' -print -delete | sed 's/^/not shipped (unfinished write): /' >&2
 "$PY" - "$KEEP_NIGHTS" <<'PYEOF'
 import json, shutil, sys, pathlib
 keep = int(sys.argv[1])

@@ -7,7 +7,7 @@ Live site: https://musharna.github.io/wildeye/
 ## Layers added in this fork
 
 **Animals**
-- Bird migration (radar): nocturnal migration density per US NEXRAD radar, computed with [vol2bird](https://github.com/adokter/vol2bird) every 10 minutes, with a replay of recent nights
+- Bird migration (radar): nocturnal migration density per US NEXRAD radar, computed with [vol2bird](https://github.com/adokter/vol2bird) every 10 minutes, with a replay of recent nights. Each radar is a night-to-night index: neighbouring radars differ by a median 1.7× ([check](docs/analysis/bird-pairs.md)), and scans that are mostly rain or clutter are faded ([check](docs/analysis/bird-rain.md)). The popup gives each finished night's total, ± 8% from sampling every 10 minutes ([check](docs/analysis/bird-sampling.md)), and the radar's last 14 nights as a sparkline, and its fall total so far from an archive of whole seasons
 - Bird migration (Europe): radar vertical profiles from Aloft
 - Wildlife sightings: GBIF, OBIS and USA-NPN records for 22 taxa, xeno-canto sound recordings, and invasive aquatic species from USGS NAS
 - Animal tracks: IOOS Animal Telemetry Network deployments and Movebank studies published under CC0 or CC BY

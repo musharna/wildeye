@@ -4,7 +4,7 @@ import gzip
 from pathlib import Path
 import pytest
 from pipeline.vol2bird import (parse_profile, reduce_profile, integrate_profile, migration_traffic,
-                               profile_time, save_profile, prune_profiles)
+                               profile_time, save_profile, prune_profiles, bio_gate_share)
 
 FIX = Path(__file__).parent / "fixtures" / "KOKX_profile.txt"
 # eight real KOKX profiles, 2026-10-17 01:01-03:28 UTC, with a 93-min hole (bioRad's interval cap)
@@ -132,3 +132,50 @@ def test_save_profile_stores_raw_text_once_per_scan_and_prunes_old_days(tmp_path
     removed = prune_profiles(tmp_path, keep_days=60, today=dt.date(2026, 9, 12))
     assert removed == [old.parent] and not old.parent.exists()
     assert p.exists() and edge.exists()
+
+def test_bio_gate_share_is_kept_gates_over_all_reflective_gates():
+    """vol2bird's n_dbz counts the gates it kept as biological after its rain (dual-pol) and clutter
+    filters, n_dbz_all every gate with reflectivity; over the profile their ratio says how much of the
+    echo the bird numbers rest on. Low = rain filled the volume and dens is extrapolated from what is left."""
+    hdr = "# date time HGHT u v w ff dd sd_vvp gap dbz eta dens DBZH n n_dbz n_all n_dbz_all\n"
+    row = "20261017 0100 {} nan nan nan nan nan nan T nan nan nan 0.0 0 {} 0 {}\n"
+    text = hdr + row.format(0, 30, 100) + row.format(200, 10, 100) + row.format(400, 0, 0)
+    assert bio_gate_share(parse_profile(text)) == pytest.approx(40 / 200)
+    assert bio_gate_share(parse_profile(hdr + row.format(0, 0, 500) + row.format(200, 0, 400))) == 0.0  # all rain
+    assert bio_gate_share(parse_profile(hdr + row.format(0, 0, 0) + row.format(200, 0, 0))) is None     # no echo
+    # the real clear KOKX profile; the number is awk's sum($16)/sum($18) over the file
+    assert bio_gate_share(parse_profile(FIX.read_text())) == pytest.approx(0.758218, abs=1e-6)
+    old = "# date time HGHT u v w ff dd sd_vvp gap dbz eta dens DBZH\n20261017 0100 0 nan nan nan nan nan nan T nan nan nan 0.0\n"
+    with pytest.raises(ValueError, match="no n_dbz"):                     # a vol2bird without the counts
+        bio_gate_share(parse_profile(old))
+
+def test_vol2bird_image_is_pinned_by_digest():
+    import re
+    from pipeline.vol2bird import IMAGE
+    assert re.fullmatch(r"adokter/vol2bird@sha256:[0-9a-f]{64}", IMAGE)
+    assert not re.fullmatch(r"adokter/vol2bird@sha256:[0-9a-f]{64}", "adokter/vol2bird")        # a tag fails
+
+def test_run_vol2bird_with_options_uses_a_private_options_conf_and_without_is_unchanged(tmp_path: Path, monkeypatch):
+    """vol2bird reads options.conf from its working directory; options go in a fresh directory mounted as that
+    directory, so nothing shared (the volume's own dir) can carry them into another run."""
+    import subprocess
+    import pipeline.vol2bird as v
+    vol = tmp_path / "KOKX20261017_051535_V06"
+    vol.write_bytes(b"x")
+    seen = []
+    def fake_run(cmd, **kw):
+        conf = [c.split(":")[0] for c in cmd if c.endswith(":/conf")]
+        seen.append((cmd, (Path(conf[0]) / "options.conf").read_text() if conf else None))
+        return subprocess.CompletedProcess(cmd, 0, stdout="profile", stderr="")
+    monkeypatch.setattr(v.subprocess, "run", fake_run)
+    assert v.run_vol2bird(vol) == "profile"
+    assert seen[0] == (["docker", "run", "--rm", "-v", f"{tmp_path}:/data", v.IMAGE, "vol2bird",
+                        "/data/KOKX20261017_051535_V06"], None)                     # unchanged without options
+    v.run_vol2bird(vol, options={"AZIMMIN": "239", "AZIMMAX": "279"})
+    cmd, conf = seen[1]
+    assert conf == "AZIMMIN = 239\nAZIMMAX = 279\n"
+    assert cmd[-3:] == [v.IMAGE, "vol2bird", "/data/KOKX20261017_051535_V06"] and "-w" in cmd and "/conf" in cmd
+    assert not list(tmp_path.glob("*options*"))                                     # nothing left beside the volume
+    for bad in ({"AZIMMIN\nDUALPOL": "0"}, {"azimmin": "1"}, {"AZIMMIN": "1\nDUALPOL = FALSE"}):
+        with pytest.raises(ValueError, match="vol2bird option"):
+            v.run_vol2bird(vol, options=bad)
