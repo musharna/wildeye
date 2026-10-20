@@ -181,6 +181,10 @@ export function measureLeftPanelNaturalHeight(panel, { getStyle = (element) => g
     && panel.getAnimations().some((animation) => animation.transitionProperty === 'visibility' && animation.playState === 'running');
   if (panelStyle.visibility === 'hidden' && !beingShown) return Math.ceil(contentBottom + paddingBottom + wrapperChrome);
 
+  // The inner is a column, so a child sits below the hidden extent of every squeezed scroller above it. Measured where it is drawn, the
+  // scroll cue under a squeezed SPECIES body came out 16 px high (its height and margin), the lane sized the stack to that, and the body
+  // stayed 16 px short on a 1400x1100 window (2026-10-20). `below` carries that extent down to the later children.
+  let below = 0;
   for (const child of inner.children) {
     const childStyle = getStyle(child);
     // A visibility: hidden child of a visible panel still takes its layout space (the SPECIES panel's scroll cue is hidden while nothing is below), so only
@@ -189,8 +193,9 @@ export function measureLeftPanelNaturalHeight(panel, { getStyle = (element) => g
     const childRect = child.getBoundingClientRect();
     const marginBottom = parseFloat(childStyle.marginBottom) || 0;
     const naturalChildHeight = Math.max(childRect.height, child.scrollHeight || 0);
-    const childBottom = childRect.top - innerRect.top + naturalChildHeight + marginBottom;
+    const childBottom = childRect.top - innerRect.top + below + naturalChildHeight + marginBottom;
     contentBottom = Math.max(contentBottom, childBottom);
+    below += naturalChildHeight - childRect.height;
   }
 
   // contentBottom runs from the inner's border-box top, so it holds the inner's top border; the bottom border is added here. Without it a

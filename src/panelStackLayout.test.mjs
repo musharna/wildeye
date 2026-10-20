@@ -213,7 +213,13 @@ test('expanded left panels integrate their headers with the container shell', ()
   );
   assert.match(
     css,
-    /#left-panel-stack > \[data-panel-id\]:not\(\.collapsed\) \.panel-divider\s*\{[\s\S]*?linear-gradient\(90deg, rgb\(0 212 255 \/ 28%\), rgba\(0, 212, 255, 0\.18\) 58%, transparent\)[\s\S]*?box-shadow:\s*0 0 7px rgba\(0, 212, 255, 0\.22\);/,
+    /#left-panel-stack > \[data-panel-id\]:not\(\.collapsed\) \.panel-divider\s*\{\s*background: var\(--glass-border\);\s*\}/,
+    'an open panel\'s header rule is a plain hairline, no gradient or glow',
+  );
+  assert.match(
+    css,
+    /#left-panel-stack > \[data-panel-id\]\.collapsed \.panel-divider\s*\{\s*visibility: hidden;\s*\}/,
+    'a collapsed pill shows no stub of the header rule',
   );
 });
 
@@ -256,7 +262,7 @@ test('a hidden panel measures as its padding only; the same panel visible measur
   const hidden = fakeLeftPanel({ panelVisibility: 'hidden', listScrollHeight: 3000 });
   assert.equal(measureLeftPanelNaturalHeight(hidden.panel, { getStyle: hidden.getStyle }), 26);
   const visible = fakeLeftPanel({ panelVisibility: 'visible', listScrollHeight: 3000 });
-  assert.equal(measureLeftPanelNaturalHeight(visible.panel, { getStyle: visible.getStyle }), 14 + 3000 + 12 + 1, 'positive control: the list\'s scroll extent and the bottom border');
+  assert.equal(measureLeftPanelNaturalHeight(visible.panel, { getStyle: visible.getStyle }), 14 + 3000 + 14 + 12 + 1, 'positive control: the list\'s scroll extent, the cue below it and the bottom border');
 });
 
 // R10-I1: a panel being shown reads visibility: hidden as its visibility transition starts, so the class change's pass measured the data panel
@@ -266,7 +272,7 @@ test('a hidden panel measures as its padding only; the same panel visible measur
 test('a hidden panel with a running visibility transition is being shown and measures its content', () => {
   const transition = (transitionProperty, playState) => ({ transitionProperty, playState });
   const measure = (animations) => { const rig = fakeLeftPanel({ panelVisibility: 'hidden', listScrollHeight: 3000, animations }); return measureLeftPanelNaturalHeight(rig.panel, { getStyle: rig.getStyle }); };
-  assert.equal(measure([transition('opacity', 'running'), transition('visibility', 'running'), transition('transform', 'running')]), 14 + 3000 + 12 + 1, 'being shown');
+  assert.equal(measure([transition('opacity', 'running'), transition('visibility', 'running'), transition('transform', 'running')]), 14 + 3000 + 14 + 12 + 1, 'being shown');
   for (const animations of [[transition('visibility', 'finished')], [transition('opacity', 'running'), transition('transform', 'running')], []]) {
     assert.equal(measure(animations), 26, `still hidden with ${JSON.stringify(animations)}`);
   }
@@ -277,6 +283,16 @@ test('a hidden panel with a running visibility transition is being shown and mea
 test('a hidden child of a visible panel still counts', () => {
   const rig = fakeLeftPanel({ panelVisibility: 'visible', cueVisibility: 'hidden', listScrollHeight: 300 });
   assert.equal(measureLeftPanelNaturalHeight(rig.panel, { getStyle: rig.getStyle }), 314 + 14 + 12 + 1);
+});
+
+// 2026-10-20: a child below a squeezed scroller is drawn higher than it sits at natural height. The cue under the 300 px list holding 3,000 px
+// counts below the list's whole extent, not where it is drawn (414): measured there, the stack was sized 16 px short (the SPECIES cue and its
+// margin) and the body never unsqueezed. Positive control: an unsqueezed list (scroll extent = height) shifts nothing.
+test('a child below a squeezed scroller counts below the scroller\'s whole extent', () => {
+  const squeezed = fakeLeftPanel({ listScrollHeight: 3000 });
+  assert.equal(measureLeftPanelNaturalHeight(squeezed.panel, { getStyle: squeezed.getStyle }), 14 + 3000 + 14 + 12 + 1);
+  const unsqueezed = fakeLeftPanel({ listScrollHeight: 300 });
+  assert.equal(measureLeftPanelNaturalHeight(unsqueezed.panel, { getStyle: unsqueezed.getStyle }), 14 + 300 + 14 + 12 + 1);
 });
 
 // Final review m-1: at phone width the left stack is an accordion. Opening a panel collapses every other open one, whatever opened it: a click,
