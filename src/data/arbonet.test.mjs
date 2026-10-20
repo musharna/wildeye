@@ -105,7 +105,7 @@ test("layer: contract, MultiPolygon parts, observed-time recolour, disease chips
     assert.equal(rc.legend.find((i) => i.label === "2–4 cases").count, 1);
     assert.equal(rc.legend.find((i) => i.label === NO_DATA.label).count, 0);
     assert.match(rc.legend.at(-1).label, /report week of the observed time/);
-    assert.deepEqual(rc.chips.map((c) => [c.id, c.label, c.active]), [["wnv", "WEST NILE 1", true], ["den", "DENGUE 3", true], ["pow", "POWASSAN 0", true]]);
+    assert.deepEqual(rc.chips.map((c) => [c.id, c.label, c.active]), [["wnv", "West Nile 1", true], ["den", "Dengue 3", true], ["pow", "Powassan 0", true]]);
     assert.deepEqual(rc.chips[0].params, { wnv: false });
     // chip: hide dengue → Florida drops to none, Texas keeps its 1 WNV
     assert.equal(l.setParams({ den: false }), true);

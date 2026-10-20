@@ -54,7 +54,7 @@ test('tracks layer: contract, chips, observed-time clipping and fading', async (
     const heads0 = ds.entities.values.filter((e) => e.id.endsWith(':head'));
     assert.ok(heads0.length > 0);
     for (const h of heads0) assert.equal(h.point.disableDepthTestDistance.getValue(), 50_000, 'same as the other bio point layers');
-    assert.deepEqual(l.getRowControls().chips.map((c) => c.label), ['SEALS 3', 'LAND MAMMALS 1'], 'one chip per group, in legend order, segment counts');
+    assert.deepEqual(l.getRowControls().chips.map((c) => c.label), ['Seals 3', 'Land mammals 1'], 'one chip per group, in legend order, segment counts');
     assert.deepEqual(l.getRowControls().legend.slice(0, 2).map((g) => [g.label, g.color]), [['seals', GROUP_COLORS.seals], ['land mammals', GROUP_COLORS['land mammals']]]);
     const lion = ds.entities.values.find((e) => e.id.startsWith('trk:d9'));
     const seal = ds.entities.values.find((e) => e.id.startsWith('trk:d1'));

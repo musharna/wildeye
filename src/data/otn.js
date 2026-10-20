@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { extentFromWeekDates, pluck } from "./observedExtent.js";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * OTN acoustic detections (site-series contract): one point per receiver station,
@@ -296,7 +297,7 @@ export function createOtnLayer() {
       const { c, active } = activeCounts();
       const chips = _species.map((sp) => ({
         id: sp,
-        label: sp.toUpperCase(),
+        label: sentenceCase(sp),
         active: _visible[sp] !== false,
         state: _visible[sp] !== false ? "active" : "idle",
         title: `${_visible[sp] !== false ? "Hide" : "Show"} ${sp}`,

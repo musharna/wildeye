@@ -64,7 +64,7 @@ test('layer: contract, live window, observed-time bin, chips hide species, legen
     assert.equal(ds.entities.values.length, 2);
     assert.equal(l.getStats().active, 1, 'S2 only has a January bin, outside the live window');
     let rc = l.getRowControls();
-    assert.deepEqual(rc.chips.map((c) => c.label), ['ATLANTIC COD', 'STRIPED BASS']);
+    assert.deepEqual(rc.chips.map((c) => c.label), ['Atlantic cod', 'Striped bass']);
     assert.equal(rc.legend.find((i) => i.label === 'striped bass').count, 1);
     assert.match(rc.legend.at(-1).label, /ends 2025-07-30/);
     // the week of 2025-07-23: cod dominates S1

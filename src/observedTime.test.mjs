@@ -168,7 +168,7 @@ test('bridge: only enabled sampling layers receive the time; a layer enabled lat
   off();
   assert.equal(s.domain(), null, 'detaching withdraws every extent it declared');
   assert.equal(describeObservedTime('2026-09-11T10:00:00Z'), '2026-09-11 10:00 UTC');
-  assert.equal(describeObservedTime(null), 'LIVE');
+  assert.equal(describeObservedTime(null), 'Live');
 });
 
 test('bridge: a layer switched off while scrubbed and back on under LIVE is told LIVE; a never-scrubbed one is left alone', async () => {
@@ -226,7 +226,7 @@ test('bar: hidden until a sampling layer is enabled, slider maps to the domain, 
   for (const fn of listeners) fn({ type: 'visibility', layerId: 'birds', enabled: true });
   assert.equal(root.hidden, false);
   const range = root.querySelector('.ot-range'), label = root.querySelector('.ot-label');
-  assert.equal(range.max, '24'); assert.equal(range.value, '24'); assert.equal(label.textContent, 'LIVE');
+  assert.equal(range.max, '24'); assert.equal(range.value, '24'); assert.equal(label.textContent, 'Live');
   range.value = '3'; range.handlers.input();
   assert.equal(s.get(), '2026-09-10T18:00:00Z');
   assert.equal(label.textContent, '2026-09-10 18:00 UTC');

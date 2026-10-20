@@ -1,6 +1,7 @@
 import * as Cesium from "cesium";
 import { binsAt, LIVE_WEEKS } from "./hpai.js";
 import { extentFromWeekDates, pluck } from "./observedExtent.js";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * Mosquito- and tick-borne disease cases by state (polygon contract): CDC NNDSS weekly
@@ -284,7 +285,7 @@ export function createArbonetLayer() {
       const per = diseaseCounts();
       const chips = Object.keys(_diseases).map((d) => ({
         id: d,
-        label: `${dname(_diseases, d).toUpperCase()} ${per[d] ?? 0}`,
+        label: `${sentenceCase(dname(_diseases, d))} ${per[d] ?? 0}`,
         active: _visible[d] !== false,
         state: _visible[d] !== false ? "active" : "idle",
         title: `${_visible[d] !== false ? "Hide" : "Show"} ${dname(_diseases, d)}`,

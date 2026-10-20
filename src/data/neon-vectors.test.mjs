@@ -94,7 +94,7 @@ test('layer: contract, one mark per kind with data, chips, legend newest month, 
     assert.equal(l.getStats().count, 2);
     assert.equal(l.getStats().active, 3, 'live: HARV ticks fall back to the identified 2025-09 month, not the pending 2026-07');
     let rc = l.getRowControls();
-    assert.deepEqual(rc.chips.map((c) => c.label), ['TICKS', 'MOSQUITOES']);
+    assert.deepEqual(rc.chips.map((c) => c.label), ['Ticks', 'Mosquitoes']);
     assert.match(rc.legend[0].label, /ticks per 1000 m² dragged, newest month 2026-07/);
     assert.equal(rc.legend[0].count, 1);
     assert.match(rc.legend.at(-1).label, /latest identified month · faded = no month identified by the lab yet · 3 marks/);

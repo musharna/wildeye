@@ -63,14 +63,14 @@ try {
     report(`dock-closed-${w}x${h}`, closedOk, closed);
     if (SHOTS) await m.screenshot({ path: `${SHOTS}/dock-${w}x${h}-closed.png` });
 
-    // Top bar: the title, the globe actions and the style indicator must not overlap, whatever is shown must lie on screen, and each
-    // action must take a real tap at its centre. At 360-414 px the centred actions sat over "wildeye" and "ACTIVE STYLE" (2026-09-26).
-    // Positive control: from 480 px up the style indicator is still shown, so hiding it everywhere cannot pass.
+    // Top bar: the title and the globe actions must not overlap, both must lie on screen, and each action must take a real tap at its
+    // centre. At 360-414 px the centred actions sat over "wildeye" (2026-09-26), so below 480 px they move to the right corner.
+    // Positive control: from 480 px up the actions are centred, so moving them aside everywhere cannot pass.
     const topBar = await m.evaluate(() => {
       const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
       const shown = (e) => { if (!e) return false; const cs = getComputedStyle(e); return cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity) > 0; };
       const R = (e) => { const b = e.getBoundingClientRect(); return { x: Math.round(b.left), r: Math.round(b.right), y: Math.round(b.top), b: Math.round(b.bottom) }; };
-      const blocks = { title: document.querySelector('h1'), actions: document.getElementById('top-center-actions'), style: document.getElementById('style-indicator') };
+      const blocks = { title: document.querySelector('h1'), actions: document.getElementById('top-center-actions') };
       const out = {};
       for (const [k, e] of Object.entries(blocks)) out[k] = shown(e) ? R(e) : null;
       const names = Object.keys(out).filter((k) => out[k]);
@@ -84,7 +84,8 @@ try {
       return { vw, ...out, overlaps, offScreen, taps };
     });
     const topBarOk = Boolean(topBar.title && topBar.actions) && topBar.overlaps.length === 0 && topBar.offScreen.length === 0
-      && topBar.taps.length === 3 && topBar.taps.every((t) => t === 'ok') && (w < 480 || Boolean(topBar.style));
+      && topBar.taps.length === 3 && topBar.taps.every((t) => t === 'ok')
+      && (w < 480 ? topBar.actions.r >= topBar.vw - 24 : Math.abs((topBar.actions.x + topBar.actions.r) / 2 - topBar.vw / 2) <= 2);
     report(`top-bar-${w}x${h}`, topBarOk, topBar);
 
     // Each tray, opened by a real tap/click on its tab: wholly on screen, first control takes a real pointer.
@@ -134,7 +135,7 @@ try {
         }
         return { open: !panel.classList.contains('collapsed'), pinned: panel.classList.contains('dock-pinned'), vw, offCentre, tray: { x: Math.round(b.left), r: Math.round(b.right), y: Math.round(b.top), b: Math.round(b.bottom), w: Math.round(b.width) },
           inside: b.left >= 0 && b.right <= vw && b.top >= 0 && b.bottom <= vh,
-          firstControl: hitTest(pop.querySelector('.style-btn')),
+          firstControl: hitTest(pop.querySelector('.map-stack-chip')),
           pin: hitTest(pin), pinBox: pr && { x: Math.round(pr.left), r: Math.round(pr.right), y: Math.round(pr.top) }, stack };
       }, sel);
       const stackClear = Boolean(tray.stack?.['compare-toggle']) && Object.values(tray.stack ?? {}).every((s) => !s || (!s.overTray && s.hit === 'ok'));

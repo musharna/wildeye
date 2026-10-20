@@ -2,12 +2,13 @@
   "note": "Exact src/ call counts per wildlife workload: time steps and particle frames (scripts/callcount-wildlife.worker.mjs). Gated by scripts/callcount-check.mjs: totals must equal these. Regenerate with `npm run perf:callcount -- --update`.",
   "workloads": {
     "tracks-step": {
-      "total": 83458,
+      "total": 83459,
       "functions": {
         "src/data/observedExtent.js:(anonymous)": 1,
         "src/data/observedExtent.js:extentFromTimes": 1,
         "src/data/observedExtent.js:pluck": 2,
         "src/data/observedExtent.js:span": 1,
+        "src/data/textCase.js:(anonymous)": 1,
         "src/data/tracks.js:(anonymous)": 72694,
         "src/data/tracks.js:clipSegmentMs": 617,
         "src/data/tracks.js:createTracksLayer": 2,
@@ -27,7 +28,7 @@
       }
     },
     "occurrences-step": {
-      "total": 94606,
+      "total": 94607,
       "functions": {
         "src/data/iucn.js:(anonymous)": 1,
         "src/data/iucn.js:iucnBadge": 5152,
@@ -52,7 +53,8 @@
         "src/data/occurrences.js:pointEntity": 5152,
         "src/data/occurrences.js:rebuild": 32,
         "src/data/occurrences.js:setObservedTime": 31,
-        "src/data/occurrences.js:update": 1
+        "src/data/occurrences.js:update": 1,
+        "src/data/textCase.js:(anonymous)": 1
       }
     },
     "birds-tick": {

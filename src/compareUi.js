@@ -4,7 +4,7 @@
  * lives in the compare controller (compare.js); this only draws it and forwards input.
  */
 const BTN =
-  'background:#16233a;color:#cfe3ff;border:1px solid rgba(120,170,255,.4);border-radius:5px;padding:2px 7px;cursor:pointer;font:inherit';
+  'background:var(--paper);color:var(--text-primary);border:1px solid var(--glass-border-hover);border-radius:4px;padding:2px 7px;cursor:pointer;font:inherit';
 const day = (t) => String(t).slice(0, 10);
 // A drape keeps drawing its old frame while the next one downloads, so the label names both.
 // (`loadingTime`, not `loading`: the manager owns stats.loading as its own enable/disable flag.)
@@ -41,7 +41,7 @@ export function installCompareUi({
   };
   const toggle = el(
     'button',
-    `position:fixed;left:50%;bottom:72px;transform:translateX(-50%);z-index:30;${BTN}`,
+    `position:fixed;left:50%;bottom:72px;transform:translateX(-50%);z-index:30;${BTN};font-size:13px`,
     '⇆ Compare',
   );
   toggle.id = 'compare-toggle';
@@ -49,8 +49,8 @@ export function installCompareUi({
   const panel = el(
     'div',
     'position:fixed;left:50%;bottom:72px;transform:translateX(-50%);z-index:30;gap:8px;align-items:center;' +
-      'padding:6px 10px;border-radius:8px;background:rgba(8,12,18,0.82);color:#cfe3ff;' +
-      'font:12px/1.2 var(--font-mono, ui-monospace, monospace);border:1px solid rgba(120,170,255,0.35)',
+      'padding:6px 10px;border-radius:6px;background:var(--paper);color:var(--text-primary);' +
+      'font:12px/1.2 var(--font-sans);border:1px solid var(--glass-border)',
   );
   panel.id = 'compare-panel';
   const side = (cls) => {
@@ -81,8 +81,8 @@ export function installCompareUi({
     panel.appendChild(n);
   const divider = el(
     'div',
-    'position:absolute;top:0;bottom:0;width:4px;margin-left:-2px;background:rgba(207,227,255,.9);' +
-      'box-shadow:0 0 6px rgba(0,0,0,.6);cursor:ew-resize;touch-action:none;z-index:25',
+    'position:absolute;top:0;bottom:0;width:4px;margin-left:-2px;background:#ffffff;' +
+      'box-shadow:0 0 0 1px rgba(22,45,61,.6);cursor:ew-resize;touch-action:none;z-index:25',
   );
   divider.id = 'compare-divider';
   doc.body.appendChild(toggle);

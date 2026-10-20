@@ -16,13 +16,13 @@ const TEDESCO = "https://doi.org/10.1038/sdata.2017.141";
 
 /** Chip labels for the source's 7 realms (its `bggrph_` values), in the source's alphabetical order. */
 export const REALM_LABELS = Object.freeze({
-  Afrotropic: "AFROTROPIC",
-  Australasia: "AUSTRALASIA",
-  Indomalayan: "INDOMALAYAN",
-  Nearctic: "NEARCTIC",
-  Neotropic: "NEOTROPIC",
-  Oceania: "OCEANIA",
-  Palearctic: "PALEARCTIC",
+  Afrotropic: "Afrotropic",
+  Australasia: "Australasia",
+  Indomalayan: "Indomalayan",
+  Nearctic: "Nearctic",
+  Neotropic: "Neotropic",
+  Oceania: "Oceania",
+  Palearctic: "Palearctic",
 });
 
 const esc = (v) =>

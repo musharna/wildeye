@@ -1,20 +1,25 @@
 /* wildeye — globe UI styles */
 
 :root {
-  --bg-dark: #0a0a0f;
-  --glass-bg: rgba(12, 12, 20, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-hover: rgba(255, 255, 255, 0.15);
-  --accent: #00d4ff;
-  --accent-dim: rgba(0, 212, 255, 0.15);
-  --accent-glow: rgba(0, 212, 255, 0.4);
-  --text-primary: #e8eaed;
-  --text-secondary: rgba(232, 234, 237, 0.5);
-  --text-dim: rgba(232, 234, 237, 0.3);
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --panel-radius: 16px;
-  --btn-radius: 10px;
+  /* Light paper on a pale page, the GBIF family (gbif/gbif-web baseThemes.ts, light theme); dark ink for text and
+     active states, because blue and cyan are the bird data's colours (grill_wildeye_visual_update_2026-10-20). */
+  --page: #f1f5f8;
+  --paper: #ffffff;
+  --bg-dark: var(--page);
+  --glass-bg: var(--paper);
+  --glass-border: #dfe6ea;
+  --glass-border-hover: #b9c6ce;
+  --accent: #162d3d;
+  --accent-dim: rgba(22, 45, 61, 0.08);
+  --accent-glow: rgba(22, 45, 61, 0.12);
+  --text-primary: #162d3d;
+  --text-secondary: #4b5d6a;
+  --text-dim: #5d6c78;
+  --warn: #8a4b00;
+  --error: #b42318;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --panel-radius: 6px;
+  --btn-radius: 4px;
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   --left-stack-x: 52px;
@@ -35,6 +40,7 @@ html, body {
   overflow: hidden;
   background: var(--bg-dark);
   font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
 }
@@ -62,12 +68,10 @@ html, body {
 }
 
 /* Data-source attribution (Cesium, the basemap and terrain). Required by the
-   providers' terms — keep it visible. Styled to be unobtrusive but legible
-   against the dark UI. */
+   providers' terms — keep it visible. White on an ink chip, legible over any imagery. */
 #cesium-credits {
   position: fixed;
-  /* Bottom-LEFT corner, below the coordinate HUD (.hud-bottom-left, bottom:180). Must stay
-     visible (attribution terms). */
+  /* Bottom-LEFT corner. Must stay visible (attribution terms). */
   bottom: 36px;
   left: 36px;
   z-index: 90;
@@ -76,10 +80,9 @@ html, body {
      row (looked like it was falling over). nowrap + a roomy max-width holds them inline. */
   white-space: nowrap;
   pointer-events: auto;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 10px;
-  color: rgba(232, 234, 237, 0.55);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  color: #ffffff;
 }
 #cesium-credits .cesium-credit-logoContainer,
 #cesium-credits .cesium-credit-textContainer,
@@ -89,7 +92,17 @@ html, body {
 }
 #cesium-credits a,
 #cesium-credits .cesium-credit-expand-link {
-  color: rgba(232, 234, 237, 0.7);
+  color: #ffffff;
+}
+/* An ink chip, not paper: Cesium's ion logo is white artwork. Horizontal padding only, so the measured 28px
+   credit band (src/creditAttribution.test.mjs CREDIT_HEIGHT_PX) is unchanged; Cesium's stock 2px black
+   text-shadow is replaced by the chip. */
+#cesium-credits .cesium-widget-credits {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: var(--btn-radius);
+  background: var(--accent);
+  text-shadow: none;
 }
 
 /* Cesium's stock attribution lightbox grows with every registered data source.
@@ -147,105 +160,45 @@ html, body {
   user-select: none;
 }
 
-#title-bar .title-glow {
-  position: absolute;
-  top: -20px;
-  left: -20px;
-  width: 200px;
-  height: 80px;
-  background: radial-gradient(ellipse, var(--accent-dim) 0%, transparent 70%);
-  filter: blur(20px);
-  opacity: 0.6;
-}
-
+/* The wordmark sits on paper like every other label: ink straight on satellite imagery is unreadable. */
 #title-bar h1 {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-family: var(--font-mono);
-  font-size: 26px;
+  padding: 4px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  background: var(--paper);
+  font-family: var(--font-sans);
+  font-size: 20px;
   font-weight: 600;
-  letter-spacing: 8px;
   color: var(--text-primary);
-  text-shadow: 0 0 30px var(--accent-glow);
   position: relative;
 }
 
-#title-bar .title-logo {
-  position: relative;
-  display: block;
-  width: 52px;
-  height: auto;
-  filter: drop-shadow(0 0 12px rgba(0, 246, 255, 0.5));
-}
-
-#title-bar .title-logo::before,
-#title-bar .title-logo::after {
-  content: '';
-  position: absolute;
-  z-index: 1;
-  left: 50%;
-  top: -9px;
-  width: 13px;
-  height: 7px;
-  border: 1px solid var(--accent);
-  border-bottom: 0;
-  border-radius: 999px 999px 0 0;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-50%);
-  transform-origin: 50% 100%;
-}
-
-#title-bar .title-logo::after {
-  top: -15px;
-  width: 27px;
-  height: 13px;
-}
-
-.brand-logo {
-  aspect-ratio: 775 / 520;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.brand-logo > img,
-.brand-logo > svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* ── Style Indicator ──────────────────────────── */
-#style-indicator {
+/* ── Pointer readout ──────────────────────────── */
+/* The latitude and longitude under the pointer, in the top-right corner the style indicator left empty. Not on a touch screen
+   (pointer: coarse; nothing hovers) nor below 480 px, where the globe actions take that corner. Not (hover: none) either: headless
+   Chrome reports it, which would hide the box from every browser check. No display here: the JS shows it through [hidden]. */
+#pointer-readout {
   position: fixed;
   top: 32px;
   right: 36px;
   z-index: 100;
+  padding: 4px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  background: var(--paper);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   pointer-events: none;
   user-select: none;
-  text-align: right;
 }
 
-#style-indicator .indicator-label {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 3px;
-  color: var(--text-dim);
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
-}
-
-#style-indicator .indicator-value {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 16px;
-  font-weight: 500;
-  letter-spacing: 5px;
-  color: var(--accent);
-  margin-top: 4px;
-  text-shadow: 0 0 20px var(--accent-glow);
-  transition: var(--transition-smooth);
+@media (pointer: coarse), (max-width: 479px) {
+  #pointer-readout { display: none; }
 }
 
 /* ── Control Panel ────────────────────────────── */
@@ -259,27 +212,16 @@ html, body {
   max-width: 680px;
 }
 
-#control-panel .panel-glow {
-  position: absolute;
-  inset: -30px;
-  background: radial-gradient(ellipse at center bottom, var(--accent-dim) 0%, transparent 60%);
-  filter: blur(30px);
-  opacity: 0.4;
-  pointer-events: none;
-}
-
 .panel-inner {
   position: relative;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   padding: 16px 20px 18px;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    0 8px 32px rgba(22, 45, 61, 0.16),
+    0 0 0 1px rgba(22, 45, 61, 0.03) inset,
+    0 1px 0 rgba(22, 45, 61, 0.06) inset;
 }
 
 .panel-header {
@@ -290,45 +232,11 @@ html, body {
   padding: 0 4px;
 }
 
-.panel-mini-status {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  padding: 0 6px 2px;
-}
-
-#control-panel.collapsed .panel-mini-status {
-  display: flex;
-}
-
-.panel-mini-label {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.4px;
-  color: var(--text-dim);
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
-}
-
-.panel-mini-value {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1.8px;
-  color: var(--accent);
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
-  text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
-}
-
-/* Brief B: the host pills' and headers' label text and their +/− button are 0.8 white, like the SPECIES panel's text. In the shared 0.3 white
-   (--text-dim) they measured 2.1:1 over the collapsed glass on the light street map and 2.2:1 over ocean; 0.8 white holds 4.5:1 over both
-   (qa collapsed-pills measures it). One rule for every pill, so they stay one family. The label is 0.9 white: at 0.8 its thin 9 px strokes,
-   as rendered at 1x, measured 4.14-4.26:1 on DATA LAYERS over the light map (the 90th-percentile glyph pixel over the median ground), at 0.9
-   4.81-5.55:1 on every pill. */
+/* The host pills' and headers' label text and their +/− button are ink on paper; one rule for every pill, so they stay one family. */
 .panel-title {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 3px;
-  color: rgba(232, 234, 237, 0.9);
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-primary);
   white-space: nowrap;
 }
 
@@ -342,124 +250,36 @@ html, body {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(232, 234, 237, 0.8);
-  font-family: var(--font-mono);
+  border: 1px solid rgba(22, 45, 61, 0.12);
+  background: rgba(22, 45, 61, 0.03);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
+/* The + and − are two bars drawn here, not a text glyph: the button's name is its aria-label (ui.js). */
+.panel-collapse-btn { position: relative; }
+.panel-collapse-btn::before,
+.panel-collapse-btn::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 1.5px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+.panel-collapse-btn::after { transform: translate(-50%, -50%) rotate(90deg); }
+.panel-collapse-btn[aria-expanded="true"]::after { display: none; }
+
 .panel-collapse-btn:hover {
   border-color: var(--glass-border-hover);
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.07);
-}
-
-/* ── Button Grid ──────────────────────────────── */
-.button-grid {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.button-grid::-webkit-scrollbar {
-  display: none;
-}
-
-.style-btn {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 16px 10px;
-  min-width: 78px;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: var(--btn-radius);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  overflow: hidden;
-  outline: none;
-}
-
-.style-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 100%);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.style-btn:hover {
-  border-color: var(--glass-border-hover);
-  background: rgba(255, 255, 255, 0.06);
-  transform: translateY(-1px);
-}
-
-.style-btn:hover::before {
-  opacity: 1;
-}
-
-.style-btn:active {
-  transform: translateY(0);
-}
-
-.style-btn.active {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  box-shadow:
-    0 0 20px rgba(0, 212, 255, 0.15),
-    0 0 0 1px rgba(0, 212, 255, 0.1) inset;
-}
-
-.style-btn.active .btn-icon {
-  color: var(--accent);
-  text-shadow: 0 0 12px var(--accent-glow);
-}
-
-.style-btn.active .btn-label {
-  color: var(--text-primary);
-}
-
-.btn-icon {
-  font-size: 20px;
-  line-height: 1;
-  color: var(--text-secondary);
-  transition: all var(--transition-fast);
-}
-
-.btn-label {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  letter-spacing: 0.3px;
-  transition: color var(--transition-fast);
-}
-
-.btn-key {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  font-family: var(--font-mono);
-  font-size: 8px;
-  color: var(--text-dim);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.style-btn:hover .btn-key,
-.style-btn.active .btn-key {
-  opacity: 1;
+  background: rgba(22, 45, 61, 0.07);
 }
 
 /* ── Loading Screen ───────────────────────────── */
@@ -484,33 +304,17 @@ html, body {
   text-align: center;
 }
 
-.loader-logo {
-  display: block;
-  width: 128px;
-  height: auto;
-  margin: 0 auto 24px;
-  filter: drop-shadow(0 0 24px rgba(0, 246, 255, 0.42));
-  animation: logo-pulse 2s ease-in-out infinite;
-}
-
-@keyframes logo-pulse {
-  0%, 100% { opacity: 0.72; transform: scale(0.98); }
-  50% { opacity: 1; transform: scale(1.02); }
-}
-
 .loader-content h2 {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 18px;
   font-weight: 600;
-  letter-spacing: 6px;
   color: var(--text-primary);
   margin-bottom: 12px;
 }
 
 .loader-status {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 2px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   color: var(--text-dim);
   animation: pulse 2s ease-in-out infinite;
 }
@@ -520,23 +324,20 @@ html, body {
   50% { opacity: 1; }
 }
 
-/* Map Source tiles live with Visual Presets in the bottom command tray. */
+/* The Map source tiles live in the bottom Basemap tray. */
+/* The tray's only section, so no rule or gap above it: those divided it from the retired presets grid (blind critic, 2026-10-20). */
 .map-source-section {
   display: grid;
   gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(123, 189, 211, 0.18);
 }
 
 .map-source-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: rgba(190, 221, 230, 0.62);
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.35px;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 12px;
 }
 
 .map-stack-chip-row {
@@ -551,14 +352,12 @@ html, body {
   justify-content: center;
   gap: 4px;
   padding: 4px 7px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
+  font-family: var(--font-sans);
+  font-size: 12px;
   white-space: nowrap;
   color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(22, 45, 61, 0.04);
+  border: 1px solid rgba(22, 45, 61, 0.08);
   border-radius: 4px;
   cursor: pointer;
   /* Explicit property list, NOT `transition: all`: `all` animates
@@ -585,7 +384,7 @@ html, body {
 .map-stack-chip:hover,
 .map-stack-chip:focus-visible {
   border-color: var(--glass-border-hover);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(22, 45, 61, 0.06);
   color: var(--text-primary);
 }
 
@@ -602,7 +401,6 @@ html, body {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-dim);
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
 }
 
 .pp-stack-status {
@@ -611,16 +409,14 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.8px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   color: var(--accent);
   text-align: center;
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
 }
 
 .pp-stack-status.warn {
-  color: #ffb84d;
+  color: var(--warn);
 }
 
 /* Proximity / All segmented control under the 3D toggle */
@@ -632,12 +428,11 @@ html, body {
   transform: translateX(50%);
   z-index: 300;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(8, 10, 14, 0.88);
-  color: #d9f7ff;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 1.8px;
+  border: 1px solid rgba(22, 45, 61, 0.25);
+  background: var(--paper);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
   padding: 8px 14px;
   cursor: pointer;
   display: none;
@@ -648,7 +443,6 @@ body.ui-clean-view #clean-view-exit {
 }
 
 body.ui-clean-view #title-bar,
-body.ui-clean-view #style-indicator,
 body.ui-clean-view #top-center-actions,
 body.ui-clean-view #global-loading-status,
 body.ui-clean-view #control-panel,
@@ -680,8 +474,6 @@ body.ui-clean-view #data-panel {
   border: 1px solid var(--glass-border);
   border-radius: 50%;
   color: var(--text-secondary);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   cursor: pointer;
   transition: all var(--transition-fast);
   outline: none;
@@ -690,7 +482,7 @@ body.ui-clean-view #data-panel {
 #top-center-actions button:hover,
 #top-center-actions button:focus-visible {
   border-color: var(--glass-border-hover);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(22, 45, 61, 0.06);
   transform: scale(1.1);
 }
 
@@ -711,13 +503,8 @@ body.ui-clean-view #data-panel {
   fill: currentColor;
 }
 
-/* Below 480 px the title (139 px), the centred actions (124 px) and the style indicator (108 px) need more width than the top bar has,
-   and the actions sat over "wildeye" and "ACTIVE STYLE". The style name stays on screen in the HUD line and the presets tray, so the
-   indicator gives way and the actions take its corner, inset like the title. */
+/* Below 480 px the centred actions would sit over the title, so they move to the top-right corner, inset like the title. */
 @media (max-width: 479px) {
-  #style-indicator {
-    display: none;
-  }
 
   #top-center-actions {
     left: auto;
@@ -737,30 +524,24 @@ body.ui-clean-view #data-panel {
   max-width: calc(100vw - 32px);
   padding: 6px 10px;
   border-radius: 7px;
-  border: 1px solid rgba(0, 212, 255, 0.24);
-  background: rgba(3, 10, 18, 0.78);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  color: rgba(170, 252, 255, 0.92);
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.35px;
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
+  border: 1px solid rgba(22, 45, 61, 0.24);
+  background: var(--paper);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
   transform: translateX(-50%);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34), 0 0 14px rgba(0, 212, 255, 0.08);
   pointer-events: none;
 }
 #global-loading-status[hidden] { display: none; }
 #global-loading-label {
-  color: rgba(184, 244, 255, 0.92);
+  color: var(--text-primary);
 }
 #global-loading-detail {
   min-width: 34px;
   max-width: min(220px, 38vw);
   overflow: hidden;
-  color: #00e1ff;
+  color: var(--accent);
   font-weight: 600;
-  letter-spacing: 1.6px;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -772,146 +553,22 @@ body.ui-clean-view #data-panel {
 #global-loading-status:is([data-state='complete'], [data-state='cancelled'], [data-state='error']) #global-loading-detail {
   display: none;
 }
-#global-loading-status[data-state='error'] { border-color: rgba(255, 98, 82, 0.55); color: #ff9b8e; }
+#global-loading-status[data-state='error'] { border-color: rgba(255, 98, 82, 0.55); color: var(--error); }
 #global-loading-status[data-state='error'] #global-loading-label,
-#global-loading-status[data-state='error'] #global-loading-detail { color: #ff9b8e; }
-#global-loading-status[data-state='cancelled'] { color: #ffd488; }
+#global-loading-status[data-state='error'] #global-loading-detail { color: var(--error); }
+#global-loading-status[data-state='cancelled'] { color: var(--warn); }
 #global-loading-status[data-state='retry'] { border-color: rgba(255, 212, 136, 0.55); }
 #global-loading-status[data-state='retry'] #global-loading-label,
-#global-loading-status[data-state='retry'] #global-loading-detail { color: #ffd488; }
+#global-loading-status[data-state='retry'] #global-loading-detail { color: var(--warn); }
 #global-loading-status[data-state='cancelled'] #global-loading-label,
-#global-loading-status[data-state='cancelled'] #global-loading-detail { color: #ffd488; }
+#global-loading-status[data-state='cancelled'] #global-loading-detail { color: var(--warn); }
 #global-loading-status[data-state='acquiring'] {
-  border-color: rgba(0, 212, 255, 0.42);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34), 0 0 18px rgba(0, 212, 255, 0.12);
+  border-color: rgba(22, 45, 61, 0.42);
 }
 
 .share-icon {
   font-size: 16px;
   line-height: 1;
-}
-
-/* ── Split-flap chip text ─────────────────────────────────────────
-   Per-character departure-board flip when a chip label changes.
-   Driven entirely by src/splitFlap.js, which rebuilds the label as
-   one span per character on the change and strips them again once
-   the cascade lands.
-
-   The DOM text is the truth and its node never moves. A chip label is
-   upgraded once into a permanent shell — a .gev-flap-text span holding
-   one long-lived Text node, plus an aria-hidden .gev-flap-cells
-   sibling — and from then on a label change is only `node.data = next`.
-   During a cascade the host takes .gev-flap-active, which clips the
-   real text out of view and lets the cells stand in for it. The cells
-   carry no text at all: both glyphs are generated content (::before =
-   outgoing, ::after = incoming), and generated content never reaches
-   textContent. That is what keeps QA pins and the traffic chip's own
-   `textContent !==` guard honest, and it lets the cells be rebuilt
-   freely while the aria-live region sees only one characterData
-   change per label update.
-
-   Each cell rolls on cubic-bezier(0.2, 0.75, 0.25, 1); the
-   left-to-right stagger is what makes it read as a Solari board
-   rather than a counter.
-   ------------------------------------------------------------------ */
-/* While the flaps play, the real text is clipped out of view but stays in
-   the DOM and in the accessibility tree — same clipped-but-present treatment
-   as .world-overlay-accessibility. It is never removed or reparented. */
-.gev-flap-host.gev-flap-active > .gev-flap-text {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-/* Permanent sibling: empty (and so zero-width) whenever no cascade is running. */
-.gev-flap-cells {
-  white-space: pre;
-}
-.gev-flap-cell {
-  display: inline-block;
-  /* Chip labels carry real spaces; a collapsed space would drop a column. */
-  white-space: pre;
-}
-/* The incoming glyph is in flow, so it — not any text node — is what gives
-   the column its natural width. EVERY column has one, including a column the
-   new string does not reach: that one carries a blank, so it holds its width
-   and its index for the whole cascade instead of collapsing. Collapsing would
-   stack the absolutely-positioned outgoing glyphs on one x and would let a
-   later glyph slide into an earlier column. */
-.gev-flap-cell::after {
-  content: attr(data-flap-next);
-  display: inline-block;
-  white-space: pre;
-}
-.gev-flap-cell.is-flapping {
-  position: relative;
-  /* Relative to the chip's own font size, so the foreshortening reads the
-     same on the 8px status chips as it would anywhere else. */
-  perspective: 4em;
-}
-.gev-flap-cell.is-flapping::before,
-.gev-flap-cell.is-flapping::after {
-  transform-origin: 50% 50%;
-  backface-visibility: hidden;
-}
-.gev-flap-cell.is-flapping::after {
-  animation: gev-flap-in var(--gev-flap-dur, 190ms)
-    cubic-bezier(0.2, 0.75, 0.25, 1) var(--gev-flap-delay, 0ms) both;
-}
-/* Out of flow, so the outgoing glyph overlays its own column without
-   affecting layout — one per column, each anchored to its own cell box. */
-.gev-flap-cell.is-flapping::before {
-  content: attr(data-flap-prev);
-  position: absolute;
-  top: 0;
-  left: 0;
-  white-space: pre;
-  animation: gev-flap-out var(--gev-flap-dur, 190ms)
-    cubic-bezier(0.2, 0.75, 0.25, 1) var(--gev-flap-delay, 0ms) both;
-}
-/* Length changes are eased, never snapped. A GROWING label reserves its new
-   columns the moment the cells go in, so splitFlap.js eases from the previous
-   on-screen width to the cascade width at the start. A SHRINKING one holds
-   every column for the whole cascade, so its ease runs at SETTLEMENT instead,
-   from the cascade width down to the natural width — one smooth transition
-   after the flaps have landed, rather than columns collapsing underneath
-   them. */
-.gev-flap-sizing {
-  display: inline-block;
-  transition: width var(--gev-flap-total, 500ms) cubic-bezier(0.2, 0.75, 0.25, 1);
-}
-/* The old leaf hinges down and away on the cell's midline. */
-@keyframes gev-flap-out {
-  0% { transform: rotateX(0deg); opacity: 1; }
-  48% { transform: rotateX(-88deg); opacity: 0.5; }
-  100% { transform: rotateX(-90deg); opacity: 0; }
-}
-/* The new leaf waits for the old one to clear, then drops in and settles
-   with a single small overshoot — the mechanical clack. */
-@keyframes gev-flap-in {
-  0% { transform: rotateX(90deg); opacity: 0; }
-  46% { transform: rotateX(90deg); opacity: 0; }
-  78% { transform: rotateX(-7deg); opacity: 1; }
-  100% { transform: rotateX(0deg); opacity: 1; }
-}
-/* Reduced motion collapses the duration rather
-   than dropping the animation, so the final frame still lands the glyph.
-   src/splitFlap.js also checks the query and takes the instant path, so
-   this is the belt to that braces. */
-@media (prefers-reduced-motion: reduce) {
-  .gev-flap-cell.is-flapping::before,
-  .gev-flap-cell.is-flapping::after {
-    animation-duration: 1ms;
-    animation-delay: 0ms;
-  }
-  .gev-flap-sizing {
-    transition-duration: 1ms;
-  }
 }
 
 /* ── Toast Notification ──────────────────────── */
@@ -925,18 +582,13 @@ body.ui-clean-view #data-panel {
   background: var(--glass-bg);
   border: 1px solid var(--accent);
   border-radius: 8px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 2px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   color: var(--accent);
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
   transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
-  box-shadow: 0 0 20px rgba(0, 212, 255, 0.15);
 }
 
 #toast.visible {
@@ -965,10 +617,10 @@ body.ui-clean-view #data-panel {
   transform: translate(-50%, -50%);
   width: min(90vw, calc(90vh * (16 / 9)));
   aspect-ratio: 16 / 9;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(22, 45, 61, 0.28);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.35),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    0 0 0 1px rgba(22, 45, 61, 0.16),
+    inset 0 0 0 1px rgba(22, 45, 61, 0.06);
 }
 
 #safe-frame-overlay.ratio-9-16 #safe-frame-box {
@@ -989,215 +641,24 @@ body.ui-clean-view #data-panel {
   background:
     linear-gradient(to right,
       transparent 33.333%,
-      rgba(255, 255, 255, 0.2) 33.333%,
-      rgba(255, 255, 255, 0.2) 33.7%,
+      rgba(22, 45, 61, 0.2) 33.333%,
+      rgba(22, 45, 61, 0.2) 33.7%,
       transparent 33.7%,
       transparent 66.333%,
-      rgba(255, 255, 255, 0.2) 66.333%,
-      rgba(255, 255, 255, 0.2) 66.7%,
+      rgba(22, 45, 61, 0.2) 66.333%,
+      rgba(22, 45, 61, 0.2) 66.7%,
       transparent 66.7%
     ),
     linear-gradient(to bottom,
       transparent 33.333%,
-      rgba(255, 255, 255, 0.2) 33.333%,
-      rgba(255, 255, 255, 0.2) 33.7%,
+      rgba(22, 45, 61, 0.2) 33.333%,
+      rgba(22, 45, 61, 0.2) 33.7%,
       transparent 33.7%,
       transparent 66.333%,
-      rgba(255, 255, 255, 0.2) 66.333%,
-      rgba(255, 255, 255, 0.2) 66.7%,
+      rgba(22, 45, 61, 0.2) 66.333%,
+      rgba(22, 45, 61, 0.2) 66.7%,
       transparent 66.7%
     );
-}
-
-/* ── Intelligence HUD Overlay ────────────────── */
-#intel-hud {
-  position: fixed;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.4s ease, visibility 0.4s ease;
-  --hud-color: rgba(0, 255, 255, 0.6);
-  --hud-glow: rgba(0, 255, 255, 0.4);
-  --hud-border: rgba(0, 255, 255, 0.15);
-  --hud-inset: 36px;
-}
-
-#intel-hud.active {
-  opacity: 1;
-  visibility: visible;
-}
-
-#intel-hud * {
-  font-family: var(--font-mono);
-  color: var(--hud-color);
-  text-shadow: 0 0 4px var(--hud-glow);
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
-  line-height: 1.6;
-}
-
-.hud-bottom-bar {
-  display: none;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(980px, calc(100vw - 120px));
-  border: 1px solid var(--hud-border);
-  background: rgba(0, 0, 0, 0.34);
-  padding: 4px 10px;
-  font-size: 10px;
-  letter-spacing: 1.4px;
-  align-items: center;
-  pointer-events: none;
-}
-
-.hud-bottom-bar {
-  bottom: 110px;
-  justify-content: center;
-}
-
-/* Corner blocks */
-.hud-corner {
-  position: absolute;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 4px;
-}
-
-/* Two corners share each row, so each gets at most its share of it and its readout wraps at a space. Unbounded, their
-   one-line readouts printed over each other below ~666 px (lat/lon under ALT/SUN on a phone) and the summary ran off
-   the right edge. The top-left summary sits below the clock's line, so that corner may span the row. */
-.hud-top-left {
-  top: 120px;
-  left: var(--hud-inset);
-  max-width: calc(100% - 2 * var(--hud-inset));
-}
-
-.hud-top-right {
-  top: 120px;
-  right: var(--hud-inset);
-}
-
-.hud-bottom-left {
-  bottom: 180px;
-  left: var(--hud-inset);
-}
-
-.hud-bottom-right {
-  bottom: 180px;
-  right: var(--hud-inset);
-}
-
-.hud-bottom-left,
-.hud-bottom-right {
-  max-width: calc(50% - var(--hud-inset) - 6px);
-}
-
-.hud-corner > .hud-content {
-  min-width: 0;
-}
-
-.hud-bracket {
-  font-size: 22px;
-  line-height: 1;
-  opacity: 0.6;
-}
-
-.hud-content {
-  font-size: 13px;
-  letter-spacing: 2px;
-}
-
-.hud-mode {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: 4px;
-  margin-top: 3px;
-}
-
-.hud-summary-wrap {
-  margin-top: 6px;
-  max-width: 420px;
-}
-
-.hud-summary-label {
-  font-size: 9px;
-  letter-spacing: 1.8px;
-  opacity: 0.55;
-}
-
-.hud-summary {
-  margin-top: 2px;
-  min-height: 16px;
-  font-size: 11px;
-  letter-spacing: 1.2px;
-  opacity: 0.88;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* While the summary types out, the untyped rest holds its space unseen (src/hud.js _typeSummary); clip, so no early ellipsis. */
-.hud-summary.is-typing {
-  text-overflow: clip;
-}
-
-.hud-summary-untyped {
-  visibility: hidden;
-}
-
-#intel-hud[data-variant='tactical'] .hud-bottom-bar {
-  display: none;
-}
-
-#intel-hud[data-variant='operator'] .hud-bottom-bar {
-  display: flex;
-}
-
-#intel-hud[data-variant='tactical'] .hud-top-left,
-#intel-hud[data-variant='tactical'] .hud-top-right,
-#intel-hud[data-variant='operator'] .hud-top-left,
-#intel-hud[data-variant='operator'] .hud-top-right {
-  top: max(14vh, 136px);
-}
-
-#intel-hud[data-variant='operator'] .hud-bottom-bar {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0.52), rgba(8, 22, 18, 0.52));
-}
-
-#intel-hud[data-variant='operator'] .hud-corner {
-  padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.36);
-}
-
-#intel-hud[data-variant='operator'] .hud-bracket {
-  display: none;
-}
-
-#intel-hud[data-variant='minimal'] .hud-top-right,
-#intel-hud[data-variant='minimal'] .hud-bottom-right {
-  display: none;
-}
-
-#intel-hud[data-variant='minimal'] .hud-top-left {
-  top: 88px;
-}
-
-#intel-hud[data-variant='minimal'] .hud-bottom-left {
-  max-width: calc(100% - 2 * var(--hud-inset));
-}
-
-#intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  display: flex;
-}
-
-#intel-hud[data-variant='minimal'] .hud-summary-wrap {
-  max-width: 280px;
 }
 
 /* ── Data Layer Toggle Panel ─────────────────── */
@@ -1237,27 +698,16 @@ body.ui-clean-view #data-panel {
   transform: translateY(0);
 }
 
-#data-panel .panel-glow {
-  position: absolute;
-  inset: -20px;
-  background: radial-gradient(ellipse at center, var(--accent-dim) 0%, transparent 60%);
-  filter: blur(20px);
-  opacity: 0.25;
-  pointer-events: none;
-}
-
 .data-panel-inner {
   position: relative;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   padding: 14px 16px 12px;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    0 8px 32px rgba(22, 45, 61, 0.16),
+    0 0 0 1px rgba(22, 45, 61, 0.03) inset,
+    0 1px 0 rgba(22, 45, 61, 0.06) inset;
   max-height: min(620px, calc(100vh - var(--left-stack-top) - var(--left-stack-gap) - 36px));
   display: flex;
   flex-direction: column;
@@ -1275,7 +725,7 @@ body.ui-clean-view #data-panel {
   overscroll-behavior: contain;
   padding-right: 4px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 212, 255, 0.5) rgba(255, 255, 255, 0.04);
+  scrollbar-color: rgba(22, 45, 61, 0.5) rgba(22, 45, 61, 0.04);
   scrollbar-gutter: stable;
 }
 
@@ -1284,12 +734,12 @@ body.ui-clean-view #data-panel {
 }
 
 .data-toggle-list::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(22, 45, 61, 0.04);
   border-radius: 999px;
 }
 
 .data-toggle-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(0, 212, 255, 0.65), rgba(0, 212, 255, 0.2));
+  background: linear-gradient(180deg, rgba(22, 45, 61, 0.65), rgba(22, 45, 61, 0.2));
   border-radius: 999px;
 }
 
@@ -1300,7 +750,7 @@ body.ui-clean-view #data-panel {
 }
 
 .data-toggle-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(22, 45, 61, 0.03);
 }
 
 .data-toggle-top {
@@ -1326,7 +776,6 @@ body.ui-clean-view #data-panel {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
-  letter-spacing: 0.3px;
 }
 
 .data-toggle-right {
@@ -1336,9 +785,8 @@ body.ui-clean-view #data-panel {
 }
 
 .data-count {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.5px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   color: var(--text-secondary);
   min-width: 30px;
   text-align: right;
@@ -1346,12 +794,11 @@ body.ui-clean-view #data-panel {
 
 .data-toggle-btn {
   padding: 3px 10px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1.5px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(22, 45, 61, 0.04);
+  border: 1px solid rgba(22, 45, 61, 0.08);
   border-radius: 4px;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -1366,47 +813,41 @@ body.ui-clean-view #data-panel {
 .data-toggle-btn.feed-fallback,
 .data-toggle-btn.feed-unavailable {
   min-width: 82px;
-  letter-spacing: 0.8px;
 }
 
 .data-toggle-btn:hover {
   border-color: var(--glass-border-hover);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(22, 45, 61, 0.06);
 }
 
 .data-toggle-btn.active {
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-dim);
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
 }
 
 .data-toggle-btn.active.feed-stale,
 .data-toggle-btn.active.feed-fallback {
-  color: #ffd27a;
+  color: var(--warn);
   border-color: rgba(255, 190, 82, 0.75);
   background: rgba(255, 174, 51, 0.1);
-  box-shadow: 0 0 10px rgba(255, 174, 51, 0.12);
 }
 
 .data-toggle-btn.active.feed-degraded {
-  color: #ffad72;
+  color: var(--warn);
   border-color: rgba(255, 137, 72, 0.78);
   background: rgba(255, 112, 48, 0.1);
-  box-shadow: 0 0 10px rgba(255, 112, 48, 0.12);
 }
 
 .data-toggle-btn.active.feed-unavailable {
-  color: #ff8585;
+  color: var(--error);
   border-color: rgba(255, 92, 92, 0.78);
   background: rgba(255, 60, 60, 0.1);
-  box-shadow: 0 0 10px rgba(255, 60, 60, 0.12);
 }
 
 .data-toggle-meta {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.5px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   color: var(--text-dim);
   padding-left: 26px;
   margin-top: 2px;
@@ -1430,12 +871,11 @@ body.ui-clean-view #data-panel {
 
 .data-toggle-chip {
   padding: 2px 7px;
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.2px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(22, 45, 61, 0.04);
+  border: 1px solid rgba(22, 45, 61, 0.08);
   border-radius: 3px;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -1445,7 +885,7 @@ body.ui-clean-view #data-panel {
 .data-toggle-chip:hover,
 .data-toggle-chip:focus-visible {
   border-color: var(--glass-border-hover);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(22, 45, 61, 0.06);
   color: var(--text-secondary);
 }
 
@@ -1466,9 +906,8 @@ body.ui-clean-view #data-panel {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.5px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   color: var(--text-dim);
   cursor: default;
 }
@@ -1478,8 +917,8 @@ body.ui-clean-view #data-panel {
   height: 6px;
   border-radius: 50%;
   /* The swatch IS the datum — keep it exactly the point color, with only a
-     hairline ring so a near-black class still reads on the panel glass. */
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+     hairline ring so a near-white class still reads on the panel's paper. */
+  box-shadow: 0 0 0 1px rgba(22, 45, 61, 0.12);
   flex: none;
 }
 
@@ -1546,18 +985,21 @@ body.ui-clean-view #data-panel {
 }
 
 #left-panel-stack > [data-panel-id]:not(.collapsed) .panel-divider {
-  background: linear-gradient(90deg, rgb(0 212 255 / 28%), rgba(0, 212, 255, 0.18) 58%, transparent);
-  box-shadow: 0 0 7px rgba(0, 212, 255, 0.22);
+  background: var(--glass-border);
+}
+
+/* A collapsed pill is its name and its +; the header rule belongs to the open panel (blind critic: a stub line in an empty box). */
+#left-panel-stack > [data-panel-id].collapsed .panel-divider {
+  visibility: hidden;
 }
 
 .scene-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(22, 45, 61, 0.05);
+  border: 1px solid rgba(22, 45, 61, 0.14);
   border-radius: 7px;
   color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1.2px;
+  font-family: var(--font-sans);
+  font-size: 12px;
   padding: 6px 9px;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -1569,7 +1011,7 @@ body.ui-clean-view #data-panel {
 .scene-btn:hover:not(:disabled) {
   color: var(--accent);
   border-color: var(--accent);
-  background: rgba(0, 212, 255, 0.14);
+  background: rgba(22, 45, 61, 0.14);
 }
 
 .scene-btn:disabled {
@@ -1577,7 +1019,6 @@ body.ui-clean-view #data-panel {
   cursor: default;
 }
 
-#control-panel.collapsed .button-grid,
 #data-panel.collapsed .data-toggle-list {
   display: none !important;
 }
@@ -1587,8 +1028,7 @@ body.ui-clean-view #data-panel {
 }
 
 #data-panel.collapsed .panel-title {
-  font-size: 8px;
-  letter-spacing: 1.8px;
+  font-size: 12px;
 }
 
 #control-panel.collapsed .panel-inner,
@@ -1603,7 +1043,6 @@ body.ui-clean-view #data-panel {
 
 /* ── Recording Mode ─────────────────────────── */
 body.recording-mode #title-bar,
-body.recording-mode #style-indicator,
 body.recording-mode #top-center-actions,
 body.recording-mode #global-loading-status,
 body.recording-mode #clean-view-exit,
@@ -1616,10 +1055,7 @@ body.recording-mode #data-panel {
 
 /* ── Responsive ───────────────────────────────── */
 @media (max-width: 720px) {
-
-  .button-grid {
-    flex-wrap: nowrap;
-  }
+  
 
   #control-panel {
     left: 16px;
@@ -1635,31 +1071,15 @@ body.recording-mode #data-panel {
 
   #title-bar h1 {
     font-size: 16px;
-    letter-spacing: 4px;
   }
 
   #title-bar h1 {
     gap: 8px;
   }
-
-  #title-bar .title-logo {
-    width: 36px;
-  }
-
-  #intel-hud {
-    --hud-inset: 16px;
-  }
-
-  .hud-bottom-bar {
-    width: calc(100vw - 24px);
-    left: 12px;
-    transform: none;
-  }
-
-  .hud-bottom-bar {
-    bottom: 90px;
-    font-size: 9px;
-  }
+  
+  
+  
+  
 
   #data-panel {
     top: auto;
@@ -1710,10 +1130,6 @@ body.recording-mode #data-panel {
   transform: none;
 }
 
-#command-dock .panel-glow {
-  display: none;
-}
-
 #command-dock .panel-inner,
 #command-dock #control-panel.collapsed .panel-inner {
   height: 100%;
@@ -1721,8 +1137,6 @@ body.recording-mode #data-panel {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 #command-dock .panel-header,
@@ -1730,20 +1144,8 @@ body.recording-mode #data-panel {
   padding: 0;
 }
 
-#command-dock .panel-collapse-btn,
-#command-dock .panel-mini-status {
+#command-dock .panel-collapse-btn{
   display: none !important;
-}
-
-#command-dock .btn-label {
-  font-family: var(--font-mono);
-  text-transform: uppercase; /* uppercase-ok: UI label, no unit text (traced 2026-09-17) */
-}
-
-#command-dock .btn-key {
-  top: 3px;
-  right: 4px;
-  font-size: 7px;
 }
 
 body.ui-clean-view #command-dock,
@@ -1768,7 +1170,7 @@ body.recording-mode #cesium-credits {
 
 @media (max-width: 980px) {
   #command-dock > #control-panel {
-    border-top: 1px solid rgba(123, 189, 211, 0.16);
+    border-top: 1px solid rgba(22, 45, 61, 0.16);
   }
 }
 
@@ -1805,7 +1207,7 @@ body.recording-mode #cesium-credits {
 }
 
 #command-dock > #control-panel {
-  border-left: 1px solid rgba(123, 189, 211, 0.18);
+  border-left: 1px solid rgba(22, 45, 61, 0.18);
 }
 
 #command-dock .panel-inner,
@@ -1832,8 +1234,8 @@ body.recording-mode #cesium-credits {
 
 #command-dock .panel-title::after {
   margin-left: 0.45rem;
-  color: rgba(54, 220, 255, 0.68);
-  font-size: 0.7rem;
+  color: var(--accent);
+  font-size: 12px;
 }
 
 #command-dock #control-panel .panel-title::after {
@@ -1842,59 +1244,13 @@ body.recording-mode #cesium-credits {
   float: left;
 }
 
-#command-dock #control-panel.collapsed .button-grid {
-  display: none !important;
-}
-
 #command-dock #control-panel:not(.collapsed) .panel-header {
   margin-bottom: 0.35rem;
-}
-
-#command-dock #control-panel:not(.collapsed) .button-grid {
-  display: flex !important;
-  animation: command-dock-reveal 220ms ease-out both;
-}
-
-#command-dock .button-grid {
-  flex-wrap: nowrap;
-  gap: 0.3rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-#command-dock .button-grid::-webkit-scrollbar {
-  display: none;
-}
-
-#command-dock .style-btn {
-  flex: 0 0 3.2rem;
-  min-width: 3.2rem;
-  min-height: 2.45rem;
-  gap: 0.1rem;
-  padding: 0.3rem 0.25rem;
-  border-radius: 0.2rem;
-}
-
-#command-dock .btn-icon {
-  font-size: 0.78rem;
-}
-
-#command-dock .btn-label {
-  letter-spacing: 0.02rem;
-}
-
-#command-dock .btn-key {
-  display: none;
 }
 
 @keyframes command-dock-reveal {
   from { opacity: 0; transform: translateY(0.2rem); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-/* Compact dock clearance keeps the reference-like low profile. */
-body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
-  bottom: calc(2vh + 4.7rem);
 }
 
 @media (max-width: 900px) {
@@ -1907,8 +1263,8 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
 
 /* ── Command dock refinement ── */
 #command-dock {
-  /* the dock is one tab (VISUAL PRESETS); this once summed two tabs and a voice control, which put the
-     desktop presets tray 155 px left of the dock (2026-09-27) */
+  /* the dock is one tab (Basemap); this once summed two tabs and a voice control, which put the
+     desktop tray 155 px left of the dock (2026-09-27) */
   --dock-unified-width: var(--dock-side-compact);
   --dock-tray-open: max(34rem, calc(var(--dock-unified-width) + 0.75rem));
   --dock-presets-open: max(34rem, calc(var(--dock-unified-width) + 0.75rem));
@@ -1918,10 +1274,9 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   display: inline-flex;
   align-items: center;
   gap: 0.42rem;
-  color: rgba(206, 232, 239, 0.72);
-  font-size: 0.58rem;
+  color: var(--text-secondary);
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.13rem;
 }
 
 #command-dock .dock-label-icon {
@@ -1929,7 +1284,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   flex: 0 0 1rem;
   width: 1rem;
   height: 1rem;
-  background: rgba(232, 234, 237, 0.3);
+  background: rgba(22, 45, 61, 0.3);
   mask-position: center;
   mask-repeat: no-repeat;
   mask-size: contain;
@@ -1946,7 +1301,6 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
 
 #command-dock :is(#control-panel):hover .dock-label-icon, #command-dock :is(#control-panel).dock-pinned .dock-label-icon {
   background: var(--accent);
-  filter: drop-shadow(0 0 0.35rem rgba(0, 212, 255, 0.28));
 }
 
 #command-dock :is(#control-panel):hover .panel-title{
@@ -1984,7 +1338,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
 }
 
 #command-dock #control-panel .panel-title::after {
-  background: linear-gradient(to left, rgba(232, 234, 237, 0.3), transparent);
+  background: linear-gradient(to left, rgba(22, 45, 61, 0.3), transparent);
 }
 
 #command-dock .panel-title::after,
@@ -2008,13 +1362,8 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits {
   transform: rotate(-12deg) scale(1.08);
 }
 
-#command-dock .btn-label {
-  font-size: 0.56rem;
-}
-
 /* The compact dock leaves both lower corners free for required attribution and telemetry. */
-body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
-body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits {
+body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
   right: auto;
   bottom: 0.75rem;
   left: 1.5rem;
@@ -2023,29 +1372,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   text-align: left;
 }
 
-#intel-hud[data-variant='tactical'] .hud-bottom-left,
-#intel-hud[data-variant='tactical'] .hud-bottom-right,
-#intel-hud[data-variant='operator'] .hud-bottom-left,
-#intel-hud[data-variant='operator'] .hud-bottom-right {
-  bottom: calc(2vh + 6.5rem);
-}
-
-#intel-hud[data-variant='operator'] .hud-bottom-bar {
-  bottom: calc(2vh + 9.8rem);
-  width: min(48vw, 680px);
-}
-
-#intel-hud[data-variant='minimal'] .hud-bottom-left {
-  bottom: calc(2vh + 5.4rem);
-}
-
-#intel-hud[data-variant='minimal'] .hud-bottom-bar {
-  bottom: calc(2vh + 9rem);
-}
-
 @media (max-width: 900px) {
-  body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
-  body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits {
+  body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
     bottom: calc(2vh + 5rem);
     left: 0.75rem;
     max-width: calc(100vw - 1.5rem);
@@ -2097,15 +1425,9 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   width: var(--dock-tray-open);
   visibility: hidden;
   opacity: 0;
-  background: rgba(8, 20, 30, 0.94);
-  border: 1px solid rgba(123, 189, 211, 0.32);
+  background: var(--paper);
+  border: 1px solid rgba(22, 45, 61, 0.32);
   border-radius: 0.42rem;
-  box-shadow:
-    0 0.9rem 2.4rem rgba(0, 0, 0, 0.58),
-    0 0 1.5rem rgba(0, 212, 255, 0.08),
-    0 0 0 1px rgba(255, 255, 255, 0.025) inset;
-  backdrop-filter: blur(28px) saturate(1.3);
-  -webkit-backdrop-filter: blur(28px) saturate(1.3);
   pointer-events: none;
   transform: translateY(0.55rem) scale(0.985);
   transform-origin: bottom left;
@@ -2146,9 +1468,9 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   left: 1.65rem;
   width: 0.6rem;
   height: 0.6rem;
-  background: rgba(8, 20, 30, 0.96);
-  border-right: 1px solid rgba(123, 189, 211, 0.28);
-  border-bottom: 1px solid rgba(123, 189, 211, 0.28);
+  background: var(--paper);
+  border-right: 1px solid rgba(22, 45, 61, 0.28);
+  border-bottom: 1px solid rgba(22, 45, 61, 0.28);
   transform: rotate(45deg);
 }
 
@@ -2157,27 +1479,21 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   left: auto;
 }
 
-#command-dock .dock-popover-content .button-grid {
-  display: flex !important;
-}
-
 #command-dock .dock-pin-btn {
   display: none;
   flex: 0 0 auto;
-  color: rgba(190, 221, 230, 0.5);
-  border: 1px solid rgba(123, 189, 211, 0.2);
-  font-family: var(--font-mono);
-  font-size: 0.35rem;
-  letter-spacing: 0.04rem;
+  color: var(--text-secondary);
+  border: 1px solid rgba(22, 45, 61, 0.2);
+  font-family: var(--font-sans);
+  font-size: 12px;
   cursor: pointer;
 }
 
 #command-dock .dock-pin-btn:hover,
 #command-dock .dock-pin-btn[aria-pressed='true'] {
   color: var(--accent);
-  border-color: rgba(0, 212, 255, 0.62);
-  background: rgba(0, 212, 255, 0.1);
-  box-shadow: 0 0 0.55rem rgba(0, 212, 255, 0.12);
+  border-color: rgba(22, 45, 61, 0.62);
+  background: rgba(22, 45, 61, 0.1);
 }
 
 #command-dock .panel-divider {
@@ -2246,28 +1562,6 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   padding: 0.7rem;
 }
 
-#command-dock .dock-popover-content .button-grid {
-  align-items: stretch;
-  min-height: 3.7rem;
-}
-
-#command-dock .dock-popover-content .style-btn {
-  flex: 1 1 0;
-  min-width: 3.6rem;
-  min-height: 3.7rem;
-  height: 100%;
-  padding: 0.45rem 0.3rem;
-}
-
-#command-dock .dock-popover-content .btn-icon {
-  font-size: 1.15rem;
-  line-height: 1;
-}
-
-#command-dock .btn-label {
-  padding-top: 10px;
-}
-
 #command-dock .dock-pin-btn {
   position: absolute;
   top: -1rem;
@@ -2280,8 +1574,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   margin: 0;
   padding: 0;
   border-radius: 50%;
-  background: rgba(8, 24, 34, 0.96);
-  box-shadow: 0 0.35rem 0.9rem rgba(0, 0, 0, 0.5);
+  background: var(--paper);
+  box-shadow: 0 0.35rem 0.9rem rgba(22, 45, 61, 0.16);
   transform: none;
 }
 
@@ -2305,15 +1599,12 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   right: calc((var(--dock-unified-width) - var(--dock-presets-open)) / 2);
 }
 
-
 /* Final joined-dock geometry: only the three controls own visible surfaces. */
 #command-dock {
   padding: 0;
   background: none;
   border: none;
   box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 #command-dock > #control-panel > .panel-inner {
@@ -2321,22 +1612,16 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   border-bottom-left-radius: 0;
 }
 
-#command-dock .dock-popover-content .style-btn:hover {
-  transform: none;
-}
-
-/* Match compact dock wings to the glass treatment used by left-panel buttons. */
+/* The dock button is the same paper as the left panels. */
 #command-dock > #control-panel {
   box-sizing: border-box;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    0 8px 32px rgba(22, 45, 61, 0.16),
+    0 0 0 1px rgba(22, 45, 61, 0.03) inset,
+    0 1px 0 rgba(22, 45, 61, 0.06) inset;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
@@ -2351,28 +1636,19 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 }
 
 #command-dock > :is(#control-panel).dock-pinned {
-  border-color: rgba(0, 212, 255, 0.55);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(0, 212, 255, 0.08) inset,
-    0 0 1rem rgba(0, 212, 255, 0.12);
+  border-color: rgba(22, 45, 61, 0.55);
 }
 
+/* One button, its label centred: the right-aligned label, the square left corners and the hairline under it were the
+   right half of a joined two-part dock whose left half is gone. */
 #command-dock #control-panel .panel-header {
-  justify-content: flex-end;
+  justify-content: center;
   width: 100%;
 }
 
 #command-dock #control-panel .panel-title {
-  justify-content: flex-end;
-  text-align: right;
-}
-
-/* These must follow the shared wing skin so the visible borders stay joined. */
-
-#command-dock > #control-panel {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
+  justify-content: center;
+  text-align: center;
 }
 
 #command-dock #control-panel .panel-header {
@@ -2397,23 +1673,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   display: none;
 }
 
-#command-dock #control-panel .panel-header::after {
-  content: '';
-  position: absolute;
-  right: 0.45rem;
-  bottom: 0.12rem;
-  left: 0.45rem;
-  height: 1px;
-  pointer-events: none;
-}
-
-#command-dock #control-panel .panel-header::after {
-  background: linear-gradient(90deg, rgba(232, 234, 237, 0), rgba(232, 234, 237, 0.24));
-}
-
 /* ── Biology details card (src/bio/detailsCard.js) ── */
-/* I1 (final review): the card and the SPECIES panel have a background floor of 0.86 rather than the shared 0.72 glass, so their text holds 4.5:1
-   where a light street map shows through (measured in qa-species contrast). */
+/* The card is opaque paper, so its text contrast is the token pair's alone (src/styleTokens.test.mjs). */
 .bio-card {
   position: fixed;
   right: 24px;
@@ -2425,12 +1686,10 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   flex-direction: column;
   gap: 6px;
   padding: 12px 14px;
-  background: rgba(12, 12, 20, 0.86);
+  background: var(--paper);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  box-shadow: 0 8px 32px rgba(22, 45, 61, 0.16), 0 0 0 1px rgba(22, 45, 61, 0.03) inset;
   color: var(--text-primary);
   font: 12px/1.45 var(--font-sans);
 }
@@ -2454,22 +1713,23 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
 .bio-card-announce { position: fixed; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 .bio-card-head { display: flex; align-items: center; gap: 8px; }
 /* No text-transform: uppercase — it maps µ (U+00B5) to M in unit strings. */
-.bio-card-title { flex: 1; min-width: 0; font: 10px/1.3 var(--font-mono); letter-spacing: 1px; color: var(--accent); }
-/* I1: the close ×, the status and error lines, Retry and the foot are 0.8 white like the filter and rows: in the shared 0.5 white they measured
-   2.96:1 over a white basemap. */
-.bio-card-close { background: none; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: rgba(232, 234, 237, 0.8); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 8px; }
+.bio-card-title { flex: 1; min-width: 0; font: 12px/1.3 var(--font-sans);color: var(--accent); }
+/* The close ×, the status and error lines, Retry and the foot are ink, like the filter and rows. */
+.bio-card-close { background: none; border: 1px solid rgba(22, 45, 61, 0.14); border-radius: 7px; color: var(--text-primary); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 8px; }
 .bio-card-close:hover { color: var(--accent); border-color: var(--accent); }
 /* Fix round 6 (critic r5 N1): shown while the antimeridian note is folded (detailsCard.js); a tap shows the note's text over the list, where a
    touch user can read it (the credit link's title is hover-only). */
-.bio-card-note-info { background: none; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 50%; color: rgba(232, 234, 237, 0.8); cursor: pointer; font: italic 700 11px/1 Georgia, serif; width: 22px; height: 22px; padding: 0; }
+.bio-card-note-info { background: none; border: 1px solid rgba(22, 45, 61, 0.14); border-radius: 50%; color: var(--text-primary); cursor: pointer; font: italic 700 11px/1 Georgia, serif; width: 22px; height: 22px; padding: 0; }
 .bio-card-note-info[hidden] { display: none; }
 .bio-card-note-info:hover, .bio-card-note-info[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
-.bio-card-note-pop { position: absolute; top: 40px; left: 12px; right: 12px; z-index: 1; margin: 0; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 8px; background: rgb(13, 15, 22); color: rgba(232, 234, 237, 0.9); font-size: 11px; }
+.bio-card-note-pop { position: absolute; top: 40px; left: 12px; right: 12px; z-index: 1; margin: 0; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--paper); color: var(--text-primary); font-size: 12px; }
 .bio-card-note-pop[hidden] { display: none; }
-/* 0.8 white: the shared --text-secondary (0.5 white) measured 4.09:1 over the card (visual critic 5). */
-.bio-card-filter { color: rgba(232, 234, 237, 0.8); font-size: 11px; }
+
+/* line-height 1.3 on the filter and foot lines: at 12 px (11 until 2026-10-20) their two-line wraps took 6 px more of the card's fixed
+   166 px at 568x320, and the species row and the GBIF link fell out of view. */
+.bio-card-filter { color: var(--text-primary); font-size: 12px; line-height: 1.3; }
 /* Stage 3 "What's here": one line per enabled GIBS layer at the searched spot, each with its own date. */
-.bio-card-layers { list-style: none; margin: 0 0 6px; padding: 0; color: rgba(232, 234, 237, 0.9); font-size: 11px; line-height: 1.45; }
+.bio-card-layers { list-style: none; margin: 0 0 6px; padding: 0; color: var(--text-primary); font-size: 12px; line-height: 1.45; }
 .bio-card-layers[hidden] { display: none; }
 .bio-card-filter:empty { display: none; }
 /* R13-M1: the species list (the body) and the Top datasets rows share the card's height. .bio-card-main is a flex item of the card, so it takes
@@ -2494,7 +1754,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
    no species at all while it kept a dataset line. The floor is the list's: a status or a marker's details keep their own height (a taller
    status card covered the globe's centre in landscape, where a what-lives-here click goes). */
 .bio-card-body { grid-row: body; overflow-y: auto; min-height: 0; }
-.bio-card-body:has(> .bio-card-row) { min-height: calc(12px * 1.45 + 11px * 1.45 + 15px); }
+/* One whole species row: its 12 px name (1.45) and 12 px secondary line (1.3; 11 px at 1.45 until 2026-10-20, 48 px either way) plus 15 px. */
+.bio-card-body:has(> .bio-card-row) { min-height: calc(12px * 1.45 + 12px * 1.3 + 15px); }
 /* Fix round 5 (critic r4 S1): the list keeps its one whole row at every size. Where the card's content still overflows its box (a short
    window), detailsCard.js folds, in order, the Top datasets block and then the antimeridian note (its text goes to the credit link's title);
    the gbif.org credit is never folded. */
@@ -2513,21 +1774,20 @@ body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minim
   }
 }
 .bio-card-body a, .bio-card-foot a { color: var(--accent); }
-.bio-card-row { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; width: 100%; text-align: left; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: inherit; padding: 5px 8px; margin-bottom: 3px; }
+.bio-card-row { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; width: 100%; text-align: left; background: rgba(22, 45, 61, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: inherit; padding: 5px 8px; margin-bottom: 3px; }
 .bio-card-row:hover, .bio-card-row:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }
 .bio-card-row-primary { grid-column: 1; }
-/* List rows only: the card is translucent, so the scientific name and count use 0.8 white rather than --text-secondary (0.5), which fell
-   to about 3:1 where a light basemap shows through. Over a white basemap the card ground is about rgb(81,81,86): 0.8 gives 4.8:1. */
-.bio-card-row-secondary { grid-column: 1; color: rgba(232, 234, 237, 0.8); font-style: italic; font-size: 11px; }
+/* List rows: the scientific name and count are ink. */
+.bio-card-row-secondary { grid-column: 1; color: var(--text-primary); font-style: italic; font-size: 12px; line-height: 1.3; }
 .bio-card-row-secondary:empty { display: none; }
-.bio-card-row-count { grid-column: 2; grid-row: 1; color: rgba(232, 234, 237, 0.8); font: 10px/1.6 var(--font-mono); }
-.bio-card-row-note { grid-column: 1 / -1; color: #ffb86b; font-size: 11px; }
-.bio-card-status { margin: 0 0 6px; color: rgba(232, 234, 237, 0.8); }
-.bio-card-retry { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: rgba(232, 234, 237, 0.8); cursor: pointer; font: 9px var(--font-mono); letter-spacing: 1.2px; padding: 5px 9px; }
+.bio-card-row-count { grid-column: 2; grid-row: 1; color: var(--text-primary); font: 12px/1.6 var(--font-sans); }
+.bio-card-row-note { grid-column: 1 / -1; color: var(--warn); font-size: 12px; }
+.bio-card-status { margin: 0 0 6px; color: var(--text-primary); }
+.bio-card-retry { background: rgba(22, 45, 61, 0.05); border: 1px solid rgba(22, 45, 61, 0.14); border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans);padding: 5px 9px; }
 /* R12-I1: only the foot's Top datasets rows shrink and scroll, with a fade while more of them is below; its heading, note and gbif.org credit
    link are fixed tracks of .bio-card-main, so the credit is visible at rest. (One scrolling foot capped at 26vh hid the credit below its
    scroll with no cue.) */
-.bio-card-foot { grid-row: foot-start / foot-end; display: grid; grid-template-rows: subgrid; margin-top: 6px; font-size: 11px; color: rgba(232, 234, 237, 0.8); border-top: 1px solid var(--glass-border); padding-top: 6px; }
+.bio-card-foot { grid-row: foot-start / foot-end; display: grid; grid-template-rows: subgrid; margin-top: 6px; font-size: 12px; line-height: 1.3; color: var(--text-primary); border-top: 1px solid var(--glass-border); padding-top: 6px; }
 .bio-card-foot:empty { display: none; }
 .bio-card-foot-note { grid-row: foot-note; display: block; margin-bottom: 2px; }
 .bio-card-foot > a { grid-row: foot-link; justify-self: start; }
@@ -2563,14 +1823,7 @@ body.recording-mode #bio-card { display: none !important; }
   height: var(--left-panel-allocated-height);
   max-height: var(--left-panel-allocated-height);
 }
-#species-panel .panel-glow {
-  position: absolute;
-  inset: -18px;
-  background: radial-gradient(ellipse at center, rgba(0, 212, 255, 0.16) 0%, transparent 65%);
-  filter: blur(16px);
-  opacity: 0.25;
-  pointer-events: none;
-}
+
 .species-panel-inner {
   position: relative;
   background: var(--glass-bg);
@@ -2580,13 +1833,10 @@ body.recording-mode #bio-card { display: none !important; }
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 24px);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  box-shadow: 0 8px 32px rgba(22, 45, 61, 0.16), 0 0 0 1px rgba(22, 45, 61, 0.03) inset, 0 1px 0 rgba(22, 45, 61, 0.06) inset;
 }
-/* I1 and critic 10 S1: the 0.86 background floor, as on the card, for the open panel only. The collapsed SPECIES pill keeps the shared glass of
-   the DATA LAYERS and SCENES pills, which the floor had made about 30 levels darker over a light map. */
-#species-panel:not(.collapsed) .species-panel-inner { background: rgba(12, 12, 20, 0.86); }
+/* The open panel is opaque paper, as the card is; the collapsed Species pill keeps the shared surface of its sibling pills. */
+#species-panel:not(.collapsed) .species-panel-inner { background: var(--paper); }
 /* B1/S1: the header stays put and the body scrolls inside the panel. 4 px of left padding inside the scroller, taken back by the margin, keep a
    focused link's ring from being cut at the scroller's left edge. */
 #left-panel-stack > #species-panel:not(.collapsed) .species-panel-inner { height: 100%; max-height: 100%; overflow: hidden; }
@@ -2595,23 +1845,22 @@ body.recording-mode #bio-card { display: none !important; }
 /* B1: the scroll cue is a row of its own under the body's scroll container, inside the panel, so it can never cover content (the fade and the
    overlaying "more ↓" hint it replaces hid a dataset count and a footer line). Its height is always laid out, and speciesPanel.js changes only
    its visibility, shown while more of the body is below and hidden at the end, so nothing moves. aria-hidden in index.html. */
-.species-more, .dataset-list-more { flex: 0 0 auto; height: 14px; margin-top: 2px; color: var(--accent); font: 9px/14px var(--font-mono); letter-spacing: 1.2px; text-align: right; visibility: hidden; pointer-events: none; }
+.species-more, .dataset-list-more { flex: 0 0 auto; height: 14px; margin-top: 2px; color: var(--accent); font: 12px/14px var(--font-sans);text-align: right; visibility: hidden; pointer-events: none; }
 /* Each chip row sits beside its label when they fit on one line, and under it when they do not. */
 .species-chip-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .species-chip-group > .species-label { margin-bottom: 0; }
 /* The shared .scene-btn is flex: 1 with a 72 px floor, which squeezed LAST 10 YEARS below its text inside a group; each chip takes its text's width. */
 .species-chip-group .scene-btn.species-chip { flex: 0 0 auto; }
-/* A label sits 4 px above the control it names (the body's gap is 8 px), so it reads as that control's, not the one above. Its text is the
-   chips' 0.8 white: the shared --text-secondary (0.5 white) measured 4.00 to 4.55:1 over the panel. */
-.species-label { margin-bottom: -4px; color: rgba(232, 234, 237, 0.8); font: 9px var(--font-mono); letter-spacing: 1.2px; }
-#species-search { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 7px; color: var(--text-primary); padding: 6px 8px; font: 12px var(--font-sans); }
+/* A label sits 4 px above the control it names (the body's gap is 8 px), so it reads as that control's, not the one above. Its text is ink. */
+.species-label { margin-bottom: -4px; color: var(--text-primary); font: 12px var(--font-sans);}
+#species-search { background: rgba(22, 45, 61, 0.06); border: 1px solid rgba(22, 45, 61, 0.14); border-radius: 7px; color: var(--text-primary); padding: 6px 8px; font: 12px var(--font-sans); }
 #species-search:focus { outline: none; border-color: var(--accent); }
-/* The browser's default placeholder measured 3.55:1 and its clear cross 1.33:1 (visual critic 5): a 0.65 white placeholder, and the native
-   clear button kept (same click and keyboard behaviour) but drawn as a light cross. */
-#species-search::placeholder { color: rgba(232, 234, 237, 0.65); }
-#species-search::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; margin-left: 6px; cursor: pointer; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' fill='none' stroke='%23e8eaed' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 12px 12px no-repeat; }
+/* The browser's default placeholder measured 3.55:1 (visual critic 5): the placeholder is the secondary ink, and the native clear button
+   is kept (same click and keyboard behaviour) but drawn as an ink cross. */
+#species-search::placeholder { color: var(--text-secondary); }
+#species-search::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; margin-left: 6px; cursor: pointer; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' fill='none' stroke='%23162d3d' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 12px 12px no-repeat; }
 /* About five one-line rows, then the list scrolls on its own, so the chips and the action below stay in view. */
-.species-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; max-height: 150px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.35) transparent; }
+.species-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; max-height: 150px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(22, 45, 61, 0.35) transparent; }
 .species-suggestions > li { flex: 0 0 auto; }
 .species-suggestions[hidden] { display: none; }
 /* A list taller than its cap fades out at the bottom, so it reads as scrollable, and the fade goes as the end is reached. A scroll
@@ -2627,16 +1876,16 @@ body.recording-mode #bio-card { display: none !important; }
     animation-timeline: scroll(self);
   }
 }
-.species-suggestion { width: 100%; text-align: left; background: rgba(255, 255, 255, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans); padding: 5px 8px; }
+.species-suggestion { width: 100%; text-align: left; background: rgba(22, 45, 61, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans); padding: 5px 8px; }
 .species-suggestion:hover, .species-suggestion:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }
-/* I1: status and error lines ("Name search failed …") are 0.8 white; the shared 0.5 white measured 2.96:1 over a white basemap. */
-.species-status { color: rgba(232, 234, 237, 0.8); font-size: 11px; }
+/* Status and error lines ("Name search failed …") are ink. */
+.species-status { color: var(--text-primary); font-size: 12px; }
 .species-status:empty { display: none; }
 .species-chosen { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .species-chosen[hidden] { display: none; }
 .species-chosen-name { flex: 1; min-width: 0; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* M1: "shown as GBIF's <name>" on a line of its own under the name and the switch, in the notes' amber, when a match was not EXACT. */
-.species-chosen-note { flex: 1 0 100%; color: #ffb86b; font-size: 11px; }
+.species-chosen-note { flex: 1 0 100%; color: var(--warn); font-size: 12px; }
 /* Modeled range (spec 2026-09-30-modeled-range-design.md): the switch when the geomodel range may be shown, and always one line saying
    what it is or why there is none. Its own row under the species name. */
 /* Under WHAT LIVES HERE, not in the chosen row: there it pushed the action below the fold on a phone held landscape (qa-species panel-fold). */
@@ -2644,37 +1893,37 @@ body.recording-mode #bio-card { display: none !important; }
 .species-modeled[hidden], .species-modeled [hidden] { display: none; }
 /* The switch keeps its label's width; the note wraps under it. Shrinking it to share the row clipped "ON" out of the pill (148 px of text in 133). */
 .species-modeled > .species-switch { flex: 0 0 auto; }
-.species-modeled-note { flex: 1; min-width: 12em; color: rgba(232, 234, 237, 0.8); font-size: 11px; }
+.species-modeled-note { flex: 1; min-width: 12em; color: var(--text-primary); font-size: 12px; }
 /* The record-count legend: a caption over five circles with their bounds, each circle bottom-aligned above its label. Sizes, colours and
    labels come from SPECIES_MAP_LEGEND (src/bio/gbif.js): GBIF's scaled.circles classes as the globe draws them (spec: Implementation notes). */
-/* B1: an opaque ground, so a swatch cut by the panel's edge reads as legend, never as a circle on the globe behind the glass. */
-.species-legend { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; color: rgba(232, 234, 237, 0.78); font-size: 11px; background: rgb(13, 15, 22); border-radius: 8px; padding: 6px 8px; }
+/* B1: an opaque ground, so a swatch cut by the panel's edge reads as legend, never as a circle on the globe behind it. */
+.species-legend { flex: 0 0 auto; display: flex; flex-direction: column; gap: 3px; color: var(--text-primary); font-size: 12px; background: var(--paper); border-radius: 8px; padding: 6px 8px; }
 .species-legend[hidden] { display: none; }
 .species-legend-classes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; max-width: 220px; }
 .species-legend-class { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; min-width: 0; }
 .species-legend-swatch { display: block; flex: 0 0 auto; border-radius: 50%; box-sizing: border-box; }
-.species-legend-label { font: 10px var(--font-mono); text-align: center; white-space: nowrap; }
+.species-legend-label { font: 12px var(--font-sans); text-align: center; white-space: nowrap; }
 /* Top datasets (src/bio/datasetList.js), under the legend and in the what-lives-here card: a small heading, then one row per dataset with
    its title as a link and its record count; a failed lookup adds a note on its own line. */
-.species-datasets { flex: 0 0 auto; display: flex; flex-direction: column; font-size: 11px; }
+.species-datasets { flex: 0 0 auto; display: flex; flex-direction: column; font-size: 12px; }
 /* Space between the parts that show: the heading, the live region when it holds a message, and the content. A flex gap also spaced the empty
    live region, and at the end of a 400x800 phone's scroll those 4 px put the top dataset link out of view. */
 .species-datasets > :not(:first-child):not(:empty) { margin-top: 4px; }
 .species-datasets[hidden] { display: none; }
-.species-datasets-loading { color: rgba(232, 234, 237, 0.8); }
+.species-datasets-loading { color: var(--text-primary); }
 /* The link is as wide as its text, so its focus ring stays clear of the scroll gutter. */
 .species-datasets-link { align-self: flex-start; color: var(--accent); }
-.species-datasets-error { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: #ffb86b; }
+.species-datasets-error { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--warn); }
 /* The live region stays in the layout (never display: none, which would stop announcements); empty, it takes no height and no space above. */
-.species-datasets-status { margin: 0; color: #ffb86b; }
+.species-datasets-status { margin: 0; color: var(--warn); }
 .species-datasets-content { display: flex; flex-direction: column; gap: 4px; }
 .dataset-list { display: flex; flex-direction: column; gap: 3px; }
-.dataset-list-heading { color: rgba(232, 234, 237, 0.8); font: 9px var(--font-mono); letter-spacing: 1.2px; }
+.dataset-list-heading { color: var(--text-primary); font: 12px var(--font-sans);}
 .dataset-list-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.dataset-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; font-size: 11px; line-height: 1.35; }
+.dataset-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; font-size: 12px; line-height: 1.35; }
 .dataset-row-link { flex: 1 1 0; min-width: 0; color: var(--accent); overflow-wrap: anywhere; }
-.dataset-row-count { flex: 0 0 auto; color: rgba(232, 234, 237, 0.8); font: 10px var(--font-mono); }
-.dataset-row-note { flex: 1 0 100%; color: #ffb86b; font-size: 10px; }
+.dataset-row-count { flex: 0 0 auto; color: var(--text-primary); font: 12px var(--font-sans); }
+.dataset-row-note { flex: 1 0 100%; color: var(--warn); font-size: 12px; }
 .bio-card-foot .dataset-list { grid-row: datasets-start / datasets-end; display: grid; grid-template-rows: subgrid; row-gap: 0; margin-bottom: 6px; }
 .bio-card-foot .dataset-list-heading { grid-row: datasets-heading; }
 /* The rows' floor is their ring inset only (see .bio-card-body). R13-M2: 3 px of padding inside the scroller, taken back by the margin, as on
@@ -2702,12 +1951,11 @@ body.recording-mode #bio-card { display: none !important; }
    which between rows read as the end of the list. */
 .bio-card-foot .dataset-list-more { grid-row: datasets-heading; justify-self: end; align-self: end; height: auto; margin-top: 0; line-height: 12px; }
 .species-chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
-/* Unpressed chips: the shared .scene-btn text (0.5 white) measured 4.00 to 4.55:1 over the panel, so species chips use 0.8 white. The
-   pressed rule below has the same specificity and comes later, so it still wins. */
-.scene-btn.species-chip { color: rgba(232, 234, 237, 0.8); }
+/* Unpressed species chips are ink. The pressed rule below has the same specificity and comes later, so it still wins. */
+.scene-btn.species-chip { color: var(--text-primary); }
 /* .scene-btn:hover paints exactly the pressed look, so a hovered chip (a resting pointer, a sticky touch hover) read as pressed:
    at 400x800 the pointer sat on ALL YEARS. Hover on an unpressed chip only lightens it; a pressed chip stays pressed under hover. */
-.species-chip:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.38); background: rgba(255, 255, 255, 0.09); }
+.species-chip:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--text-primary); border-color: rgba(22, 45, 61, 0.38); background: rgba(22, 45, 61, 0.09); }
 .species-chip[aria-pressed="true"], .species-chip[aria-pressed="true"]:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 /* MAP ON / MAP OFF is a switch, not a chip: a track whose knob sits left on grey while the map is off and right on the accent while it is
    on. The words still say the state; role="switch" with aria-checked carries it under the fixed name "Species map". */
@@ -2715,17 +1963,17 @@ body.recording-mode #bio-card { display: none !important; }
 /* hidden must win over the display above: .species-modeled [hidden] has the same specificity and comes earlier, so a hidden
    MODELED RANGE switch was still drawn (09-30, real list) */
 .scene-btn.species-switch[hidden] { display: none; }
-.scene-btn.species-switch::before { content: ""; flex: 0 0 auto; width: 24px; height: 14px; border-radius: 999px; background: radial-gradient(circle at 7px 50%, #e8eaed 0 4px, transparent 4.5px), rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32); }
-.scene-btn.species-switch[aria-checked="true"]::before { background: radial-gradient(circle at 17px 50%, #03141b 0 4px, transparent 4.5px), var(--accent); box-shadow: none; }
-.scene-btn.species-switch:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(255, 255, 255, 0.38); background: rgba(255, 255, 255, 0.09); }
+.scene-btn.species-switch::before { content: ""; flex: 0 0 auto; width: 24px; height: 14px; border-radius: 999px; background: radial-gradient(circle at 7px 50%, rgba(22, 45, 61, 1.0) 0 4px, transparent 4.5px), rgba(22, 45, 61, 0.16); box-shadow: inset 0 0 0 1px rgba(22, 45, 61, 0.12); }
+.scene-btn.species-switch[aria-checked="true"]::before { background: radial-gradient(circle at 17px 50%, var(--paper) 0 4px, transparent 4.5px), var(--accent); box-shadow: none; }
+.scene-btn.species-switch:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(22, 45, 61, 0.38); background: rgba(22, 45, 61, 0.09); }
 /* The action is not a toggle: a full-width accent pill at rest, filled while armed (aria-pressed="true"). Every selector carries .scene-btn,
    so it out-ranks the shared .scene-btn rules by specificity, not by source order (hover 0,4,0 > .scene-btn:hover:not(:disabled) 0,3,0). */
-.scene-btn.species-action { flex: 0 0 auto; border-radius: 999px; color: var(--accent); border-color: rgba(0, 212, 255, 0.75); background: rgba(0, 212, 255, 0.06); font-size: 10px; font-weight: 700; letter-spacing: 1.6px; padding: 8px 12px; }
+.scene-btn.species-action { flex: 0 0 auto; border-radius: 999px; color: var(--accent); border-color: rgba(22, 45, 61, 0.75); background: rgba(22, 45, 61, 0.06); font-size: 12px; font-weight: 700;padding: 8px 12px; }
 .scene-btn.species-action:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
-.scene-btn.species-action[aria-pressed="true"], .scene-btn.species-action[aria-pressed="true"]:hover:not(:disabled) { color: #03141b; border-color: var(--accent); background: var(--accent); }
+.scene-btn.species-action[aria-pressed="true"], .scene-btn.species-action[aria-pressed="true"]:hover:not(:disabled) { color: var(--paper); border-color: var(--accent); background: var(--accent); }
 /* One credit per line: with "only" the pair no longer fits one line of the 320 px panel, and a wrap between them left the
    separator dangling at the end of the first line. On their own lines neither can wrap inside itself. */
-.species-credit { margin: 0; color: rgba(232, 234, 237, 0.78); font-size: 11px; line-height: 1.4; }
+.species-credit { margin: 0; color: var(--text-primary); font-size: 12px; line-height: 1.4; }
 .species-credit > span { display: block; white-space: nowrap; }
 /* B1: on a 400x800 phone the left stack ends at half height, so the panel keeps WHAT LIVES HERE and both chip rows whole by tightening its
    padding, gaps and control heights, letting the chips shrink below the shared 72 px, and keeping "Find a species" for screen readers only
@@ -2741,7 +1989,7 @@ body.recording-mode #bio-card { display: none !important; }
   #species-panel .species-credit { line-height: 1.25; }
   #species-panel .species-datasets-content { gap: 2px; }
   #species-panel .species-body { gap: 2px; }
-  #species-panel .species-label { margin-bottom: 0; letter-spacing: 0.4px; }
+  #species-panel .species-label { margin-bottom: 0;}
   #species-panel label.species-label[for="species-search"] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   #species-panel #species-search { padding-top: 4px; padding-bottom: 4px; }
   #species-panel .scene-btn.species-action { padding-top: 6px; padding-bottom: 6px; }
@@ -2760,11 +2008,15 @@ body.recording-mode #bio-card { display: none !important; }
 /* Final round (critic r1 N2): in phone landscape the stack's half-height line (50vh + 8px, the context rail's share in portrait) left it
    110 px at 667x375, and the SPECIES body 55 px: the chosen row showed 13 of its 44 px and WHAT LIVES HERE none. The rail sits beside the
    stack there, not under it, so the stack runs down to the rail's own floor above the required map credit (calc(2vh + 7.5rem), the rail rule
-   above), 178 px at 667x375, and is 460 px wide instead of the full width: wide enough for the FUZZY status on one line (at 360 px it took
-   two, and WHAT LIVES HERE lost 6.5 px), and the map stays in view beside it.
+   above), 178 px at 667x375, and is 490 px wide instead of the full width: wide enough for the FUZZY status on one line (at 360 px it took
+   two, and WHAT LIVES HERE lost 6.5 px), and the map stays in view beside it. 460 px until 2026-10-20, when the status went from 11 to
+   12 px Inter: the line measured 444.5 px against 415 px of text width, wrapped, and pushed What lives here 14.5 px under the fold. The
+   SPECIES body also runs into the inner's right padding, its 15 px scrollbar gutter standing in for it, so the line gets 455 px. Not
+   wider: at 1024 px the panel's right edge (506) must stay left of the globe's centre (512), or the card stops sitting beside the panel
+   (src/bio/shortViewport.js).
    Fix round 3 (critic r2 N1): with every panel collapsed the stack has the same height, so all three pills (162 px with their gaps) show
    without a scroll at 667x375 and 640x360 (the 110 px band hid SPECIES below it), at the collapsed pills' desktop width, which keeps them
-   clear of the globe's centre; an open panel widens it to 460 px, and folds while the card shows (src/bio/shortViewport.js).
+   clear of the globe's centre; an open panel widens it to 490 px, and folds while the card shows (src/bio/shortViewport.js).
    Fix round 4 (critic r3 N1): at 568x320 the stack is 124 px tall, and the three 50 px pills with their gaps took 162, leaving SPECIES an 8 px
    sliver whose + sat on the map credit. On a short viewport the collapsed pills are 38 px (6 px padding above and below the header, 34 px for
    SPECIES) with 4 px gaps, 118 px in all. */
@@ -2772,21 +2024,20 @@ body.recording-mode #bio-card { display: none !important; }
   /* Fix round 5 (critic r4 B1): the short model is a height condition, so it holds at every width. Above 720 px the desktop lane engine
      used to lay out the stack at these heights, and gave it a 38 px band from 26vh (on main 1f5d591 too), so an open panel showed only its
      header; ui.js now leaves the stack to these rules whenever the viewport is short, as it does on phones. The stack is the phone one: from
-     under the header (70 px) down to the rail's floor above the map credit, a 176 px pill column, one open panel at a time (460 px wide), the
+     under the header (70 px) down to the rail's floor above the map credit, a 176 px pill column, one open panel at a time (490 px wide), the
      collapsed pills hidden while it is open. */
   #left-panel-stack { top: var(--short-stack-top, 70px); left: 16px; right: auto; width: min(var(--left-collapsed-width), calc(100vw - 32px)); bottom: calc(2vh + 7.5rem); max-height: none; overflow-y: auto; row-gap: 4px; }
-  #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) { width: min(460px, calc(100vw - 32px)); }
+  #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) { width: min(490px, calc(100vw - 32px)); }
+  #left-panel-stack > #species-panel:not(.collapsed) .species-body { margin-right: -14px; }
   #left-panel-stack:has(> [data-panel-id]:not(.collapsed)) > [data-panel-id].collapsed { display: none !important; }
   #left-panel-stack > [data-panel-id], #left-panel-stack > [data-panel-id].collapsed { position: relative; top: auto; right: auto; bottom: auto; left: auto; width: 100%; }
   #left-panel-stack > [data-panel-id].collapsed > :is(.data-panel-inner, .species-panel-inner) { padding-top: 6px; padding-bottom: 6px; }
-  /* Fix round 5 (critic r4 N2): each panel's glow extends 18 px past its box (inset -18px), which gave the 124 px stack at 568x320 a 16 px
-     scroll range nothing needed; here the glow stays inside its pill. */
-  #left-panel-stack > [data-panel-id] > .panel-glow { inset: 0; }
+  
 }
 #species-panel.collapsed { width: var(--left-collapsed-width); }
 #species-panel.collapsed .species-body { display: none !important; }
 #species-panel.collapsed .species-more { display: none !important; }
-#species-panel.collapsed .panel-title { font-size: 8px; letter-spacing: 1.8px; }
+#species-panel.collapsed .panel-title { font-size: 12px;}
 #species-panel.collapsed .species-panel-inner { padding-bottom: 10px; }
 #species-panel.collapsed .panel-header { margin-bottom: 2px; }
 body.ui-clean-view #species-panel,
@@ -2801,12 +2052,12 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
 #observed-time { position: fixed; left: 0; right: 0; margin-inline: auto; width: fit-content; bottom: 28px; z-index: 30;
   box-sizing: border-box; max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center;
   gap: 8px; align-items: center; padding: 6px 10px; border-radius: 8px;
-  background: rgba(8, 12, 18, 0.82); color: #cfe3ff; font: 12px/1.2 var(--font-mono, ui-monospace, monospace);
-  border: 1px solid rgba(120, 170, 255, 0.35); backdrop-filter: blur(4px); }
+  background: var(--paper); color: var(--text-primary); font: 12px/1.2 var(--font-sans);
+  border: 1px solid rgba(22, 45, 61, 0.35);}
 #observed-time .ot-title { min-width: 9em; opacity: 0.8; }
-#observed-time .ot-range { width: 38vw; max-width: 520px; min-width: 120px; flex: 0 1 auto; }
+#observed-time .ot-range { width: 38vw; max-width: 520px; min-width: 120px; flex: 0 1 auto; accent-color: var(--accent); }
 #observed-time .ot-label { min-width: 14em; }
-#observed-time button { background: #16233a; color: #cfe3ff; border: 1px solid rgba(120, 170, 255, 0.4);
+#observed-time button { background: var(--paper); color: var(--text-primary); border: 1px solid rgba(22, 45, 61, 0.4);
   border-radius: 5px; padding: 2px 7px; cursor: pointer; font: inherit; }
 @media (max-width: 600px) {
   #observed-time { width: calc(100vw - 16px); }
@@ -2836,10 +2087,6 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
     position: static;
     flex: 0 0 auto;
     width: auto;
-    /* a backdrop-filter makes an element the containing block of its absolute descendants even when
-       static, which kept each tray centred on its tab; the dock behind already blurs the scene */
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
 
   #command-dock .panel-inner,

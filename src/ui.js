@@ -397,7 +397,7 @@ export class StyleManager {
       const stack = state.activeStack;
       const label = state.status === 'switching'
         ? '...'
-        : (stack?.shortLabel || stack?.label || 'MAP');
+        : (stack?.shortLabel || stack?.label || 'Map');
       this._mapStackStatus.textContent = label;
       this._mapStackStatus.classList.toggle('warn', !!state.lastError);
     }
@@ -908,7 +908,7 @@ export class StyleManager {
         const boxes = [...document.querySelectorAll(SHORT_HEADER_SELECTOR)].map((element) => element.getBoundingClientRect());
         const stackLeft = stack.getBoundingClientRect().left;
         // 4 px below the header, the gap the pills keep between each other: at 568x320 the three 38 px pills need all but 3.6 px of what is left.
-        const stackTop = topBelowHeader({ boxes, left: stackLeft, right: stackLeft + Math.min(460, window.innerWidth - 32), viewportHeight: window.innerHeight, gap: 4 });
+        const stackTop = topBelowHeader({ boxes, left: stackLeft, right: stackLeft + Math.min(490, window.innerWidth - 32), viewportHeight: window.innerHeight, gap: 4 });
         const card = document.getElementById('bio-card');
         const cardLeft = parseFloat(card ? getComputedStyle(card).getPropertyValue('--short-card-left') : '') || 200;
         const cardTop = topBelowHeader({ boxes, left: cardLeft, right: window.innerWidth - 16, viewportHeight: window.innerHeight });
@@ -1108,8 +1108,7 @@ export class StyleManager {
   }
 
   /**
-   * Updates collapse button glyphs based on panel state. Right-rail panels
-   * use directional arrows; left-stack panels use +/- symbols.
+   * Updates a collapse button's state and name. Its + or − is drawn by style.css from aria-expanded.
    * @param {HTMLElement} panelEl - The panel DOM element.
    * @returns {void}
    */
@@ -1117,7 +1116,6 @@ export class StyleManager {
     const collapsed = panelEl.classList.contains('collapsed');
     panelEl.querySelectorAll('.panel-collapse-btn[data-collapse-target]').forEach((btn) => {
       if (btn.closest('[data-panel-id]') !== panelEl) return;
-      btn.textContent = collapsed ? '+' : '−';
       btn.setAttribute('aria-expanded', String(!collapsed));
       const panelName = panelEl.querySelector('.panel-title, .pp-header-label')?.textContent?.trim() || 'panel';
       const action = collapsed ? 'Expand' : 'Collapse';

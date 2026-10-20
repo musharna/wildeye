@@ -7,17 +7,17 @@
  *
  *  1. Idle + zero layers + parked camera → the scene stops rendering
  *     (near-zero postRender fires over a settle-then-observe window).
- *  2. An animated style takes the style-anim hold, keeps frames flowing, and
- *     releases it when the style returns to normal.
+ *  2. (Retired 2026-10-20 with the visual presets: the animated style hold.)
  *  3. Camera movement while idle → a render on most moving frames (Cesium-native path).
  *  4. Birds enabled → continuous mode (its particle animator holds the loop):
  *     postRender cadence ≈ rAF cadence and ≥5× the idle count.
  *  5. Birds disabled again → back to idle (near-zero fires).
  *
  * The idle windows measure the STEADY-STATE floor, so counting starts only
- * after a quiet run longer than one HUD summary refresh (`HUD_SUMMARY_INTERVAL_MS`
- * in src/hud.js): disabling layers marks the summary dirty, and the tick that
- * notices it types new text into a HUD corner up to 15 s later. A scene that
+ * after a 16 s quiet run. The camera HUD's 15 s summary refresh set that length
+ * (it typed new text into a HUD corner up to 15 s after a layer change); the HUD
+ * is gone (2026-10-20) and the length is kept, so a slow periodic re-render still
+ * cannot fall between the settle and the count. A scene that
  * renders every frame never produces an empty second, so a quiet run that never
  * arrives is a FAILURE, not a fall-through.
  *
@@ -98,10 +98,8 @@ try {
   const diag = () => page.evaluate(() => window.__godsEyeView.getRenderGovernorDiagnostics?.()
     || window.__gevRenderGovernor?.getDiagnostics?.() || null);
 
-  /** Mirrors `HUD_SUMMARY_INTERVAL_MS` in src/hud.js; this harness drives the built app, not the module. */
-  const HUD_SUMMARY_INTERVAL_MS = 15_000;
-  /** One full refresh period, plus a second of margin, in 1 s windows. */
-  const QUIET_RUN_WINDOWS = Math.ceil(HUD_SUMMARY_INTERVAL_MS / 1_000) + 1;
+  /** 16 one-second windows: the retired HUD's 15 s refresh plus a second of margin, kept as the quiet run's length. */
+  const QUIET_RUN_WINDOWS = 16;
 
   /**
    * Wait for a run of empty one-second windows at least one summary refresh
@@ -135,26 +133,7 @@ try {
   check('governor reports idle mode with zero layers', d1?.mode === 'idle', d1);
   check('idle parked scene stops rendering (≤4 fires / 5s)', idle.renders <= 4, idle);
 
-  // ── 2. animated style cycle: style-anim holds, then releases ─────────
-  await page.evaluate(() => { window.__godsEyeView.styleManager.setStyle('retro'); });
-  await new Promise((r) => setTimeout(r, 900)); // crossfade + first ticks
-  const dAnim = await diag();
-  check('animated style takes the style-anim hold (continuous)', dAnim?.mode === 'continuous' && dAnim.holds.includes('style-anim'), dAnim);
-  const animFrames = await countFrames(2_000);
-  check('animated style keeps frames flowing (≥50% rAF)', animFrames.renders >= animFrames.rafs * 0.5, animFrames);
-  await page.evaluate(() => { window.__godsEyeView.styleManager.setStyle('normal'); });
-  // The crossfade ends on an animation frame, so on a starved host a fixed wait read the hold before its last tick. Poll the governor instead;
-  // a hold that never releases still fails at the ceiling.
-  const released = await (async () => {
-    const t0 = Date.now();
-    for (;;) {
-      const d = await diag();
-      if (d?.mode === 'idle' && !d.holds.includes('style-anim')) return { ...d, waitedMs: Date.now() - t0 };
-      if (Date.now() - t0 > 15_000) return { ...d, waitedMs: Date.now() - t0, timedOut: true };
-      await new Promise((r) => setTimeout(r, 250));
-    }
-  })();
-  check('style-anim hold releases and the scene goes idle (within 15 s)', !released.timedOut, released);
+  // (2. the animated style cycle and its style-anim hold were retired with the visual presets, 2026-10-20.)
 
   // ── 3. camera movement renders (Cesium-native path) ───────────────────
   // One camera step per animation frame for 20 frames, counting renders over exactly those frames, so the ratio holds at any frame rate.

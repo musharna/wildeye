@@ -63,7 +63,7 @@ test('update: records that collide at 4 decimals still load (duplicate-id regres
     l.init({ dataSources: { add() {}, remove() {} } });
     assert.equal(await l.update(), true, l.getStats().error);
     assert.equal(l.getStats().count, 2);
-    assert.equal(l.getRowControls().chips[0].label, 'WHALES 2');
+    assert.equal(l.getRowControls().chips[0].label, 'Whales 2');
     assert.equal(l.getStats().truncated.length, 0);
     globalThis.fetch = async () => ({ ok: true, json: async () => ({ ...gj, truncated: ['orca'] }) });
     await l.update();

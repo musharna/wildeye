@@ -6,7 +6,7 @@ export const MAP_STACKS = [
   {
     id: 'esri-imagery',
     label: 'Esri Satellite',
-    shortLabel: 'SAT',
+    shortLabel: 'Satellite',
     kind: 'esri-imagery',
   },
   {

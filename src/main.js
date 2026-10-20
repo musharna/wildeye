@@ -166,11 +166,10 @@ async function init() {
     // clutter the on-globe line. See docs/pre-ship-audit-2026-07-01.md H11.
     registerDataCredits(viewer);
 
-    // The page colour behind the globe (style.css --page) and no sun or moon discs floating on it. The atmosphere stays,
-    // softened: Cesium's default is bright enough to read as a hard cyan seam at the limb.
+    // The page colour behind the globe (style.css --page). skyBox: false above also leaves out Cesium's sun and moon
+    // discs (Viewer: "no skyBox, Sun, or Moon will be added"). The atmosphere stays, softened: Cesium's default is
+    // bright enough to read as a hard cyan seam at the limb.
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#f1f5f8');
-    viewer.scene.sun.show = false;
-    viewer.scene.moon.show = false;
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
     viewer.scene.skyAtmosphere.saturationShift = -0.12;
@@ -308,7 +307,7 @@ async function init() {
       observedTime,
     });
     // Bottom-centre is one stack above the dock and the map credits: time bar, then compare pill | panel.
-    // The pointer readout sits beside it and rises above it only where it overlaps it (a phone).
+    // Nothing sits beside it since the pointer readout moved to the top-right corner (style.css).
     stackAboveChrome({
       doc: document,
       below: () => [document.getElementById('command-dock'), document.getElementById('cesium-credits')],
@@ -316,7 +315,6 @@ async function init() {
         document.getElementById('observed-time'),
         [compareUi.toggle, compareUi.panel],
       ],
-      beside: () => [document.getElementById('pointer-readout')].filter(Boolean),
     });
     // Restoration starts only after the complete production registry is sealed.
     dataManager.finalizeRegistrations(LAYER_STATE_REGISTRY);

@@ -259,7 +259,7 @@ export function attachObservedTime(store, dataManager, layers) {
 
 /** Human label for the bar. */
 export function describeObservedTime(iso) {
-  return iso ? `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC` : "LIVE";
+  return iso ? `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC` : "Live";
 }
 
 /**
@@ -290,7 +290,7 @@ export function installObservedTimeUi(
     '<button class="ot-back" title="Back one hour">◀</button>' +
     '<input class="ot-range" type="range" min="0" max="0" value="0" aria-label="Observed time">' +
     '<button class="ot-fwd" title="Forward one hour">▶|</button>' +
-    '<button class="ot-live" title="Return to live data">LIVE</button>' +
+    '<button class="ot-live" title="Return to live data">Live</button>' +
     '<span class="ot-label"></span>';
   doc.body.appendChild(root);
   const range = root.querySelector(".ot-range"),

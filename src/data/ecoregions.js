@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * Terrestrial ecoregions and biomes (polygon contract, static): RESOLVE Ecoregions 2017
@@ -269,7 +270,7 @@ export function createEcoregionsLayer() {
         .sort((a, b) => a - b);
       const chips = nums.map((b) => ({
         id: String(b),
-        label: `${CHIP_LABELS[b] || biomeOf(b).name.toUpperCase()} ${counts[b] ?? 0}`,
+        label: `${CHIP_LABELS[b] || sentenceCase(biomeOf(b).name)} ${counts[b] ?? 0}`,
         active: _biomes[b] !== false,
         state: _biomes[b] !== false ? "active" : "idle",
         title: `${_biomes[b] !== false ? "Hide" : "Show"} ${biomeOf(b).name}`,

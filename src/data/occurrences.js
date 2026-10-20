@@ -1,6 +1,7 @@
 import * as Cesium from "cesium";
 import { loadIucn, iucnBadge } from "./iucn.js";
 import { extentFromDays, pluck } from "./observedExtent.js";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * Recent wildlife sightings from GBIF + OBIS (CC0 / CC-BY records only; Happywhale's under its datasets' CC BY-NC 4.0),
@@ -23,17 +24,17 @@ export const GROUP_COLORS = Object.freeze({
   other: "#b0bec5",
 });
 const GROUP_LABELS = Object.freeze({
-  whales: "WHALES",
-  birds: "BIRDS",
-  amphibians: "AMPHIBIANS",
-  sharks: "SHARKS & RAYS",
-  turtles: "TURTLES",
-  insects: "INSECTS",
-  mammals: "MAMMALS",
-  plants: "PLANTS (PHENOLOGY)",
-  sounds: "SOUNDS (XENO-CANTO)",
-  invasives: "INVASIVE AQUATICS (USGS)",
-  other: "OTHER",
+  whales: "Whales",
+  birds: "Birds",
+  amphibians: "Amphibians",
+  sharks: "Sharks & rays",
+  turtles: "Turtles",
+  insects: "Insects",
+  mammals: "Mammals",
+  plants: "Plants (phenology)",
+  sounds: "Sounds (xeno-canto)",
+  invasives: "Invasive aquatics (USGS)",
+  other: "Other",
 });
 
 /** 1.0 for today, fading to 0.25 at windowDays old (pure). */
@@ -272,7 +273,7 @@ export function createOccurrencesLayer() {
         .sort()
         .map((g) => ({
           id: g,
-          label: `${GROUP_LABELS[g] || g.toUpperCase()} ${_groupCounts[g]}`,
+          label: `${GROUP_LABELS[g] || sentenceCase(g)} ${_groupCounts[g]}`,
           active: _groups[g] !== false,
           state: _groups[g] !== false ? "active" : "idle",
           title: `${_groups[g] !== false ? "Hide" : "Show"} ${g}`,

@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { extentFromWeekDates, pluck } from "./observedExtent.js";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * H5N1 sampled spread (site-series contract): one point per place in the Nextstrain
@@ -25,11 +26,11 @@ export const HOST_COLORS = Object.freeze({
   other: "#94a3b8",
 });
 export const HOST_LABELS = Object.freeze({
-  poultry: "POULTRY",
-  "wild bird": "WILD BIRDS",
-  cattle: "CATTLE",
-  human: "HUMANS",
-  other: "OTHER (MAMMALS, INSECTS, UNKNOWN)",
+  poultry: "Poultry",
+  "wild bird": "Wild birds",
+  cattle: "Cattle",
+  human: "Humans",
+  other: "Other (mammals, insects, unknown)",
 });
 
 export const hostColor = (cat) => HOST_COLORS[cat] || HOST_COLORS.other;
@@ -298,7 +299,7 @@ export function createH5n1Layer() {
       const { c, active } = activeCounts();
       const chips = _categories.map((k) => ({
         id: k,
-        label: HOST_LABELS[k] || k.toUpperCase(),
+        label: HOST_LABELS[k] || sentenceCase(k),
         active: _visible[k] !== false,
         state: _visible[k] !== false ? "active" : "idle",
         title: `${_visible[k] !== false ? "Hide" : "Show"} ${k}`,

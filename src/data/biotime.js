@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { extentFromTimes } from "./observedExtent.js";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * Assemblage time series, BioTIME 2.0 (Dornelas et al. 2025, Global Ecology and Biogeography 34(5): e70003,
@@ -292,7 +293,7 @@ export function createBiotimeLayer({
     getRowControls() {
       const chips = TAXA.map((t) => ({
         id: t,
-        label: t.toUpperCase(),
+        label: sentenceCase(t),
         active: _visible[t] !== false,
         state: _visible[t] !== false ? "active" : "idle",
         title: `${_visible[t] !== false ? "Hide" : "Show"} ${t}`,

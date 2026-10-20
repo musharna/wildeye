@@ -17,18 +17,18 @@ const DATA_URL = "data/phenology.geojson";
 const FADED = 0.2;
 
 export const CLASSES = Object.freeze([
-  { key: "leaves", label: "LEAVES", name: "leaves", color: "#66bb6a" },
-  { key: "flowers", label: "FLOWERS", name: "flowers", color: "#f48fb1" },
-  { key: "fruits", label: "FRUITS", name: "fruits", color: "#ff8a65" },
+  { key: "leaves", label: "Leaves", name: "leaves", color: "#66bb6a" },
+  { key: "flowers", label: "Flowers", name: "flowers", color: "#f48fb1" },
+  { key: "fruits", label: "Fruits", name: "fruits", color: "#ff8a65" },
   {
     key: "insects",
-    label: "INSECTS",
+    label: "Insects",
     name: "insect activity/emergence",
     color: "#ffd54f",
   },
   {
     key: "birds",
-    label: "BIRDS",
+    label: "Birds",
     name: "birds present (arrival)",
     color: "#4fc3f7",
   },

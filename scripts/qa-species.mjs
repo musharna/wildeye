@@ -448,7 +448,10 @@ if (CHECKS.has('panel-layout')) {
     if (!dm.setLayerParams('species', { taxonKey: 5133088, name: 'Monarch' }, { origin: 'user' })) throw new Error('species params rejected');
     await dm.setEnabled('species', true, { origin: 'user' });
   });
-  const desktopFit = await fitAt(1400, 900, 'panel-scrolled-desktop');
+  // 2026-10-20: with the camera HUD's corners gone from the left lane, the whole body fits at 1400x900 (a 780 px corridor), so the desktop
+  // overflow case, where the cue must show and the end links scroll into view, moved to a 720 px tall window (still above the short threshold).
+  const desktopFit = await fitAt(1400, 900, null, { overflow: false });
+  const shortDesktopFit = await fitAt(1400, 720, 'panel-scrolled-desktop');
   const phoneFit = await fitAt(400, 800, 'panel-scrolled-phone');
   // Critic 8 S1: at the page's starting camera (street level over Austin, pitched 30° down) the ground below the stack holds no monarch record
   // from the last 10 years (api.gbif.org v1: 0; its 12 species tiles answered 200 and the circles they draw sit at the horizon, under the
@@ -471,13 +474,13 @@ if (CHECKS.has('panel-layout')) {
   });
   await setOpen('species-panel', !initial.species);
   await sleep(800);
-  const fitOk = desktopFit.ok && phoneFit.ok && smallPhoneFit.ok && tallDesktopFit.ok;
+  const fitOk = desktopFit.ok && shortDesktopFit.ok && phoneFit.ok && smallPhoneFit.ok && tallDesktopFit.ok;
   report('panel-layout', collapsedOk && expandedOk && phoneOk && restoredOk && fitOk, {
     collapsed: { species: collapsed.species.width, data: collapsed.data.width },
     expanded: { species: expanded.species.width, speciesExpandedVar: expanded.species.expandedVar },
     phone: { viewport: phone.viewport, speciesWidth: phone.species.width, speciesLeft: phone.species.left, speciesRight: phone.species.right },
     restored: { viewport: restored.viewport, speciesCollapsed: restored.species.collapsed, dataCollapsed: restored.data.collapsed },
-    desktopFit, phoneFit, smallPhoneFit, tallDesktopFit,
+    desktopFit, shortDesktopFit, phoneFit, smallPhoneFit, tallDesktopFit,
     collapsedOk, expandedOk, phoneOk, restoredOk, fitOk,
   });
 }
@@ -1215,11 +1218,11 @@ if (CHECKS.has('card-foot-rest')) {
 // over the OSM street map (central Austin from 3 km) and over open ocean (the Pacific from 800 km, OSM), at 1400x900 and 375x667: the three
 // pills' computed backgrounds and backdrop filters are equal, and the SPECIES pill's fill (the median pixel of the pill 10 px in from its edges,
 // with every header's contents hidden) is within 15 levels per channel of the mean of the other two pills' fills. Positive control in the same
-// check: the open SPECIES panel's computed background is the 0.86 floor, not the pills' glass.
+// check: the open SPECIES panel's computed background is opaque paper, rgb(255, 255, 255) (the dark look's 0.86 floor until 2026-10-20).
 // Brief B (pill contrast): in the same states, every pill's label text (DATA LAYERS, SCENES, SPECIES) holds 4.5:1 and its + button 3:1 (a
 // non-text control) over the ground it is drawn on, measured with qa contrast's method (the text made transparent, the page captured, the
 // text colour composited over each pixel under its line boxes, the lowest ratio kept). Positive control in the same measurement: each label
-// at 0.3 white (the pills' old --text-dim) over the same pixels comes out under 4.5:1.
+// in its own colour at 0.3 alpha over the same pixels comes out under 4.5:1.
 if (CHECKS.has('collapsed-pills')) {
   await installContrast();
   const pillContrast = async (roots) => {
@@ -1324,7 +1327,9 @@ if (CHECKS.has('collapsed-pills')) {
     await page.setViewport({ width: 1400, height: 900 });
     await sleep(2000);
   }
-  const controlOk = Boolean(control?.open) && control.background === 'rgba(12, 12, 20, 0.86)' && samples.length > 0 && control.background !== samples[0].pills[0].background;
+  // The open panel is opaque paper (style.css --paper). The dark look's open-panel floor (0.86) differed from the pills' glass; on paper
+  // they are one surface, so the control is the exact value, which a translucent or dark panel fails.
+  const controlOk = Boolean(control?.open) && control.background === 'rgb(255, 255, 255)' && samples.length > 0;
   report('collapsed-pills', error === null && samples.length === 4 && samples.every((s) => s.ok) && controlOk && restored?.stack === initial.stack, {
     samples: samples.map((s) => ({ viewport: s.viewport, place: s.place, tiles: s.tiles, ok: s.ok, maxLevels: s.maxLevels, pills: s.pills.map((p) => ({ name: p.name, rgb: p.rgb, background: p.background, box: p.box })), contrast: s.contrast })),
     initial, control, controlOk, restored, ...(error ? { error } : {}),
@@ -1647,8 +1652,9 @@ if (CHECKS.has('card')) {
 
 if (CHECKS.has('suggestion-fade')) {
   // A suggestion list taller than its cap fades out at the bottom (a scroll-driven mask); a list that fits must not fade. Each list is
-  // screenshotted, and rows compare by their brightest text pixels (99th-percentile luminance): the bottom visible row against the
-  // first. Positive control in the same check: "hump" overflows the cap, so its bottom row must read dimmer; an unfaded short list
+  // screenshotted, and rows compare by how far their ink stands from the ground (99th minus 1st percentile luminance, so dark text on
+  // paper and light text on glass both read): the bottom visible row against the first. Reading the brightest pixels alone measured
+  // the paper, not the text, once the panels turned white (2026-10-20). Positive control in the same check: "hump" overflows the cap, so its bottom row must read dimmer; an unfaded short list
   // therefore cannot come from a blind probe. The short query must return at least two rows that fit the cap (one row compares with
   // itself, so its ratio is 1 by construction): "sialia currucoides" gives 3;
   // "megaptera nov" gives 4, but its subspecies names wrap past the cap and the list fades, as it should.
@@ -1688,7 +1694,7 @@ if (CHECKS.has('suggestion-fade')) {
         const lum = [];
         for (let i = 0; i < data.length; i += 4) lum.push(0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]);
         lum.sort((a, b) => a - b);
-        return Number(lum[Math.floor(lum.length * 0.99)].toFixed(1));
+        return Number((lum[Math.floor(lum.length * 0.99)] - lum[Math.floor(lum.length * 0.01)]).toFixed(1));
       });
     }, png, box.rows, box.width);
     return { query, rows: box.total, visibleRows: box.rows.length, overflows: box.scrollHeight > box.clientHeight, scrollHeight: box.scrollHeight, clientHeight: box.clientHeight, fade: box.fade, peaks, bottomToFirst: Number((peaks.at(-1) / peaks[0]).toFixed(3)), texts: box.texts };
@@ -2245,7 +2251,7 @@ if (CHECKS.has('landscape-regions')) {
     const boxes = [...document.querySelectorAll('#left-panel-stack > [data-panel-id]')].filter((p) => p.getClientRects().length > 0).map((p) => ({ id: p.id, r: p.getBoundingClientRect() }));
     const out = [];
     for (const { text, r } of lines) for (const b of boxes) if (Math.min(r.right, b.r.right) - Math.max(r.left, b.r.left) > 0.5 && Math.min(r.bottom, b.r.bottom) - Math.max(r.top, b.r.top) > 0.5) out.push(`${b.id} over "${text}"`);
-    return { lines: lines.length, out };
+    return { lines: lines.length, texts: [...new Set(lines.map((l) => l.text))], out };
   });
   const pillsState = () => page.evaluate((ids) => {
     const stack = document.getElementById('left-panel-stack');
@@ -2265,7 +2271,7 @@ if (CHECKS.has('landscape-regions')) {
   try {
     for (const [width, height] of SIZES) {
       const size = `${width}x${height}`;
-      // Fix round 6 (critic r5 S2): where the open 460 px panel and the card fit side by side and the panel leaves the globe's centre clear, both
+      // Fix round 6 (critic r5 S2): where the open 490 px panel (460 until 2026-10-20) and the card fit side by side and the panel leaves the globe's centre clear, both
       // stay; pinned per size (1024x500, 1024x580, 1280x600), not read from the page. Everywhere else the panel folds while the card shows.
       const beside = BESIDE.has(size);
       const r = { viewport: size, beside };
@@ -2355,7 +2361,8 @@ if (CHECKS.has('landscape-regions')) {
       await shot(`landscape-regions-${size}`);
       const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && (DESKTOP_LANE.has(size) || (st.scrollSlack <= 1 && st.pillsInBox)) && st.pills.every((p) => p.collapsed && p.hit);
       // Fix round 5: no size is exempt from a whole species row (the card folds its Top datasets block and then the note first).
-      const headerOk = (h) => Boolean(h) && h.lines >= 2 && h.out.length === 0;
+      // Positive control: the title's own line box is found and reads "wildeye" (the eye logo's extra boxes made it 3 until 2026-10-20).
+      const headerOk = (h) => Boolean(h) && h.lines >= 1 && h.texts?.includes('wildeye') && h.out.length === 0;
       const turnsOk = beside
         ? r.armed.speciesOpen && !r.armed.speciesOverlapsCard && r.speciesOpenAfterPick
         : !r.armed.speciesOpen && !r.speciesOpenAfterPick && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown;

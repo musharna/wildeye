@@ -8,7 +8,7 @@
  * `items()` lists slots bottom-to-top; a slot is an element or an array of alternates that share one
  * place (the compare pill and its panel). A hidden item keeps its place but gives up its height.
  *
- * `beside()` lists boxes with their own CSS place near the bottom (the pointer readout; the camera HUD's
+ * `beside()` lists boxes with their own CSS place near the bottom (none at present: the camera HUD's
  * bottom corners until 2026-10-20). Each keeps that place unless it overlaps, across, something below it
  * (chrome or a placed item); then it sits above the highest such thing. On a phone a wide box sat under
  * the Compare pill; on a desktop it is far to the side and stays where the CSS puts it.

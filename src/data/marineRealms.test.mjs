@@ -80,7 +80,7 @@ test('entities: one per polygon part, holes kept, coloured by realm; group chips
   assert.equal(black.polygon.hierarchy.holes.length, 1, 'the island stays a hole');
   assert.ok(ds.entities.values.find((e) => e.id === 'marine-realms:30:1'));
   const { chips, legend } = layer.getRowControls();
-  assert.deepEqual(chips.map((c) => c.label), ['BALTIC 1', 'BLACK SEA 1', 'N ATLANTIC, ARCTIC & N PACIFIC 6', 'MID-TROP N PACIFIC 1', 'SE PACIFIC 1', 'TROPICS & WARM SEAS 18', 'NW PACIFIC 1', 'SOUTHERN OCEAN 1']);
+  assert.deepEqual(chips.map((c) => c.label), ['Baltic 1', 'Black Sea 1', 'N Atlantic, Arctic & N Pacific 6', 'Mid-trop. N Pacific 1', 'SE Pacific 1', 'Tropics & warm seas 18', 'NW Pacific 1', 'Southern Ocean 1']);
   assert.equal(legend.length, 31);
   assert.deepEqual(legend[1], { label: '2 Black Sea', color: GEOJSON.features[1].properties.color, count: null });
 

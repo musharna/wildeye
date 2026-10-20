@@ -506,9 +506,9 @@ export function createBirdsLayer() {
         title: `${_params[id] ? 'Hide' : 'Show'} ${title}`, params: { [id]: !_params[id] } });
       return {
         chips: [
-          chip('columns', 'COLUMNS', 'per-radar density columns'),
-          chip('drape', 'RADAR', 'the probable-biological-echo radar image'),
-          chip('particles', 'FLOW', 'the illustrative migration flow particles'),
+          chip('columns', 'Columns', 'per-radar density columns'),
+          chip('drape', 'Radar', 'the probable-biological-echo radar image'),
+          chip('particles', 'Flow', 'the illustrative migration flow particles'),
         ],
         legend: birdsLegend(_params),
       };

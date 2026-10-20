@@ -815,21 +815,21 @@ test('the scroll cue shows while more of the panel body is below, hides at the e
   assert.equal(cue.style.visibility, 'hidden', 'I2: a 1 px range is rounding');
 });
 
-// I1 (final review): the status and error lines, Retry, the card foot and the close × used the shared --text-secondary (0.5 white), 2.96:1
-// over a white basemap through the 0.72 glass. No text rule of the panel, the card or their dataset lists may use the shared 0.5 or 0.3
-// white, and both surfaces have a background floor of 0.86, so text holds 4.5:1 over the lightest basemap (qa-species contrast measures it).
-test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both surfaces have a background floor', () => {
+// I1 (final review) once found text in the shared 0.5 white at 2.96:1 over a white basemap through the 0.72 glass. Since the light look
+// (grill_wildeye_visual_update_2026-10-20) the panel and the card are opaque paper and their text is ink: no rule of the feature may go back
+// to the dark look's translucent white, and src/styleTokens.test.mjs holds every text token to 4.5:1 on paper and page.
+test('SPECIES panel and card text is ink on opaque paper, never the old translucent white', () => {
   const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
   // Comments are removed first, so a comment above a rule is not read as part of its selector.
   const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]*)\{([^{}]*)\}/g)].map(([, selector, body]) => ({ selector: selector.trim(), body }));
   const feature = rules.filter(({ selector }) => /\.species-|#species-|\.bio-card|\.dataset-/.test(selector));
   assert.ok(feature.length > 40, `positive control: the feature's rules are found (${feature.length})`);
-  const dim = feature.filter(({ body }) => /(?:^|[;\s])color:\s*var\(--text-(?:secondary|dim)\)/.test(body)).map(({ selector }) => selector);
-  assert.deepEqual(dim, [], 'rules still using the shared 0.5 or 0.3 white');
+  const white = feature.filter(({ body }) => /(?:^|[;\s])color:\s*rgba\((?:255, 255, 255|232, 234, 237)/.test(body)).map(({ selector }) => selector);
+  assert.deepEqual(white, [], 'rules still using the dark look\'s translucent white');
   for (const selector of ['.bio-card-close', '.bio-card-status', '.bio-card-retry', '.bio-card-foot', '.species-status']) {
     const rule = feature.find((r) => r.selector === selector);
     assert.ok(rule, `${selector} rule`);
-    assert.match(rule.body, /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.8\);/, `${selector} is 0.8 white`);
+    assert.match(rule.body, /(?:^|[;\s])color: var\(--text-primary\);/, `${selector} is ink`);
   }
   // R12-I1 (re-review): only the Top datasets rows scroll inside the card foot; the heading, the note and the gbif.org credit never shrink, so
   // the credit is visible at rest. The rows fade at the bottom while more of them is below, like the card body.
@@ -842,7 +842,7 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   }
   // Brief B fix round 1 (critic S1): the floors say what a short card keeps: one whole species row; the dataset rows only their ring inset.
   for (const declaration of ['grid-row: body;', 'overflow-y: auto;', 'min-height: 0;']) assert.ok(bodyOf('.bio-card-body').includes(declaration), `.bio-card-body has ${declaration}`);
-  assert.ok(bodyOf('.bio-card-body:has(> .bio-card-row)').includes('min-height: calc(12px * 1.45 + 11px * 1.45 + 15px);'), 'a species list keeps one whole row');
+  assert.ok(bodyOf('.bio-card-body:has(> .bio-card-row)').includes('min-height: calc(12px * 1.45 + 12px * 1.3 + 15px);'), 'a species list keeps one whole row');
   const foot = bodyOf('.bio-card-foot');
   for (const declaration of ['grid-row: foot-start / foot-end;', 'display: grid;', 'grid-template-rows: subgrid;']) assert.ok(foot.includes(declaration), `.bio-card-foot has ${declaration}`);
   assert.doesNotMatch(foot, /overflow-y: auto|max-height/, 'the foot itself neither scrolls nor has a cap');
@@ -872,17 +872,14 @@ test('no SPECIES panel or card text uses the shared 0.5 or 0.3 white, and both s
   for (const declaration of ['grid-row: datasets-heading;', 'justify-self: end;']) assert.ok(bodyOf('.bio-card-foot .dataset-list-more').includes(declaration), `the rows' cue has ${declaration}`);
   // Brief B fix round 1 (critic S3): a line cut at the rows' edge fades out there too (scroll-driven, 0 px at the end), and focus inside drops it.
   assert.match(css, /@supports \(animation-timeline: scroll\(\)\) \{\s*\.bio-card-foot \.dataset-list-rows \{[^}]*mask-image: linear-gradient\(to bottom, #000 calc\(100% - var\(--bio-card-datasets-fade\)\), transparent\);[^}]*animation-timeline: scroll\(self\);[^}]*\}\s*\.bio-card-foot \.dataset-list-rows:focus-within \{ -webkit-mask-image: none; mask-image: none; \}/);
-  // Brief B: the shared host pill and header label text and its +/− button are 0.8 white (the shared 0.3 white measured 2.1:1 over the collapsed
-  // glass on the light map and over ocean); one rule for every pill.
+  // The shared host pill and header label text and its +/− button are ink; one rule for every pill.
   const hostRule = (selector) => rules.find((r) => r.selector === selector)?.body ?? '';
-  // Final round (critic N1): the 9 px labels' rendered strokes measured 4.14-4.26:1 on DATA LAYERS at 0.8 white (fg90 over the median ground,
-  // light street map, 1x DPR); at 0.9 white 4.81-5.55:1 on all three pills. The + button's strokes were already 5.3:1 or more.
-  assert.match(hostRule('.panel-title'), /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.9\);/, '.panel-title is 0.9 white');
-  assert.match(hostRule('.panel-collapse-btn'), /(?:^|[;\s])color: rgba\(232, 234, 237, 0\.8\);/, '.panel-collapse-btn is 0.8 white');
-  // Critic 10 S1: the floor is for the open SPECIES panel and the card; the collapsed SPECIES pill keeps the shared glass of its sibling pills.
+  assert.match(hostRule('.panel-title'), /(?:^|[;\s])color: var\(--text-primary\);/, '.panel-title is ink');
+  assert.match(hostRule('.panel-collapse-btn'), /(?:^|[;\s])color: var\(--text-primary\);/, '.panel-collapse-btn is ink');
+  // The open SPECIES panel and the card are opaque paper; the collapsed SPECIES pill keeps the shared surface of its sibling pills.
   assert.ok(bodyOf('.species-panel-inner').includes('background: var(--glass-bg);'), '.species-panel-inner keeps the shared glass');
   for (const selector of ['#species-panel:not(.collapsed) .species-panel-inner', '.bio-card']) {
-    assert.match(bodyOf(selector), /(?:^|[;\s])background: rgba\(12, 12, 20, 0\.86\);/, `${selector} has the 0.86 background floor`);
+    assert.match(bodyOf(selector), /(?:^|[;\s])background: var\(--paper\);/, `${selector} is opaque paper`);
   }
 });
 
@@ -912,9 +909,9 @@ test('SPECIES panel markup, CSS, startup wiring and credits are in place', () =>
   // Critic r1 S-new: focus in the dataset rows gives them one whole link line back, at the species list's expense (qa card-foot-rest rings).
   // Fix round 3 (critic r2 S2): that focus share lives only in the short-window block above; no rule outside it changes the card on focus.
   assert.doesNotMatch(css.replace(/@media \(max-height: 600px\) and \(orientation: landscape\) \{[\s\S]*?\n\}/, ''), /dataset-list-rows:focus-within\) \.bio-card-body|dataset-list-rows:focus-within \{ min-height/, 'no unscoped focus share');
-  // Final round (critic r1 N2): phone landscape gives the stack the rail's floor above the map credit and a 460 px width (qa panel-fold 667x375).
+  // Final round (critic r1 N2): phone landscape gives the stack the rail's floor above the map credit and a 490 px width (qa panel-fold 667x375; 460 until the 12 px type of 2026-10-20).
   // Fix round 5: the short stack is a height condition at every width (the lane engine steps aside there, ui.js), with the phone stack's box.
-  assert.match(css, /@media \(max-height: 600px\) and \(orientation: landscape\) \{(?:\s*\/\*[\s\S]*?\*\/)?\s*#left-panel-stack \{ top: var\(--short-stack-top, 70px\); left: 16px; right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); max-height: none; overflow-y: auto; row-gap: 4px; \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(460px, calc\(100vw - 32px\)\); \}/);
+  assert.match(css, /@media \(max-height: 600px\) and \(orientation: landscape\) \{(?:\s*\/\*[\s\S]*?\*\/)?\s*#left-panel-stack \{ top: var\(--short-stack-top, 70px\); left: 16px; right: auto; width: min\(var\(--left-collapsed-width\), calc\(100vw - 32px\)\); bottom: calc\(2vh \+ 7\.5rem\); max-height: none; overflow-y: auto; row-gap: 4px; \}\s*#left-panel-stack:has\(> \[data-panel-id\]:not\(\.collapsed\)\) \{ width: min\(490px, calc\(100vw - 32px\)\); \}/);
   assert.doesNotMatch(css, /@media \(max-width: 720px\) and \(max-height: [0-9]+px\)|@media \(min-width: 721px\) and \(max-height: 480px\)/, 'no width-split short rules');
   const uiSource = readFileSync(new URL('../ui.js', import.meta.url), 'utf8');
   assert.match(uiSource, /window\.matchMedia\('\(max-width: 720px\)'\)\.matches \|\| window\.matchMedia\(SHORT_VIEWPORT_QUERY\)\.matches\) \{\n      stack\.classList\.remove\('layout-focus'\);/, 'the lane engine steps aside on a short viewport');
@@ -943,14 +940,13 @@ test('SPECIES panel markup, CSS, startup wiring and credits are in place', () =>
     assert.ok(tag.includes('role="group"') && tag.includes(`aria-labelledby="${group}-label"`), `${group} is a group named by its visible label: ${tag}`);
     assert.equal(tag.includes('aria-label='), false, `${group} takes its name from the visible label only: ${tag}`);
   }
-  // R-7s: the row labels (Find a species, Years, What lives here radius) measured 4.00 to 4.55:1 in the shared 0.5 white, so they use the
-  // chips' 0.8 white.
-  assert.match(css, /\.species-label \{[^}]*color: rgba\(232, 234, 237, 0\.8\);/);
+  // R-7s: the row labels (Find a species, Years, What lives here radius) are ink.
+  assert.match(css, /\.species-label \{[^}]*color: var\(--text-primary\);/);
   assert.doesNotMatch(css, /\.species-label \{[^}]*var\(--text-secondary\)/);
-  // S4: the search placeholder is 0.65 white (the browser default measured 3.55:1), and the native clear button is replaced by a light
-  // cross that measures at least 3:1, keeping the native control and its keyboard behaviour.
-  assert.match(css, /#species-search::placeholder \{ color: rgba\(232, 234, 237, 0\.65\); \}/);
-  assert.match(css, /#species-search::-webkit-search-cancel-button \{[^}]*-webkit-appearance: none;[^}]*background: url\("data:image\/svg\+xml,[^"]*stroke='%23e8eaed'[^"]*"\)/);
+  // S4: the search placeholder is the secondary ink (the browser default measured 3.55:1), and the native clear button is replaced by an
+  // ink cross, keeping the native control and its keyboard behaviour.
+  assert.match(css, /#species-search::placeholder \{ color: var\(--text-secondary\); \}/);
+  assert.match(css, /#species-search::-webkit-search-cancel-button \{[^}]*-webkit-appearance: none;[^}]*background: url\("data:image\/svg\+xml,[^"]*stroke='%23162d3d'[^"]*"\)/);
   assert.match(css, /#left-panel-stack > #species-panel \{[^}]*order: 5;/);
   assert.match(css, /#species-panel\.collapsed \.species-body \{ display: none !important; \}/);
   // B1/S1: the body scrolls under a fixed header, with the scroll cue in a row of its own below it; the legend has an opaque ground, so a
@@ -965,7 +961,7 @@ test('SPECIES panel markup, CSS, startup wiring and credits are in place', () =>
   assert.doesNotMatch(css, /\.species-more(?:, \.dataset-list-more)? \{[^}]*(?:position:|margin-top: -)/);
   assert.match(css, /#species-panel\.collapsed \.species-more \{ display: none !important; \}/);
   assert.doesNotMatch(css, /dataset-list-heading \{[^}]*sticky/);
-  assert.match(css, /\.species-legend \{[^}]*background: rgb\(13, 15, 22\);/);
+  assert.match(css, /\.species-legend \{[^}]*background: var\(--paper\);/);
   assert.match(css, /\.species-chip-group \{ display: flex; flex-wrap: wrap;/);
   // In a group the chips take their text's width: the shared .scene-btn flex: 1 squeezed Last 10 years below its text on the desktop panel.
   assert.match(css, /\.species-chip-group \.scene-btn\.species-chip \{ flex: 0 0 auto; \}/);
