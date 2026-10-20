@@ -102,7 +102,9 @@ def night_total(profiles: list[tuple[dt.datetime, str]], sunset: dt.datetime, su
     bio_gate_share is the profiles' bio_gate_share weighted by the time each stands for (profiles with
     no echo left out): near 0 on a night of rain, where the birds counted rest on a few gates.
     height_quartiles_m: the 25th, 50th and 75th percentile heights (m ASL) of the night's birds, each
-    profile's density weighted by the time it stands for (bioRad's quantile rule, pooled)."""
+    profile's density weighted by the time it stands for (bioRad's quantile rule, pooled; profiles with no
+    density add nothing and are left out). A night whose heights cannot be computed keeps its totals:
+    height_quartiles_m stays None and height_failure says why (logged too)."""
     parsed = [(t, parse_profile(text)) for t, text in profiles]
     recs = [(t, integrate_profile(bins)) for t, bins in parsed]
     shares = [bio_gate_share(bins) for _, bins in parsed]
@@ -110,7 +112,7 @@ def night_total(profiles: list[tuple[dt.datetime, str]], sunset: dt.datetime, su
            "profiles_without_density": sum(1 for _, r in recs if r["vid_birds_km2"] is None),
            "coverage": 0.0, "measured_coverage": 0.0, "mt_birds_km": None,
            "peak_mtr_birds_km_h": None, "peak_time": None, "speedless_share": None, "bio_gate_share": None,
-           "height_quartiles_m": None}
+           "height_quartiles_m": None, "height_failure": None}
     if not recs:
         return out
     times = [t for t, _ in recs]
@@ -121,8 +123,13 @@ def night_total(profiles: list[tuple[dt.datetime, str]], sunset: dt.datetime, su
     seen = sum(h * r["vid_birds_km2"] for h, r in measured)
     unseen = sum(h * r["vid_birds_km2"] * r["speedless_share"] for h, r in measured if r["speedless_share"] is not None)
     out.update(coverage=sum(hours) / night_h, measured_coverage=sum(h for h, _ in measured) / night_h,
-               mt_birds_km=mt[-1], speedless_share=unseen / seen if seen > 0 else None,
-               height_quartiles_m=pooled_height_quantiles([bins for _, bins in parsed], hours))
+               mt_birds_km=mt[-1], speedless_share=unseen / seen if seen > 0 else None)
+    dense = [(h, bins) for h, (_, bins), (_, r) in zip(hours, parsed, recs) if r["vid_birds_km2"] is not None]
+    try:
+        out["height_quartiles_m"] = pooled_height_quantiles([b for _, b in dense], [h for h, _ in dense])
+    except ValueError as e:   # a height-only problem must not cost the night its totals; recorded, not hidden
+        out["height_failure"] = repr(e)
+        log.error("night %s heights FAILED: %r", _iso(sunset), e)
     echo = [(h, s) for h, s in zip(hours, shares) if s is not None]
     echo_h = sum(h for h, _ in echo)
     if echo_h > 0:
@@ -150,11 +157,11 @@ def build_nights(root: Path, sites: list[dict], out: Path, now: dt.datetime, nig
                 continue
             try:
                 entry = night_total(stored_profiles(root, site["id"], sunset, min(sunrise, now)), sunset, sunrise)
+                entry.update(night=night.isoformat(), complete=now >= sunrise, antenna_m=site["antenna_m"])
             except Exception as e:  # one bad site-night must not cost the others; logged and listed
                 failures[f"{site['id']} {night}"] = repr(e)
                 log.error("%s night %s FAILED: %r", site["id"], night, e)
                 continue
-            entry.update(night=night.isoformat(), complete=now >= sunrise, antenna_m=site["antenna_m"])
             table.setdefault(site["id"], {})[night.isoformat()] = entry
     cutoff = (now.date() - dt.timedelta(days=keep_nights)).isoformat()   # kept: the keep_nights after it
     doc = {"generated_at": _iso(now),
