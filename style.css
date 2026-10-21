@@ -1012,10 +1012,12 @@ body.ui-clean-view #data-panel {
   overflow-wrap: anywhere;
 }
 
+/* A hairline between the name and the ×: they are two buttons, and hovering one must not read as half a chip (blind critic). */
 .layers-on-off {
   flex: none;
   width: 24px;
   position: relative;
+  border-left: 1px solid rgba(29, 58, 79, 0.14);
 }
 
 /* A drawn ×, so the button's name comes only from its aria-label. */
@@ -1155,12 +1157,13 @@ body.ui-clean-view #data-panel {
   min-width: 0;
 }
 
+/* The same badge as the header's "3 on" (blind critic: a light-blue count above navy ones read as two systems). */
 .layer-group-on {
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--paper);
-  background: var(--accent);
+  color: var(--band);
+  background: var(--band-accent);
   border-radius: 999px;
   padding: 0 7px;
 }
@@ -2470,7 +2473,7 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
 #data-panel .panel-header .layers-search {
   color: var(--band-text);
   background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.28);
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
 #data-panel .panel-header .layers-search::placeholder {
