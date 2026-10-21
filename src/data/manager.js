@@ -1,5 +1,6 @@
 import { governorRequestRender } from '../renderGovernor.js';
 import { sentenceCase } from './textCase.js';
+import { createGroupedLayersPanel } from './layerPanelGroups.js';
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
   if (value && typeof value === 'object') {
@@ -1886,20 +1887,36 @@ export class DataLayerManager {
   /**
    * Build the toggle panel UI inside the given container element.
    */
-  buildTogglePanel(container) {
+  buildTogglePanel(container, { groups = null } = {}) {
     this._toggleContainer = container;
+    // Grouped panel (src/data/layerPanelGroups.js): rows go into group bodies under an "On now" strip and a search box.
+    // Without groups the rows stay one flat list, as the manager tests build it.
+    this._groupedPanel = groups
+      ? createGroupedLayersPanel({
+        container,
+        groups,
+        onTurnOff: (layerId) => {
+          this.setEnabled(layerId, false, { origin: 'user' })
+            .catch((error) => console.warn(`[Data] ${layerId} toggle error:`, error));
+        },
+      })
+      : null;
     this._renderToggles();
   }
 
   _renderToggles() {
     if (!this._toggleContainer) return;
     this._toggleContainer.innerHTML = '';
+    const layers = this.getAll();
+    const placement = this._groupedPanel
+      ? this._groupedPanel.layout(layers)
+      : layers.filter((layer) => layer.showInTogglePanel).map((layer) => ({ layer, parent: this._toggleContainer }));
 
-    for (const layer of this.getAll()) {
-      if (!layer.showInTogglePanel) continue;
+    for (const { layer, parent } of placement) {
       const row = document.createElement('div');
       row.className = 'data-toggle-row';
       row.dataset.layerId = layer.id;
+      row.classList.toggle('is-on', layer.enabled);
 
       const topRow = document.createElement('div');
       topRow.className = 'data-toggle-top';
@@ -1914,6 +1931,7 @@ export class DataLayerManager {
       const count = document.createElement('span');
       count.className = 'data-count';
       count.textContent = layer.stats.count ? this._formatCount(layer.stats.count) : '—';
+      count.hidden = !layer.enabled;
 
       const toggle = document.createElement('button');
       toggle.className = `data-toggle-btn${layer.enabled ? ' active' : ''}`;
@@ -1937,6 +1955,7 @@ export class DataLayerManager {
       const bottomRow = document.createElement('div');
       bottomRow.className = 'data-toggle-meta';
       bottomRow.textContent = this._buildMetaText(layer);
+      bottomRow.title = bottomRow.textContent;
 
       row.appendChild(topRow);
       row.appendChild(bottomRow);
@@ -1965,8 +1984,9 @@ export class DataLayerManager {
         this._syncRowControls(controls, layer);
       }
 
-      this._toggleContainer.appendChild(row);
+      parent.appendChild(row);
     }
+    this._groupedPanel?.sync(layers);
   }
 
   /**
@@ -2058,9 +2078,11 @@ export class DataLayerManager {
       this._panelRefreshPendingOnVisible = true;
       return;
     }
-    for (const layer of this.getAll()) {
+    const layers = this.getAll();
+    for (const layer of layers) {
       const row = this._toggleContainer.querySelector(`[data-layer-id="${layer.id}"]`);
       if (!row) continue;
+      row.classList.toggle('is-on', layer.enabled);
 
       const btn = row.querySelector('.data-toggle-btn');
       if (btn) {
@@ -2070,15 +2092,18 @@ export class DataLayerManager {
       const count = row.querySelector('.data-count');
       if (count) {
         count.textContent = layer.stats.count ? this._formatCount(layer.stats.count) : '—';
+        count.hidden = !layer.enabled;
       }
 
       const meta = row.querySelector('.data-toggle-meta');
       if (meta) {
         meta.textContent = this._buildMetaText(layer);
+        meta.title = meta.textContent;
       }
 
       this._syncRowControls(row.querySelector('.data-toggle-controls'), layer);
     }
+    this._groupedPanel?.sync(layers);
   }
 
   _buildMetaText(layer) {
@@ -2093,6 +2118,8 @@ export class DataLayerManager {
     if (layer.lifecycleUncertain) {
       return `Uncertain · ${source} · lifecycle state requires reconciliation`;
     }
+    // An off layer has no feed to describe: its row names the source alone ("· never" read as a broken feed).
+    if (!layer.enabled) return source;
     const presentedError = stats.error || stats.lastError || stats.managerRefreshError;
     if (presentedError) {
       if (typeof stats.retryInSec === 'number' && stats.retryInSec > 0) {

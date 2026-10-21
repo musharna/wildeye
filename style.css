@@ -3,22 +3,28 @@
 :root {
   /* Light paper on a pale page, the GBIF family (gbif/gbif-web baseThemes.ts, light theme); dark ink for text and
      active states, because blue and cyan are the bird data's colours (grill_wildeye_visual_update_2026-10-20). */
-  --page: #f1f5f8;
+  /* Atlas look (grill_wildeye_layers_ux_2026-10-20, the user's pick): cool grey page, white paper, slate header bands. */
+  --page: #e8ecef;
   --paper: #ffffff;
   --bg-dark: var(--page);
   --glass-bg: var(--paper);
-  --glass-border: #dfe6ea;
-  --glass-border-hover: #b9c6ce;
-  --accent: #162d3d;
-  --accent-dim: rgba(22, 45, 61, 0.08);
-  --accent-glow: rgba(22, 45, 61, 0.12);
-  --text-primary: #162d3d;
-  --text-secondary: #4b5d6a;
-  --text-dim: #5d6c78;
+  --glass-border: #cfd7dd;
+  --glass-border-hover: #9fb0bc;
+  --accent: #1d3a4f;
+  --accent-dim: rgba(29, 58, 79, 0.08);
+  --accent-glow: rgba(29, 58, 79, 0.12);
+  --text-primary: #14222d;
+  --text-secondary: #3f505c;
+  --text-dim: #55646f;
+  /* The slate of the header bands and the wordmark, the white on it, and the band's one blue (the count, the underline). */
+  --band: #1f2d3a;
+  --band-text: #ffffff;
+  --band-muted: #b9c6cf;
+  --band-accent: #4f9fd1;
   --warn: #8a4b00;
   --error: #b42318;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --panel-radius: 6px;
+  --panel-radius: 3px;
   --btn-radius: 4px;
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -160,19 +166,21 @@ html, body {
   user-select: none;
 }
 
-/* The wordmark sits on paper like every other label: ink straight on satellite imagery is unreadable. */
+/* The wordmark sits on a box like every other label (ink straight on satellite imagery is unreadable): the Atlas slate band with
+   its blue underline. */
 #title-bar h1 {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 4px 12px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--band);
   border-radius: var(--btn-radius);
-  background: var(--paper);
+  background: var(--band);
+  box-shadow: inset 0 -3px 0 var(--band-accent);
   font-family: var(--font-sans);
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--band-text);
   position: relative;
 }
 
@@ -219,9 +227,9 @@ html, body {
   border-radius: var(--panel-radius);
   padding: 16px 20px 18px;
   box-shadow:
-    0 8px 32px rgba(22, 45, 61, 0.16),
-    0 0 0 1px rgba(22, 45, 61, 0.03) inset,
-    0 1px 0 rgba(22, 45, 61, 0.06) inset;
+    0 8px 32px rgba(29, 58, 79, 0.16),
+    0 0 0 1px rgba(29, 58, 79, 0.03) inset,
+    0 1px 0 rgba(29, 58, 79, 0.06) inset;
 }
 
 .panel-header {
@@ -250,8 +258,8 @@ html, body {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  border: 1px solid rgba(22, 45, 61, 0.12);
-  background: rgba(22, 45, 61, 0.03);
+  border: 1px solid rgba(29, 58, 79, 0.12);
+  background: rgba(29, 58, 79, 0.03);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
@@ -279,7 +287,7 @@ html, body {
 .panel-collapse-btn:hover {
   border-color: var(--glass-border-hover);
   color: var(--text-primary);
-  background: rgba(22, 45, 61, 0.07);
+  background: rgba(29, 58, 79, 0.07);
 }
 
 /* ── Loading Screen ───────────────────────────── */
@@ -356,8 +364,8 @@ html, body {
   font-size: 12px;
   white-space: nowrap;
   color: var(--text-dim);
-  background: rgba(22, 45, 61, 0.04);
-  border: 1px solid rgba(22, 45, 61, 0.08);
+  background: rgba(29, 58, 79, 0.04);
+  border: 1px solid rgba(29, 58, 79, 0.08);
   border-radius: 4px;
   cursor: pointer;
   /* Explicit property list, NOT `transition: all`: `all` animates
@@ -384,7 +392,7 @@ html, body {
 .map-stack-chip:hover,
 .map-stack-chip:focus-visible {
   border-color: var(--glass-border-hover);
-  background: rgba(22, 45, 61, 0.06);
+  background: rgba(29, 58, 79, 0.06);
   color: var(--text-primary);
 }
 
@@ -428,7 +436,7 @@ html, body {
   transform: translateX(50%);
   z-index: 300;
   border-radius: 999px;
-  border: 1px solid rgba(22, 45, 61, 0.25);
+  border: 1px solid rgba(29, 58, 79, 0.25);
   background: var(--paper);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -482,7 +490,7 @@ body.ui-clean-view #data-panel {
 #top-center-actions button:hover,
 #top-center-actions button:focus-visible {
   border-color: var(--glass-border-hover);
-  background: rgba(22, 45, 61, 0.06);
+  background: rgba(29, 58, 79, 0.06);
   transform: scale(1.1);
 }
 
@@ -524,7 +532,7 @@ body.ui-clean-view #data-panel {
   max-width: calc(100vw - 32px);
   padding: 6px 10px;
   border-radius: 7px;
-  border: 1px solid rgba(22, 45, 61, 0.24);
+  border: 1px solid rgba(29, 58, 79, 0.24);
   background: var(--paper);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -563,7 +571,7 @@ body.ui-clean-view #data-panel {
 #global-loading-status[data-state='cancelled'] #global-loading-label,
 #global-loading-status[data-state='cancelled'] #global-loading-detail { color: var(--warn); }
 #global-loading-status[data-state='acquiring'] {
-  border-color: rgba(22, 45, 61, 0.42);
+  border-color: rgba(29, 58, 79, 0.42);
 }
 
 .share-icon {
@@ -617,10 +625,10 @@ body.ui-clean-view #data-panel {
   transform: translate(-50%, -50%);
   width: min(90vw, calc(90vh * (16 / 9)));
   aspect-ratio: 16 / 9;
-  border: 1px solid rgba(22, 45, 61, 0.28);
+  border: 1px solid rgba(29, 58, 79, 0.28);
   box-shadow:
-    0 0 0 1px rgba(22, 45, 61, 0.16),
-    inset 0 0 0 1px rgba(22, 45, 61, 0.06);
+    0 0 0 1px rgba(29, 58, 79, 0.16),
+    inset 0 0 0 1px rgba(29, 58, 79, 0.06);
 }
 
 #safe-frame-overlay.ratio-9-16 #safe-frame-box {
@@ -641,22 +649,22 @@ body.ui-clean-view #data-panel {
   background:
     linear-gradient(to right,
       transparent 33.333%,
-      rgba(22, 45, 61, 0.2) 33.333%,
-      rgba(22, 45, 61, 0.2) 33.7%,
+      rgba(29, 58, 79, 0.2) 33.333%,
+      rgba(29, 58, 79, 0.2) 33.7%,
       transparent 33.7%,
       transparent 66.333%,
-      rgba(22, 45, 61, 0.2) 66.333%,
-      rgba(22, 45, 61, 0.2) 66.7%,
+      rgba(29, 58, 79, 0.2) 66.333%,
+      rgba(29, 58, 79, 0.2) 66.7%,
       transparent 66.7%
     ),
     linear-gradient(to bottom,
       transparent 33.333%,
-      rgba(22, 45, 61, 0.2) 33.333%,
-      rgba(22, 45, 61, 0.2) 33.7%,
+      rgba(29, 58, 79, 0.2) 33.333%,
+      rgba(29, 58, 79, 0.2) 33.7%,
       transparent 33.7%,
       transparent 66.333%,
-      rgba(22, 45, 61, 0.2) 66.333%,
-      rgba(22, 45, 61, 0.2) 66.7%,
+      rgba(29, 58, 79, 0.2) 66.333%,
+      rgba(29, 58, 79, 0.2) 66.7%,
       transparent 66.7%
     );
 }
@@ -678,7 +686,8 @@ body.ui-clean-view #data-panel {
 }
 
 #data-panel {
-  --panel-expanded-width: 280px;
+  /* 320 px, as Species: at 280 the group rows' names wrapped to three and four lines. */
+  --panel-expanded-width: 320px;
   position: fixed;
   top: calc(var(--left-stack-top) + var(--left-stack-gap));
   left: var(--left-stack-x);
@@ -705,9 +714,9 @@ body.ui-clean-view #data-panel {
   border-radius: var(--panel-radius);
   padding: 14px 16px 12px;
   box-shadow:
-    0 8px 32px rgba(22, 45, 61, 0.16),
-    0 0 0 1px rgba(22, 45, 61, 0.03) inset,
-    0 1px 0 rgba(22, 45, 61, 0.06) inset;
+    0 8px 32px rgba(29, 58, 79, 0.16),
+    0 0 0 1px rgba(29, 58, 79, 0.03) inset,
+    0 1px 0 rgba(29, 58, 79, 0.06) inset;
   max-height: min(620px, calc(100vh - var(--left-stack-top) - var(--left-stack-gap) - 36px));
   display: flex;
   flex-direction: column;
@@ -725,7 +734,7 @@ body.ui-clean-view #data-panel {
   overscroll-behavior: contain;
   padding-right: 4px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(22, 45, 61, 0.5) rgba(22, 45, 61, 0.04);
+  scrollbar-color: rgba(29, 58, 79, 0.5) rgba(29, 58, 79, 0.04);
   scrollbar-gutter: stable;
 }
 
@@ -734,12 +743,12 @@ body.ui-clean-view #data-panel {
 }
 
 .data-toggle-list::-webkit-scrollbar-track {
-  background: rgba(22, 45, 61, 0.04);
+  background: rgba(29, 58, 79, 0.04);
   border-radius: 999px;
 }
 
 .data-toggle-list::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(22, 45, 61, 0.65), rgba(22, 45, 61, 0.2));
+  background: linear-gradient(180deg, rgba(29, 58, 79, 0.65), rgba(29, 58, 79, 0.2));
   border-radius: 999px;
 }
 
@@ -750,7 +759,7 @@ body.ui-clean-view #data-panel {
 }
 
 .data-toggle-row:hover {
-  background: rgba(22, 45, 61, 0.03);
+  background: rgba(29, 58, 79, 0.03);
 }
 
 .data-toggle-top {
@@ -797,8 +806,8 @@ body.ui-clean-view #data-panel {
   font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-dim);
-  background: rgba(22, 45, 61, 0.04);
-  border: 1px solid rgba(22, 45, 61, 0.08);
+  background: rgba(29, 58, 79, 0.04);
+  border: 1px solid rgba(29, 58, 79, 0.08);
   border-radius: 4px;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -817,7 +826,7 @@ body.ui-clean-view #data-panel {
 
 .data-toggle-btn:hover {
   border-color: var(--glass-border-hover);
-  background: rgba(22, 45, 61, 0.06);
+  background: rgba(29, 58, 79, 0.06);
 }
 
 .data-toggle-btn.active {
@@ -874,8 +883,8 @@ body.ui-clean-view #data-panel {
   font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-dim);
-  background: rgba(22, 45, 61, 0.04);
-  border: 1px solid rgba(22, 45, 61, 0.08);
+  background: rgba(29, 58, 79, 0.04);
+  border: 1px solid rgba(29, 58, 79, 0.08);
   border-radius: 3px;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -885,7 +894,7 @@ body.ui-clean-view #data-panel {
 .data-toggle-chip:hover,
 .data-toggle-chip:focus-visible {
   border-color: var(--glass-border-hover);
-  background: rgba(22, 45, 61, 0.06);
+  background: rgba(29, 58, 79, 0.06);
   color: var(--text-secondary);
 }
 
@@ -918,8 +927,287 @@ body.ui-clean-view #data-panel {
   border-radius: 50%;
   /* The swatch IS the datum — keep it exactly the point color, with only a
      hairline ring so a near-white class still reads on the panel's paper. */
-  box-shadow: 0 0 0 1px rgba(22, 45, 61, 0.12);
+  box-shadow: 0 0 0 1px rgba(29, 58, 79, 0.12);
   flex: none;
+}
+
+/* ── Layers: header count, "On now" strip, search, groups (src/data/layerPanelGroups.js) ── */
+
+.panel-count {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.panel-count[hidden] {
+  display: none;
+}
+
+.layers-tools {
+  margin: 0 0 10px;
+  padding: 0 4px;
+}
+
+.layers-tools[hidden] {
+  display: none;
+}
+
+.layers-on {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.layers-on[hidden] {
+  display: none;
+}
+
+.layers-on-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layers-on-chip {
+  display: flex;
+  align-items: stretch;
+  border-radius: 4px;
+  background: var(--accent-dim);
+  /* The bar takes the layer's group colour (Atlas look, below). */
+  box-shadow: inset 3px 0 0 var(--group, var(--accent));
+  overflow: hidden;
+}
+
+.layers-on-chip[hidden] {
+  display: none;
+}
+
+.layers-on-name,
+.layers-on-off,
+.layers-on-more {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.layers-on-name {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px 3px 10px;
+  line-height: 1.3;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+/* A hairline between the name and the ×: they are two buttons, and hovering one must not read as half a chip (blind critic). */
+.layers-on-off {
+  flex: none;
+  width: 24px;
+  position: relative;
+  border-left: 1px solid rgba(29, 58, 79, 0.14);
+}
+
+/* A drawn ×, so the button's name comes only from its aria-label. */
+.layers-on-off::before,
+.layers-on-off::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 1.5px;
+  background: currentColor;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.layers-on-off::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.layers-on-name:hover,
+.layers-on-off:hover {
+  background: rgba(29, 58, 79, 0.1);
+}
+
+.layers-on-name:focus-visible,
+.layers-on-off:focus-visible,
+.layers-on-more:focus-visible,
+.layer-group-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.layers-on-more {
+  align-self: flex-start;
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.layers-on-more[hidden] {
+  display: none;
+}
+
+/* In the header row, in the divider's place (layerPanelGroups.js). */
+#data-panel .panel-header .layers-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#data-panel .panel-header .panel-collapse-btn {
+  flex: none;
+}
+
+#data-panel:not(.collapsed) .panel-header .panel-divider,
+#data-panel.collapsed .panel-header .layers-search {
+  display: none;
+}
+
+.layers-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--page);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  outline: none;
+}
+
+.layers-search::placeholder {
+  color: var(--text-dim);
+}
+
+.layers-search:focus {
+  border-color: var(--accent);
+  background: var(--paper);
+}
+
+.layers-search-empty {
+  margin: 8px 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.layers-search-empty[hidden],
+.layer-group[hidden],
+.layer-group-body[hidden],
+.data-toggle-row[hidden] {
+  display: none;
+}
+
+.layer-group + .layer-group {
+  border-top: 1px solid var(--glass-border);
+}
+
+.layer-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 6px 9px 4px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.layer-group-head:hover {
+  background: rgba(29, 58, 79, 0.03);
+}
+
+.layer-group-caret {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 3px 0 2px;
+  border-right: 1.5px solid var(--text-secondary);
+  border-bottom: 1.5px solid var(--text-secondary);
+  transform: rotate(-45deg);
+  transition: transform var(--transition-fast);
+}
+
+.layer-group.open .layer-group-caret {
+  transform: rotate(45deg);
+}
+
+.layer-group-label {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The same badge as the header's "3 on" (blind critic: a light-blue count above navy ones read as two systems). */
+.layer-group-on {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--band);
+  background: var(--band-accent);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+
+.layer-group-on[hidden] {
+  display: none;
+}
+
+.layer-group-count {
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  min-width: 18px;
+  text-align: right;
+}
+
+.layer-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+}
+
+/* A layer that is on: an ink bar down its left edge and a filled switch, so on and off differ at a glance. */
+.data-toggle-row.is-on {
+  background: rgba(29, 58, 79, 0.035);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.data-toggle-btn.active:not(.feed-stale):not(.feed-fallback):not(.feed-degraded):not(.feed-unavailable) {
+  color: var(--paper);
+  background: var(--accent);
+}
+
+/* An off row's source is one line (the full text is its title); an on row shows it whole, with its freshness. */
+.data-toggle-row:not(.is-on) .data-toggle-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#data-panel.collapsed .layers-tools {
+  display: none;
 }
 
 /* ── Scene Director Panel ───────────────────── */
@@ -994,8 +1282,8 @@ body.ui-clean-view #data-panel {
 }
 
 .scene-btn {
-  background: rgba(22, 45, 61, 0.05);
-  border: 1px solid rgba(22, 45, 61, 0.14);
+  background: rgba(29, 58, 79, 0.05);
+  border: 1px solid rgba(29, 58, 79, 0.14);
   border-radius: 7px;
   color: var(--text-secondary);
   font-family: var(--font-sans);
@@ -1011,7 +1299,7 @@ body.ui-clean-view #data-panel {
 .scene-btn:hover:not(:disabled) {
   color: var(--accent);
   border-color: var(--accent);
-  background: rgba(22, 45, 61, 0.14);
+  background: rgba(29, 58, 79, 0.14);
 }
 
 .scene-btn:disabled {
@@ -1170,7 +1458,7 @@ body.recording-mode #cesium-credits {
 
 @media (max-width: 980px) {
   #command-dock > #control-panel {
-    border-top: 1px solid rgba(22, 45, 61, 0.16);
+    border-top: 1px solid rgba(29, 58, 79, 0.16);
   }
 }
 
@@ -1207,7 +1495,7 @@ body.recording-mode #cesium-credits {
 }
 
 #command-dock > #control-panel {
-  border-left: 1px solid rgba(22, 45, 61, 0.18);
+  border-left: 1px solid rgba(29, 58, 79, 0.18);
 }
 
 #command-dock .panel-inner,
@@ -1284,7 +1572,7 @@ body.recording-mode #cesium-credits {
   flex: 0 0 1rem;
   width: 1rem;
   height: 1rem;
-  background: rgba(22, 45, 61, 0.3);
+  background: rgba(29, 58, 79, 0.3);
   mask-position: center;
   mask-repeat: no-repeat;
   mask-size: contain;
@@ -1338,7 +1626,7 @@ body.recording-mode #cesium-credits {
 }
 
 #command-dock #control-panel .panel-title::after {
-  background: linear-gradient(to left, rgba(22, 45, 61, 0.3), transparent);
+  background: linear-gradient(to left, rgba(29, 58, 79, 0.3), transparent);
 }
 
 #command-dock .panel-title::after,
@@ -1426,7 +1714,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
   visibility: hidden;
   opacity: 0;
   background: var(--paper);
-  border: 1px solid rgba(22, 45, 61, 0.32);
+  border: 1px solid rgba(29, 58, 79, 0.32);
   border-radius: 0.42rem;
   pointer-events: none;
   transform: translateY(0.55rem) scale(0.985);
@@ -1469,8 +1757,8 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
   width: 0.6rem;
   height: 0.6rem;
   background: var(--paper);
-  border-right: 1px solid rgba(22, 45, 61, 0.28);
-  border-bottom: 1px solid rgba(22, 45, 61, 0.28);
+  border-right: 1px solid rgba(29, 58, 79, 0.28);
+  border-bottom: 1px solid rgba(29, 58, 79, 0.28);
   transform: rotate(45deg);
 }
 
@@ -1483,7 +1771,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
   display: none;
   flex: 0 0 auto;
   color: var(--text-secondary);
-  border: 1px solid rgba(22, 45, 61, 0.2);
+  border: 1px solid rgba(29, 58, 79, 0.2);
   font-family: var(--font-sans);
   font-size: 12px;
   cursor: pointer;
@@ -1492,8 +1780,8 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
 #command-dock .dock-pin-btn:hover,
 #command-dock .dock-pin-btn[aria-pressed='true'] {
   color: var(--accent);
-  border-color: rgba(22, 45, 61, 0.62);
-  background: rgba(22, 45, 61, 0.1);
+  border-color: rgba(29, 58, 79, 0.62);
+  background: rgba(29, 58, 79, 0.1);
 }
 
 #command-dock .panel-divider {
@@ -1575,7 +1863,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
   padding: 0;
   border-radius: 50%;
   background: var(--paper);
-  box-shadow: 0 0.35rem 0.9rem rgba(22, 45, 61, 0.16);
+  box-shadow: 0 0.35rem 0.9rem rgba(29, 58, 79, 0.16);
   transform: none;
 }
 
@@ -1619,9 +1907,9 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
   box-shadow:
-    0 8px 32px rgba(22, 45, 61, 0.16),
-    0 0 0 1px rgba(22, 45, 61, 0.03) inset,
-    0 1px 0 rgba(22, 45, 61, 0.06) inset;
+    0 8px 32px rgba(29, 58, 79, 0.16),
+    0 0 0 1px rgba(29, 58, 79, 0.03) inset,
+    0 1px 0 rgba(29, 58, 79, 0.06) inset;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
@@ -1636,7 +1924,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
 }
 
 #command-dock > :is(#control-panel).dock-pinned {
-  border-color: rgba(22, 45, 61, 0.55);
+  border-color: rgba(29, 58, 79, 0.55);
 }
 
 /* One button, its label centred: the right-aligned label, the square left corners and the hairline under it were the
@@ -1689,7 +1977,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
   background: var(--paper);
   border: 1px solid var(--glass-border);
   border-radius: var(--panel-radius);
-  box-shadow: 0 8px 32px rgba(22, 45, 61, 0.16), 0 0 0 1px rgba(22, 45, 61, 0.03) inset;
+  box-shadow: 0 8px 32px rgba(29, 58, 79, 0.16), 0 0 0 1px rgba(29, 58, 79, 0.03) inset;
   color: var(--text-primary);
   font: 12px/1.45 var(--font-sans);
 }
@@ -1715,11 +2003,11 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
 /* No text-transform: uppercase — it maps µ (U+00B5) to M in unit strings. */
 .bio-card-title { flex: 1; min-width: 0; font: 12px/1.3 var(--font-sans);color: var(--accent); }
 /* The close ×, the status and error lines, Retry and the foot are ink, like the filter and rows. */
-.bio-card-close { background: none; border: 1px solid rgba(22, 45, 61, 0.14); border-radius: 7px; color: var(--text-primary); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 8px; }
+.bio-card-close { background: none; border: 1px solid rgba(29, 58, 79, 0.14); border-radius: 7px; color: var(--text-primary); cursor: pointer; font-size: 14px; line-height: 1; padding: 2px 8px; }
 .bio-card-close:hover { color: var(--accent); border-color: var(--accent); }
 /* Fix round 6 (critic r5 N1): shown while the antimeridian note is folded (detailsCard.js); a tap shows the note's text over the list, where a
    touch user can read it (the credit link's title is hover-only). */
-.bio-card-note-info { background: none; border: 1px solid rgba(22, 45, 61, 0.14); border-radius: 50%; color: var(--text-primary); cursor: pointer; font: italic 700 11px/1 Georgia, serif; width: 22px; height: 22px; padding: 0; }
+.bio-card-note-info { background: none; border: 1px solid rgba(29, 58, 79, 0.14); border-radius: 50%; color: var(--text-primary); cursor: pointer; font: italic 700 11px/1 Georgia, serif; width: 22px; height: 22px; padding: 0; }
 .bio-card-note-info[hidden] { display: none; }
 .bio-card-note-info:hover, .bio-card-note-info[aria-expanded="true"] { color: var(--accent); border-color: var(--accent); }
 .bio-card-note-pop { position: absolute; top: 40px; left: 12px; right: 12px; z-index: 1; margin: 0; padding: 8px 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--paper); color: var(--text-primary); font-size: 12px; }
@@ -1774,7 +2062,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
   }
 }
 .bio-card-body a, .bio-card-foot a { color: var(--accent); }
-.bio-card-row { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; width: 100%; text-align: left; background: rgba(22, 45, 61, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: inherit; padding: 5px 8px; margin-bottom: 3px; }
+.bio-card-row { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; width: 100%; text-align: left; background: rgba(29, 58, 79, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: inherit; padding: 5px 8px; margin-bottom: 3px; }
 .bio-card-row:hover, .bio-card-row:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }
 .bio-card-row-primary { grid-column: 1; }
 /* List rows: the scientific name and count are ink. */
@@ -1783,7 +2071,7 @@ body:not(.ui-clean-view):not(.recording-mode) #cesium-credits{
 .bio-card-row-count { grid-column: 2; grid-row: 1; color: var(--text-primary); font: 12px/1.6 var(--font-sans); }
 .bio-card-row-note { grid-column: 1 / -1; color: var(--warn); font-size: 12px; }
 .bio-card-status { margin: 0 0 6px; color: var(--text-primary); }
-.bio-card-retry { background: rgba(22, 45, 61, 0.05); border: 1px solid rgba(22, 45, 61, 0.14); border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans);padding: 5px 9px; }
+.bio-card-retry { background: rgba(29, 58, 79, 0.05); border: 1px solid rgba(29, 58, 79, 0.14); border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans);padding: 5px 9px; }
 /* R12-I1: only the foot's Top datasets rows shrink and scroll, with a fade while more of them is below; its heading, note and gbif.org credit
    link are fixed tracks of .bio-card-main, so the credit is visible at rest. (One scrolling foot capped at 26vh hid the credit below its
    scroll with no cue.) */
@@ -1833,7 +2121,7 @@ body.recording-mode #bio-card { display: none !important; }
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 24px);
-  box-shadow: 0 8px 32px rgba(22, 45, 61, 0.16), 0 0 0 1px rgba(22, 45, 61, 0.03) inset, 0 1px 0 rgba(22, 45, 61, 0.06) inset;
+  box-shadow: 0 8px 32px rgba(29, 58, 79, 0.16), 0 0 0 1px rgba(29, 58, 79, 0.03) inset, 0 1px 0 rgba(29, 58, 79, 0.06) inset;
 }
 /* The open panel is opaque paper, as the card is; the collapsed Species pill keeps the shared surface of its sibling pills. */
 #species-panel:not(.collapsed) .species-panel-inner { background: var(--paper); }
@@ -1853,14 +2141,14 @@ body.recording-mode #bio-card { display: none !important; }
 .species-chip-group .scene-btn.species-chip { flex: 0 0 auto; }
 /* A label sits 4 px above the control it names (the body's gap is 8 px), so it reads as that control's, not the one above. Its text is ink. */
 .species-label { margin-bottom: -4px; color: var(--text-primary); font: 12px var(--font-sans);}
-#species-search { background: rgba(22, 45, 61, 0.06); border: 1px solid rgba(22, 45, 61, 0.14); border-radius: 7px; color: var(--text-primary); padding: 6px 8px; font: 12px var(--font-sans); }
+#species-search { background: rgba(29, 58, 79, 0.06); border: 1px solid rgba(29, 58, 79, 0.14); border-radius: 7px; color: var(--text-primary); padding: 6px 8px; font: 12px var(--font-sans); }
 #species-search:focus { outline: none; border-color: var(--accent); }
 /* The browser's default placeholder measured 3.55:1 (visual critic 5): the placeholder is the secondary ink, and the native clear button
    is kept (same click and keyboard behaviour) but drawn as an ink cross. */
 #species-search::placeholder { color: var(--text-secondary); }
 #species-search::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; margin-left: 6px; cursor: pointer; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' fill='none' stroke='%23162d3d' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 12px 12px no-repeat; }
 /* About five one-line rows, then the list scrolls on its own, so the chips and the action below stay in view. */
-.species-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; max-height: 150px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(22, 45, 61, 0.35) transparent; }
+.species-suggestions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; max-height: 150px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(29, 58, 79, 0.35) transparent; }
 .species-suggestions > li { flex: 0 0 auto; }
 .species-suggestions[hidden] { display: none; }
 /* A list taller than its cap fades out at the bottom, so it reads as scrollable, and the fade goes as the end is reached. A scroll
@@ -1876,7 +2164,7 @@ body.recording-mode #bio-card { display: none !important; }
     animation-timeline: scroll(self);
   }
 }
-.species-suggestion { width: 100%; text-align: left; background: rgba(22, 45, 61, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans); padding: 5px 8px; }
+.species-suggestion { width: 100%; text-align: left; background: rgba(29, 58, 79, 0.03); border: 1px solid transparent; border-radius: 7px; color: var(--text-primary); cursor: pointer; font: 12px var(--font-sans); padding: 5px 8px; }
 .species-suggestion:hover, .species-suggestion:focus { border-color: var(--accent); background: var(--accent-dim); outline: none; }
 /* Status and error lines ("Name search failed …") are ink. */
 .species-status { color: var(--text-primary); font-size: 12px; }
@@ -1955,7 +2243,7 @@ body.recording-mode #bio-card { display: none !important; }
 .scene-btn.species-chip { color: var(--text-primary); }
 /* .scene-btn:hover paints exactly the pressed look, so a hovered chip (a resting pointer, a sticky touch hover) read as pressed:
    at 400x800 the pointer sat on ALL YEARS. Hover on an unpressed chip only lightens it; a pressed chip stays pressed under hover. */
-.species-chip:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--text-primary); border-color: rgba(22, 45, 61, 0.38); background: rgba(22, 45, 61, 0.09); }
+.species-chip:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--text-primary); border-color: rgba(29, 58, 79, 0.38); background: rgba(29, 58, 79, 0.09); }
 .species-chip[aria-pressed="true"], .species-chip[aria-pressed="true"]:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 /* MAP ON / MAP OFF is a switch, not a chip: a track whose knob sits left on grey while the map is off and right on the accent while it is
    on. The words still say the state; role="switch" with aria-checked carries it under the fixed name "Species map". */
@@ -1963,12 +2251,12 @@ body.recording-mode #bio-card { display: none !important; }
 /* hidden must win over the display above: .species-modeled [hidden] has the same specificity and comes earlier, so a hidden
    MODELED RANGE switch was still drawn (09-30, real list) */
 .scene-btn.species-switch[hidden] { display: none; }
-.scene-btn.species-switch::before { content: ""; flex: 0 0 auto; width: 24px; height: 14px; border-radius: 999px; background: radial-gradient(circle at 7px 50%, rgba(22, 45, 61, 1.0) 0 4px, transparent 4.5px), rgba(22, 45, 61, 0.16); box-shadow: inset 0 0 0 1px rgba(22, 45, 61, 0.12); }
+.scene-btn.species-switch::before { content: ""; flex: 0 0 auto; width: 24px; height: 14px; border-radius: 999px; background: radial-gradient(circle at 7px 50%, rgba(29, 58, 79, 1.0) 0 4px, transparent 4.5px), rgba(29, 58, 79, 0.16); box-shadow: inset 0 0 0 1px rgba(29, 58, 79, 0.12); }
 .scene-btn.species-switch[aria-checked="true"]::before { background: radial-gradient(circle at 17px 50%, var(--paper) 0 4px, transparent 4.5px), var(--accent); box-shadow: none; }
-.scene-btn.species-switch:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(22, 45, 61, 0.38); background: rgba(22, 45, 61, 0.09); }
+.scene-btn.species-switch:hover:not(:disabled) { color: var(--text-primary); border-color: rgba(29, 58, 79, 0.38); background: rgba(29, 58, 79, 0.09); }
 /* The action is not a toggle: a full-width accent pill at rest, filled while armed (aria-pressed="true"). Every selector carries .scene-btn,
    so it out-ranks the shared .scene-btn rules by specificity, not by source order (hover 0,4,0 > .scene-btn:hover:not(:disabled) 0,3,0). */
-.scene-btn.species-action { flex: 0 0 auto; border-radius: 999px; color: var(--accent); border-color: rgba(22, 45, 61, 0.75); background: rgba(22, 45, 61, 0.06); font-size: 12px; font-weight: 700;padding: 8px 12px; }
+.scene-btn.species-action { flex: 0 0 auto; border-radius: 999px; color: var(--accent); border-color: rgba(29, 58, 79, 0.75); background: rgba(29, 58, 79, 0.06); font-size: 12px; font-weight: 700;padding: 8px 12px; }
 .scene-btn.species-action:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .scene-btn.species-action[aria-pressed="true"], .scene-btn.species-action[aria-pressed="true"]:hover:not(:disabled) { color: var(--paper); border-color: var(--accent); background: var(--accent); }
 /* One credit per line: with "only" the pair no longer fits one line of the 320 px panel, and a wrap between them left the
@@ -2053,11 +2341,11 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
   box-sizing: border-box; max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center;
   gap: 8px; align-items: center; padding: 6px 10px; border-radius: 8px;
   background: var(--paper); color: var(--text-primary); font: 12px/1.2 var(--font-sans);
-  border: 1px solid rgba(22, 45, 61, 0.35);}
+  border: 1px solid rgba(29, 58, 79, 0.35);}
 #observed-time .ot-title { min-width: 9em; opacity: 0.8; }
 #observed-time .ot-range { width: 38vw; max-width: 520px; min-width: 120px; flex: 0 1 auto; accent-color: var(--accent); }
 #observed-time .ot-label { min-width: 14em; }
-#observed-time button { background: var(--paper); color: var(--text-primary); border: 1px solid rgba(22, 45, 61, 0.4);
+#observed-time button { background: var(--paper); color: var(--text-primary); border: 1px solid rgba(29, 58, 79, 0.4);
   border-radius: 5px; padding: 2px 7px; cursor: pointer; font: inherit; }
 @media (max-width: 600px) {
   #observed-time { width: calc(100vw - 16px); }
@@ -2103,4 +2391,145 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
     right: auto;
     left: calc(50% - var(--dock-popover-mobile-width) / 2);
   }
+}
+
+/* ── Atlas look (grill_wildeye_layers_ux_2026-10-20, the user's pick of three rendered directions) ──
+   Slate header bands on the left panels and the wordmark, hairline rules, and one muted colour per Layers group, used
+   only for marks (a dot, a square, a bar), never for text. The selectors carry two ids so they outrank every per-viewport
+   padding rule above; the band takes the inner box's top padding, and bleeds by its side padding (16 px Layers, 14 px Species). */
+#left-panel-stack > #data-panel { --band-bleed: 16px; }
+#left-panel-stack > #species-panel { --band-bleed: 14px; }
+
+#left-panel-stack > #data-panel .data-panel-inner,
+#left-panel-stack > #species-panel .species-panel-inner {
+  padding-top: 0;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(20, 34, 45, 0.18);
+}
+
+#left-panel-stack > #data-panel .panel-header,
+#left-panel-stack > #species-panel .panel-header {
+  margin: 0 calc(-1 * var(--band-bleed)) 12px;
+  padding: 8px var(--band-bleed);
+  background: var(--band);
+}
+
+#left-panel-stack > #data-panel.collapsed .data-panel-inner,
+#left-panel-stack > #species-panel.collapsed .species-panel-inner {
+  padding-bottom: 0;
+}
+
+/* A short window keeps the header as tight as the short-viewport rules did before the band (6 px over the title, 8 px under):
+   the Species parts must stay whole at 667x375 (qa-species panel-fold). */
+@media (max-height: 600px) and (orientation: landscape) {
+  #left-panel-stack > #data-panel .panel-header,
+  #left-panel-stack > #species-panel .panel-header {
+    padding-top: 3px;
+    padding-bottom: 3px;
+    margin-bottom: 8px;
+  }
+}
+
+#left-panel-stack > #data-panel.collapsed .panel-header,
+#left-panel-stack > #species-panel.collapsed .panel-header {
+  margin-bottom: 0;
+}
+
+#left-panel-stack > #species-panel:not(.collapsed) .panel-divider {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#left-panel-stack > #data-panel .panel-title,
+#left-panel-stack > #species-panel .panel-title {
+  color: var(--band-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#left-panel-stack > #data-panel .panel-collapse-btn,
+#left-panel-stack > #species-panel .panel-collapse-btn {
+  color: var(--band-text);
+  border-color: rgba(255, 255, 255, 0.35);
+  background: transparent;
+}
+
+#left-panel-stack > #data-panel .panel-collapse-btn:hover,
+#left-panel-stack > #species-panel .panel-collapse-btn:hover {
+  border-color: var(--band-text);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+#left-panel-stack > #data-panel .panel-collapse-btn:focus-visible,
+#left-panel-stack > #species-panel .panel-collapse-btn:focus-visible {
+  outline: 2px solid var(--band-text);
+  outline-offset: 1px;
+}
+
+#data-panel .panel-count {
+  color: var(--band);
+  background: var(--band-accent);
+}
+
+#data-panel .panel-header .layers-search {
+  color: var(--band-text);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+#data-panel .panel-header .layers-search::placeholder {
+  color: var(--band-muted);
+}
+
+#data-panel .panel-header .layers-search:focus {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: var(--band-text);
+}
+
+.layer-group + .layer-group {
+  border-top-color: #e3e8ec;
+}
+
+/* One muted colour per group, for marks only. */
+[data-group-id="movement"] { --group: #3b7ea1; }
+[data-group-id="records"] { --group: #6b8e23; }
+[data-group-id="patterns"] { --group: #8e5ea2; }
+[data-group-id="habitats"] { --group: #2e7d5b; }
+[data-group-id="land"] { --group: #a0722a; }
+[data-group-id="ocean"] { --group: #1f6f8b; }
+[data-group-id="coral"] { --group: #d0644b; }
+[data-group-id="disease"] { --group: #a8323e; }
+[data-group-id="human"] { --group: #6e6e6e; }
+
+.layer-group-label::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: var(--group);
+  vertical-align: 1px;
+}
+
+.layer-group-head .layer-group-caret {
+  border-color: var(--group);
+}
+
+/* The group dot stands in for the emoji, which read as decoration rather than as a key. */
+#data-toggles .data-icon {
+  display: none;
+}
+
+#data-toggles .data-toggle-left::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--group);
+}
+
+#data-toggles .data-toggle-meta,
+#data-toggles .data-toggle-controls {
+  padding-left: 16px;
 }

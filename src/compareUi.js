@@ -82,7 +82,7 @@ export function installCompareUi({
   const divider = el(
     'div',
     'position:absolute;top:0;bottom:0;width:4px;margin-left:-2px;background:#ffffff;' +
-      'box-shadow:0 0 0 1px rgba(22,45,61,.6);cursor:ew-resize;touch-action:none;z-index:25',
+      'box-shadow:0 0 0 1px rgba(29,58,79,.6);cursor:ew-resize;touch-action:none;z-index:25',
   );
   divider.id = 'compare-divider';
   doc.body.appendChild(toggle);

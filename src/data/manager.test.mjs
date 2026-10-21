@@ -1803,18 +1803,22 @@ test('layer feed states distinguish unavailable, fallback, stale, and degraded c
 test('layer metadata names degraded state instead of presenting an ordinary age', () => {
   const mgr = new DataLayerManager({});
   assert.match(mgr._buildMetaText({
+    enabled: true,
     source: 'AISStream',
     stats: { stale: true, count: 20, lastUpdate: Date.now() - 10_000 },
   }), /^Stale · AISStream · /);
   assert.equal(mgr._buildMetaText({
+    enabled: true,
     source: 'TomTom',
     stats: { mode: 'sim', count: 120, lastUpdate: 1, loadingLabel: 'simulated traffic' },
   }), 'Fallback · TomTom · simulated traffic');
   assert.equal(mgr._buildMetaText({
+    enabled: true,
     source: 'CelesTrak',
     stats: { error: 'CelesTrak unreachable', count: 0, lastUpdate: null },
   }), 'Unavailable · CelesTrak · CelesTrak unreachable');
   assert.equal(mgr._buildMetaText({
+    enabled: true,
     source: 'CelesTrak',
     stats: {
       status: 'unavailable',
@@ -1823,6 +1827,12 @@ test('layer metadata names degraded state instead of presenting an ordinary age'
       lastUpdate: 1,
     },
   }), 'Unavailable · CelesTrak · CelesTrak unreachable');
+  // The same stale feed on a layer that is off has no state to report: the row names its source alone.
+  assert.equal(mgr._buildMetaText({
+    enabled: false,
+    source: 'AISStream',
+    stats: { stale: true, count: 20, lastUpdate: Date.now() - 10_000 },
+  }), 'AISStream');
 });
 
 test('uncertain lifecycle state overrides ordinary feed status without disabling reconciliation', () => {
@@ -2771,6 +2781,27 @@ function makeRowControlLayer() {
     },
   };
 }
+
+test('an off row names its source alone; an on row adds how fresh its data is', async () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: makeControlElement };
+  const mgr = new DataLayerManager({});
+  mgr.register(makeRowControlLayer().module);
+  const container = makeControlElement();
+  try {
+    mgr.buildTogglePanel(container);
+    const meta = container.querySelector('[data-layer-id="satellites"]').querySelector('.data-toggle-meta');
+    const count = container.querySelector('[data-layer-id="satellites"]').querySelector('.data-count');
+    assert.equal(meta.textContent, 'CelesTrak');
+    assert.equal(count.hidden, true, 'no count while off');
+    assert.equal(await mgr.setEnabled('satellites', true), true);
+    mgr._refreshTogglePanel();
+    assert.equal(meta.textContent, 'CelesTrak · just now');
+    assert.equal(count.hidden, false);
+  } finally {
+    globalThis.document = originalDocument;
+  }
+});
 
 test('a layer that declares row controls renders its chips and color legend', async () => {
   const originalDocument = globalThis.document;

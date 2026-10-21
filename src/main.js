@@ -67,6 +67,7 @@ import { installCompareUi } from './compareUi.js';
 import { stackAboveChrome } from './bottomStack.js';
 import { createObservedTime, attachObservedTime, installObservedTimeUi } from './observedTime.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
+import { LAYER_GROUPS } from './data/layerGroups.js';
 import { registerDataCredits } from './data/dataCredits.js';
 import { MapStackController } from './mapStackController.js';
 import {
@@ -166,10 +167,12 @@ async function init() {
     // clutter the on-globe line. See docs/pre-ship-audit-2026-07-01.md H11.
     registerDataCredits(viewer);
 
-    // The page colour behind the globe (style.css --page). skyBox: false above also leaves out Cesium's sun and moon
-    // discs (Viewer: "no skyBox, Sun, or Moon will be added"). The atmosphere stays, softened: Cesium's default is
-    // bright enough to read as a hard cyan seam at the limb.
-    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#f1f5f8');
+    // The page colour behind the globe, read from style.css --page so the two cannot drift. skyBox: false above also
+    // leaves out Cesium's sun and moon discs (Viewer: "no skyBox, Sun, or Moon will be added"). The atmosphere stays,
+    // softened: Cesium's default is bright enough to read as a hard cyan seam at the limb.
+    const pageColour = getComputedStyle(document.documentElement).getPropertyValue('--page').trim();
+    if (!pageColour) throw new Error('style.css defines no --page colour for the globe background');
+    viewer.scene.backgroundColor = Cesium.Color.fromCssColorString(pageColour);
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;
     viewer.scene.skyAtmosphere.saturationShift = -0.12;
@@ -328,7 +331,7 @@ async function init() {
         return dataManager.unregisterForQa(layerId);
       };
     }
-    dataManager.buildTogglePanel(document.getElementById('data-toggles'));
+    dataManager.buildTogglePanel(document.getElementById('data-toggles'), { groups: LAYER_GROUPS });
     styleManager.attachDataManager(dataManager);
     // Biology details card: Cesium's info box is off, so this is where biology markers show their details.
     // Dismissing the card cancels the what-lives-here search it was waiting for (the controller is created below), and the
