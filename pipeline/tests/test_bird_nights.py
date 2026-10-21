@@ -280,3 +280,21 @@ def test_cli_parses_vol2bird_options_and_refuses_a_malformed_one(tmp_path: Path,
     assert got == [{"AZIMMIN": "239", "AZIMMAX": "279"}, None]
     with pytest.raises(SystemExit, match="KEY=VALUE"):
         bn.main(base + ["--vol2bird-option", "AZIMMIN"])
+
+def test_a_volume_archived_twice_counts_once_but_two_different_scans_at_one_time_still_fail(tmp_path: Path):
+    """On 2025-10-20 the NEXRAD archive holds some volumes under a second key: KOKX20251020_000203_V06 is
+    byte for byte KOKX20251020_002308_V06 (same ETag and size; written a day later), so vol2bird gives both
+    the time 00:23 and the night failed with 'profile times must be strictly increasing'. The three real
+    profiles here are that pair and the scan between them."""
+    for f in sorted((FIX / "vp_KOKX_dup_20251020").glob("*.txt")):
+        save_profile(f.read_text(), "KOKX", "2025/10/20/KOKX/" + f.name.removesuffix(".txt"), tmp_path)
+    start, end = dt.datetime(2025, 10, 20, 0, tzinfo=UTC), dt.datetime(2025, 10, 20, 1, tzinfo=UTC)
+    ps = stored_profiles(tmp_path, "KOKX", start, end)
+    assert [t for t, _ in ps] == [dt.datetime(2025, 10, 20, 0, 14, tzinfo=UTC), dt.datetime(2025, 10, 20, 0, 23, tzinfo=UTC)]
+    assert night_total(ps, start, end)["profiles"] == 2
+    # Two different scans with one time are not a copy: that still fails, and names both volumes.
+    other = tmp_path / "other"
+    save_profile(prof(start, [(0, 5.0, 10.0), (200, 1.0, 10.0)]), "KOKX", "2025/10/20/KOKX/KOKX20251020_000000_V06", other)
+    save_profile(prof(start, [(0, 6.0, 10.0), (200, 1.0, 10.0)]), "KOKX", "2025/10/20/KOKX/KOKX20251020_000100_V06", other)
+    with pytest.raises(ValueError, match="KOKX20251020_000000_V06.*KOKX20251020_000100_V06"):
+        stored_profiles(other, "KOKX", start, end)

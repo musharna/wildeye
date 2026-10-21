@@ -16,6 +16,7 @@ test('aloft: the profile time cannot wrap inside its date', () => {
     scan_time: '2026-10-15T20:09:42Z' };
   assert.match(describeAloft(p, 6000), /<br>profile Oct\u00a015\u00a020:09\u00a0UTC · published daily/);
   assert.doesNotMatch(describeAloft(p, 6000), /\d-\d/);
+  assert.match(describeAloft({ ...p, peak_altitude_m: 0 }, 6000), /8 m\/s, densest 0\u2060–\u2060200\u00a0m above sea level<br>/);
 });
 
 test('columnEntity: shared renderer keys by prefix and carries properties', () => {

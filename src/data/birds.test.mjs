@@ -2,7 +2,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, heightLine, seasonLines, SEASON_COMPARE, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, heightLine, seasonLines, SEASON_COMPARE, BIN_M, describe, columnEntity, nightText, nightLines, nightSpark } from './birds.js';
+
+test('birds: BIN_M is the height step of real vol2bird and Aloft profiles', () => {
+  const steps = (hs) => new Set(hs.slice(1).map((h, i) => h - hs[i]));
+  const kokx = readFileSync(new URL('../../pipeline/tests/fixtures/KOKX_profile.txt', import.meta.url), 'utf8')
+    .split('\n').filter((l) => l.trim() && !l.startsWith('#')).map((l) => Number(l.trim().split(/\s+/)[2]));
+  assert.deepEqual([...steps(kokx)], [BIN_M]);
+  const rows = readFileSync(new URL('../../pipeline/tests/fixtures/seang_vpts_tail.csv', import.meta.url), 'utf8').trim().split('\n');
+  const col = rows[0].split(',').indexOf('height');
+  const aloft = [...new Set(rows.slice(1).map((r) => Number(r.split(',')[col])))].sort((a, b) => a - b);
+  assert.deepEqual([...steps(aloft)], [BIN_M]);
+  assert.equal(kokx[0], 0, 'positive control: the lowest real bin starts at 0');
+});
 
 test('birds: analyst record maps fields and nulls', () => {
   const r = mapBirdRecord({ site: 'KOKX', name: 'Upton NY', density_birds_km3: 12.5, heading_deg: 200, speed_ms: 9, peak_altitude_m: 600, scan_time: '2026-09-11T00:12:10Z', stale: false, lat: 40.9, lon: -72.9 }, 0);
@@ -152,6 +164,11 @@ test('birds: a scan whose echo was mostly not birds is flagged at the gauge-chec
   assert.doesNotMatch(clear, /Mostly rain/);
   assert.match(clear, /Compare nights at this radar/);
   assert.match(describe({ ...base, density_birds_km3: 0, bio_gate_share: 0.01 }, 0), /Mostly rain or clutter.*Quiet/);
+  // vol2bird heights are the bottom of a 200 m bin above sea level: 0 is the lowest layer, not the ground
+  assert.match(describe({ ...base, peak_altitude_m: 0 }, 6000), /9 m\/s, densest 0\u2060–\u2060200\u00a0m above sea level<br>/);
+  assert.match(clear, /densest 400\u2060–\u2060600\u00a0m above sea level<br>/);
+  assert.doesNotMatch(describe({ ...base, peak_altitude_m: 0 }, 6000), /peak 0/);
+  assert.doesNotMatch(describe({ ...base, peak_altitude_m: null }, 6000), /densest|null|NaN/, 'no densest layer: the clause is left out');
   const alpha = (props) => columnEntity({ geometry: { coordinates: [-74.4, 40.0] }, properties: { ...base, ...props } })
     .cylinder.material.color.getValue().alpha;
   assert.equal(alpha({ bio_gate_share: 0.003 }), 0.25, 'mostly rain: faded like a stale scan');
@@ -258,7 +275,11 @@ test('birds: the season line totals the archived nights and says how many it res
   // a finished season drops "so far"; the latest season is picked by date, not by key order
   const done = { windows: two.windows, seasons: { 'fall-2026': { KAKQ: { '2026-11-15': rec(10) } }, 'fall-2025': { KAKQ: { '2025-11-15': rec(1) } } } };
   assert.match(seasonLines(done, 'KAKQ', false)[0], /^Fall 2026: 10 birds .*Nov\u00a015: 1 of 107 nights\)$/);
-  assert.equal(SEASON_COMPARE, false, 'until season_check has run on both falls');
+  // the switch is season_check's verdict on the falls in the archive (pipeline/season_check.py, rule fixed 10-19)
+  const verdict = JSON.parse(readFileSync(new URL('../../docs/analysis/bird_season.json', import.meta.url)));
+  assert.equal(verdict.season, 'fall-2026');
+  assert.equal(typeof verdict.ships, 'boolean');
+  assert.equal(SEASON_COMPARE, verdict.ships, `season_check says ships=${verdict.ships} (median ${verdict.median_disagreement} over ${verdict.pairs.length} pairs)`);
 });
 
 test('birds: update() feeds the night totals into the popups and keeps the last good file on failure', async () => {
