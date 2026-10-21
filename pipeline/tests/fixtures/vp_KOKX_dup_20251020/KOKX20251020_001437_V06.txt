@@ -1,0 +1,30 @@
+# vol2bird Vertical Profile of Birds (VPB)
+# source: RAD:KOKX,PLC:NEW_YORK_CITY,state:NY,radar_name:KOKX
+# polar volume input: /data/KOKX20251020_001437_V06
+# volume coverage pattern (VCP): 35
+# date   time HGHT    u      v       w     ff    dd  sd_vvp gap dbz     eta   dens   DBZH   n   n_dbz n_all n_dbz_all
+20251020 0014    0 -10.03   8.37  -19.92 13.07 309.8   4.38 F  12.88  419.8  38.16  11.70 51106 66031 81992 99303
+20251020 0014  200  -8.23   9.75  186.73 12.76 319.8   4.64 F   9.16  178.2  16.20   7.01 80277 88951 139258 167668
+20251020 0014  400  -8.41  15.66   21.10 17.77 331.8   4.27 F  -0.40   19.7   1.79  -2.65 17656 34860 37267 79207
+20251020 0014  600  -5.00  15.89   62.75 16.66 342.5   4.67 F -10.55    1.9   0.17 -10.45  4395 43374  6264 57221
+20251020 0014  800   0.88  16.89   57.06 16.91   3.0   4.09 F -13.89    0.9   0.08 -14.91   619 26057  1550 40084
+20251020 0014 1000   6.98  19.99    8.57 21.18  19.2   1.83 F -18.70    0.3   0.03 -15.02   432 11758  8091 28698
+20251020 0014 1200   7.80  20.58  -11.79 22.01  20.8   1.57 F -24.77    0.1   0.01 -13.36   139  4425  9115 21501
+20251020 0014 1400    nan    nan     nan   nan   nan   2.37 T -28.54    0.0   0.00 -23.09    63  8128  1001 20117
+20251020 0014 1600    nan    nan     nan   nan   nan    nan T -37.97    0.0   0.00 -36.81     5 10707    10 14723
+20251020 0014 1800    nan    nan     nan   nan   nan    nan T -40.69    0.0   0.00 -39.87     2 13984     6 14741
+20251020 0014 2000    nan    nan     nan   nan   nan    nan T -40.59    0.0   0.00 -40.61     6  9298     6  9347
+20251020 0014 2200    nan    nan     nan   nan   nan    nan T -41.97    0.0   0.00 -41.97     0  9360     0  9360
+20251020 0014 2400    nan    nan     nan   nan   nan    nan T -42.30    0.0   0.00 -42.30     0  8640     0  8640
+20251020 0014 2600    nan    nan     nan   nan   nan    nan T -41.24    0.0   0.00 -41.24     0  5400     0  5400
+20251020 0014 2800    nan    nan     nan   nan   nan    nan T -41.24    0.0   0.00 -41.24     0  5760     0  5760
+20251020 0014 3000    nan    nan     nan   nan   nan    nan T -39.99    0.0   0.00 -39.99     0  5760     0  5760
+20251020 0014 3200    nan    nan     nan   nan   nan    nan T -40.40    0.0   0.00 -40.40     0  2520     0  2520
+20251020 0014 3400    nan    nan     nan   nan   nan    nan T   -inf    0.0   0.00   -inf     0  2520     0  2520
+20251020 0014 3600    nan    nan     nan   nan   nan    nan T   -inf    0.0   0.00   -inf     0  2520     0  2520
+20251020 0014 3800    nan    nan     nan   nan   nan    nan T   -inf    0.0   0.00   -inf     0  2520     0  2520
+20251020 0014 4000    nan    nan     nan   nan   nan    nan T    nan    nan    nan    nan     0     0     0     0
+20251020 0014 4200    nan    nan     nan   nan   nan    nan T    nan    nan    nan    nan     0     0     0     0
+20251020 0014 4400    nan    nan     nan   nan   nan    nan T    nan    nan    nan    nan     0     0     0     0
+20251020 0014 4600    nan    nan     nan   nan   nan    nan T    nan    nan    nan    nan     0     0     0     0
+20251020 0014 4800    nan    nan     nan   nan   nan    nan T    nan    nan    nan    nan     0     0     0     0

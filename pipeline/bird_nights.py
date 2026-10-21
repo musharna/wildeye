@@ -82,17 +82,28 @@ def night_window(night: dt.date, lon: float, lat: float) -> tuple[dt.datetime, d
 # --- totals ---------------------------------------------------------------------------------------
 
 def stored_profiles(root: Path, site: str, start: dt.datetime, end: dt.datetime) -> list[tuple[dt.datetime, str]]:
-    """Stored profiles of `site` whose vol2bird time lies in [start, end], oldest first."""
-    out = []
+    """Stored profiles of `site` whose vol2bird time lies in [start, end], oldest first.
+    The archive holds some volumes twice under different keys (2025-10-20: same object, second key
+    written a day later); their profiles share a time and every row, so the copy is dropped. Two
+    profiles with one time and different rows are different scans, and raise."""
+    out: dict[dt.datetime, tuple[str, str]] = {}
+    rows = lambda text: [line for line in text.splitlines() if not line.startswith("#")]
     day = start.date()
     while day <= end.date():
         for f in sorted((root / site / f"{day:%Y%m%d}").glob("*.txt.gz")):
             text = gzip.decompress(f.read_bytes()).decode()
             t = profile_time(text)
-            if start <= t <= end:
-                out.append((t, text))
+            if not start <= t <= end:
+                continue
+            if t in out:
+                kept, kept_text = out[t]
+                if rows(kept_text) != rows(text):
+                    raise ValueError(f"{site} {kept} and {f.name} are different scans with one profile time {_iso(t)}")
+                log.info("%s %s is a copy of %s (same time and rows): dropped", site, f.name, kept)
+                continue
+            out[t] = (f.name, text)
         day += dt.timedelta(days=1)
-    return sorted(out, key=lambda p: p[0])
+    return [(t, text) for t, (_, text) in sorted(out.items())]
 
 def night_total(profiles: list[tuple[dt.datetime, str]], sunset: dt.datetime, sunrise: dt.datetime) -> dict:
     """mt over the night as bioRad computes it, peak mtr, how much of the night the profiles stand for,
