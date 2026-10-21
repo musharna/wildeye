@@ -3,22 +3,28 @@
 :root {
   /* Light paper on a pale page, the GBIF family (gbif/gbif-web baseThemes.ts, light theme); dark ink for text and
      active states, because blue and cyan are the bird data's colours (grill_wildeye_visual_update_2026-10-20). */
-  --page: #f1f5f8;
+  /* Atlas look (grill_wildeye_layers_ux_2026-10-20, the user's pick): cool grey page, white paper, slate header bands. */
+  --page: #e8ecef;
   --paper: #ffffff;
   --bg-dark: var(--page);
   --glass-bg: var(--paper);
-  --glass-border: #dfe6ea;
-  --glass-border-hover: #b9c6ce;
-  --accent: #162d3d;
-  --accent-dim: rgba(22, 45, 61, 0.08);
-  --accent-glow: rgba(22, 45, 61, 0.12);
-  --text-primary: #162d3d;
-  --text-secondary: #4b5d6a;
-  --text-dim: #5d6c78;
+  --glass-border: #cfd7dd;
+  --glass-border-hover: #9fb0bc;
+  --accent: #1d3a4f;
+  --accent-dim: rgba(29, 58, 79, 0.08);
+  --accent-glow: rgba(29, 58, 79, 0.12);
+  --text-primary: #14222d;
+  --text-secondary: #3f505c;
+  --text-dim: #55646f;
+  /* The slate of the header bands and the wordmark, the white on it, and the band's one blue (the count, the underline). */
+  --band: #1f2d3a;
+  --band-text: #ffffff;
+  --band-muted: #b9c6cf;
+  --band-accent: #4f9fd1;
   --warn: #8a4b00;
   --error: #b42318;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --panel-radius: 6px;
+  --panel-radius: 3px;
   --btn-radius: 4px;
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-smooth: 300ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -160,19 +166,21 @@ html, body {
   user-select: none;
 }
 
-/* The wordmark sits on paper like every other label: ink straight on satellite imagery is unreadable. */
+/* The wordmark sits on a box like every other label (ink straight on satellite imagery is unreadable): the Atlas slate band with
+   its blue underline. */
 #title-bar h1 {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 4px 12px;
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--band);
   border-radius: var(--btn-radius);
-  background: var(--paper);
+  background: var(--band);
+  box-shadow: inset 0 -3px 0 var(--band-accent);
   font-family: var(--font-sans);
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--band-text);
   position: relative;
 }
 
@@ -975,7 +983,8 @@ body.ui-clean-view #data-panel {
   align-items: stretch;
   border-radius: 4px;
   background: var(--accent-dim);
-  box-shadow: inset 3px 0 0 var(--accent);
+  /* The bar takes the layer's group colour (Atlas look, below). */
+  box-shadow: inset 3px 0 0 var(--group, var(--accent));
   overflow: hidden;
 }
 
@@ -2379,4 +2388,145 @@ body.recording-mode #species-panel { opacity: 0 !important; visibility: hidden !
     right: auto;
     left: calc(50% - var(--dock-popover-mobile-width) / 2);
   }
+}
+
+/* ── Atlas look (grill_wildeye_layers_ux_2026-10-20, the user's pick of three rendered directions) ──
+   Slate header bands on the left panels and the wordmark, hairline rules, and one muted colour per Layers group, used
+   only for marks (a dot, a square, a bar), never for text. The selectors carry two ids so they outrank every per-viewport
+   padding rule above; the band takes the inner box's top padding, and bleeds by its side padding (16 px Layers, 14 px Species). */
+#left-panel-stack > #data-panel { --band-bleed: 16px; }
+#left-panel-stack > #species-panel { --band-bleed: 14px; }
+
+#left-panel-stack > #data-panel .data-panel-inner,
+#left-panel-stack > #species-panel .species-panel-inner {
+  padding-top: 0;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(20, 34, 45, 0.18);
+}
+
+#left-panel-stack > #data-panel .panel-header,
+#left-panel-stack > #species-panel .panel-header {
+  margin: 0 calc(-1 * var(--band-bleed)) 12px;
+  padding: 8px var(--band-bleed);
+  background: var(--band);
+}
+
+#left-panel-stack > #data-panel.collapsed .data-panel-inner,
+#left-panel-stack > #species-panel.collapsed .species-panel-inner {
+  padding-bottom: 0;
+}
+
+/* A short window keeps the header as tight as the short-viewport rules did before the band (6 px over the title, 8 px under):
+   the Species parts must stay whole at 667x375 (qa-species panel-fold). */
+@media (max-height: 600px) and (orientation: landscape) {
+  #left-panel-stack > #data-panel .panel-header,
+  #left-panel-stack > #species-panel .panel-header {
+    padding-top: 3px;
+    padding-bottom: 3px;
+    margin-bottom: 8px;
+  }
+}
+
+#left-panel-stack > #data-panel.collapsed .panel-header,
+#left-panel-stack > #species-panel.collapsed .panel-header {
+  margin-bottom: 0;
+}
+
+#left-panel-stack > #species-panel:not(.collapsed) .panel-divider {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+#left-panel-stack > #data-panel .panel-title,
+#left-panel-stack > #species-panel .panel-title {
+  color: var(--band-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#left-panel-stack > #data-panel .panel-collapse-btn,
+#left-panel-stack > #species-panel .panel-collapse-btn {
+  color: var(--band-text);
+  border-color: rgba(255, 255, 255, 0.35);
+  background: transparent;
+}
+
+#left-panel-stack > #data-panel .panel-collapse-btn:hover,
+#left-panel-stack > #species-panel .panel-collapse-btn:hover {
+  border-color: var(--band-text);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+#left-panel-stack > #data-panel .panel-collapse-btn:focus-visible,
+#left-panel-stack > #species-panel .panel-collapse-btn:focus-visible {
+  outline: 2px solid var(--band-text);
+  outline-offset: 1px;
+}
+
+#data-panel .panel-count {
+  color: var(--band);
+  background: var(--band-accent);
+}
+
+#data-panel .panel-header .layers-search {
+  color: var(--band-text);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+#data-panel .panel-header .layers-search::placeholder {
+  color: var(--band-muted);
+}
+
+#data-panel .panel-header .layers-search:focus {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: var(--band-text);
+}
+
+.layer-group + .layer-group {
+  border-top-color: #e3e8ec;
+}
+
+/* One muted colour per group, for marks only. */
+[data-group-id="movement"] { --group: #3b7ea1; }
+[data-group-id="records"] { --group: #6b8e23; }
+[data-group-id="patterns"] { --group: #8e5ea2; }
+[data-group-id="habitats"] { --group: #2e7d5b; }
+[data-group-id="land"] { --group: #a0722a; }
+[data-group-id="ocean"] { --group: #1f6f8b; }
+[data-group-id="coral"] { --group: #d0644b; }
+[data-group-id="disease"] { --group: #a8323e; }
+[data-group-id="human"] { --group: #6e6e6e; }
+
+.layer-group-label::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 2px;
+  background: var(--group);
+  vertical-align: 1px;
+}
+
+.layer-group-head .layer-group-caret {
+  border-color: var(--group);
+}
+
+/* The group dot stands in for the emoji, which read as decoration rather than as a key. */
+#data-toggles .data-icon {
+  display: none;
+}
+
+#data-toggles .data-toggle-left::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--group);
+}
+
+#data-toggles .data-toggle-meta,
+#data-toggles .data-toggle-controls {
+  padding-left: 16px;
 }

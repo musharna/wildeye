@@ -101,7 +101,7 @@ async function viewportChecks(browser, width, height) {
   const inView = await page.evaluate((n) => Object.fromEntries(Object.entries(n).map(([id, name]) => [id, window.__qaNameInView(name)])), names);
   report(`${tag}: every on layer's full name is in view at the top of the panel`, Object.values(inView).every(Boolean), { inView });
 
-  const headings = await page.evaluate(() => [...document.querySelectorAll('#data-panel [data-group-id]')]
+  const headings = await page.evaluate(() => [...document.querySelectorAll('#data-panel .layer-group[data-group-id]')]
     .map((g) => ({ label: g.querySelector('.layer-group-label')?.textContent.trim(), inView: window.__qaInView(g.querySelector('.layer-group-head')) })));
   const shown = headings.filter((h) => h.inView).length;
   report(`${tag}: at least ${MIN_HEADINGS[width]} group headings in view at the top of the panel`,
@@ -138,7 +138,7 @@ try {
   // Grouping, read from the desktop page's DOM order.
   const grouping = await page.evaluate(() => {
     const rows = [...document.querySelectorAll('#data-panel .data-toggle-row')];
-    const seq = rows.map((r) => r.closest('[data-group-id]')?.querySelector('.layer-group-label')?.textContent.trim() ?? null);
+    const seq = rows.map((r) => r.closest('.layer-group[data-group-id]')?.querySelector('.layer-group-label')?.textContent.trim() ?? null);
     const names = rows.map((r) => r.querySelector('.data-name')?.textContent.trim());
     return { count: rows.length, seq, names };
   });
@@ -186,7 +186,7 @@ try {
     const cleared = await page.evaluate(() => ({
       value: document.querySelector('#data-panel input[type="search"]').value,
       visibleRows: [...document.querySelectorAll('#data-panel .data-toggle-row')].filter((r) => r.getClientRects().length).length,
-      groups: document.querySelectorAll('#data-panel [data-group-id]').length,
+      groups: document.querySelectorAll('#data-panel .layer-group[data-group-id]').length,
     }));
     report('Escape clears the search and the groups fold back', cleared.value === '' && cleared.visibleRows === 0 && cleared.groups === 9, cleared);
   }

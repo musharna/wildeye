@@ -567,6 +567,9 @@ if (CHECKS.has('left-stack')) {
     }
     const data = document.getElementById('data-panel');
     if (data.classList.contains('collapsed')) data.querySelector('[data-collapse-target="data-panel"]').click();
+    // Focus mode needs a panel taller than the lane. The Layers groups load folded (398 px at 1400x900 fits beside the Species pill,
+    // tail mode), so unfold them all: the 68 rows are the tall content the flat list used to be.
+    for (const head of data.querySelectorAll('.layer-group-head[aria-expanded="false"]')) head.click();
   });
   // The positive control is read once the lane has laid out the expanded panel: an allocated height, and the same mode and panel height on 4
   // reads 250 ms apart. A fixed 1.5 s wait read it mid-expansion on a loaded host (251 px, no allocation, normal mode). 20 s at most, then throw.

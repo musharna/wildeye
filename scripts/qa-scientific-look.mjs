@@ -31,8 +31,8 @@ const AXE = createRequire(import.meta.url).resolve('axe-core/axe.min.js');
 // Words that are written in capitals because they are acronyms, codes or licence terms, not because of styling. A run of capitals made
 // only of these (NOAA OISST, CC BY) is a name, not shouting; any other all-capitals word of two or more letters is a label left in caps.
 const ACRONYMS = [
-  'API', 'APHIS', 'BALTRAD', 'BY', 'CC', 'CC0', 'CDC', 'CI', 'DOI', 'EU', 'EVI', 'FIRMS', 'GBIF', 'GEDI', 'GFW', 'GIBS', 'HAB', 'HAEDAT', 'HTTP',
-  'HTTPS', 'ID', 'IGBP', 'IOC', 'ISME', 'IUCN', 'LST', 'MDD', 'MODIS', 'NAS', 'NASA', 'NC', 'ND', 'NDVI', 'NE', 'NEON', 'NEXRAD', 'NOAA', 'NPN',
+  'API', 'APHIS', 'BALTRAD', 'BY', 'CC', 'CC0', 'CDC', 'CI', 'DOI', 'EU', 'EVI', 'FIRMS', 'GBIF', 'GEDI', 'GFW', 'GIBS', 'HAB', 'HAEDAT', 'HPAI', 'HTTP',
+  'HTTPS', 'ID', 'IGBP', 'IOC', 'ISME', 'IUCN', 'LST', 'MAP', 'MDD', 'MODIS', 'NAS', 'NASA', 'NC', 'NCBI', 'ND', 'NDVI', 'NE', 'NEON', 'NEXRAD', 'NNDSS', 'NOAA', 'NPN',
   'NSF', 'NW', 'NWSS', 'OBIS', 'OISST', 'OSM', 'OTN', 'RESOLVE', 'SA', 'SE', 'SEDAC', 'SW', 'UN', 'URL', 'US', 'USA', 'USDA', 'USGS', 'UTC',
   'VIIRS', 'VPTS', 'WMS',
   // US state codes (a radar is named "Wakefield VA (KAKQ)")
@@ -152,6 +152,13 @@ try {
       }
     }, panelId);
     report(`${label}: panel open and its contents visible`, opened && settledIn, { settledIn });
+    // The Layers groups load folded; open each, as a visitor would, so the sweep reaches the layer rows' own styling.
+    if (panelId === 'data-panel') {
+      for (const head of await page.$$('#data-toggles .layer-group-head[aria-expanded="false"]')) await head.click();
+      const unfolded = await page.evaluate(() => document.querySelectorAll('#data-toggles .layer-group-head[aria-expanded="false"]').length === 0
+        && document.querySelectorAll('#data-toggles .layer-group-head').length > 0);
+      report('layers: every group unfolded for the sweep', unfolded);
+    }
     const one = await page.evaluate((acronyms) => {
       const allowed = new Set(acronyms);
       // A word that is an acronym, or a radar or station code (KAKQ: four capitals starting K, P or T).

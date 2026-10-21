@@ -69,6 +69,19 @@ test('white holds 4.5:1 on the ink accent (the credit chip and active chips)', (
   assert.ok(contrast('#ffffff', tokens['--accent']) >= 4.5, `${contrast('#ffffff', tokens['--accent']).toFixed(2)}:1`);
 });
 
+test('the header band holds its text: title and search text, the search placeholder, and the count badge', () => {
+  const band = tokens['--band'];
+  // The search box is white at 12% over the band (style.css, Atlas look); its text and placeholder sit on that.
+  const field = '#' + over(parseColour('rgba(255, 255, 255, 0.12)'), parseColour(band)).map((c) => Math.round(c).toString(16).padStart(2, '0')).join('');
+  const pairs = [
+    ['--band-text on --band', tokens['--band-text'], band],
+    ['--band-text on the search field', tokens['--band-text'], field],
+    ['--band-muted on the search field', tokens['--band-muted'], field],
+    ['--band on --band-accent (the count)', band, tokens['--band-accent']],
+  ];
+  for (const [name, fg, ground] of pairs) assert.ok(contrast(fg, ground) >= 4.5, `${name}: ${contrast(fg, ground).toFixed(2)}:1`);
+});
+
 test('the token reader resolves var() and refuses an undefined reference', () => {
   assert.equal(tokens['--bg-dark'], tokens['--page'], 'positive control: --bg-dark resolves through var(--page)');
   assert.throws(() => rootTokens(':root { --a: var(--missing); }'), /--missing is not defined/);

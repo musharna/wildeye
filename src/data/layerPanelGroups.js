@@ -5,10 +5,13 @@
  * real browser by scripts/qa-layers-ux.mjs.
  */
 import { LAYER_GROUPS, layerMatchesQuery, orderLayersForPanel } from './layerGroups.js';
+import { SHORT_VIEWPORT_QUERY } from '../bio/shortViewport.js';
 
 // The strip lists this many layers before the rest fold behind "+k more". A count, not a measured line limit: the names
 // are long (up to ~290 px at 12 px against a ~240 px panel), so each layer takes its own line and may wrap.
 const STRIP_MAX = 4;
+// A short window (the short-landscape rules' query) gives the whole panel ~280 px: two, then "+k more".
+const STRIP_MAX_SHORT = 2;
 
 function el(doc, tag, className, text) {
   const node = doc.createElement(tag);
@@ -31,6 +34,7 @@ export function createGroupedLayersPanel({ container, groups = LAYER_GROUPS, onT
   let stripKey = null;
   let stripExpanded = false;
   let sections = new Map();
+  const shortWindow = typeof matchMedia === 'function' ? matchMedia(SHORT_VIEWPORT_QUERY) : null;
 
   // Header count: "3 on" beside the panel title, so the collapsed pill says it too.
   const header = container.parentElement?.querySelector('.panel-header');
@@ -77,6 +81,7 @@ export function createGroupedLayersPanel({ container, groups = LAYER_GROUPS, onT
     applyFilter();
   });
 
+  shortWindow?.addEventListener('change', () => fitStrip());
   more.addEventListener('click', () => {
     stripExpanded = !stripExpanded;
     fitStrip();
@@ -137,8 +142,9 @@ export function createGroupedLayersPanel({ container, groups = LAYER_GROUPS, onT
   // Fold layers past STRIP_MAX behind "+k more"; pressed, it lists them all and reads "Show fewer".
   function fitStrip() {
     const items = [...chips.children];
-    const overflow = items.length - STRIP_MAX;
-    items.forEach((item, i) => { item.hidden = !stripExpanded && i >= STRIP_MAX; });
+    const max = shortWindow?.matches ? STRIP_MAX_SHORT : STRIP_MAX;
+    const overflow = items.length - max;
+    items.forEach((item, i) => { item.hidden = !stripExpanded && i >= max; });
     more.hidden = overflow <= 0;
     more.textContent = stripExpanded ? 'Show fewer' : `+${overflow} more`;
     more.setAttribute('aria-expanded', stripExpanded ? 'true' : 'false');
