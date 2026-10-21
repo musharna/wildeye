@@ -1803,18 +1803,22 @@ test('layer feed states distinguish unavailable, fallback, stale, and degraded c
 test('layer metadata names degraded state instead of presenting an ordinary age', () => {
   const mgr = new DataLayerManager({});
   assert.match(mgr._buildMetaText({
+    enabled: true,
     source: 'AISStream',
     stats: { stale: true, count: 20, lastUpdate: Date.now() - 10_000 },
   }), /^Stale · AISStream · /);
   assert.equal(mgr._buildMetaText({
+    enabled: true,
     source: 'TomTom',
     stats: { mode: 'sim', count: 120, lastUpdate: 1, loadingLabel: 'simulated traffic' },
   }), 'Fallback · TomTom · simulated traffic');
   assert.equal(mgr._buildMetaText({
+    enabled: true,
     source: 'CelesTrak',
     stats: { error: 'CelesTrak unreachable', count: 0, lastUpdate: null },
   }), 'Unavailable · CelesTrak · CelesTrak unreachable');
   assert.equal(mgr._buildMetaText({
+    enabled: true,
     source: 'CelesTrak',
     stats: {
       status: 'unavailable',
@@ -1823,6 +1827,12 @@ test('layer metadata names degraded state instead of presenting an ordinary age'
       lastUpdate: 1,
     },
   }), 'Unavailable · CelesTrak · CelesTrak unreachable');
+  // The same stale feed on a layer that is off has no state to report: the row names its source alone.
+  assert.equal(mgr._buildMetaText({
+    enabled: false,
+    source: 'AISStream',
+    stats: { stale: true, count: 20, lastUpdate: Date.now() - 10_000 },
+  }), 'AISStream');
 });
 
 test('uncertain lifecycle state overrides ordinary feed status without disabling reconciliation', () => {
