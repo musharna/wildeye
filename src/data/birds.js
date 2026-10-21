@@ -227,7 +227,8 @@ export function particleText(dens, heading, speed, nearest) {
 
 // A radar's fall against its last fall: shown only while season_check finds adjacent radars agree on the change
 // between years (docs/analysis/bird-season.md, bird_season.json; rule fixed before either season was in the archive).
-export const SEASON_COMPARE = false;
+// Fall 2026 through Oct 19 against fall 2025: median disagreement 1.14 over 11 pairs (limit 1.5 over >= 6).
+export const SEASON_COMPARE = true;
 
 const seasonOrder = (doc, key) => {
   const [name, year] = key.split('-');
