@@ -1,23 +1,22 @@
 {
-  "_vendor-cesium-Drf3xzW0.js": {
-    "file": "assets/vendor-cesium-Drf3xzW0.js",
+  "_vendor-cesium-B9uG-mH_.js": {
+    "file": "assets/vendor-cesium-B9uG-mH_.js",
     "name": "vendor-cesium"
   },
   "index.html": {
-    "file": "assets/index-BPt1oEh9.js",
+    "file": "assets/index-BWD0TEVY.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_vendor-cesium-Drf3xzW0.js"
+      "_vendor-cesium-B9uG-mH_.js"
     ],
     "dynamicImports": [
-      "src/data/egm96Grid.generated.js",
       "node_modules/pbf/index.js",
       "node_modules/@mapbox/vector-tile/index.js"
     ],
     "css": [
-      "assets/index-BS3uX1ta.css"
+      "assets/index-tCnkhDtF.css"
     ],
     "assets": [
       "assets/hansenLoss.worker-C9w6Z-uV.js"
@@ -33,12 +32,6 @@
     "file": "assets/pbf-DdPwTKUY.js",
     "name": "pbf",
     "src": "node_modules/pbf/index.js",
-    "isDynamicEntry": true
-  },
-  "src/data/egm96Grid.generated.js": {
-    "file": "assets/egm96Grid.generated-wavK1IGt.js",
-    "name": "egm96Grid.generated",
-    "src": "src/data/egm96Grid.generated.js",
     "isDynamicEntry": true
   }
 }

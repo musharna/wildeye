@@ -7,27 +7,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>wildeye</title>
   <link rel="icon" type="image/svg+xml" href="/wildeye/logo.svg" />
-  <!-- Self-hosted type: three Google stylesheets once cost a slow-4G visit 1.6 s. The two Latin files every page draws are preloaded. -->
+  <!-- Self-hosted type: three Google stylesheets once cost a slow-4G visit 1.6 s. The Latin file every page draws is preloaded. -->
   <link rel="preload" href="/wildeye/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="preload" href="/wildeye/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/wildeye/fonts/fonts.css" />
-  <script type="module" crossorigin src="/wildeye/assets/index-BPt1oEh9.js"></script>
-  <link rel="modulepreload" crossorigin href="/wildeye/assets/vendor-cesium-Drf3xzW0.js">
-  <link rel="stylesheet" crossorigin href="/wildeye/assets/index-BS3uX1ta.css">
+  <script type="module" crossorigin src="/wildeye/assets/index-BWD0TEVY.js"></script>
+  <link rel="modulepreload" crossorigin href="/wildeye/assets/vendor-cesium-B9uG-mH_.js">
+  <link rel="stylesheet" crossorigin href="/wildeye/assets/index-tCnkhDtF.css">
 </head>
 <body>
   <div id="cesiumContainer"></div>
 
   <!-- Title -->
   <div id="title-bar">
-    <div class="title-glow"></div>
-    <h1><span class="title-logo brand-logo" data-logo-gaze data-logo-src="logo.svg" aria-hidden="true"><img src="/wildeye/logo.svg" alt="" /></span> <span>wildeye</span></h1>
-  </div>
-
-  <!-- Style indicator -->
-  <div id="style-indicator">
-    <span class="indicator-label">ACTIVE STYLE</span>
-    <span class="indicator-value" id="active-style-name">NORMAL</span>
+    <h1>wildeye</h1>
   </div>
 
   <!-- Top-center camera and share actions -->
@@ -43,7 +35,7 @@
     </button>
   </nav>
   <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>
-    <span id="global-loading-label">LOADING LIVE DATA</span>
+    <span id="global-loading-label">Loading live data</span>
     <span id="global-loading-detail"></span>
   </div>
   <!-- Toast notification -->
@@ -54,60 +46,28 @@
     <div id="safe-frame-box"></div>
   </div>
 
-  <button id="clean-view-exit" title="Return UI controls">EXIT CLEAN VIEW</button>
+  <button id="clean-view-exit" title="Return UI controls">Exit clean view</button>
 
-  <!-- Bottom command dock: visual presets and map source -->
-  <div id="command-dock" aria-label="Visual preset and map source controls">
+  <!-- Bottom command dock: the basemap choice -->
+  <div id="command-dock" aria-label="Basemap">
   <!-- Control panel -->
   <div id="control-panel" class="panel-collapsible collapsed">
-    <div class="panel-glow"></div>
     <div class="panel-inner">
       <button id="control-panel-toggle" class="panel-header dock-tray-toggle" type="button"
         data-dock-toggle-target="control-panel" aria-expanded="false"
-        aria-controls="control-panel-popover" aria-label="Expand Visual Presets">
-        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>VISUAL PRESETS</span>
+        aria-controls="control-panel-popover" aria-label="Expand Basemap">
+        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>Basemap</span>
         <span class="panel-divider"></span>
       </button>
       <div id="control-panel-popover" class="dock-popover-content">
-      <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin visual presets" aria-pressed="false" title="Keep visual presets open"><img src="/wildeye/pin.svg" alt="" /></button>
-      <div id="style-buttons" class="button-grid">
-        <button class="style-btn active" data-style="normal" title="Show the globe without a visual filter.">
-          <span class="btn-icon">◯</span>
-          <span class="btn-label">Normal</span>
-          <span class="btn-key">1</span>
-        </button>
-        <button class="style-btn" data-style="retro" title="Emulate a green phosphor CRT with scanlines and screen curvature.">
-          <span class="btn-icon">▦</span>
-          <span class="btn-label">CRT</span>
-          <span class="btn-key">2</span>
-        </button>
-        <button class="style-btn" data-style="anime" title="Apply bright cel-shaded color and illustrated outlines.">
-          <span class="btn-icon">✦</span>
-          <span class="btn-label">Anime</span>
-          <span class="btn-key">3</span>
-        </button>
-        <button class="style-btn" data-style="noir" title="Apply high-contrast monochrome film-noir grading.">
-          <span class="btn-icon">◐</span>
-          <span class="btn-label">Noir</span>
-          <span class="btn-key">4</span>
-        </button>
-        <button class="style-btn" data-style="snow" title="Add a cold, snowy whiteout treatment to the scene.">
-          <span class="btn-icon">❄</span>
-          <span class="btn-label">Snow</span>
-          <span class="btn-key">5</span>
-        </button>
-      </div>
+      <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin basemap" aria-pressed="false" title="Keep the basemap choice open"><img src="/wildeye/pin.svg" alt="" /></button>
       <section class="map-source-section" aria-labelledby="map-source-label">
         <div class="map-source-heading">
-          <span id="map-source-label">MAP SOURCE</span>
+          <span id="map-source-label">Map source</span>
           <span id="map-stack-status" class="pp-stack-status" aria-live="polite">3D</span>
         </div>
         <div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source"></div>
       </section>
-      </div>
-      <div id="style-mini-status" class="panel-mini-status" aria-live="polite">
-        <span class="panel-mini-label">Style</span>
-        <span id="style-mini-value" class="panel-mini-value">NORMAL</span>
       </div>
     </div>
   </div>
@@ -116,12 +76,11 @@
   <div id="left-panel-stack">
   <!-- Data Layer Toggle Panel -->
   <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
-    <div class="panel-glow"></div>
     <div class="data-panel-inner">
       <div class="panel-header">
-        <span class="panel-title">DATA LAYERS</span>
+        <span class="panel-title">Layers</span>
         <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel">+</button>
+        <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel"></button>
       </div>
       <div id="data-toggles" class="data-toggle-list"></div>
     </div>
@@ -129,12 +88,11 @@
 
   <!-- Species search: any GBIF species on the map, and what has been recorded around a clicked point -->
   <div id="species-panel" class="panel-collapsible collapsed" data-panel-id="species-panel">
-    <div class="panel-glow"></div>
     <div class="species-panel-inner">
       <div class="panel-header">
-        <span class="panel-title">SPECIES</span>
+        <span class="panel-title">Species</span>
         <span class="panel-divider"></span>
-        <button class="panel-collapse-btn" data-collapse-target="species-panel" title="Collapse panel">+</button>
+        <button class="panel-collapse-btn" data-collapse-target="species-panel" title="Collapse panel"></button>
       </div>
       <div id="species-body" class="species-body">
         <label class="species-label" for="species-search">Find a species</label>
@@ -143,31 +101,31 @@
         <div id="species-status" class="species-status" role="status" aria-live="polite"></div>
         <div id="species-chosen" class="species-chosen" hidden>
           <span id="species-chosen-name" class="species-chosen-name"></span>
-          <button type="button" id="species-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Species map">MAP OFF</button>
+          <button type="button" id="species-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Species map">Map off</button>
           <span id="species-chosen-note" class="species-chosen-note" hidden></span>
         </div>
-        <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">WHAT LIVES HERE</button>
+        <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">What lives here</button>
         <div id="species-modeled" class="species-modeled" hidden>
-          <button type="button" id="species-modeled-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Modeled range" hidden>MODELED RANGE OFF</button>
+          <button type="button" id="species-modeled-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Modeled range" hidden>Modeled range off</button>
           <span id="species-modeled-note" class="species-modeled-note" role="status" aria-live="polite"></span>
         </div>
         <div id="species-effort" class="species-modeled" hidden>
-          <button type="button" id="species-effort-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Recording effort" hidden>RECORDING EFFORT OFF</button>
+          <button type="button" id="species-effort-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Recording effort" hidden>Recording effort off</button>
           <span id="species-effort-note" class="species-modeled-note" role="status" aria-live="polite"></span>
         </div>
         <div class="species-chip-group">
           <span id="species-years-label" class="species-label">Years</span>
           <div id="species-years" class="species-chip-row" role="group" aria-labelledby="species-years-label">
-            <button type="button" class="scene-btn species-chip" data-years="recent" aria-pressed="true">LAST 10 YEARS</button>
-            <button type="button" class="scene-btn species-chip" data-years="all" aria-pressed="false">ALL YEARS</button>
+            <button type="button" class="scene-btn species-chip" data-years="recent" aria-pressed="true">Last 10 years</button>
+            <button type="button" class="scene-btn species-chip" data-years="all" aria-pressed="false">All years</button>
           </div>
         </div>
         <div class="species-chip-group">
           <span id="species-radius-label" class="species-label">What lives here radius</span>
           <div id="species-radius" class="species-chip-row" role="group" aria-labelledby="species-radius-label">
-            <button type="button" class="scene-btn species-chip" data-radius="1" aria-pressed="false">1 KM</button>
-            <button type="button" class="scene-btn species-chip" data-radius="10" aria-pressed="true">10 KM</button>
-            <button type="button" class="scene-btn species-chip" data-radius="50" aria-pressed="false">50 KM</button>
+            <button type="button" class="scene-btn species-chip" data-radius="1" aria-pressed="false">1 km</button>
+            <button type="button" class="scene-btn species-chip" data-radius="10" aria-pressed="true">10 km</button>
+            <button type="button" class="scene-btn species-chip" data-radius="50" aria-pressed="false">50 km</button>
           </div>
         </div>
         <div id="species-legend" class="species-legend" hidden></div>
@@ -184,15 +142,14 @@
 
   </div>
 
-  <!-- Intelligence HUD Overlay -->
-  <div id="intel-hud"></div>
+  <!-- Latitude and longitude under the pointer -->
+  <div id="pointer-readout" class="pointer-readout" aria-hidden="true" hidden></div>
 
   <!-- Loading screen -->
   <div id="loading-screen">
     <div class="loader-content">
-      <span class="loader-logo brand-logo" data-logo-gaze data-logo-src="logo.svg" aria-hidden="true"><img src="/wildeye/logo.svg" alt="" /></span>
       <h2>wildeye</h2>
-      <p class="loader-status">Loading the globe...</p>
+      <p class="loader-status">Loading the globe…</p>
     </div>
   </div>
 
