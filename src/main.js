@@ -67,6 +67,7 @@ import { installCompareUi } from './compareUi.js';
 import { stackAboveChrome } from './bottomStack.js';
 import { createObservedTime, attachObservedTime, installObservedTimeUi } from './observedTime.js';
 import { LAYER_STATE_REGISTRY } from './data/layerState.js';
+import { LAYER_GROUPS } from './data/layerGroups.js';
 import { registerDataCredits } from './data/dataCredits.js';
 import { MapStackController } from './mapStackController.js';
 import {
@@ -328,7 +329,7 @@ async function init() {
         return dataManager.unregisterForQa(layerId);
       };
     }
-    dataManager.buildTogglePanel(document.getElementById('data-toggles'));
+    dataManager.buildTogglePanel(document.getElementById('data-toggles'), { groups: LAYER_GROUPS });
     styleManager.attachDataManager(dataManager);
     // Biology details card: Cesium's info box is off, so this is where biology markers show their details.
     // Dismissing the card cancels the what-lives-here search it was waiting for (the controller is created below), and the

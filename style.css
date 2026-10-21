@@ -678,7 +678,8 @@ body.ui-clean-view #data-panel {
 }
 
 #data-panel {
-  --panel-expanded-width: 280px;
+  /* 320 px, as Species: at 280 the group rows' names wrapped to three and four lines. */
+  --panel-expanded-width: 320px;
   position: fixed;
   top: calc(var(--left-stack-top) + var(--left-stack-gap));
   left: var(--left-stack-x);
@@ -920,6 +921,281 @@ body.ui-clean-view #data-panel {
      hairline ring so a near-white class still reads on the panel's paper. */
   box-shadow: 0 0 0 1px rgba(22, 45, 61, 0.12);
   flex: none;
+}
+
+/* ── Layers: header count, "On now" strip, search, groups (src/data/layerPanelGroups.js) ── */
+
+.panel-count {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+
+.panel-count[hidden] {
+  display: none;
+}
+
+.layers-tools {
+  margin: 0 0 10px;
+  padding: 0 4px;
+}
+
+.layers-tools[hidden] {
+  display: none;
+}
+
+.layers-on {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.layers-on[hidden] {
+  display: none;
+}
+
+.layers-on-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layers-on-chip {
+  display: flex;
+  align-items: stretch;
+  border-radius: 4px;
+  background: var(--accent-dim);
+  box-shadow: inset 3px 0 0 var(--accent);
+  overflow: hidden;
+}
+
+.layers-on-chip[hidden] {
+  display: none;
+}
+
+.layers-on-name,
+.layers-on-off,
+.layers-on-more {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.layers-on-name {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px 3px 10px;
+  line-height: 1.3;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.layers-on-off {
+  flex: none;
+  width: 24px;
+  position: relative;
+}
+
+/* A drawn ×, so the button's name comes only from its aria-label. */
+.layers-on-off::before,
+.layers-on-off::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 10px;
+  height: 1.5px;
+  background: currentColor;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.layers-on-off::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.layers-on-name:hover,
+.layers-on-off:hover {
+  background: rgba(22, 45, 61, 0.1);
+}
+
+.layers-on-name:focus-visible,
+.layers-on-off:focus-visible,
+.layers-on-more:focus-visible,
+.layer-group-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.layers-on-more {
+  align-self: flex-start;
+  padding: 2px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.layers-on-more[hidden] {
+  display: none;
+}
+
+/* In the header row, in the divider's place (layerPanelGroups.js). */
+#data-panel .panel-header .layers-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#data-panel .panel-header .panel-collapse-btn {
+  flex: none;
+}
+
+#data-panel:not(.collapsed) .panel-header .panel-divider,
+#data-panel.collapsed .panel-header .layers-search {
+  display: none;
+}
+
+.layers-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-primary);
+  background: var(--page);
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  outline: none;
+}
+
+.layers-search::placeholder {
+  color: var(--text-dim);
+}
+
+.layers-search:focus {
+  border-color: var(--accent);
+  background: var(--paper);
+}
+
+.layers-search-empty {
+  margin: 8px 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.layers-search-empty[hidden],
+.layer-group[hidden],
+.layer-group-body[hidden],
+.data-toggle-row[hidden] {
+  display: none;
+}
+
+.layer-group + .layer-group {
+  border-top: 1px solid var(--glass-border);
+}
+
+.layer-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 6px 9px 4px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.layer-group-head:hover {
+  background: rgba(22, 45, 61, 0.03);
+}
+
+.layer-group-caret {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 3px 0 2px;
+  border-right: 1.5px solid var(--text-secondary);
+  border-bottom: 1.5px solid var(--text-secondary);
+  transform: rotate(-45deg);
+  transition: transform var(--transition-fast);
+}
+
+.layer-group.open .layer-group-caret {
+  transform: rotate(45deg);
+}
+
+.layer-group-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.layer-group-on {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+
+.layer-group-on[hidden] {
+  display: none;
+}
+
+.layer-group-count {
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  min-width: 18px;
+  text-align: right;
+}
+
+.layer-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 6px;
+}
+
+/* A layer that is on: an ink bar down its left edge and a filled switch, so on and off differ at a glance. */
+.data-toggle-row.is-on {
+  background: rgba(22, 45, 61, 0.035);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.data-toggle-btn.active:not(.feed-stale):not(.feed-fallback):not(.feed-degraded):not(.feed-unavailable) {
+  color: var(--paper);
+  background: var(--accent);
+}
+
+/* An off row's source is one line (the full text is its title); an on row shows it whole, with its freshness. */
+.data-toggle-row:not(.is-on) .data-toggle-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#data-panel.collapsed .layers-tools {
+  display: none;
 }
 
 /* ── Scene Director Panel ───────────────────── */

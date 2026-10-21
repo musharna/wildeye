@@ -2772,6 +2772,27 @@ function makeRowControlLayer() {
   };
 }
 
+test('an off row names its source alone; an on row adds how fresh its data is', async () => {
+  const originalDocument = globalThis.document;
+  globalThis.document = { createElement: makeControlElement };
+  const mgr = new DataLayerManager({});
+  mgr.register(makeRowControlLayer().module);
+  const container = makeControlElement();
+  try {
+    mgr.buildTogglePanel(container);
+    const meta = container.querySelector('[data-layer-id="satellites"]').querySelector('.data-toggle-meta');
+    const count = container.querySelector('[data-layer-id="satellites"]').querySelector('.data-count');
+    assert.equal(meta.textContent, 'CelesTrak');
+    assert.equal(count.hidden, true, 'no count while off');
+    assert.equal(await mgr.setEnabled('satellites', true), true);
+    mgr._refreshTogglePanel();
+    assert.equal(meta.textContent, 'CelesTrak · just now');
+    assert.equal(count.hidden, false);
+  } finally {
+    globalThis.document = originalDocument;
+  }
+});
+
 test('a layer that declares row controls renders its chips and color legend', async () => {
   const originalDocument = globalThis.document;
   globalThis.document = { createElement: makeControlElement };
