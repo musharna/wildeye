@@ -161,6 +161,12 @@ export function nightText(n) {
 // "250–850 m" must not break at the dash: word joiners on both sides, a no-break space before the unit.
 const WJ = '\u2060';
 const fmtHeight = (m) => fmtCount(50 * Math.round(m / 50));
+// vol2bird's HGHT and the VPTS "height" are the bottom of a height bin in m above sea level (pipeline/vol2bird.py
+// integrate_profile; vpts-csv "Lower bound of the altitude bin"); the pinned vol2bird and Aloft both use 200 m bins.
+export const BIN_M = 200;
+/** ", densest 400–600 m above sea level": the profile's densest height bin, or '' when it has none. */
+export const densestText = (bottomM) => (bottomM === null || bottomM === undefined || !Number.isFinite(Number(bottomM)) ? ''
+  : `, densest ${fmtCount(Number(bottomM))}${WJ}–${WJ}${fmtCount(Number(bottomM) + BIN_M)}${NBSP}m above sea level`);
 
 /**
  * Where a finished night's birds flew: the middle half of the night's density by height (bioRad's height quantile,
@@ -275,7 +281,7 @@ export function describe(p, h, nights = null, nowMs = Date.now(), seasons = null
   const head = `<b>${p.name ?? p.site}</b> (${p.site})<br>`;
   const body = h > 0
     ? `${Number(p.density_birds_km3).toFixed(1)} birds/km³, heading ${Math.round(p.heading_deg)}°, ` +
-      `${Number(p.speed_ms ?? 0).toFixed(0)} m/s, peak ${p.peak_altitude_m} m`
+      `${Number(p.speed_ms ?? 0).toFixed(0)} m/s${densestText(p.peak_altitude_m)}`
     : 'Quiet — no biological echo (daytime or clear)';
   const warn = mostlyNotBirds(p)
     ? `Mostly rain or clutter: only ${Math.round(100 * p.bio_gate_share)}% of the echo passed the bird filter, so this count is unreliable<br>`
