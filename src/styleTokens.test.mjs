@@ -87,3 +87,43 @@ test('the token reader resolves var() and refuses an undefined reference', () =>
   assert.throws(() => rootTokens(':root { --a: var(--missing); }'), /--missing is not defined/);
   assert.throws(() => parseColour('cyan'), /not a colour/);
 });
+
+/** Every rgb()/rgba()/#hex literal in a source text, with its line, skipping the :root token block. */
+function colourLiterals(source, file) {
+  const root = source.match(/:root\s*\{[^}]*\}/);
+  const text = root ? source.replace(root[0], (m) => m.replace(/[^\n]/g, ' ')) : source;
+  const out = [];
+  for (const m of text.matchAll(/rgba?\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*(?:,\s*[\d.]+\s*)?\)|#[0-9a-f]{6}\b|#[0-9a-f]{3}\b/gi)) {
+    const line = text.slice(0, m.index).split('\n').length;
+    out.push({ where: `${file}:${line}`, literal: m[0], rgb: parseColour(m[0].replace(/\s+/g, ' ').replace(/,(?=\S)/g, ', ')).slice(0, 3) });
+  }
+  return out;
+}
+
+const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+/** Literals that are a near copy of the accent but not the accent or any other token: a tint left behind when the accent moved. */
+function strayAccents(literals, toks) {
+  const accent = parseColour(toks['--accent']).slice(0, 3);
+  const known = Object.values(toks).flatMap((v) => { try { return [parseColour(v).slice(0, 3)]; } catch { return []; } });
+  return literals
+    .filter(({ rgb }) => distance(rgb, accent) > 0 && distance(rgb, accent) <= 30)
+    .filter(({ rgb }) => !known.some((k) => distance(rgb, k) === 0))
+    .map(({ where, literal }) => `${where} ${literal}`);
+}
+
+test('no colour literal is a stale near-copy of the accent (the accent moved in the Atlas look; its tints must move with it)', async () => {
+  const { readdirSync } = await import('node:fs');
+  const srcDir = new URL('./', import.meta.url);
+  const files = [['style.css', css], ...readdirSync(srcDir, { recursive: true })
+    .filter((f) => /\.js$/.test(f))
+    .map((f) => [`src/${f}`, readFileSync(new URL(f, srcDir), 'utf8')])];
+  // A data colour on the map is not chrome: it may sit near the accent by design. Each exception names its file and literal.
+  const dataColours = new Set(['src/data/arbonet.js #134e4a']);
+  const stray = files.flatMap(([f, text]) => strayAccents(colourLiterals(text, f), tokens))
+    .filter((s) => !dataColours.has(s.replace(/:\d+ /, ' ')));
+  assert.deepEqual(stray, []);
+  // Positive controls: the old #111 ink is caught, the accent itself and a far colour are not.
+  const probe = colourLiterals('a { color: rgba(22, 45, 61, 0.1); border: 1px solid rgba(29, 58, 79, 0.14); background: #a8323e; }', 'probe');
+  assert.deepEqual(strayAccents(probe, tokens), ['probe:1 rgba(22, 45, 61, 0.1)']);
+});
