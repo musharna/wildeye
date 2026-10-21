@@ -89,7 +89,7 @@ test('layer: contract, live window, observed-time bin, chips hide species, legen
     assert.equal(l.getStats().active, 1, 'S2 only has a January bin, outside the live window');
     assert.equal(l.getStats().error, null);
     let rc = l.getRowControls();
-    assert.deepEqual(rc.chips.map((c) => c.label), ['RIGHT WHALE', 'FIN WHALE', 'SEI WHALE', 'HUMPBACK WHALE']);
+    assert.deepEqual(rc.chips.map((c) => c.label), ['Right whale', 'Fin whale', 'Sei whale', 'Humpback whale']);
     assert.equal(rc.legend.find((i) => i.label === 'fin whale').count, 1);
     assert.match(rc.legend.at(-1).label, /ends 2026-05-15/);
     assert.match(ds.entities.getById('cetaceans:0').description.getValue(), /Woods Hole Oceanographic Institution/);

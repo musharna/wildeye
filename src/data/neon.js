@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { extentFromMonths, pluck } from "./observedExtent.js";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * NEON small-mammal trapping (site-series contract): one point per NEON site, sized
@@ -258,7 +259,7 @@ export function createNeonLayer() {
       const top = _species.slice(0, 8); // chips for the eight commonest species; the rest stay visible
       const chips = top.map((sp) => ({
         id: sp,
-        label: sp.toUpperCase(),
+        label: sentenceCase(sp),
         active: _visible[sp] !== false,
         state: _visible[sp] !== false ? "active" : "idle",
         title: `${_visible[sp] !== false ? "Hide" : "Show"} ${sp}`,

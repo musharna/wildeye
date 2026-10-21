@@ -1,4 +1,4 @@
-// Stage 3 "What's here" (grill A14): the WHAT LIVES HERE card also lists what each enabled GIBS layer holds at
+// Stage 3 "What's here" (grill A14): the What lives here card also lists what each enabled GIBS layer holds at
 // the clicked spot. The rows belong to one status/list render: reset() clears them, so a marker's details or
 // any other use of the card never shows another search's values.
 import { test } from 'node:test';

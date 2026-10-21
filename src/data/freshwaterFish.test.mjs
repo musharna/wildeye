@@ -81,7 +81,7 @@ test('entities: one per polygon part, coloured by bin; realm chips hide and show
   assert.equal(ds.entities.values.length, 5, '4 basins, Dreketi in two parts');
   assert.ok(ds.entities.values.find((e) => e.id === 'freshwater-fish:B0004:1'));
   const { chips, legend } = layer.getRowControls();
-  assert.deepEqual(chips.map((c) => c.label), ['AFROTROPIC 2', 'NEOTROPIC 1', 'OCEANIA 1']);
+  assert.deepEqual(chips.map((c) => c.label), ['Afrotropic 2', 'Neotropic 1', 'Oceania 1']);
   assert.deepEqual(legend.slice(0, 8).map((l) => [l.label, l.color]), BINS.map((b) => [`${b.label} species`, b.color]));
   assert.equal(legend.length, 9);
 

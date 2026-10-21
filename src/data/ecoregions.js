@@ -1,4 +1,5 @@
 import * as Cesium from "cesium";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * Terrestrial ecoregions and biomes (polygon contract, static): RESOLVE Ecoregions 2017
@@ -49,20 +50,20 @@ export const NNH = Object.freeze({
 
 /** Short chip labels for the 14 biomes (the full names are 40–55 characters). */
 const CHIP_LABELS = Object.freeze({
-  1: "TROP MOIST FOREST",
-  2: "TROP DRY FOREST",
-  3: "TROP CONIFER",
-  4: "TEMP BROADLEAF",
-  5: "TEMP CONIFER",
-  6: "BOREAL",
-  7: "TROP GRASSLAND",
-  8: "TEMP GRASSLAND",
-  9: "FLOODED GRASSLAND",
-  10: "MONTANE GRASSLAND",
-  11: "TUNDRA",
-  12: "MEDITERRANEAN",
-  13: "DESERT",
-  14: "MANGROVES",
+  1: "Trop. moist forest",
+  2: "Trop. dry forest",
+  3: "Trop. conifer",
+  4: "Temp. broadleaf",
+  5: "Temp. conifer",
+  6: "Boreal",
+  7: "Trop. grassland",
+  8: "Temp. grassland",
+  9: "Flooded grassland",
+  10: "Montane grassland",
+  11: "Tundra",
+  12: "Mediterranean",
+  13: "Desert",
+  14: "Mangroves",
 });
 
 export function biomeOf(num) {
@@ -269,7 +270,7 @@ export function createEcoregionsLayer() {
         .sort((a, b) => a - b);
       const chips = nums.map((b) => ({
         id: String(b),
-        label: `${CHIP_LABELS[b] || biomeOf(b).name.toUpperCase()} ${counts[b] ?? 0}`,
+        label: `${CHIP_LABELS[b] || sentenceCase(biomeOf(b).name)} ${counts[b] ?? 0}`,
         active: _biomes[b] !== false,
         state: _biomes[b] !== false ? "active" : "idle",
         title: `${_biomes[b] !== false ? "Hide" : "Show"} ${biomeOf(b).name}`,

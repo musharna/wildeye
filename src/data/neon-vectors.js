@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { extentFromMonths, pluck } from "./observedExtent.js";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * NEON ticks + mosquitoes (site-series contract, clone of neon.js): one point per NEON site
@@ -274,7 +275,7 @@ export function createNeonVectorsLayer() {
       const { c, active } = activeCounts();
       const chips = Object.entries(KINDS).map(([k, K]) => ({
         id: k,
-        label: K.label.toUpperCase(),
+        label: sentenceCase(K.label),
         active: _visible[k] !== false,
         state: _visible[k] !== false ? "active" : "idle",
         title: `${_visible[k] !== false ? "Hide" : "Show"} ${K.label}`,

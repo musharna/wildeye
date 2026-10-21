@@ -137,9 +137,9 @@ if (CHECKS.has('shown')) {
   const asked = [...tiles.entries()].map(([url, status]) => ({ ...tileParts(url), status }));
   const credits = await page.evaluate(() => [...document.querySelectorAll('.cesium-credit-textContainer, .cesium-credit-lightbox, #cesium-credits')].map((n) => n.textContent).join(' '));
   const checks = {
-    offByDefault: before.toggleText === 'MODELED RANGE OFF' && before.ariaChecked === 'false' && !before.enabled && before.modeled.length === 0 && tilesBefore === 0,
+    offByDefault: before.toggleText === 'Modeled range off' && before.ariaChecked === 'false' && !before.enabled && before.modeled.length === 0 && tilesBefore === 0,
     shownNote: before.note === `iNaturalist Geomodel · ${shown.group} passed validation ${MONTH}`,
-    on: after.enabled && after.toggleText === 'MODELED RANGE ON' && after.ariaChecked === 'true' && after.modeled.length === 1,
+    on: after.enabled && after.toggleText === 'Modeled range on' && after.ariaChecked === 'true' && after.modeled.length === 1,
     tilesAsked: asked.length > 0,
     onlyThisTaxonThresholded: asked.every((t) => t.id === shown.id && t.thresholded === 'true'),
     zCapped: asked.every((t) => t.z <= MODELED_MAX_LEVEL),

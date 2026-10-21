@@ -18,10 +18,9 @@ const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 
 /** Terrain may load once the camera is below this height (Q4); the opening view must be well above it. */
 const TERRAIN_ALTITUDE_M = 2_000_000;
-const SKYBOX_BUDGET_KB = 300;
 const GOOGLE_FONTS = /fonts\.(googleapis|gstatic)\.com/;
 const TERRAIN = /terrain\.reearth\.land/;
-/** Cesium's default star box or the site's own (public/skybox): both at once would count 12 faces and fail. */
+/** Cesium's default star box or the site's old own (public/skybox): the light look has no starfield, so neither may load. */
 const SKYBOX = /\/(cesium\/Assets\/Textures\/SkyBox|skybox)\/tycho2t3_80_/;
 
 const results = [];
@@ -63,14 +62,15 @@ try {
   });
   const googleFonts = first.filter((r) => GOOGLE_FONTS.test(r.url)).map((r) => r.url.slice(0, 90));
   const hasFace = (fam) => fonts.faces.some((f) => f.startsWith(fam));
-  report('fonts-self-hosted', googleFonts.length === 0 && hasFace('Inter') && hasFace('JetBrains Mono')
+  // One face since the light look (2026-10-20): Inter loads, JetBrains Mono no longer does.
+  report('fonts-self-hosted', googleFonts.length === 0 && hasFace('Inter') && !hasFace('JetBrains Mono')
     && fonts.iconFontElements === 0 && fonts.icons.every((i) => i.svg && i.w >= 12 && i.h >= 12),
   { googleFonts: googleFonts.length, sample: googleFonts.slice(0, 2), ...fonts });
 
-  // Stars: all six faces still load (the sky is not blank), within the budget.
+  // Stars: none load (the page colour is behind the globe). Positive control: the basemap imagery did load in the same window.
   const sky = first.filter((r) => SKYBOX.test(r.url));
-  const skyKb = Math.round(sky.reduce((s, r) => s + r.bytes, 0) / 1024);
-  report('skybox-budget', sky.length === 6 && sky.every((r) => r.bytes > 0) && skyKb <= SKYBOX_BUDGET_KB, { faces: sky.length, kb: skyKb, budgetKb: SKYBOX_BUDGET_KB });
+  const basemap = first.filter((r) => /services\.arcgisonline\.com/.test(r.url)).length;
+  report('no-starfield', sky.length === 0 && basemap > 0, { faces: sky.length, basemapRequests: basemap });
 
   // Terrain: none at the opening view; below 2,000 km it loads, and it stays after zooming back out.
   const openingHeight = await page.evaluate(() => Math.round(window.__godsEyeView.viewer.camera.positionCartographic.height));

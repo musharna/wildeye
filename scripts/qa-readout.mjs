@@ -116,7 +116,7 @@ try {
   report('viewonly-and-timeless', bm.rows.chicago?.status === 'viewonly' && gedi.rows.forest?.status === 'value' && num(gedi.rows.forest.text) > 50,
     { nightlights: bm.rows.chicago?.status, biomassForest: gedi.rows.forest?.text });
 
-  // The real path: Compare land cover | LST, arm WHAT LIVES HERE with a real click, click the globe over the forest
+  // The real path: Compare land cover | LST, arm What lives here with a real click, click the globe over the forest
   // point, and the card lists both layers with their dates.
   await page.evaluate(async () => { await window.__godsEyeView.compare.set('gibs-landcover', 'gibs-lst'); });
   await page.evaluate(async ([lat, lon]) => {

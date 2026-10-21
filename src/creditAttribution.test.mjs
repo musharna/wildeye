@@ -192,7 +192,6 @@ const RECOGNIZED = new Set([
   // credit
   '#cesium-credits',
   'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits',
-  "body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits",
   'body.ui-clean-view #cesium-credits',
   'body.recording-mode #cesium-credits',
   // dock
@@ -312,7 +311,6 @@ const WIDTHS = [1440, 1024, 980, 900, 830, 800, 760, 721, 720, 700, 640, 600, 48
 const HEIGHTS = [500, 560, 640, 700, 800, 900, 1000, 1080, 1200, 1440, 1600];
 
 const CREDIT_SELECTORS = ['#cesium-credits', 'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits'];
-const MINIMAL_HUD_CREDIT = "body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits";
 const TRAY_ORDINARY = ['#command-dock .dock-popover-content', '#command-dock #control-panel .dock-popover-content'];
 const TRAY_SCENARIOS = [
   { name: 'ordinary tray', offset: TRAY_ORDINARY },
@@ -448,19 +446,6 @@ test('the dock anchor changes at 720px — the 2vh cancellation is band-limited'
     'calc(2vh + 5rem)',
     'the credit keeps its 2vh base below 720px — that asymmetry is the whole hazard',
   );
-});
-
-test('the minimal-HUD credit variant tracks the ordinary one', () => {
-  // It is MORE specific, so if the two ever diverge the model reads the wrong
-  // anchor while the browser paints the other.
-  assert.ok(compareSpecificity(specificity(MINIMAL_HUD_CREDIT), specificity(CREDIT_SELECTORS[1])) > 0);
-  for (const width of WIDTHS) {
-    assert.equal(
-      resolve([MINIMAL_HUD_CREDIT], 'bottom', width, 'minimal-HUD credit').decl.value,
-      resolve(CREDIT_SELECTORS, 'bottom', width, 'credit').decl.value,
-      `the minimal-HUD credit anchor diverges at ${width}px`,
-    );
-  }
 });
 
 test('the tray only spans the credit corner at the widths the model covers', () => {

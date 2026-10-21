@@ -15,14 +15,14 @@ export const EDITION = "2017";
 
 /** Short chip labels for the 8 groups of the paper's Fig. 1 (the full names are up to 80 characters). */
 export const GROUP_LABELS = Object.freeze({
-  1: "BALTIC",
-  2: "BLACK SEA",
-  3: "N ATLANTIC, ARCTIC & N PACIFIC",
-  4: "MID-TROP N PACIFIC",
-  5: "SE PACIFIC",
-  6: "TROPICS & WARM SEAS",
-  7: "NW PACIFIC",
-  8: "SOUTHERN OCEAN",
+  1: "Baltic",
+  2: "Black Sea",
+  3: "N Atlantic, Arctic & N Pacific",
+  4: "Mid-trop. N Pacific",
+  5: "SE Pacific",
+  6: "Tropics & warm seas",
+  7: "NW Pacific",
+  8: "Southern Ocean",
 });
 
 const esc = (v) =>

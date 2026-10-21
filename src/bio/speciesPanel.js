@@ -146,7 +146,7 @@ export function createSpeciesPanel({
         status.textContent = `GBIF name lookup failed (${error.message})`;
       });
     }
-    toggle.textContent = on ? 'MAP ON' : 'MAP OFF';
+    toggle.textContent = on ? 'Map on' : 'Map off';
     toggle.setAttribute('aria-checked', String(on));
     const mapped = Boolean(on && p.taxonKey);
     legend.hidden = !mapped; // below the action, outside the chosen-species block
@@ -158,7 +158,7 @@ export function createSpeciesPanel({
     const stats = speciesLayer.getStats();
     if (stats.error) status.textContent = `GBIF ${stats.error} (${stats.tileFailures} tile errors)`;
     armButton.setAttribute('aria-pressed', String(whatLivesHere.armed));
-    armButton.textContent = whatLivesHere.armed ? 'CLICK THE GLOBE · ESC CANCELS' : 'WHAT LIVES HERE';
+    armButton.textContent = whatLivesHere.armed ? 'Click the globe · Esc cancels' : 'What lives here';
   }
 
   /**

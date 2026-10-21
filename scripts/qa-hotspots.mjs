@@ -232,7 +232,7 @@ try {
       }, { timeout: 30000 }, head).then((h) => h.jsonValue(), async () => (await cardText()).body);
       ok = drawn && String(seen).startsWith(head) && areaOk(p, /Land area: ([^\n]*?km²)/.exec(seen)?.[1]);
     } else {
-      // the click reaches the ground: WHAT LIVES HERE lists this layer's row
+      // the click reaches the ground: What lives here lists this layer's row
       const want = `${LAYER_NAME}: ${p.outer.length ? OUTER(p.outer) : NONE} · ${DATE}`;
       seen = await page.waitForFunction((name) => {
         const items = [...document.querySelectorAll('#bio-card .bio-card-layers li')].map((li) => li.textContent);

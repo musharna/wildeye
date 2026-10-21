@@ -54,7 +54,7 @@ test('layer: contract, species order by total captures, observed month, chips, l
     assert.equal(ds.entities.values.length, 2);
     assert.equal(l.getStats().active, 2, 'live: every site shows its latest bout');
     let rc = l.getRowControls();
-    assert.deepEqual(rc.chips.map((c) => c.label), ['PEROMYSCUS MANICULATUS', 'MICROTUS OREGONI', 'PEROMYSCUS LEUCOPUS']);
+    assert.deepEqual(rc.chips.map((c) => c.label), ['Peromyscus maniculatus', 'Microtus oregoni', 'Peromyscus leucopus']);
     assert.equal(rc.legend.find((i) => i.label === 'Peromyscus maniculatus').count, 1);
     assert.equal(l.setObservedTime('2026-06-15T00:00:00Z'), true);
     assert.equal(l.getStats().active, 1, 'only HARV trapped in June');

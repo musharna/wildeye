@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { binsAt, LIVE_WEEKS } from "./gfw.js";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * Apparent fishing effort on a 1° grid (polygon contract): one square per 1° cell with
@@ -264,7 +265,7 @@ export function createFishingLayer() {
       const counts = classCounts();
       const chips = _gears.map((g) => ({
         id: g,
-        label: gearLabel(g).toUpperCase(),
+        label: sentenceCase(gearLabel(g)),
         active: _visible[g] !== false,
         state: _visible[g] !== false ? "active" : "idle",
         title: `${_visible[g] !== false ? "Hide" : "Show"} ${gearLabel(g)}`,

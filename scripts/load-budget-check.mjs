@@ -6,8 +6,9 @@
  * (cache disabled, new browser context each), waits for
  * `window.__godsEyeView.styleManager`, then until no new same-origin
  * script/data file has arrived for 3 s, and records every one fetched. The
- * ready signal alone is not a cut: the HUD's first-tick geoid fetch lands on
- * either side of it from load to load. Two things are gated, both exact:
+ * ready signal alone is not a cut: a late fetch can land on either side of it
+ * from load to load (the camera HUD's first-tick geoid fetch did, until the HUD
+ * was removed on 2026-10-20). Two things are gated, both exact:
  *
  *   1. the SET of files on the startup path, keyed by the source module each
  *      came from (Vite's build manifest; Cesium's static tree by path), so a

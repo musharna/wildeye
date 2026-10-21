@@ -6,22 +6,6 @@ import { createDefaultLayerState } from './data/layerState.js';
 
 const uiSource = fs.readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
 
-function sourceBlock(start, end) {
-  const startIndex = uiSource.indexOf(start);
-  const endIndex = uiSource.indexOf(end, startIndex + start.length);
-  assert.ok(startIndex >= 0, `missing source block start: ${start}`);
-  assert.ok(endIndex > startIndex, `missing source block end: ${end}`);
-  return uiSource.slice(startIndex, endIndex);
-}
-
-function assertClaimsBefore(block, mutation, label) {
-  const claimIndex = block.indexOf("claimRestoreLane?.('visual')");
-  const mutationIndex = block.indexOf(mutation);
-  assert.ok(claimIndex >= 0, `${label} must claim the visual restore lane`);
-  assert.ok(mutationIndex >= 0, `${label} mutation marker is missing`);
-  assert.ok(claimIndex < mutationIndex, `${label} must claim before mutation`);
-}
-
 function makeManager(hash = '') {
   globalThis.window = { location: { hash, href: `http://localhost/${hash}` } };
   globalThis.history = {
@@ -48,19 +32,19 @@ function installClipboard(writeText) {
   });
 }
 
-// The DISPLAY panel went on 2026-09-26 (bloat step 1, cluster 3): its fields are ignored on parse, and the
-// NVG/FLIR styles an old link names restore as normal. `crt` in the same kind of link is the positive control.
-test('retired visual fields in an old link are ignored, and nvg/flir restore as normal', () => {
+// The DISPLAY panel went on 2026-09-26 (bloat step 1, cluster 3) and the visual presets and camera HUD on
+// 2026-10-20 (plain scientific-tool look): their fields are ignored on parse. The basemap and the camera
+// in the same link are the positive control: an old link still opens where it pointed.
+test('retired visual fields in an old link are ignored, and the rest of the link still restores', () => {
   const retired = 'cr=1&sc=0&scf=5&sce=97&bloom=1&bi=80&bv=2&sharpen=0&si=10&hud=minimal&sp=g.50';
-  for (const style of ['nvg', 'flir']) {
-    const parsed = makeManager(`#v=2&lat=10&lon=20&style=${style}&hv=1&${retired}`).parseInitialHash();
-    assert.equal(parsed.style, 'normal', `${style} restores as normal`);
-    assert.equal(parsed.hudVisible, true, 'a kept field in the same link still restores');
-    for (const key of ['celestialRing', 'scopeEnabled', 'scopeFeatherPct', 'scopeTerminusPct', 'bloom', 'sharpen', 'hudVariant', 'styleParams']) {
-      assert.equal(key in parsed, false, `${key} is not parsed`);
+  for (const style of ['nvg', 'flir', 'crt', 'anime', 'noir', 'snow', 'normal']) {
+    const parsed = makeManager(`#v=2&lat=10&lon=20&style=${style}&hv=1&map=osm&${retired}`).parseInitialHash();
+    assert.equal(parsed.lat, 10, `${style}: the camera still restores`);
+    assert.equal(parsed.mapStack, 'osm', `${style}: the basemap still restores`);
+    for (const key of ['style', 'hudVisible', 'celestialRing', 'scopeEnabled', 'scopeFeatherPct', 'scopeTerminusPct', 'bloom', 'sharpen', 'hudVariant', 'styleParams']) {
+      assert.equal(key in parsed, false, `${style}: ${key} is not parsed`);
     }
   }
-  assert.equal(makeManager(`#v=2&lat=10&lon=20&style=crt&${retired}`).parseInitialHash().style, 'retro');
 });
 
 test('unknown-only v2 layer tokens are invalid, while historical l fields stay inert', () => {
@@ -74,15 +58,14 @@ test('unknown-only v2 layer tokens are invalid, while historical l fields stay i
   }
 });
 
-test('share-link serialization writes HUD visibility and map, and none of the retired visual fields', () => {
+test('share-link serialization writes the map, and none of the retired visual fields', () => {
   const manager = makeManager();
-  manager.onVisualChange({ hudVisible: true, mapStack: 'osm' });
+  manager.onVisualChange({ mapStack: 'osm' });
   clearTimeout(manager._debounceTimer);
   manager._updateHash();
   const params = new URLSearchParams(window.location.hash.slice(1));
-  assert.equal(params.get('hv'), '1');
   assert.equal(params.get('map'), 'osm');
-  for (const key of ['cr', 'sc', 'scf', 'sce', 'bloom', 'bi', 'bv', 'sharpen', 'si', 'hud', 'sp']) {
+  for (const key of ['style', 'hv', 'cr', 'sc', 'scf', 'sce', 'bloom', 'bi', 'bv', 'sharpen', 'si', 'hud', 'sp']) {
     assert.equal(params.has(key), false, `${key} is not written`);
   }
 });
@@ -96,13 +79,12 @@ test('generated links are v2 and include deterministic layers, options, and pane
     { id: 'control-panel', collapsed: false, pinned: true },
     { id: 'species-panel', collapsed: true },
   ] }));
-  manager.onStyleChange('retro');
   clearTimeout(manager._debounceTimer);
   manager._updateHash();
   const params = new URLSearchParams(window.location.hash.slice(1));
   assert.equal(params.get('v'), '2');
   assert.equal(params.get('l'), 'n.o', 'registry order, not enable order');
-  assert.equal(params.get('style'), 'crt');
+  assert.equal(params.has('style'), false);
   assert.equal(params.get('ui'), 'c.c.0_c.p.1_b.c.1');
 });
 
@@ -315,14 +297,14 @@ test('newer navigation suppresses delayed share camera while non-camera state st
   });
   const applied = await manager.applyState({
     lat: 40, lon: -74, alt: 500, heading: 0, pitch: -30, roll: 0,
-    style: 'thermal', panelState: { specs: [] },
+    mapStack: 'osm', panelState: { specs: [] },
   }, { navigationToken: 4 });
   assert.equal(applied.succeeded, true);
   assert.equal(flights, 0);
-  assert.equal(restored.style, 'thermal');
+  assert.equal(restored.mapStack, 'osm');
 });
 
-test('newer visual, map, and individual panel actions suppress only their owned restore lanes', async () => {
+test('newer map and individual panel actions suppress only their owned restore lanes', async () => {
   let restored = null;
   const manager = makeManager(
     '#v=2&lat=40&lon=-74&style=flir&map=osm&ui=c.c.0_d.c.0',
@@ -331,33 +313,20 @@ test('newer visual, map, and individual panel actions suppress only their owned 
   manager._isNavigationCurrent = () => false;
   const state = manager.parseInitialHash();
 
-  manager.claimRestoreLane('visual');
   manager.claimRestoreLane('map');
   manager.claimRestoreLane('panel', 'control-panel');
   const result = await manager.applyState(state, { navigationToken: 1 });
 
-  assert.equal(restored.style, undefined);
   assert.equal(restored.mapStack, undefined);
   assert.deepEqual(restored.panelState, {
     specs: [{ id: 'data-panel', collapsed: false, pinned: null }],
   });
-  assert.equal(result.visual, 'superseded');
+  assert.equal('visual' in result, false, 'the visual lane is retired');
   assert.equal(result.map, 'superseded');
   assert.equal(result.panels, 'applied');
   assert.equal(manager._initialRestorePending, true);
   manager.completeInitialRestore();
   assert.equal(manager._initialRestorePending, false);
-});
-
-test('every explicit visual gesture claims restore authority before it mutates state', () => {
-  const initUi = sourceBlock('  _initUI() {', '  _initMapStackControl() {');
-  const hotkey = initUi.slice(
-    initUi.indexOf("if (e.key.toLowerCase() === 'h')"),
-    initUi.indexOf("if (e.key.toLowerCase() === 'o')"),
-  );
-  assertClaimsBefore(hotkey, 'this.hud.toggle()', 'HUD hotkey');
-  const style = sourceBlock('  setStyle(styleName, {', '  _startTransition(styleName, fromValue, toValue) {');
-  assertClaimsBefore(style, 'this.activeStyle = styleName', 'setStyle');
 });
 
 test('share apply completion waits for both callback work and camera settlement', async () => {

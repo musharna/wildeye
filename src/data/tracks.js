@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import { extentFromTimes, pluck } from "./observedExtent.js";
+import { sentenceCase } from "./textCase.js";
 
 /**
  * Animal tracks (track contract): one polyline per segment of a tagged animal's
@@ -420,7 +421,7 @@ export function createTracksLayer({ clock = () => performance.now() } = {}) {
     getRowControls() {
       const chips = _groups.map((g) => ({
         id: g,
-        label: `${g.toUpperCase()} ${_counts[g] ?? 0}`,
+        label: `${sentenceCase(g)} ${_counts[g] ?? 0}`,
         active: _visible[g] !== false,
         state: _visible[g] !== false ? "active" : "idle",
         title: `${_visible[g] !== false ? "Hide" : "Show"} ${g}`,

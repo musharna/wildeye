@@ -228,7 +228,7 @@ test('legend: the three groups with their counts and the coverage caveat with th
   await h.layer.update();
   const { legend } = h.layer.getRowControls();
   assert.deepEqual(legend.slice(0, 3).map((l) => [l.color, l.count]), [['rgb(0,90,50)', 1], ['rgb(65,171,93)', 1], ['rgb(161,217,155)', 1]]);
-  assert.match(legend[3].label, /^3 protected areas mapped in OpenStreetMap \(Overture 2026-09-23\.1\), 1 of them too small to show at about 600 m \(a WHAT LIVES HERE click still finds them\); OpenStreetMap's coverage is uneven and it is not an official registry · © OpenStreetMap contributors, ODbL$/);
+  assert.match(legend[3].label, /^3 protected areas mapped in OpenStreetMap \(Overture 2026-09-23\.1\), 1 of them too small to show at about 600 m \(a What lives here click still finds them\); OpenStreetMap's coverage is uneven and it is not an official registry · © OpenStreetMap contributors, ODbL$/);
   const all = harness({ manifest: { ...MANIFEST, counts: { ...MANIFEST.counts, unpainted_at_max_level: 0 } } });
   await all.layer.update();
   assert.doesNotMatch(all.layer.getRowControls().legend[3].label, /too small/);

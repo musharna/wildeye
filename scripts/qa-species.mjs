@@ -300,7 +300,7 @@ if (CHECKS.has('panel-layout')) {
   const expandedOk = !expanded.species.collapsed && near(expanded.species.width, Number.parseFloat(expanded.species.expandedVar));
   const phoneOk = !phone.species.collapsed && phone.species.right <= phone.viewport && phone.species.width >= 300;
   const restoredOk = restored.viewport === 1400 && restored.species.collapsed === initial.species && restored.data.collapsed === initial.data;
-  // With a species mapped (legend and Top datasets showing), at the desktop default and on a 400x800 phone, WHAT LIVES HERE and both chip rows
+  // With a species mapped (legend and Top datasets showing), at the desktop default and on a 400x800 phone, What lives here and both chip rows
   // are whole inside the body's scroll view without scrolling and are what the page hits at their corners, and no chip, action or legend
   // caption text is cut. B1: the scroll cue is a row of its own below the scroll container, inside the panel: laid out with its own height,
   // aria-hidden, overlapping no visible part of any element inside the scroll container, shown while more of the body is below and hidden
@@ -448,7 +448,10 @@ if (CHECKS.has('panel-layout')) {
     if (!dm.setLayerParams('species', { taxonKey: 5133088, name: 'Monarch' }, { origin: 'user' })) throw new Error('species params rejected');
     await dm.setEnabled('species', true, { origin: 'user' });
   });
-  const desktopFit = await fitAt(1400, 900, 'panel-scrolled-desktop');
+  // 2026-10-20: with the camera HUD's corners gone from the left lane, the whole body fits at 1400x900 (a 780 px corridor), so the desktop
+  // overflow case, where the cue must show and the end links scroll into view, moved to a 720 px tall window (still above the short threshold).
+  const desktopFit = await fitAt(1400, 900, null, { overflow: false });
+  const shortDesktopFit = await fitAt(1400, 720, 'panel-scrolled-desktop');
   const phoneFit = await fitAt(400, 800, 'panel-scrolled-phone');
   // Critic 8 S1: at the page's starting camera (street level over Austin, pitched 30° down) the ground below the stack holds no monarch record
   // from the last 10 years (api.gbif.org v1: 0; its 12 species tiles answered 200 and the circles they draw sit at the horizon, under the
@@ -456,7 +459,7 @@ if (CHECKS.has('panel-layout')) {
   // is put back afterwards.
   await page.evaluate(() => { const c = window.__godsEyeView.viewer.camera; window.__qaSavedCamera = { position: c.position.clone(), heading: c.heading, pitch: c.pitch, roll: c.roll }; });
   await flyTo(-97.74, 30.27, 400_000);
-  // 375x667: the cue is required (critic S2), and WHAT LIVES HERE is whole inside the body's view at the scroll top and hit at its corners
+  // 375x667: the cue is required (critic S2), and What lives here is whole inside the body's view at the scroll top and hit at its corners
   // (critic 8 B1: its bottom 4 px were cut). The chip rows and the end links are measured and reported, the fit criterion being 400x800.
   const smallPhoneFit = await fitAt(375, 667, 'panel-375x667', { shotAtTop: true, controls: ['action'], links: false });
   await page.evaluate(() => { const s = window.__qaSavedCamera; window.__godsEyeView.viewer.camera.setView({ destination: s.position, orientation: { heading: s.heading, pitch: s.pitch, roll: s.roll } }); });
@@ -471,13 +474,13 @@ if (CHECKS.has('panel-layout')) {
   });
   await setOpen('species-panel', !initial.species);
   await sleep(800);
-  const fitOk = desktopFit.ok && phoneFit.ok && smallPhoneFit.ok && tallDesktopFit.ok;
+  const fitOk = desktopFit.ok && shortDesktopFit.ok && phoneFit.ok && smallPhoneFit.ok && tallDesktopFit.ok;
   report('panel-layout', collapsedOk && expandedOk && phoneOk && restoredOk && fitOk, {
     collapsed: { species: collapsed.species.width, data: collapsed.data.width },
     expanded: { species: expanded.species.width, speciesExpandedVar: expanded.species.expandedVar },
     phone: { viewport: phone.viewport, speciesWidth: phone.species.width, speciesLeft: phone.species.left, speciesRight: phone.species.right },
     restored: { viewport: restored.viewport, speciesCollapsed: restored.species.collapsed, dataCollapsed: restored.data.collapsed },
-    desktopFit, phoneFit, smallPhoneFit, tallDesktopFit,
+    desktopFit, shortDesktopFit, phoneFit, smallPhoneFit, tallDesktopFit,
     collapsedOk, expandedOk, phoneOk, restoredOk, fitOk,
   });
 }
@@ -1142,7 +1145,7 @@ if (CHECKS.has('card-foot-rest')) {
       await page.evaluate(() => { if (!window.__godsEyeView.dataManager.setLayerParams('species', { radiusKm: 50 }, { origin: 'user' })) throw new Error('species radius rejected'); });
       await flyTo(...TAVEUNI);
       await openSpeciesPanel();
-      // Final review m-2: a real click on WHAT LIVES HERE at every size. The page
+      // Final review m-2: a real click on What lives here at every size. The page
       // must hit the button at its centre first; a miss fails the check with what was hit instead of falling back to a JS click.
       const armAt = await page.evaluate(() => {
         document.getElementById('species-body').scrollTop = 0;
@@ -1153,10 +1156,10 @@ if (CHECKS.has('card-foot-rest')) {
         const hit = document.elementFromPoint(x, y);
         return { x, y, hits: Boolean(hit && (hit === button || button.contains(hit))), hit: hit ? (hit.id || String(hit.className)) : null };
       });
-      if (!armAt.hits) throw new Error(`card-foot-rest ${width}x${height}: WHAT LIVES HERE is not what the page hits at its centre (${armAt.hit})`);
+      if (!armAt.hits) throw new Error(`card-foot-rest ${width}x${height}: What lives here is not what the page hits at its centre (${armAt.hit})`);
       await page.mouse.click(armAt.x, armAt.y);
       await sleep(300);
-      if (await page.evaluate(() => document.getElementById('species-what-lives-here').getAttribute('aria-pressed')) !== 'true') throw new Error(`card-foot-rest ${width}x${height}: a real click did not arm WHAT LIVES HERE`);
+      if (await page.evaluate(() => document.getElementById('species-what-lives-here').getAttribute('aria-pressed')) !== 'true') throw new Error(`card-foot-rest ${width}x${height}: a real click did not arm What lives here`);
       // Fix round 3 (critic r2 S1): the globe's centre is clicked as armed, with SPECIES left as the page leaves it; the check does not collapse
       // it. The centre must be the canvas (on a short viewport the open panel folds while the card shows, src/bio/shortViewport.js).
       await sleep(800);
@@ -1215,11 +1218,11 @@ if (CHECKS.has('card-foot-rest')) {
 // over the OSM street map (central Austin from 3 km) and over open ocean (the Pacific from 800 km, OSM), at 1400x900 and 375x667: the three
 // pills' computed backgrounds and backdrop filters are equal, and the SPECIES pill's fill (the median pixel of the pill 10 px in from its edges,
 // with every header's contents hidden) is within 15 levels per channel of the mean of the other two pills' fills. Positive control in the same
-// check: the open SPECIES panel's computed background is the 0.86 floor, not the pills' glass.
+// check: the open SPECIES panel's computed background is opaque paper, rgb(255, 255, 255) (the dark look's 0.86 floor until 2026-10-20).
 // Brief B (pill contrast): in the same states, every pill's label text (DATA LAYERS, SCENES, SPECIES) holds 4.5:1 and its + button 3:1 (a
 // non-text control) over the ground it is drawn on, measured with qa contrast's method (the text made transparent, the page captured, the
 // text colour composited over each pixel under its line boxes, the lowest ratio kept). Positive control in the same measurement: each label
-// at 0.3 white (the pills' old --text-dim) over the same pixels comes out under 4.5:1.
+// in its own colour at 0.3 alpha over the same pixels comes out under 4.5:1.
 if (CHECKS.has('collapsed-pills')) {
   await installContrast();
   const pillContrast = async (roots) => {
@@ -1324,7 +1327,9 @@ if (CHECKS.has('collapsed-pills')) {
     await page.setViewport({ width: 1400, height: 900 });
     await sleep(2000);
   }
-  const controlOk = Boolean(control?.open) && control.background === 'rgba(12, 12, 20, 0.86)' && samples.length > 0 && control.background !== samples[0].pills[0].background;
+  // The open panel is opaque paper (style.css --paper). The dark look's open-panel floor (0.86) differed from the pills' glass; on paper
+  // they are one surface, so the control is the exact value, which a translucent or dark panel fails.
+  const controlOk = Boolean(control?.open) && control.background === 'rgb(255, 255, 255)' && samples.length > 0;
   report('collapsed-pills', error === null && samples.length === 4 && samples.every((s) => s.ok) && controlOk && restored?.stack === initial.stack, {
     samples: samples.map((s) => ({ viewport: s.viewport, place: s.place, tiles: s.tiles, ok: s.ok, maxLevels: s.maxLevels, pills: s.pills.map((p) => ({ name: p.name, rgb: p.rgb, background: p.background, box: p.box })), contrast: s.contrast })),
     initial, control, controlOk, restored, ...(error ? { error } : {}),
@@ -1333,7 +1338,7 @@ if (CHECKS.has('collapsed-pills')) {
 
 // Brief B (fold), fix round 1 (critic S2, review M-3): with a status line showing, nothing the person just used or needs next may leave the
 // SPECIES body's view. At 375x667 and 400x800, panel open, body at its scroll top, the search box, the status line, the chosen species row
-// with its MAP switch, and WHAT LIVES HERE are each whole inside the body's view and are what the page hits at their corners (a half-cut row
+// with its MAP switch, and What lives here are each whole inside the body's view and are what the page hits at their corners (a half-cut row
 // fails), in three states per size: (1) a 1-line status, "No names match …" (both name sources answered empty in the page's fetch); (2) a
 // 2-line status (1 line on the wider landscape panel): a species chosen through a real FUZZY match (iNaturalist's suggestion answered in the page as "Danaus plexippa"), "No exact
 // GBIF match …; shown as GBIF's …", with the chosen row's note; (3) a failed name search with that species still chosen. Positive controls in
@@ -1647,8 +1652,9 @@ if (CHECKS.has('card')) {
 
 if (CHECKS.has('suggestion-fade')) {
   // A suggestion list taller than its cap fades out at the bottom (a scroll-driven mask); a list that fits must not fade. Each list is
-  // screenshotted, and rows compare by their brightest text pixels (99th-percentile luminance): the bottom visible row against the
-  // first. Positive control in the same check: "hump" overflows the cap, so its bottom row must read dimmer; an unfaded short list
+  // screenshotted, and rows compare by how far their ink stands from the ground (99th minus 1st percentile luminance, so dark text on
+  // paper and light text on glass both read): the bottom visible row against the first. Reading the brightest pixels alone measured
+  // the paper, not the text, once the panels turned white (2026-10-20). Positive control in the same check: "hump" overflows the cap, so its bottom row must read dimmer; an unfaded short list
   // therefore cannot come from a blind probe. The short query must return at least two rows that fit the cap (one row compares with
   // itself, so its ratio is 1 by construction): "sialia currucoides" gives 3;
   // "megaptera nov" gives 4, but its subspecies names wrap past the cap and the list fades, as it should.
@@ -1688,7 +1694,7 @@ if (CHECKS.has('suggestion-fade')) {
         const lum = [];
         for (let i = 0; i < data.length; i += 4) lum.push(0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]);
         lum.sort((a, b) => a - b);
-        return Number(lum[Math.floor(lum.length * 0.99)].toFixed(1));
+        return Number((lum[Math.floor(lum.length * 0.99)] - lum[Math.floor(lum.length * 0.01)]).toFixed(1));
       });
     }, png, box.rows, box.width);
     return { query, rows: box.total, visibleRows: box.rows.length, overflows: box.scrollHeight > box.clientHeight, scrollHeight: box.scrollHeight, clientHeight: box.clientHeight, fade: box.fade, peaks, bottomToFirst: Number((peaks.at(-1) / peaks[0]).toFixed(3)), texts: box.texts };
@@ -1715,7 +1721,7 @@ if (CHECKS.has('suggestion-fade')) {
 }
 
 // M2 (final review), R12-M1 and R12-M2 (re-review): Escape in the real page, where the search box's keydown listener runs before the document's.
-// WHAT LIVES HERE is armed (its prompt card showing) and suggestions for "monarch" show; "s" is typed and Escape pressed at once, then 2.5 s pass.
+// What lives here is armed (its prompt card showing) and suggestions for "monarch" show; "s" is typed and Escape pressed at once, then 2.5 s pass.
 // The first Escape only hides the list, and the search for "monarchs" it ended does not reopen it (R12-M1); the text, the card and the armed
 // state stay. The second Escape, with text and no list, only clears the text (R12-M2). The third, with neither, closes the card and disarms: the
 // positive control that Escape still reaches them.
@@ -1788,7 +1794,7 @@ if (CHECKS.has('escape')) {
 
 // Fix round 1, I-1: the card is a landmark named by its title in the browser's accessibility tree (not only an aria-labelledby string), and it is
 // not a live region; the hidden status line beside it says what opened. The card is an <aside> beside the globe, so its role is complementary
-// (content that supports the map and stands on its own), a role that takes a name; a role-less <div> would be generic and drop the name. WHAT LIVES HERE's prompt card is opened, read through the page's
+// (content that supports the map and stands on its own), a role that takes a name; a role-less <div> would be generic and drop the name. What lives here's prompt card is opened, read through the page's
 // accessibility tree, then closed.
 if (CHECKS.has('card-a11y')) {
   let error = null;
@@ -2206,11 +2212,11 @@ if (CHECKS.has('portal-link')) {
 
 // Fix round 4 (critic r3 S1', S3, N1, N2): short landscape as one model. At 667x375, 640x360 and 568x320 (and every window up to 480 px tall)
 // the left stack, the details card and the pick target each keep their own region. In each size, with real clicks only: (1) all three collapsed
-// pills are hit at their + with the stack unscrolled; (2) SPECIES opened by its pill, WHAT LIVES HERE armed by a real click, and the globe's centre
+// pills are hit at their + with the stack unscrolled; (2) SPECIES opened by its pill, What lives here armed by a real click, and the globe's centre
 // is what the page hits (nothing covers the pick target) and a real click there lands the pick (the list shows); (3) with the results showing,
 // the card and the stack do not overlap, every collapsed pill's + is hit, the credit link is whole and hit, and at least one species row is
-// whole; (4) one tap on the SPECIES + reopens it (open and shown). (5) Keyboard: WHAT LIVES HERE armed with Enter keeps focus on an element
-// (not BODY), and Escape cancels and puts focus back on WHAT LIVES HERE, with SPECIES open again; the same at 375x667 (positive control, a
+// whole; (4) one tap on the SPECIES + reopens it (open and shown). (5) Keyboard: What lives here armed with Enter keeps focus on an element
+// (not BODY), and Escape cancels and puts focus back on What lives here, with SPECIES open again; the same at 375x667 (positive control, a
 // size where nothing moves).
 if (CHECKS.has('landscape-regions')) {
   // Fix round 5 (critic r4 B1): the short model is a height condition, so the wider phone-landscape sizes (740x360, 844x390, 932x430) and a
@@ -2245,7 +2251,7 @@ if (CHECKS.has('landscape-regions')) {
     const boxes = [...document.querySelectorAll('#left-panel-stack > [data-panel-id]')].filter((p) => p.getClientRects().length > 0).map((p) => ({ id: p.id, r: p.getBoundingClientRect() }));
     const out = [];
     for (const { text, r } of lines) for (const b of boxes) if (Math.min(r.right, b.r.right) - Math.max(r.left, b.r.left) > 0.5 && Math.min(r.bottom, b.r.bottom) - Math.max(r.top, b.r.top) > 0.5) out.push(`${b.id} over "${text}"`);
-    return { lines: lines.length, out };
+    return { lines: lines.length, texts: [...new Set(lines.map((l) => l.text))], out };
   });
   const pillsState = () => page.evaluate((ids) => {
     const stack = document.getElementById('left-panel-stack');
@@ -2265,7 +2271,7 @@ if (CHECKS.has('landscape-regions')) {
   try {
     for (const [width, height] of SIZES) {
       const size = `${width}x${height}`;
-      // Fix round 6 (critic r5 S2): where the open 460 px panel and the card fit side by side and the panel leaves the globe's centre clear, both
+      // Fix round 6 (critic r5 S2): where the open 490 px panel (460 until 2026-10-20) and the card fit side by side and the panel leaves the globe's centre clear, both
       // stay; pinned per size (1024x500, 1024x580, 1280x600), not read from the page. Everywhere else the panel folds while the card shows.
       const beside = BESIDE.has(size);
       const r = { viewport: size, beside };
@@ -2281,10 +2287,10 @@ if (CHECKS.has('landscape-regions')) {
       r.headerCollapsed = await headerCovered();
       await realClick('#species-panel [data-collapse-target="species-panel"]', 'the SPECIES +');
       r.headerOpen = await headerCovered();
-      // A person scrolls the SPECIES body to WHAT LIVES HERE when a chosen species and its note sit above it (a 163 px panel at 360 px tall).
+      // A person scrolls the SPECIES body to What lives here when a chosen species and its note sit above it (a 163 px panel at 360 px tall).
       await page.evaluate(() => { const body = document.getElementById('species-body'); body.scrollTop = 0; document.getElementById('species-what-lives-here').scrollIntoView({ block: 'nearest' }); });
       await sleep(300);
-      await realClick('#species-what-lives-here', 'WHAT LIVES HERE');
+      await realClick('#species-what-lives-here', 'What lives here');
       await sleep(600);
       r.armed = await page.evaluate(() => {
         const canvas = window.__godsEyeView.viewer.scene.canvas;
@@ -2355,7 +2361,8 @@ if (CHECKS.has('landscape-regions')) {
       await shot(`landscape-regions-${size}`);
       const pillsOk = (st) => Boolean(st) && st.scrollTop === 0 && (DESKTOP_LANE.has(size) || (st.scrollSlack <= 1 && st.pillsInBox)) && st.pills.every((p) => p.collapsed && p.hit);
       // Fix round 5: no size is exempt from a whole species row (the card folds its Top datasets block and then the note first).
-      const headerOk = (h) => Boolean(h) && h.lines >= 2 && h.out.length === 0;
+      // Positive control: the title's own line box is found and reads "wildeye" (the eye logo's extra boxes made it 3 until 2026-10-20).
+      const headerOk = (h) => Boolean(h) && h.lines >= 1 && h.texts?.includes('wildeye') && h.out.length === 0;
       const turnsOk = beside
         ? r.armed.speciesOpen && !r.armed.speciesOverlapsCard && r.speciesOpenAfterPick
         : !r.armed.speciesOpen && !r.speciesOpenAfterPick && pillsOk(r.afterPick) && r.reopened.open && r.reopened.shown;

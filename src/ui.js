@@ -1,10 +1,6 @@
 import * as Cesium from 'cesium';
-import { retroShader } from './styles/retro.js';
-import { animeShader } from './styles/anime.js';
-import { noirShader } from './styles/noir.js';
-import { snowShader } from './styles/snow.js';
 import { GLOBE_VIEW, flyToGlobeView } from './camera.js';
-import { IntelHUD } from './hud.js';
+import { PointerReadout } from './pointerReadout.js';
 import { ShareLinkManager } from './sharelink.js';
 import { LayerStateCoordinator } from './data/layerState.js';
 import { renderMapStackChips, syncMapStackChips } from './mapStackChips.js';
@@ -15,7 +11,6 @@ import {
   presentGlobalLoadingStatus,
   reduceLoadingFeedback,
 } from './loadingFeedback.js';
-import { setSplitFlapText } from './splitFlap.js';
 import {
   allocatePanelStackHeights,
   panelStackAutoCollapseIndices,
@@ -26,12 +21,7 @@ import {
 } from './panelStackLayout.js';
 import { SHORT_HEADER_SELECTOR, SHORT_VIEWPORT_QUERY, topBelowHeader } from './bio/shortViewport.js';
 import { beginDeferredNavigation, reassertNavigationHandoff } from './navigationPolicy.js';
-import { holdContinuousRender, releaseContinuousRender, governorRequestRender } from './renderGovernor.js';
 
-/** Duration (ms) for shader intensity crossfade between style presets. */
-const TRANSITION_DURATION_MS = 500;
-/** Map of style name to its GLSL shader module for post-process stages. */
-const STYLES = { retro: retroShader, anime: animeShader, noir: noirShader, snow: snowShader };
 /** Versioned localStorage namespace prefix to invalidate stale panel layouts. */
 const PANEL_LAYOUT_STORAGE_VERSION = 'v6';
 const SHARE_PANEL_STATE_SPECS = Object.freeze([
@@ -45,7 +35,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
  * resetting every panel's open/closed preference.
  */
 const PANEL_POSITION_STORAGE_VERSION = 'v8';
-/** One remeasure after HUD variant changes, whose visibility transitions can outlive the first frame. */
+/** One remeasure after a layout-affecting change whose visibility transitions can outlive the first frame. */
 const PANEL_LAYOUT_SETTLE_MS = 240;
 /**
  * Fixed UI regions that can occupy the left accordion's vertical lane.
@@ -55,25 +45,12 @@ const PANEL_LAYOUT_SETTLE_MS = 240;
  */
 const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#title-bar',
-  '#style-indicator',
   '#top-center-actions',
-  '#intel-hud .hud-top-left',
-  '#intel-hud .hud-top-right',
-  '#intel-hud .hud-bottom-left',
-  '#intel-hud .hud-bottom-right',
-  '#intel-hud .hud-bottom-bar',
+  '#pointer-readout',
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
   '#control-panel',
 ].join(', ');
-/** Display labels shown in the mini-status readout for each active style. */
-const STYLE_STATUS_LABELS = {
-  normal: 'NORMAL',
-  retro: 'CRT',
-  anime: 'ANIME',
-  noir: 'NOIR',
-  snow: 'SNOW',
-};
 /**
  * Unsharp-mask strength, always on: the 49% default of the removed DISPLAY panel's Sharpen
  * slider (amount = 0.1 + 0.49 × 2). Bloom was off by default and went with the panel.
@@ -115,13 +92,11 @@ const SHARPEN_SHADER = /* glsl */ `
  * Central UI orchestrator for wildeye.
  *
  * Responsibilities:
- * - CesiumJS PostProcessStage pipeline: registers per-style GLSL stages
- *   (CRT, anime, noir, snow) and manages intensity crossfades, plus a fixed
- *   sharpen pass.
+ * - A fixed sharpen pass over the scene.
  * - Collapsible panel system with localStorage persistence.
- * - Recording mode with safe-frame overlay and HUD mode switching.
+ * - Recording mode with safe-frame overlay.
  * - Share link encoding/decoding (delegates to ShareLinkManager).
- * - Toast notification system and Intel HUD lifecycle.
+ * - Toast notifications and the pointer latitude/longitude readout.
  */
 
 export class StyleManager {
@@ -132,17 +107,10 @@ export class StyleManager {
   constructor(viewer, { mapStackController = null } = {}) {
     this.viewer = viewer;
     this.mapStackController = mapStackController;
-    this.stages = {};
-    this.activeStyle = 'normal';
-    document.documentElement.dataset.gevStyle = this.activeStyle;
-    this.transitions = new Map();
-    this.startTime = Date.now();
 
     this._sharpenStage = null;
     this._recordingMode = false;
-    this._recordingConfig = { hidePanels: true, hudMode: 'minimal', safeFrame: '16:9' };
-    this._preRecordingHudState = null;
-    this._animFrameId = null;
+    this._recordingConfig = { hidePanels: true, safeFrame: '16:9' };
     this._lastLoadingFeedbackUpdateAt = 0;
     this._loadingFeedbackState = createLoadingFeedbackState();
     this._loadingFeedbackEvent = null;
@@ -158,7 +126,6 @@ export class StyleManager {
     this._leftStackReconsiderAutoCollapse = false;
     this._leftStackResizeObserver = null;
     this._leftStackMutationObserver = null;
-    this._leftStackHudTransitionHandler = null;
     this._leftStackPanelTransitionHandler = null;
     this._leftStackCollapsedHeights = new Map();
     this._leftStackPreferredPanelId = null;
@@ -175,7 +142,6 @@ export class StyleManager {
     this._disposed = false;
 
     // DOM refs
-    this._styleIndicator = document.getElementById('active-style-name');
     this._mapStackChips = document.getElementById('map-stack-chips');
     this._mapStackStatus = document.getElementById('map-stack-status');
     this._mapStackChangeHandler = null;
@@ -188,30 +154,17 @@ export class StyleManager {
     this._globalLoadingDetail = document.getElementById('global-loading-detail');
     this._resetGlobeBtn = document.getElementById('reset-globe-view');
     this._toast = document.getElementById('toast');
-    this._styleMiniValue = document.getElementById('style-mini-value');
     this._safeFrameOverlay = document.getElementById('safe-frame-overlay');
     this._safeFrameBox = document.getElementById('safe-frame-box');
 
-    // Intel HUD
-    this.hud = new IntelHUD(viewer);
+    // Pointer latitude/longitude readout
+    this.pointerReadout = new PointerReadout(viewer, document.getElementById('pointer-readout'));
 
     // Share Link Manager
     this.shareLinkManager = new ShareLinkManager(viewer, {
       onRestore: async (state) => {
-        const {
-          style,
-          hudVisible,
-          mapStack,
-          panelState,
-        } = state || {};
-        // Ignore the retired 'ai-edit' style from older share links.
-        if (style && style !== 'normal' && style !== 'ai-edit') {
-          this.setStyle(style, { restore: true });
-        }
-        if (typeof hudVisible === 'boolean') {
-          this.hud.setMode(hudVisible ? 'on' : 'off');
-          this._scheduleAdaptivePanelLayout({ settle: true });
-        }
+        // Older links also carry a visual style and a HUD flag; both are retired, so ignored.
+        const { mapStack, panelState } = state || {};
         const mapStackRestore = mapStack
           ? this._setMapStack(mapStack, { syncShare: false })
           : Promise.resolve();
@@ -229,7 +182,6 @@ export class StyleManager {
     this._initialShareState = this.shareLinkManager.parseInitialHash();
     this._initialCompareParam = this._initialShareState?.compare ?? null;
 
-    this._initStages();
     this._initSharpen();
     this._initUI();
     this._initMapStackControl();
@@ -238,10 +190,7 @@ export class StyleManager {
     this._initShareButton();
     this._initClearSelectedLayersButton();
     this._initResetGlobeButton();
-    this.hud.setMode('on');
     this._initRecordingOverlay();
-    this._startAnimationLoop();
-    this._updateStyleMiniStatus();
 
     // Restore from URL hash if present
     const savedState = this._initialShareState;
@@ -351,65 +300,6 @@ export class StyleManager {
   }
 
   /**
-   * Creates one CesiumJS PostProcessStage per visual style and registers
-   * it with the scene. Each stage starts with intensity 0 (invisible)
-   * so crossfade transitions can animate it in later.
-   * @returns {void}
-   */
-  _initStages() {
-    for (const [name, shader] of Object.entries(STYLES)) {
-      const uniforms = { intensity: 0.0 };
-
-      // Auto-detect time uniform — animated shaders (CRT scanlines, snow, etc.)
-      // declare `uniform float time` and receive elapsed seconds each frame.
-      if (shader.fragmentShader.includes('uniform float time')) {
-        uniforms.time = 0.0;
-      }
-
-      // Initialize custom uniforms from shader metadata (e.g. gain, pixelation)
-      if (shader.uniforms) {
-        for (const [uName, uMeta] of Object.entries(shader.uniforms)) {
-          uniforms[uName] = uMeta.default;
-        }
-      }
-
-      const stage = new Cesium.PostProcessStage({
-        name: `godsEyeView_${name}`,
-        fragmentShader: shader.fragmentShader,
-        uniforms,
-      });
-
-      // Zero-intensity stages are DISABLED (perf wave 1): a stage costs a
-      // full-screen pass only while its style is showing or fading.
-      stage.enabled = false;
-      this.viewer.scene.postProcessStages.add(stage);
-      this.stages[name] = stage;
-    }
-    // Frozen after init — cached so the per-frame animation loop doesn't
-    // rebuild Object.entries arrays every frame.
-    this._stageEntries = Object.entries(this.stages);
-  }
-
-  /**
-   * Single write path for style-stage intensity: keeps `enabled` in
-   * lockstep so zero-intensity stages cost nothing (see _initStages).
-   * The stage enables on the same
-   * frame the first non-zero intensity lands, so crossfades never pop.
-   * @param {Cesium.PostProcessStage} stage - Style post-process stage.
-   * @param {number} value - Intensity in [0, 1].
-   * @returns {void}
-   */
-  _setStageIntensity(stage, value) {
-    if (!stage) return;
-    stage.uniforms.intensity = value;
-    stage.enabled = value > 0.001;
-    // An animated shader becoming visible needs the style loop (its clock)
-    // running again; the loop self-stops when nothing visible animates.
-    if (stage.enabled && stage.uniforms.time !== undefined) this._startAnimationLoop();
-    governorRequestRender('style-stage');
-  }
-
-  /**
    * Adds the custom unsharp-mask sharpen stage at its fixed strength (SHARPEN_AMOUNT).
    * @returns {void}
    */
@@ -423,34 +313,14 @@ export class StyleManager {
   }
 
   /**
-   * Wires up the style buttons and keyboard shortcuts (1-5 style keys,
-   * H/O/V/F hotkeys, Escape) and the clean-view exit button.
+   * Wires up the keyboard shortcuts (V clean view, F data panel) and the clean-view exit button.
    * @returns {void}
    */
   _initUI() {
-    // Style buttons
-    document.querySelectorAll('.style-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.setStyle(btn.dataset.style));
-    });
-
-    // Keyboard shortcuts: 1-5, H, V, F
     this._globalKeydownHandler = (e) => {
-      // Ignore when interacting with a form control. Global hotkeys
-      // ('1'-'5', 'h', 'v', 'f') otherwise fire while a <select> dropdown is
-      // focused and its native type-ahead is in use, or while typing in a
-      // text field (M9).
+      // Ignore when interacting with a form control: global hotkeys ('v', 'f') otherwise fire while
+      // a <select> dropdown is focused and its native type-ahead is in use, or while typing (M9).
       if (e.target?.matches?.('select, input, textarea')) return;
-
-      const keyMap = {
-        '1': 'normal', '2': 'retro', '3': 'anime', '4': 'noir', '5': 'snow',
-      };
-      if (keyMap[e.key]) this.setStyle(keyMap[e.key]);
-      if (e.key.toLowerCase() === 'h') {
-        this.shareLinkManager?.claimRestoreLane?.('visual');
-        this.hud.toggle();
-        this._scheduleAdaptivePanelLayout({ settle: true });
-        this._syncShareState();
-      }
       if (e.key.toLowerCase() === 'v') this.toggleCleanView();
       if (e.key.toLowerCase() === 'f') {
         document.getElementById('data-panel').classList.toggle('active');
@@ -527,16 +397,16 @@ export class StyleManager {
       const stack = state.activeStack;
       const label = state.status === 'switching'
         ? '...'
-        : (stack?.shortLabel || stack?.label || 'MAP');
+        : (stack?.shortLabel || stack?.label || 'Map');
       this._mapStackStatus.textContent = label;
       this._mapStackStatus.classList.toggle('warn', !!state.lastError);
     }
   }
 
   /**
-   * Keeps both responsive panel lanes on the same measured layout commit. HUD
-   * visibility transitions can outlive the first animation frame, so variant
-   * changes receive one bounded settling pass.
+   * Keeps both responsive panel lanes on the same measured layout commit. Visibility
+   * transitions can outlive the first animation frame, so a change that asks to
+   * settle receives one bounded remeasuring pass.
    * @param {{settle?: boolean}} [options] Whether to remeasure after transitions.
    * @returns {void}
    */
@@ -552,7 +422,6 @@ export class StyleManager {
 
   _syncShareState() {
     this.shareLinkManager.onVisualChange({
-      hudVisible: this.hud.visible,
       mapStack: this.mapStackController?.getActiveId?.() || 'esri-imagery',
     });
   }
@@ -954,13 +823,6 @@ export class StyleManager {
         attributes: true,
         attributeFilter: ['class'],
       });
-      const hud = document.getElementById('intel-hud');
-      if (hud) {
-        this._leftStackMutationObserver.observe(hud, {
-          attributes: true,
-          attributeFilter: ['class', 'data-variant'],
-        });
-      }
       const credits = document.getElementById('cesium-credits');
       if (credits) {
         this._leftStackMutationObserver.observe(credits, {
@@ -968,16 +830,6 @@ export class StyleManager {
           childList: true,
         });
       }
-    }
-
-    const transitionHud = document.getElementById('intel-hud');
-    if (transitionHud) {
-      this._leftStackHudTransitionHandler = (event) => {
-        if (event.propertyName === 'opacity' || event.propertyName === 'visibility') {
-          this._scheduleLeftPanelLayout({ reconsiderAutoCollapse: true });
-        }
-      };
-      transitionHud.addEventListener('transitionend', this._leftStackHudTransitionHandler);
     }
 
     // R9-I1: the lane reads each panel's computed visibility, and a visibility transition (the data panel's F toggle, clean view) changes it
@@ -1034,12 +886,6 @@ export class StyleManager {
 
     const panels = [...stack.querySelectorAll(':scope > [data-panel-id]')];
     if (!panels.length) return;
-    if (!this.hud.visible || this.hud.getVariant() !== 'tactical') {
-      for (const panel of panels.filter((item) => item.classList.contains('layout-auto-collapsed'))) {
-        panel.classList.remove('collapsed', 'layout-auto-collapsed');
-        this._syncPanelCollapseButton(panel);
-      }
-    }
 
     // The existing narrow-screen composition has its own full-width stack.
     // Keep this desktop lane engine from fighting those dedicated rules. Fix round 5: a short viewport (SHORT_VIEWPORT_QUERY) at any width
@@ -1062,7 +908,7 @@ export class StyleManager {
         const boxes = [...document.querySelectorAll(SHORT_HEADER_SELECTOR)].map((element) => element.getBoundingClientRect());
         const stackLeft = stack.getBoundingClientRect().left;
         // 4 px below the header, the gap the pills keep between each other: at 568x320 the three 38 px pills need all but 3.6 px of what is left.
-        const stackTop = topBelowHeader({ boxes, left: stackLeft, right: stackLeft + Math.min(460, window.innerWidth - 32), viewportHeight: window.innerHeight, gap: 4 });
+        const stackTop = topBelowHeader({ boxes, left: stackLeft, right: stackLeft + Math.min(490, window.innerWidth - 32), viewportHeight: window.innerHeight, gap: 4 });
         const card = document.getElementById('bio-card');
         const cardLeft = parseFloat(card ? getComputedStyle(card).getPropertyValue('--short-card-left') : '') || 200;
         const cardTop = topBelowHeader({ boxes, left: cardLeft, right: window.innerWidth - 16, viewportHeight: window.innerHeight });
@@ -1216,11 +1062,13 @@ export class StyleManager {
       naturalHeights: naturalExpandedHeights,
       availableHeight: expandedAvailableHeight,
     });
-    const autoCollapseIndices = this.hud.visible ? panelStackAutoCollapseIndices({
+    // What every visitor had while the HUD was on by default: panels squeezed below half their height
+    // collapse, and in focus mode later panels give way to the first.
+    const autoCollapseIndices = panelStackAutoCollapseIndices({
       naturalHeights: naturalExpandedHeights,
       allocatedHeights: allocatedExpandedHeights,
-      collapseLaterPanels: shouldFocus && this.hud.getVariant() === 'tactical',
-    }) : [];
+      collapseLaterPanels: shouldFocus,
+    });
     if (autoCollapseIndices.length) {
       for (const index of autoCollapseIndices) {
         const panel = expandedPanels[index];
@@ -1260,8 +1108,7 @@ export class StyleManager {
   }
 
   /**
-   * Updates collapse button glyphs based on panel state. Right-rail panels
-   * use directional arrows; left-stack panels use +/- symbols.
+   * Updates a collapse button's state and name. Its + or − is drawn by style.css from aria-expanded.
    * @param {HTMLElement} panelEl - The panel DOM element.
    * @returns {void}
    */
@@ -1269,7 +1116,6 @@ export class StyleManager {
     const collapsed = panelEl.classList.contains('collapsed');
     panelEl.querySelectorAll('.panel-collapse-btn[data-collapse-target]').forEach((btn) => {
       if (btn.closest('[data-panel-id]') !== panelEl) return;
-      btn.textContent = collapsed ? '+' : '−';
       btn.setAttribute('aria-expanded', String(!collapsed));
       const panelName = panelEl.querySelector('.panel-title, .pp-header-label')?.textContent?.trim() || 'panel';
       const action = collapsed ? 'Expand' : 'Collapse';
@@ -1402,21 +1248,18 @@ export class StyleManager {
   }
 
   /**
-   * Enters or exits recording mode. When active, hides UI chrome via a body class,
-   * displays a safe-frame composition overlay (16:9 or 9:16), and switches
-   * the HUD to the specified mode. Exiting restores the HUD mode and layout
-   * variant that were active before recording started.
+   * Enters or exits recording mode. When active, hides UI chrome via a body class
+   * and displays a safe-frame composition overlay (16:9 or 9:16).
    * @param {boolean} enabled - Whether to enable recording mode.
    * @param {object} [options]
    * @param {boolean} [options.hidePanels=true] - Hide all panel chrome.
-   * @param {string} [options.hudMode='minimal'] - HUD mode while recording ('off'|'minimal'|'full'|'auto').
    * @param {string} [options.safeFrame='16:9'] - Aspect ratio for the safe-frame overlay.
    * @returns {void}
    */
   setRecordingMode(enabled, options = {}) {
-    const { hidePanels = true, hudMode = 'minimal', safeFrame = '16:9' } = options;
+    const { hidePanels = true, safeFrame = '16:9' } = options;
     this._recordingMode = !!enabled;
-    this._recordingConfig = { hidePanels, hudMode, safeFrame };
+    this._recordingConfig = { hidePanels, safeFrame };
 
     document.body.classList.toggle('recording-mode', this._recordingMode && hidePanels);
 
@@ -1426,110 +1269,11 @@ export class StyleManager {
       this._safeFrameOverlay.classList.add(safeFrame === '9:16' ? 'ratio-9-16' : 'ratio-16-9');
     }
 
-    if (this._recordingMode) {
-      // Snapshot the user's HUD state once per recording session so exit can
-      // restore it (re-entrant calls must not capture mid-recording state).
-      if (!this._preRecordingHudState) {
-        this._preRecordingHudState = {
-          mode: this.hud.getMode(),
-          variant: this.hud.getVariant(),
-        };
-      }
-      if (hudMode === 'off') {
-        this.hud.setMode('off');
-      } else if (hudMode === 'full' || hudMode === 'minimal') {
-        this.hud.setMode('on');
-        this.hud.setVariant(hudMode === 'minimal' ? 'minimal' : 'tactical');
-      } else {
-        this.hud.setMode('auto');
-      }
-    } else {
-      const saved = this._preRecordingHudState;
-      this._preRecordingHudState = null;
-      if (saved) {
-        this.hud.setVariant(saved.variant);
-      }
-      this.hud.setMode(saved ? saved.mode : 'auto');
-      if (this._safeFrameOverlay) {
-        this._safeFrameOverlay.classList.remove('active', 'ratio-9-16', 'ratio-16-9');
-      }
+    if (!this._recordingMode && this._safeFrameOverlay) {
+      this._safeFrameOverlay.classList.remove('active', 'ratio-9-16', 'ratio-16-9');
     }
     this._scheduleAdaptivePanelLayout({ settle: true });
     this._syncShareState();
-  }
-
-  // ── Parameter Sliders ─────────────────────────
-
-  // ── Style switching ───────────────────────────
-
-  /**
-   * Switches the active visual style. Handles full lifecycle:
-   * 1. Crossfades the previous shader stage intensity to 0.
-   * 2. Crossfades the new shader stage intensity to 1.
-   * 3. Updates button highlights, style indicator and HUD.
-   * @param {string} styleName - Target style ('normal'|'retro'|'anime'|'noir'|'snow').
-   * @param {object} [options]
-   * @param {boolean} [options.restore=false] - A share-link restore, which must not claim the visual lane.
-   * @returns {void}
-   */
-  setStyle(styleName, { restore = false } = {}) {
-    if (!restore) this.shareLinkManager?.claimRestoreLane?.('visual');
-    if (styleName === this.activeStyle) return;
-
-    const previousStyle = this.activeStyle;
-    this.activeStyle = styleName;
-    document.documentElement.dataset.gevStyle = styleName;
-
-    // Transition out the previous shader style
-    if (previousStyle !== 'normal' && this.stages[previousStyle]) {
-      this._startTransition(previousStyle, this.stages[previousStyle].uniforms.intensity, 0.0);
-    }
-
-    // Transition in the new shader style
-    if (styleName !== 'normal' && this.stages[styleName]) {
-      this._startTransition(styleName, this.stages[styleName].uniforms.intensity, 1.0);
-    }
-
-    // Update button UI
-    document.querySelectorAll('.style-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.style === styleName);
-    });
-
-    // Update style indicator
-    const displayNames = { retro: 'CRT' };
-    this._styleIndicator.textContent = displayNames[styleName] || styleName.toUpperCase();
-    this._updateStyleMiniStatus(styleName);
-
-    // Notify HUD (color adaptation + auto show/hide)
-    this.hud.onStyleChange(styleName);
-    this._scheduleAdaptivePanelLayout({ settle: true });
-
-    window.dispatchEvent(new CustomEvent('gev:style-change', {
-      detail: { style: styleName },
-    }));
-
-    // Notify share link manager
-    this.shareLinkManager.onStyleChange(styleName);
-    this._syncShareState();
-  }
-
-  // ── Shader transitions ────────────────────────
-
-  /**
-   * Enqueues a smooth intensity transition for a shader stage. The animation
-   * loop interpolates from `fromValue` to `toValue` over TRANSITION_DURATION_MS.
-   * @param {string} styleName - Name of the shader stage to transition.
-   * @param {number} fromValue - Starting intensity (typically current value).
-   * @param {number} toValue - Target intensity (0.0 to fade out, 1.0 to fade in).
-   * @returns {void}
-   */
-  _startTransition(styleName, fromValue, toValue) {
-    this.transitions.set(styleName, {
-      start: performance.now(),
-      from: fromValue,
-      to: toValue,
-    });
-    this._startAnimationLoop();
   }
 
   /**
@@ -1574,12 +1318,7 @@ export class StyleManager {
       return;
     }
     this._globalLoadingStatus.dataset.state = presentation.state;
-    // Split-flap the LABEL only ("LOADING LIVE DATA" -> "LOAD COMPLETE").
-    // setSplitFlapText is a no-op when the text is unchanged, which matters
-    // here: this runs on every 60 ms and 500 ms tick. The detail line is the
-    // live layer roster inside an ellipsised, width-capped span — flapping a
-    // list that churns as layers join would be noise, not delight.
-    setSplitFlapText(this._globalLoadingLabel, presentation.label);
+    if (this._globalLoadingLabel.textContent !== presentation.label) this._globalLoadingLabel.textContent = presentation.label;
     this._globalLoadingDetail.textContent = presentation.detail;
   }
 
@@ -1591,66 +1330,9 @@ export class StyleManager {
   }
 
   /**
-   * Style animation loop — self-stopping (perf wave 2). Runs only while a
-   * crossfade is in flight or an animated (time-uniform) stage is visible,
-   * holding continuous scene render for exactly that long. Re-armed by
-   * _startTransition and by _setStageIntensity enabling an animated stage.
-   * The traffic sync chip no longer rides this loop — it has its own 500 ms
-   * interval (see _startTrafficChipTicker).
-   */
-  _startAnimationLoop() {
-    if (this._animFrameId) return; // already running
-    const update = () => {
-      const now = performance.now();
-      const elapsedSec = (Date.now() - this.startTime) / 1000.0;
-
-      // Update transitions — interpolate each active crossfade
-      for (const [styleName, transition] of this.transitions) {
-        const elapsed = now - transition.start;
-        const t = Math.min(elapsed / TRANSITION_DURATION_MS, 1.0);
-        // Ease-in-out quadratic: smooth acceleration then deceleration
-        const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-        const value = transition.from + (transition.to - transition.from) * eased;
-
-        this._setStageIntensity(this.stages[styleName], value);
-
-        if (t >= 1.0) {
-          this._setStageIntensity(this.stages[styleName], transition.to);
-          this.transitions.delete(styleName);
-        }
-      }
-
-      // Update time uniforms for animated shaders. Zero-intensity stages
-      // are disabled (see _initStages), so enabled === visible here; only these keep
-      // the loop and its continuous-render hold alive.
-      let animatedStageVisible = false;
-      for (const [, stage] of this._stageEntries) {
-        if (stage.enabled && stage.uniforms.time !== undefined) {
-          stage.uniforms.time = elapsedSec;
-          // Chain mode keeps zero-intensity stages ENABLED for pass parity —
-          // only a stage that is actually VISIBLE keeps the loop (and the
-          // continuous-render hold) alive, or a settled CRT session would
-          // hold the loop forever via an invisible snow stage.
-          if (stage.uniforms.intensity > 0.001) animatedStageVisible = true;
-        }
-      }
-
-      const needed = this.transitions.size > 0 || animatedStageVisible;
-      if (needed) holdContinuousRender('style-anim');
-      else releaseContinuousRender('style-anim');
-      if (!needed) {
-        this._animFrameId = null;
-        return; // settled — the next transition/animated stage re-arms us
-      }
-      this._animFrameId = requestAnimationFrame(update);
-    };
-    this._animFrameId = requestAnimationFrame(update);
-  }
-
-  /**
    * Self-stopping 60 ms ticker for the global loading chip.
    *
-   * The chip used to ride the style rAF loop, which perf wave 2 made
+   * The chip once rode the (since removed) style rAF loop, which perf wave 2 made
    * self-stopping — leaving the chip frozen mid-state whenever no crossfade
    * or animated shader was running (it would never reveal, never cross the
    * long-load threshold, and never dwell out). Its reducer
@@ -1688,16 +1370,6 @@ export class StyleManager {
     if (!this._loadingFeedbackTicker) return;
     clearInterval(this._loadingFeedbackTicker);
     this._loadingFeedbackTicker = null;
-  }
-
-  /**
-   * Updates the collapsed mini-status readout with the active style label.
-   * @param {string} [styleName=this.activeStyle] - Style name to display.
-   * @returns {void}
-   */
-  _updateStyleMiniStatus(styleName = this.activeStyle) {
-    if (!this._styleMiniValue) return;
-    this._styleMiniValue.textContent = STYLE_STATUS_LABELS[styleName] || String(styleName || 'normal').toUpperCase();
   }
 
   /** Wire the persistent reset-to-globe control. */
@@ -1917,12 +1589,6 @@ export class StyleManager {
       document.removeEventListener('keydown', this._globalKeydownHandler);
       this._globalKeydownHandler = null;
     }
-    // Cancel the rAF animation loop and release its governor hold. (perf wave 2 fix)
-    if (this._animFrameId) {
-      cancelAnimationFrame(this._animFrameId);
-      this._animFrameId = null;
-    }
-    releaseContinuousRender('style-anim');
     if (this._loadingFeedbackTicker) {
       clearInterval(this._loadingFeedbackTicker);
       this._loadingFeedbackTicker = null;
@@ -1937,18 +1603,11 @@ export class StyleManager {
     this._leftStackResizeObserver = null;
     this._leftStackMutationObserver?.disconnect();
     this._leftStackMutationObserver = null;
-    if (this._leftStackHudTransitionHandler) {
-      document.getElementById('intel-hud')?.removeEventListener(
-        'transitionend',
-        this._leftStackHudTransitionHandler,
-      );
-      this._leftStackHudTransitionHandler = null;
-    }
     if (this._leftStackPanelTransitionHandler) {
       this._leftPanelStack?.removeEventListener('transitionend', this._leftStackPanelTransitionHandler);
       this._leftStackPanelTransitionHandler = null;
     }
-    // Clear transitions
-    this.transitions.clear();
+    this.pointerReadout?.destroy();
+    this.pointerReadout = null;
   }
 }

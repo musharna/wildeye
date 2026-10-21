@@ -210,17 +210,17 @@ export function reduceLoadingFeedback(previous, summary, nowMs, event = null) {
 export function presentLoadingFeedback(state, summary, nowMs) {
   if (!state?.visible) return null;
   if (state.phase === 'terminal') {
-    const labels = { complete: 'LOAD COMPLETE', cancelled: 'LOAD CANCELLED', error: 'LOAD FAILED' };
+    const labels = { complete: 'Load complete', cancelled: 'Load cancelled', error: 'Load failed' };
     const label = state.operation === 'disabling' && state.terminal === 'complete'
-      ? 'LIVE DATA OFF'
-      : labels[state.terminal] || 'LOAD COMPLETE';
+      ? 'Live data off'
+      : labels[state.terminal] || 'Load complete';
     return { state: state.terminal, label, detail: '' };
   }
   const active = summary.active;
   const elapsed = Math.max(0, nowMs - state.startedAt);
   const label = summary.disabling
-    ? 'TURNING OFF LIVE DATA'
-    : summary.refresh ? 'REFRESHING LIVE DATA' : 'LOADING LIVE DATA';
+    ? 'Turning off live data'
+    : summary.refresh ? 'Refreshing live data' : 'Loading live data';
   const names = active.slice(0, 2).map((record) => record.label).join(' · ');
   const suffix = active.length > 2 ? ` +${active.length - 2}` : '';
   return {

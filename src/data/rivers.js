@@ -334,8 +334,8 @@ export function createRiversLayer() {
     getRowControls() {
       const { c, active } = classCounts();
       const chips = [
-        ["temperature", "TEMPERATURE", "colour by water temperature class"],
-        ["discharge", "DISCHARGE", "size by discharge"],
+        ["temperature", "Temperature", "colour by water temperature class"],
+        ["discharge", "Discharge", "size by discharge"],
       ].map(([id, label, what]) => ({
         id,
         label,

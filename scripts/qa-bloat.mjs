@@ -25,14 +25,16 @@ const KEEP_LAYERS = ['aloft', 'arbonet', 'birds', 'cetaceans', 'chlor-a', 'cmems
   'crw-hotspot', 'crw-seaice', 'drought', 'ecoregions', 'fires', 'gfw', 'gibs-biomass', 'gibs-evi', 'gibs-landcover',
   'gibs-lst', 'gibs-nightlights', 'gmw', 'griis', 'h5n1', 'hansen-loss', 'hpai', 'ndvi', 'neon', 'neon-vectors',
   'occurrences', 'oisst', 'otn', 'phenology', 'rivers', 'tracks', 'wastewater', 'whispers'];
-const CUT_STYLES = ['surveillance', 'thermal'];
-const KEEP_STYLES = ['normal', 'retro', 'anime', 'noir', 'snow'];
+/** Every visual preset is gone since the light look (2026-10-20); the dock holds only the map source. */
+const PRESET_BUTTON = '.style-btn';
 /** Elements of God's Eye machinery (scenes, scope mask, celestial ring, cockpit, key setup). */
 const CUT_ELEMENTS = ['#scene-panel', '#scope-mask', '#celestial-ring-overlay', '#cockpit-context-toggle',
   '#cockpit-signal-toggle', '[data-cockpit-brief-index]', '[data-key-setup-apply]', '#hud-ais-vessel',
   // Step 2, Q11: the LOCATION panel with God's Eye's city pills and the Google place search.
-  '#location-bar', '#location-pills', '#search-toggle', '[data-requires-backend]'];
-const KEEP_ELEMENTS = ['#intel-hud', '#hud-latlon', '#hud-alt', '#hud-timestamp', '#data-panel', '#reset-globe-view', '#map-stack-chips'];
+  '#location-bar', '#location-pills', '#search-toggle', '[data-requires-backend]',
+  // The light look (grill_wildeye_visual_update_2026-10-20): the camera HUD, the style indicator and the eye logo.
+  '#intel-hud', '#style-indicator', '[data-logo-gaze]'];
+const KEEP_ELEMENTS = ['#pointer-readout', '#data-panel', '#reset-globe-view', '#map-stack-chips'];
 /** Step 2, A20: map sources that need a key the site never has (Google 3D Tiles, Cesium ion's Bing). */
 const KEEP_MAP_SOURCES = ['Esri Satellite', 'OSM'];
 /** Step 2, A19-A20 and Q11: server routes, Google and ion endpoints, and the deleted key panel, in any app script the page loaded (vendor-* chunks skipped: scripts/bundleStrings.mjs). */
@@ -73,7 +75,7 @@ try {
   await page.waitForFunction(() => window.__godsEyeView?.dataManager, { timeout: 180000 });
   await bootSettled(page);
   step = 'inventory';
-  const inv = await page.evaluate((CUT_ELEMENTS, KEEP_ELEMENTS) => {
+  const inv = await page.evaluate((CUT_ELEMENTS, KEEP_ELEMENTS, PRESET_BUTTON) => {
     const g = window.__godsEyeView;
     const visible = (el) => getComputedStyle(el).display !== 'none';
     const all = g.dataManager.getAll();
@@ -81,15 +83,14 @@ try {
     return {
       registered: all.map((l) => l.id),
       shown: all.filter((l) => l.showInTogglePanel).map((l) => l.id),
-      styles: [...document.querySelectorAll('.style-btn')].filter(visible).map((b) => b.dataset.style),
+      styles: [...document.querySelectorAll(PRESET_BUTTON)].map((b) => b.dataset.style),
       cutElements: CUT_ELEMENTS.filter((s) => document.querySelector(s)),
       keepElements: KEEP_ELEMENTS.filter((s) => document.querySelector(s)),
       labels: [...document.querySelectorAll('button,[role=button],label,option')].filter(visible).map(label).filter(Boolean),
       handles: Object.keys(g),
       mapSources: [...document.querySelectorAll('.map-stack-chip')].map((c) => ({ label: c.textContent.replace(/\s+/g, ' ').trim(), title: c.title })),
-      hudSummary: (document.getElementById('hud-summary')?.textContent || '').trim(),
     };
-  }, CUT_ELEMENTS, KEEP_ELEMENTS);
+  }, CUT_ELEMENTS, KEEP_ELEMENTS, PRESET_BUTTON);
   // Every script the page loaded, fetched again as text (lazy chunks that never loaded are not scanned).
   const scripts = await page.evaluate(async () => {
     const urls = [...new Set(performance.getEntriesByType('resource').map((e) => e.name).filter((u) => /\/assets\/[^/]+\.js(\?|$)/.test(u)))];
@@ -99,7 +100,8 @@ try {
   const missingKeep = KEEP_LAYERS.filter((id) => !inv.shown.includes(id));
   report('layers', leftLayers.length === 0 && missingKeep.length === 0 && inv.registered.includes('species'),
     { godsEyeLeft: leftLayers, wildlifeMissing: missingKeep, wildlifeShown: KEEP_LAYERS.length - missingKeep.length });
-  report('styles', CUT_STYLES.every((s) => !inv.styles.includes(s)) && KEEP_STYLES.every((s) => inv.styles.includes(s)), { styles: inv.styles });
+  // The map source chips in the same tray are the positive control (map-sources below).
+  report('styles', inv.styles.length === 0, { presets: inv.styles });
   report('machinery-elements', inv.cutElements.length === 0 && inv.keepElements.length === KEEP_ELEMENTS.length,
     { godsEyeLeft: inv.cutElements, keptPresent: inv.keepElements });
   const badLabels = [...new Set(inv.labels.filter((l) => CUT_LABELS.test(l)))];
@@ -119,8 +121,7 @@ try {
   const basemap = ['services.arcgisonline.com'].filter((host) => requests.some((u) => new URL(u).host === host));
   report('requests', cutRequests.length === 0 && basemap.length === 1,
     { godsEyeLeft: cutRequests.slice(0, 8), basemap, total: requests.length });
-  // The HUD keeps its plain line (A19): after the load wait it shows a composed readout, not its placeholder.
-  report('hud-line', /UTC/.test(inv.hudSummary) && !/Awaiting/.test(inv.hudSummary), { hudSummary: inv.hudSummary.slice(0, 160) });
+  // The camera HUD's line is gone with the HUD; its one reading, the pointer's latitude and longitude, is checked by qa-scientific-look.
   const leftLogs = CUT_LOGS.filter((p) => logPrefixes.has(p));
   report('startup-subsystems', leftLogs.length === 0, { godsEyeLeft: leftLogs, seen: [...logPrefixes].sort() });
 } catch (e) {

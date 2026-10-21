@@ -1,4 +1,5 @@
 import { governorRequestRender } from '../renderGovernor.js';
+import { sentenceCase } from './textCase.js';
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
   if (value && typeof value === 'object') {
@@ -10,12 +11,12 @@ function cloneLayerParams(value) {
 }
 
 const FEED_STATE_LABELS = Object.freeze({
-  nominal: 'ON',
-  loading: 'LOADING',
-  degraded: 'DEGRADED',
-  stale: 'STALE',
-  fallback: 'FALLBACK',
-  unavailable: 'UNAVAILABLE',
+  nominal: 'On',
+  loading: 'Loading',
+  degraded: 'Degraded',
+  stale: 'Stale',
+  fallback: 'Fallback',
+  unavailable: 'Unavailable',
 });
 
 const SUPERSEDED_VISIBILITY_INTENT = Symbol('superseded-visibility-intent');
@@ -2087,10 +2088,10 @@ export class DataLayerManager {
     const source = stats.source || layer.source;
     const lifecycleState = layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {
-      return `${lifecycleState.toUpperCase()} · ${source}`;
+      return `${sentenceCase(lifecycleState)} · ${source}`;
     }
     if (layer.lifecycleUncertain) {
-      return `UNCERTAIN · ${source} · lifecycle state requires reconciliation`;
+      return `Uncertain · ${source} · lifecycle state requires reconciliation`;
     }
     const presentedError = stats.error || stats.lastError || stats.managerRefreshError;
     if (presentedError) {
@@ -2141,8 +2142,8 @@ export class DataLayerManager {
       : (uncertain ? 'uncertain' : feedState);
     button.disabled = transitioning;
     button.textContent = transitioning
-      ? layer.lifecycleState.toUpperCase()
-      : (uncertain ? 'UNCERTAIN' : (layer.enabled ? FEED_STATE_LABELS[feedState] : 'OFF'));
+      ? sentenceCase(layer.lifecycleState)
+      : (uncertain ? 'Uncertain' : (layer.enabled ? FEED_STATE_LABELS[feedState] : 'Off'));
     button.setAttribute('aria-label', `${layer.name}: ${button.textContent}`);
   }
 

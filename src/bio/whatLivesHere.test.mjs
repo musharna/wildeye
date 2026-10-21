@@ -392,8 +392,8 @@ test('Escape while armed disarms (cursor back, onArmedChange(false)); other keys
   assert.equal(r.calls.near.length, 0);
 });
 
-// M2 (final review): an Escape the species search already handled (it hid the suggestion list) does not also disarm WHAT LIVES HERE.
-test('an Escape another control handled keeps WHAT LIVES HERE armed; an unhandled Escape disarms', () => {
+// M2 (final review): an Escape the species search already handled (it hid the suggestion list) does not also disarm What lives here.
+test('an Escape another control handled keeps What lives here armed; an unhandled Escape disarms', () => {
   const r = rig();
   r.controller.arm();
   for (const listener of r.doc.keydown) listener({ key: 'Escape', defaultPrevented: true });

@@ -275,7 +275,7 @@ export function createProtectedAreasLayer({
       const legend = _manifest.groups.map((g) => ({ label: g.label, color: `rgb(${_manifest.palette[g.index].join(",")})`, count: _manifest.counts.by_group?.[g.key] ?? null }));
       const small = _manifest.counts.unpainted_at_max_level ?? 0;
       legend.push({
-        label: `${n(_manifest.counts.areas)} protected areas mapped in OpenStreetMap (Overture ${_manifest.release})${small ? `, ${n(small)} of them too small to show at about 600 m (a WHAT LIVES HERE click still finds them)` : ""}; OpenStreetMap's coverage is uneven and it is not an official registry · © OpenStreetMap contributors, ODbL`,
+        label: `${n(_manifest.counts.areas)} protected areas mapped in OpenStreetMap (Overture ${_manifest.release})${small ? `, ${n(small)} of them too small to show at about 600 m (a What lives here click still finds them)` : ""}; OpenStreetMap's coverage is uneven and it is not an official registry · © OpenStreetMap contributors, ODbL`,
         color: "transparent",
         count: null,
       });

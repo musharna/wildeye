@@ -224,7 +224,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
   assert.match(base.body, /transition:\s*\n?\s*color/, 'the hover/active treatment still animates');
 });
 
-test('the Visual Presets tray owns Map Source and the retired left panel is absent', () => {
+test('the Basemap tray owns Map source and the retired left panel is absent', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const ui = readFileSync(new URL('./ui.js', import.meta.url), 'utf8');
 
@@ -234,7 +234,7 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
     /<section class="map-source-section"[\s\S]*?<div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source"><\/div>/,
   );
   assert.doesNotMatch(html, /id="stack-panel"/, 'the duplicate left MAP STACK panel is retired');
-  assert.match(html, /id="map-source-label">MAP SOURCE<[\s\S]*?id="map-stack-status"/);
+  assert.match(html, /id="map-source-label">Map source<[\s\S]*?id="map-stack-status"/);
   assert.match(
     html,
     /<button id="control-panel-toggle"[\s\S]*?data-dock-toggle-target="control-panel"[\s\S]*?aria-controls="control-panel-popover"/,

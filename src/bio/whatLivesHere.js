@@ -26,7 +26,7 @@ export function classifyClick({ picked, position }) {
 
 /** Marks the outline primitive, so it can be found in scene.groundPrimitives (scripts/qa-species.mjs does). */
 export const AREA_OUTLINE_ROLE = 'what-lives-here-area';
-/** --accent in style.css */
+/** The search circle is drawn on the globe, so it keeps a bright colour that reads over imagery (the UI's ink would not). */
 const OUTLINE_COLOR = '#00d4ff';
 
 /**

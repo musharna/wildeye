@@ -25,7 +25,7 @@ export function createEffortControl({ doc = document, dataManager, client, layer
     const shown = place?.state === 'shown';
     const on = shown && layer.isEnabled();
     toggle.hidden = !shown;
-    toggle.textContent = on ? 'RECORDING EFFORT ON' : 'RECORDING EFFORT OFF';
+    toggle.textContent = on ? 'Recording effort on' : 'Recording effort off';
     toggle.setAttribute('aria-checked', String(on));
     const error = shown ? layer.getStatus().error : null;
     note.textContent = place ? error ?? effortNote({ ...place, years: layer.getStatus().years, now: now() }) : '';

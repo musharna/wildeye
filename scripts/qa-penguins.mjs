@@ -198,7 +198,7 @@ try {
     report(`card ${what}`, ok, { want: want.lines, wantItems: want.items, got: lines.slice(0, want.lines.length), shownItems });
   }
 
-  // WHAT LIVES HERE at the four-species site, from R's answers: every species, its own counts, nothing added
+  // What lives here at the four-species site, from R's answers: every species, its own counts, nothing added
   const stra = truth.colonies.filter((c) => c.site === "STRA").sort((a, b) => ORDER.indexOf(a.species) - ORDER.indexOf(b.species));
   const short = (c) => `${LABEL[c.species].replace(/ penguin$/, "")} ${c.latest ? `${c.latest.counts.map(countWords).join(", ")} (${season(c.latest.season)})` : `present, not counted (${season(c.presentOnly)})`}`;
   const readout = await page.evaluate((lat, lon, id) => window.__godsEyeView.readoutAt(lat, lon).then((rows) => rows.find((r) => r?.id === id) ?? null), stra[0].lat, stra[0].lon, ID);

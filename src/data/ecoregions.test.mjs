@@ -94,7 +94,7 @@ test('layer: contract, static (no observed time), biome chips hide/show, legend,
     let calls = 0;
     l.setRowControlsListener(() => calls++);
     const rc = l.getRowControls();
-    assert.deepEqual(rc.chips.map((c) => c.label), ['TROP MOIST FOREST 2', 'DESERT 1']);
+    assert.deepEqual(rc.chips.map((c) => c.label), ['Trop. moist forest 2', 'Desert 1']);
     assert.deepEqual(rc.legend.slice(0, 2).map((i) => [i.color, i.count]), [['#38A700', 2], ['#CC6767', 1]]);
     assert.match(rc.legend.at(-1).label, /3 ecoregions, static/);
 

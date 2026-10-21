@@ -25,7 +25,7 @@ const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
 const ID = 'tracks';
 const FERA = { dataset: 'mb:19411459:Fera', first: '2014-12-05T17:58:00Z', firstAt: [-57.4351, -16.8761], last: '2015-11-30T23:00:13Z', lastAt: [-57.414, -16.8778] };
 const WINDOW = ['2014-12-01T00:00:00Z', '2015-12-01T00:00:00Z'];
-const GROUPS = ['WHALES & DOLPHINS', 'SEALS', 'LAND MAMMALS', 'BIRDS', 'REPTILES'];
+const GROUPS = ['Whales & dolphins', 'Seals', 'Land mammals', 'Birds', 'Reptiles'];
 
 const results = [];
 const report = (check, ok, detail = {}) => {
