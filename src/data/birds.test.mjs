@@ -258,7 +258,11 @@ test('birds: the season line totals the archived nights and says how many it res
   // a finished season drops "so far"; the latest season is picked by date, not by key order
   const done = { windows: two.windows, seasons: { 'fall-2026': { KAKQ: { '2026-11-15': rec(10) } }, 'fall-2025': { KAKQ: { '2025-11-15': rec(1) } } } };
   assert.match(seasonLines(done, 'KAKQ', false)[0], /^Fall 2026: 10 birds .*Nov\u00a015: 1 of 107 nights\)$/);
-  assert.equal(SEASON_COMPARE, false, 'until season_check has run on both falls');
+  // the switch is season_check's verdict on the falls in the archive (pipeline/season_check.py, rule fixed 10-19)
+  const verdict = JSON.parse(readFileSync(new URL('../../docs/analysis/bird_season.json', import.meta.url)));
+  assert.equal(verdict.season, 'fall-2026');
+  assert.equal(typeof verdict.ships, 'boolean');
+  assert.equal(SEASON_COMPARE, verdict.ships, `season_check says ships=${verdict.ships} (median ${verdict.median_disagreement} over ${verdict.pairs.length} pairs)`);
 });
 
 test('birds: update() feeds the night totals into the popups and keeps the last good file on failure', async () => {
