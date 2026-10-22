@@ -218,6 +218,34 @@ def verdict(r: dict) -> str | None:
         return "void"
     return "insects" if r["insect_share"] >= INSECT_SHARE else "birds"
 
+# --- what the popup may say -----------------------------------------------------------------------------
+
+ASKED = (("KFFC", "2026-10-11"), ("KFFC", "2026-10-12"), ("KFFC", "2026-10-16"), ("KFFC", "2026-10-17"),
+         ("KOHX", "2026-10-16"))
+BIRD_CONTROLS = (("KBUF", "2026-10-16"), ("KBOX", "2026-10-17"))
+
+def popup_table(nights: dict, raob_passes: bool) -> tuple[dict, dict]:
+    """The rules' controls, then the popup's line per night: the asked nights and every night that reads insects.
+    A night says what it read only when the wind passed the radiosondes and both bird controls read birds; "birds"
+    also needs some night to have read insects (else the rule was never seen to catch any). Otherwise "unclear"."""
+    get = lambda sid, n: nights.get(sid, {}).get(n) or {}
+    insect_nights = sorted((sid, n) for sid, ns in nights.items() for n, r in ns.items() if r.get("verdict") == "insects")
+    bird_ok = {f"{sid} {n}": get(sid, n).get("verdict") for sid, n in BIRD_CONTROLS}
+    controls = {"raob_passes": raob_passes, "bird_controls": bird_ok,
+                "bird_controls_pass": all(v == "birds" for v in bird_ok.values()),
+                "insect_nights": [f"{sid} {n}" for sid, n in insect_nights]}
+    trusted = controls["raob_passes"] and controls["bird_controls_pass"]
+    table = {}
+    for sid, n in sorted(set(ASKED) | set(insect_nights)):
+        r = get(sid, n)
+        v = r.get("verdict")
+        if not trusted or v not in ("birds", "insects") or (v == "birds" and not insect_nights):
+            v = "unclear"
+        table[f"{sid} {n}"] = {"verdict": v,
+                               "airspeed_ms": None if r.get("airspeed_ms") is None else round(r["airspeed_ms"], 1),
+                               "insect_share": None if r.get("insect_share") is None else round(r["insect_share"], 2)}
+    return controls, table
+
 # --- radiosondes: is the turned wind the real wind? -----------------------------------------------------
 
 def raob_uv(profile: list[dict], pres: float) -> tuple[float, float] | None:
@@ -306,9 +334,11 @@ def main(argv=None):
            "rules": {"cutoff_ms": a.cutoff, "insect_share": INSECT_SHARE, "fired_min_ms": FIRED_MIN_MS,
                      "levels_hpa": [LEVELS_HPA[0], LEVELS_HPA[-1]], "raob_max_rms_ms": RAOB_MAX_RMS_MS},
            "first_night": a.first_night.isoformat(), "last_night": a.last_night.isoformat(),
-           "hours": len(hours), "raob": raob, "turn_error_deg_max": turn, "nights": result}
+           "hours": len(hours), "raob": raob, "turn_error_deg_max": turn}
+    doc["controls"], doc["popup"] = popup_table(result, raob["passes"])
+    doc["nights"] = result
     a.out.write_text(json.dumps(doc, indent=1) + "\n")
-    print(json.dumps({"raob": raob}, indent=1))
+    print(json.dumps({k: doc[k] for k in ("raob", "turn_error_deg_max", "controls", "popup")}, indent=1))
 
 if __name__ == "__main__":
     main()
