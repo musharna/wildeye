@@ -18,7 +18,7 @@ import math
 import time
 import urllib.request
 from pathlib import Path
-from .bird_nights import night_window, stored_profiles
+from .bird_nights import night_total, night_window, stored_profiles
 from .vol2bird import parse_profile
 
 RAP = "https://noaa-rap-pds.s3.amazonaws.com"
@@ -135,7 +135,7 @@ def turn_error_deg(lat, lon, ij: tuple[int, int], geo: tuple[float, float]) -> f
     d = math.degrees(math.atan2(ve, ue)) - math.degrees(math.atan2(dlat, dlon))
     return abs((d + 180) % 360 - 180)
 
-def _get(url: str, rng: tuple[int, int | None] | None = None, tries: int = 4) -> bytes:
+def _get(url: str, rng: tuple[int, int | None] | None = None, tries: int = 6) -> bytes:
     for k in range(tries):
         try:
             req = urllib.request.Request(url, headers={"Range": f"bytes={rng[0]}-{'' if rng[1] is None else rng[1]}"}
@@ -145,7 +145,7 @@ def _get(url: str, rng: tuple[int, int | None] | None = None, tries: int = 4) ->
         except OSError:
             if k == tries - 1:
                 raise
-            time.sleep(2 * (k + 1))
+            time.sleep(5 * (k + 1))          # WSL DNS drops out for tens of seconds at a time
 
 def fetch_hour(hour: dt.datetime, cache: Path) -> Path:
     """The RAP analysis at `hour`, cut to HGT/UGRD/VGRD at LEVELS_HPA, cached as one GRIB file."""
@@ -231,7 +231,7 @@ def popup_table(nights: dict, raob_passes: bool) -> tuple[dict, dict]:
     get = lambda sid, n: nights.get(sid, {}).get(n) or {}
     insect_nights = sorted((sid, n) for sid, ns in nights.items() for n, r in ns.items() if r.get("verdict") == "insects")
     bird_ok = {f"{sid} {n}": get(sid, n).get("verdict") for sid, n in BIRD_CONTROLS}
-    controls = {"raob_passes": raob_passes, "bird_controls": bird_ok,
+    controls = {"asked": [f"{sid} {n}" for sid, n in ASKED], "raob_passes": raob_passes, "bird_controls": bird_ok,
                 "bird_controls_pass": all(v == "birds" for v in bird_ok.values()),
                 "insect_nights": [f"{sid} {n}" for sid, n in insect_nights]}
     trusted = controls["raob_passes"] and controls["bird_controls_pass"]
@@ -282,18 +282,19 @@ def main(argv=None):
     windows = {(sid, n): night_window(n, sites[sid]["lon"], sites[sid]["lat"]) for sid in sids for n in nights}
     hours = sorted({nearest_hour(s) + dt.timedelta(hours=k) for s, r in windows.values()
                     for k in range(int((nearest_hour(r) - nearest_hour(s)).total_seconds() // 3600) + 1)})
-    winds = {}
-    for k, h in enumerate(hours):
-        winds[h] = columns(fetch_hour(h, a.cache), {sid: sites[sid] for sid in sids})
-        if k % 24 == 0:
-            print(f"winds {k + 1}/{len(hours)} {h:%Y-%m-%d %HZ}", flush=True)
+    with cf.ThreadPoolExecutor(4) as ex:                 # S3 latency, not bandwidth, sets the pace: hours in parallel
+        for k, _ in enumerate(ex.map(lambda h: fetch_hour(h, a.cache), hours)):
+            if k % 24 == 0:
+                print(f"fetched {k + 1}/{len(hours)}", flush=True)
+    winds = {h: columns(fetch_hour(h, a.cache), {sid: sites[sid] for sid in sids}) for h in hours}
     result = {}
     for sid in sids:
         for n in nights:
             sunset, sunrise = windows[(sid, n)]
             profs = stored_profiles(a.vp_dir, sid, sunset, sunrise)
-            result.setdefault(sid, {})[n.isoformat()] = night_airspeed(
-                profs, {h: c[sid] for h, c in winds.items()}, a.cutoff)
+            r = night_airspeed(profs, {h: c[sid] for h, c in winds.items()}, a.cutoff)
+            r["mt_birds_km"] = night_total(profs, sunset, sunrise)["mt_birds_km"] if profs else None   # the count it is about
+            result.setdefault(sid, {})[n.isoformat()] = r
     # radiosondes at 00Z and 12Z inside the run, against the turned and the unturned RAP wind
     raob = {"stations": {}, "rms_ms": {}}
     errs = {"turned": [], "unturned": [], "turned_backwards": []}
