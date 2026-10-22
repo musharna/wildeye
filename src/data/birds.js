@@ -222,6 +222,28 @@ export function nightSpark(nights) {
   return `Last ${done.length} nights: ${bars} (high ${fmtCount(top.mt_birds_km)} on ${nightDate(top.night)}; log scale; × rain)`;
 }
 
+// The drape is each radar's scan out to pipeline/ppi.py RANGE_MAX_M (birds.test.mjs reads it there); a click on the
+// drape belongs to the radar whose scan it is.
+export const DRAPE_RANGE_KM = 150;
+
+const gcKm = (lon1, lat1, lon2, lat2) => {
+  const r = Math.PI / 180;
+  const a = Math.sin(((lat2 - lat1) * r) / 2) ** 2
+    + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(((lon2 - lon1) * r) / 2) ** 2;
+  return 2 * 6371.0088 * Math.asin(Math.min(1, Math.sqrt(a)));
+};
+
+/** The radar whose drape covers (lon, lat): the nearest of `sites` ({site, lon, lat}) within rangeKm, else null. */
+export function radarAt(lon, lat, sites, rangeKm = DRAPE_RANGE_KM) {
+  let best = null;
+  for (const s of sites ?? []) {
+    if (!Number.isFinite(s?.lon) || !Number.isFinite(s?.lat)) continue;
+    const d = gcKm(lon, lat, s.lon, s.lat);
+    if (d <= rangeKm && (best === null || d < best.d)) best = { site: s.site, d };
+  }
+  return best?.site ?? null;
+}
+
 /** Popup for a clicked flow particle: its local density, velocity and the radar it was drawn from. */
 export function particleText(dens, heading, speed, nearest) {
   return `<b>Ensemble contact</b> (illustrative)<br>` +
@@ -311,6 +333,8 @@ export function createBirdsLayer() {
   let _field = null;          // {cdf,total,w,h,bounds,sites,cellDeg}
   let _tickRemover = null;
   let _clickHandler = null;
+  let _columnSites = [];       // {site, lon, lat} of the columns shown: whose drape a ground click is on
+  let _groundClickBlocked = () => false;
   let _enabled = false;
   let _params = { ...DEFAULT_PARAMS };
   let _preRenderRemover = null;
@@ -440,6 +464,7 @@ export function createBirdsLayer() {
       if (!_enabled) return;
       const picked = viewer.scene.pick(click.position);
       const id = picked && (typeof picked.id === 'string' ? picked.id : picked.primitive?.id);
+      if (picked === undefined) { selectRadarUnder(viewer, click.position); return; }
       if (typeof id !== 'string' || !id.startsWith('birds-particle:')) return;
       const i = Number(id.slice('birds-particle:'.length));
       const p = _particles[i]; if (!p) return;
@@ -453,6 +478,20 @@ export function createBirdsLayer() {
       });
       viewer.selectedEntity = ent;
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  }
+
+  /**
+   * A click on bare globe inside a radar's drape opens that radar's popup (its column entity, shown or not): with
+   * columns off by default the drape is the only thing there to click. Not while another tool owns ground clicks.
+   */
+  function selectRadarUnder(viewer, position) {
+    if (!_params.drape || !_columnSites.length || _groundClickBlocked()) return;
+    const ground = viewer.camera.pickEllipsoid(position, viewer.scene.globe.ellipsoid);
+    if (!ground) return;
+    const c = Cesium.Cartographic.fromCartesian(ground);
+    const site = radarAt(Cesium.Math.toDegrees(c.longitude), Cesium.Math.toDegrees(c.latitude), _columnSites);
+    const ent = site && _dataSource?.entities.getById(`birds:${site}`);
+    if (ent) viewer.selectedEntity = ent;
   }
 
   const layer = {
@@ -521,10 +560,13 @@ export function createBirdsLayer() {
       };
     },
     setRowControlsListener(listener) { _rowControlsListener = typeof listener === 'function' ? listener : null; },
+    /** blocked() true = a ground click belongs to another tool (What lives here, armed) and must not open a radar. */
+    setGroundClickGuard(blocked) { _groundClickBlocked = typeof blocked === 'function' ? blocked : () => false; },
 
     /** Rebuild the per-radar columns from a FeatureCollection. Returns the count. */
     _renderColumns(gj, nights = null, seasons = null) {
         _dataSource.entities.removeAll();
+        _columnSites = gj.features.map((f) => ({ site: f.properties?.site, lon: f.geometry?.coordinates?.[0], lat: f.geometry?.coordinates?.[1] }));
         let count = 0;
         for (const f of gj.features) {
           count++;
