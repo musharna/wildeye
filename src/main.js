@@ -21,7 +21,7 @@ import { hotspotsLayer } from './data/hotspots.js';
 import speciesLayer, { DEFAULT_SPECIES_PARAMS } from './data/species.js';
 import { createBioClient } from './bio/gbif.js';
 import { createWhatLivesHere } from './bio/whatLivesHere.js';
-import { createShortViewportRegions } from './bio/shortViewport.js';
+import { createShortViewportRegions, SHORT_VIEWPORT_QUERY } from './bio/shortViewport.js';
 import { createSpeciesPanel } from './bio/speciesPanel.js';
 import { createModeledRangeControl } from './bio/modeledRangeControl.js';
 import { createModeledRangeLayer, loadModeledList } from './data/modeledRange.js';
@@ -310,14 +310,17 @@ async function init() {
       observedTime,
     });
     // Bottom-centre is one stack above the dock and the map credits: time bar, then compare pill | panel.
-    // Nothing sits beside it since the pointer readout moved to the top-right corner (style.css).
-    stackAboveChrome({
+    // The details card (made below) sits beside it: its CSS bottom is a constant, the stack's is measured, so where
+    // they overlap across the card rises above the stack. On a short viewport the card hangs from the top instead.
+    const bottomStack = stackAboveChrome({
       doc: document,
       below: () => [document.getElementById('command-dock'), document.getElementById('cesium-credits')],
       items: () => [
         document.getElementById('observed-time'),
         [compareUi.toggle, compareUi.panel],
       ],
+      beside: () => [document.getElementById('bio-card')],
+      topAnchored: () => window.matchMedia(SHORT_VIEWPORT_QUERY).matches,
     });
     // Restoration starts only after the complete production registry is sealed.
     dataManager.finalizeRegistrations(LAYER_STATE_REGISTRY);
@@ -340,6 +343,7 @@ async function init() {
     const bioCard = createDetailsCard({ viewer, layerName: (id) => dataManager.layers.get(id)?.module?.name || id, onDismiss: () => whatLivesHere?.cancel(), onListEnd: () => whatLivesHere?.listEnded() });
     document.body.appendChild(bioCard.element);
     document.body.appendChild(bioCard.announcer);
+    bottomStack.place(); // the card is beside the stack from here on: this place() starts watching it
     // Species search and "what lives here" (docs/superpowers/specs/2026-09-13-species-search-design.md).
     const bioClient = createBioClient();
     let speciesPanel = null;

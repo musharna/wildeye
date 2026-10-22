@@ -8,10 +8,14 @@
  * `items()` lists slots bottom-to-top; a slot is an element or an array of alternates that share one
  * place (the compare pill and its panel). A hidden item keeps its place but gives up its height.
  *
- * `beside()` lists boxes with their own CSS place near the bottom (none at present: the camera HUD's
+ * `beside()` lists boxes with their own CSS place near the bottom (the details card; the camera HUD's
  * bottom corners until 2026-10-20). Each keeps that place unless it overlaps, across, something below it
  * (chrome or a placed item); then it sits above the highest such thing. On a phone a wide box sat under
- * the Compare pill; on a desktop it is far to the side and stays where the CSS puts it.
+ * the Compare pill; at 1400x900 the card's fixed 104 px sat 18 px into the time bar's right end.
+ * A box may join after install (the card is made later); the first place() that sees it watches it.
+ *
+ * `topAnchored(e)` says a beside box hangs from the top right now (the card on a short viewport, whose
+ * CSS sets `bottom: auto`): it gets no inline bottom, since `top` and `bottom` together would stretch it.
  */
 // Any open tray takes its room, however it was opened. Counting pinned trays only let a tray opened by a
 // click or a hover cover the Compare pill but its bottom 11 px (1400 px, 2026-09-28).
@@ -22,6 +26,7 @@ export function stackAboveChrome({
   below,
   items,
   beside = () => [],
+  topAnchored = () => false,
   gap = 8,
   floor = 28,
 }) {
@@ -32,6 +37,13 @@ export function stackAboveChrome({
     chrome().flatMap((a) => [a, ...(a.children || []), ...(a.querySelectorAll?.(TRAYS) || [])]);
   const slots = () =>
     items().map((s) => (Array.isArray(s) ? s : [s]).filter(Boolean));
+  const watched = new Set();
+  let ro = null;
+  const watch = (e) => {
+    if (!e || watched.has(e)) return;
+    watched.add(e);
+    ro?.observe(e);
+  };
 
   const place = () => {
     const vh = win?.innerHeight;
@@ -57,7 +69,9 @@ export function stackAboveChrome({
       }
     }
     for (const e of beside().filter(Boolean)) {
+      watch(e);
       e.style.bottom = "";
+      if (topAnchored(e)) continue;
       const r = e.getBoundingClientRect?.();
       if (!r?.width) continue;
       const clear = under
@@ -74,13 +88,13 @@ export function stackAboveChrome({
 
   // Every box whose size moves the stack is watched: an item shown or hidden resizes too. The chrome
   // is also watched for class/children changes (pinning a tray toggles classes before it lays out).
-  const ro = win?.ResizeObserver ? new win.ResizeObserver(() => place()) : null;
+  ro = win?.ResizeObserver ? new win.ResizeObserver(() => place()) : null;
   for (const e of [
     ...chromeBoxes(),
     ...chrome().flatMap((a) => [...(a.querySelectorAll?.('.dock-popover-content') || [])]),
     ...slots().flat(),
     ...beside().filter(Boolean),
-  ]) ro?.observe(e);
+  ]) watch(e);
   const mo = win?.MutationObserver
     ? new win.MutationObserver(() => place())
     : null;
