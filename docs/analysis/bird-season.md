@@ -1,7 +1,7 @@
 # Can a radar's fall be compared with its last fall? (season check)
 
 Rule written to the grill ledger on 2026-10-19, **before either fall was in the archive**
-(`~/.claude/projects/-home-mjarnold/memory/grill_wildeye_bird_season_2026-10-19.md`); code `pipeline/season_check.py`.
+(`grill_wildeye_bird_season_2026-10-19.md` (outside the repo)); code `pipeline/season_check.py`.
 
 ## Rule
 

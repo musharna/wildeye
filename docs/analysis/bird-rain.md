@@ -3,7 +3,7 @@
 vol2bird's dual-pol filter drops rain gates before it counts birds, so in rain the count rests on the few gates left.
 `bio_gate_share` (kept gates / reflective gates, `pipeline/vol2bird.py`) measures that. This check sets the share
 below which the globe marks a scan as unreliable, against airport rain gauges. Rules written to the grill ledger at
-2026-10-18 21:30 EDT, **before any gauge was fetched** (`~/.claude/projects/-home-mjarnold/memory/grill_wildeye_radar_depth_2026-10-16.md`).
+2026-10-18 21:30 EDT, **before any gauge was fetched** (`grill_wildeye_radar_depth_2026-10-16.md` (outside the repo)).
 
 ## Rules
 

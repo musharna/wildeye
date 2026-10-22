@@ -3,7 +3,7 @@
 Weather radar sees insects as well as birds. Birds fly through the air under their own power; most insects drift
 with the wind. So the speed of the echo *through the air* (ground velocity from vol2bird minus the wind) separates
 them. This check asks whether the spike nights at KFFC and KOHX in mid-October 2026 are insects.
-Grill ledger: `~/.claude/projects/-home-mjarnold/memory/grill_wildeye_insects_2026-10-20.md` (closed 2026-10-21).
+Grill ledger: `grill_wildeye_insects_2026-10-20.md` (outside the repo) (closed 2026-10-21).
 
 ## Rules
 
@@ -79,4 +79,4 @@ uv run --python 3.13 --with pygrib --with numpy python -m pipeline.insect_check 
 Rscript docs/analysis/bird_insects_figure.R
 ```
 
-The store is msi-4080's `~/.cache/wildeye/vp` (kept 60 days). ~360 RAP hours, 2.3 MB each.
+`--vp-dir` is the bird cron's vol2bird store (`build_birds.py --vp-dir`, kept 60 days). ~360 RAP hours, 2.3 MB each.

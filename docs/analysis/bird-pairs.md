@@ -1,7 +1,7 @@
 # Do neighbouring radars agree? (adjacent-radar check, G3)
 
 Rules written to the grill ledger at 2026-10-17 17:40 EDT, **before any pair was computed**
-(`~/.claude/projects/-home-mjarnold/memory/grill_wildeye_radar_depth_2026-10-16.md`); committed here with the result.
+(`grill_wildeye_radar_depth_2026-10-16.md` (outside the repo)); committed here with the result.
 
 ## Rules
 
