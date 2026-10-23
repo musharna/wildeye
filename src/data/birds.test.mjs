@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, heightLine, seasonLines, SEASON_COMPARE, BIN_M, describe, columnEntity, nightText, nightLines, nightSpark, airspeedLines, nightDates, AIRSPEED_NIGHTS, AIRSPEED_CUTOFF_MS } from './birds.js';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, heightLine, seasonLines, SEASON_COMPARE, BIN_M, describe, columnEntity, nightText, nightLines, nightSpark, radarAt, DRAPE_RANGE_KM, airspeedLines, nightDates, AIRSPEED_NIGHTS, AIRSPEED_CUTOFF_MS } from './birds.js';
 
 test('birds: BIN_M is the height step of real vol2bird and Aloft profiles', () => {
   const steps = (hs) => new Set(hs.slice(1).map((h, i) => h - hs[i]));
@@ -392,4 +392,25 @@ test('birds: the popup sparkline is the radar against its own nights, log scale,
   assert.equal(nightSpark(null), null);
   const p = { site: 'KAKQ', name: 'Wakefield VA', density_birds_km3: 3.2, heading_deg: 200, speed_ms: 9, peak_altitude_m: 400, scan_time: 't', bio_gate_share: 0.8 };
   assert.match(describe(p, 6000, doc.sites.KAKQ, Date.parse(doc.generated_at)), /Last night \(Oct\u00a017\)[^<]*<br>Last 14 nights: ▆█/);
+});
+
+test('birds: a click on the drape belongs to the nearest radar whose scan reaches it', () => {
+  const sites = [{ site: 'KAKQ', lon: -77.0073, lat: 36.984 }, { site: 'KLWX', lon: -77.4778, lat: 38.9753 },
+    { site: 'KBAD' }];
+  assert.equal(radarAt(-77.0073, 37.5, sites), 'KAKQ', '57 km north of KAKQ');
+  assert.equal(radarAt(-77.3, 38.2, sites), 'KLWX', 'inside both rings: the nearer radar (KLWX ~87 km, KAKQ ~138 km)');
+  assert.equal(radarAt(-77.0073, 37.5, [sites[0]], 50), null, 'KAKQ at 57 km is beyond a 50 km range');
+  assert.equal(radarAt(-77.0073, 37.5, [sites[0]], 60), 'KAKQ', 'and inside a 60 km one');
+  assert.equal(radarAt(-80.5, 36.984, sites), null, 'over 300 km from both: no radar');
+  assert.equal(radarAt(-77.0073, 36.984 + 149 / 111.2, [sites[0]]), 'KAKQ', 'just inside 150 km');
+  assert.equal(radarAt(-77.0073, 36.984 + 151 / 111.2, [sites[0]]), null, 'just outside 150 km');
+  assert.equal(radarAt(-77, 37, []), null);
+  assert.equal(radarAt(-77, 37, undefined), null);
+});
+
+test('birds: DRAPE_RANGE_KM is the range the pipeline draws the drape to (pipeline/ppi.py)', () => {
+  const ppi = readFileSync(new URL('../../pipeline/ppi.py', import.meta.url), 'utf8');
+  const m = ppi.match(/^RANGE_MIN_M, RANGE_MAX_M = [\d_.]+, ([\d_.]+)$/m);
+  assert.ok(m, 'RANGE_MAX_M is still declared in pipeline/ppi.py');
+  assert.equal(DRAPE_RANGE_KM, Number(m[1].replaceAll('_', '')) / 1000);
 });

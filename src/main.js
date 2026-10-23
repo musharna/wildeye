@@ -359,6 +359,7 @@ async function init() {
       ...[crwOutlookLayer, oisstLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, chlorALayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, hotspotsLayer, haedatLayer, penguinsLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
+    let groundPickInFlight = false;
     whatLivesHere = createWhatLivesHere({
       viewer,
       client: bioClient,
@@ -367,9 +368,15 @@ async function init() {
       onPickSpecies: ({ taxonKey, name }) => {
         speciesPanel?.chooseTaxon({ taxonKey, name }).catch((error) => console.error('[species] could not map the picked species', { taxonKey, error }));
       },
-      onArmedChange: () => speciesPanel?.render(),
+      onArmedChange: (armed, reason) => {
+        speciesPanel?.render();
+        // The pick disarms inside the same click the radar drape also hears; block that click for the rest of its task.
+        if (reason === 'pick') { groundPickInFlight = true; setTimeout(() => { groundPickInFlight = false; }, 0); }
+      },
       readLayers: readGibsLayers,
     });
+    // A ground click while "what lives here" is armed is its search, not a click on a radar's drape.
+    birdsLayer.setGroundClickGuard(() => Boolean(whatLivesHere?.armed) || groundPickInFlight);
     speciesPanel = createSpeciesPanel({ dataManager, speciesLayer, client: bioClient, whatLivesHere });
     createModeledRangeControl({ dataManager, client: bioClient, layer: modeledRangeLayer, loadList: loadModeledList() });
     // Recording effort for the chosen species' class (docs/superpowers/specs/2026-09-30-effort-layer-design.md).
