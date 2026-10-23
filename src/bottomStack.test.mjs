@@ -211,3 +211,55 @@ test('the end of a transition or animation in the bottom chrome re-places the st
   s.destroy();
   assert.equal((listeners.transitionend ?? []).length + (listeners.animationend ?? []).length, 0);
 });
+
+// At 1400x900 the details card sat at its CSS bottom (104 px) while the time bar, lifted above the dock, reached 122 px
+// from the bottom: the card covered the bar's right end by 176 x 18 px (measured 2026-10-21). The card is beside the stack.
+test('the details card rises above the time bar where it overlaps it across, and keeps its CSS place where it does not', () => {
+  const { doc } = env();
+  doc.defaultView.getComputedStyle = (e) => ({ bottom: e.cssBottom });
+  const dock = () => box(820, 62, 616, 784);
+  const card = box(431, 365, 1016, 1376, { cssBottom: '104px' });
+  const bar = box(0, 34, 208, 1192);
+  stackAboveChrome({ doc, below: () => [dock()], items: () => [bar], beside: () => [card] });
+  assert.equal(bar.style.bottom, '88px'); // 900 - 820 + 8
+  assert.equal(card.style.bottom, '130px'); // 88 + 34 + 8
+  // the bar hidden: the card overlaps nothing it must clear (the dock is left of it) and keeps its CSS place
+  const card2 = box(431, 365, 1016, 1376, { cssBottom: '104px', style: { bottom: '130px' } });
+  stackAboveChrome({ doc, below: () => [dock()], items: () => [box(0, 0, 0, 0)], beside: () => [card2] });
+  assert.equal(card2.style.bottom, '');
+  // a wide window: the centred bar ends left of the card
+  const card3 = box(431, 365, 1536, 1896, { cssBottom: '104px' });
+  stackAboveChrome({ doc, below: () => [box(820, 62, 876, 1044)], items: () => [box(0, 34, 468, 1452)], beside: () => [card3] });
+  assert.equal(card3.style.bottom, '');
+});
+
+// On a short viewport the card hangs from the top (CSS bottom: auto) with a max-height; an inline bottom there as well
+// would stretch it from top to bottom. A top-anchored box is left to its CSS, and an inline bottom from before is cleared.
+test('a top-anchored box beside the stack gets no inline bottom, and loses one it had', () => {
+  const { doc } = env();
+  doc.defaultView.getComputedStyle = (e) => ({ bottom: e.cssBottom });
+  let short = true;
+  const card = box(76, 200, 1016, 1376, { cssBottom: '104px', style: { bottom: '130px' } });
+  const { place } = stackAboveChrome({ doc, below: () => [box(820, 62, 616, 784)], items: () => [box(0, 34, 208, 1192)],
+    beside: () => [card], topAnchored: (e) => e === card && short });
+  assert.equal(card.style.bottom, '');
+  short = false; // the window grows past the short query: bottom-anchored again, so it rises
+  place();
+  assert.equal(card.style.bottom, '130px');
+});
+
+// The card is made after the stack is installed (main.js), so it is not there to watch at install; showing it resizes
+// it from nothing, and only a watched box re-places the stack when that happens.
+test('a box that joins beside() after install is watched from the first place() that sees it', () => {
+  const { doc, ros } = env();
+  doc.defaultView.getComputedStyle = (e) => ({ bottom: e.cssBottom });
+  let card = null;
+  const { place } = stackAboveChrome({ doc, below: () => [box(820, 62, 616, 784)], items: () => [box(0, 34, 208, 1192)],
+    beside: () => [card] });
+  card = box(431, 365, 1016, 1376, { cssBottom: '104px' });
+  assert.ok(!ros[0].seen.includes(card));
+  place();
+  place();
+  assert.equal(ros[0].seen.filter((t) => t === card).length, 1, 'watched once, however often it is placed');
+  assert.equal(card.style.bottom, '130px');
+});
