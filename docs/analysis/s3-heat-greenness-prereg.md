@@ -1,7 +1,7 @@
 # S3 pilot: are cities hotter than cropland at the same greenness? (pre-registration)
 
 Written and committed 2026-09-24, **before any measured run**. Grill ledger:
-`~/.claude/projects/-home-mjarnold/memory/grill_wildeye_s3_heat_greenness_2026-09-24.md`.
+`grill_wildeye_s3_heat_greenness_2026-09-24.md` (outside the repo).
 
 **Question.** Is daytime land surface warmer in cities than in cropland in the same region, at the same greenness? Night-time lights, vegetation (EVI) and temperature (LST) are separate NASA products on the site. Only their overlap can separate "cities are hotter" from "cities are less green".
 

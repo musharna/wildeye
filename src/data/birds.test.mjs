@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, heightLine, seasonLines, SEASON_COMPARE, BIN_M, describe, columnEntity, nightText, nightLines, nightSpark, radarAt, DRAPE_RANGE_KM } from './birds.js';
+import { mapBirdRecord, birdColumn, headingColor, createBirdsLayer, drapeFade, frameIdAtOrBefore, RAIN_SHARE, SAMPLING_ERROR, mostlyNotBirds, nightDate, scanTime, particleText, heightLine, seasonLines, SEASON_COMPARE, BIN_M, describe, columnEntity, nightText, nightLines, nightSpark, radarAt, DRAPE_RANGE_KM, airspeedLines, nightDates, AIRSPEED_NIGHTS, AIRSPEED_CUTOFF_MS } from './birds.js';
 
 test('birds: BIN_M is the height step of real vol2bird and Aloft profiles', () => {
   const steps = (hs) => new Set(hs.slice(1).map((h, i) => h - hs[i]));
@@ -280,6 +280,33 @@ test('birds: the season line totals the archived nights and says how many it res
   assert.equal(verdict.season, 'fall-2026');
   assert.equal(typeof verdict.ships, 'boolean');
   assert.equal(SEASON_COMPARE, verdict.ships, `season_check says ships=${verdict.ships} (median ${verdict.median_disagreement} over ${verdict.pairs.length} pairs)`);
+});
+
+test('birds: the airspeed check gives one popup line per verdict, with its nights and speeds', () => {
+  const t = { 'KFFC 2026-10-17': { verdict: 'birds', airspeed_ms: 11.2, insect_share: 0.1 },
+    'KFFC 2026-10-16': { verdict: 'birds', airspeed_ms: 9.0, insect_share: 0.2 },
+    'KFFC 2026-10-11': { verdict: 'insects', airspeed_ms: 3.1, insect_share: 0.8 },
+    'KFFC 2026-10-12': { verdict: 'unclear', airspeed_ms: null, insect_share: null },
+    'KOHX 2026-10-16': { verdict: 'birds', airspeed_ms: 8.0, insect_share: 0.1 } };
+  const lines = airspeedLines('KFFC', t);
+  assert.equal(lines.length, 3);
+  assert.match(lines[0], /^Airspeed check, Oct\u00a011: likely insects, so the count is too high \(3\.1\u00a0m\/s through the air; insects drift under 5\u00a0m\/s\)$/);
+  assert.equal(lines[1], 'Airspeed check, Oct\u00a012: unclear');
+  assert.match(lines[2], /^Airspeed check, Oct\u00a016, 17: looks like birds \(9\.0\u2060–\u206011\.2\u00a0m\/s through the air/);
+  assert.deepEqual(airspeedLines('KBUF', t), [], 'a radar the check did not ask about gets no line');
+  // the month is written where it changes, so a list across Sep/Oct stays readable
+  assert.equal(nightDates(['2026-09-27', '2026-09-30', '2026-10-01', '2026-10-04']), 'Sep\u00a027, 30, Oct\u00a01, 4');
+  assert.equal(nightDates([]), '');
+});
+
+test('birds: the shipped airspeed table and cutoff are bird_insects.json\'s', () => {
+  const doc = JSON.parse(readFileSync(new URL('../../docs/analysis/bird_insects.json', import.meta.url)));
+  assert.equal(AIRSPEED_CUTOFF_MS, doc.rules.cutoff_ms);
+  assert.deepEqual({ ...AIRSPEED_NIGHTS }, doc.popup);
+  assert.ok(Object.keys(doc.popup).length >= 5, 'the five nights asked about are in it');
+  assert.ok(Object.isFrozen(AIRSPEED_NIGHTS));
+  const kffc = describe({ site: 'KFFC', name: 'Atlanta', density_birds_km3: 1, heading_deg: 200, speed_ms: 9, scan_time: 't' }, 1);
+  assert.match(kffc, /Airspeed check, /, 'the line reaches the radar popup');
 });
 
 test('birds: update() feeds the night totals into the popups and keeps the last good file on failure', async () => {

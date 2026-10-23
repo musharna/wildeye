@@ -23,6 +23,9 @@ This changelog records public product changes.
   Before this, those details were attached to the markers but never shown.
 - wildeye: scheduled pipelines under `pipeline/`, a licence ledger in
   `DATA_SOURCES.md`, and a GitHub Pages deploy script.
+- wildeye: an airspeed check in the bird radar popup. For the KFFC and KOHX spike nights of
+  mid-October 2026, and for every night from 27 Sep to 20 Oct whose echo moved like drifting insects,
+  the popup says whether it looks like birds or likely insects (`docs/analysis/bird-insects.md`).
 
 ### Changed
 

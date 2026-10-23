@@ -8,7 +8,7 @@
 
 **Tech Stack:** vanilla JS ES modules, Cesium 1.138.0, `node:test` under node24, puppeteer SwiftShader for live QA.
 
-**Spec:** `~/.claude/projects/-home-mjarnold/memory/grill_wildeye_gibs_wave_2026-09-22.md` — Q5, A6, A7/A16, A9, A12, A15, A18, A19. Stage-1 plan for conventions: `docs/superpowers/plans/2026-09-22-gibs-stage1.md`.
+**Spec:** `grill_wildeye_gibs_wave_2026-09-22.md` (outside the repo) — Q5, A6, A7/A16, A9, A12, A15, A18, A19. Stage-1 plan for conventions: `docs/superpowers/plans/2026-09-22-gibs-stage1.md`.
 
 ## Global Constraints
 

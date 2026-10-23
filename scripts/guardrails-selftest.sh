@@ -148,6 +148,10 @@ devfix=$(printf 'p = "%sers/a2b32/Zotero/x.pdf"' "$devroot")
 check no-dev-paths j.py "$devfix" fail
 homefix=$(printf 'p = "/home%s"' "/someone/data.csv") # placeholder home must PASS
 check no-dev-paths k.py "$homefix" pass
+projfix=$(printf 'see `~/.claude/projects/-home-%s/memory/x.md`' "mjarnold") # Claude project-dir form must FAIL
+check no-dev-paths k2.md "$projfix" fail
+projok=$(printf 'see `~/.claude/projects/-home-%s/memory/x.md`' "someone") # a placeholder user must PASS
+check no-dev-paths k3.md "$projok" pass
 mkdir -p "$tmp/r/.github/workflows"
 check no-unpinned-action .github/workflows/u1.yml '      - uses: actions/checkout@v7' fail
 check no-unpinned-action .github/workflows/u2.yml '        uses: actions/setup-node@v7.1.0 # v7.1.0' fail
