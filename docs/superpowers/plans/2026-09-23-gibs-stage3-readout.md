@@ -8,7 +8,7 @@
 
 **Tech Stack:** vanilla JS ES modules, Cesium 1.138.0, `node:test` under node24, Python 3 + pytest for the pipeline, and puppeteer SwiftShader under `heavy-run` for live QA.
 
-**Spec:** `~/.claude/projects/-home-mjarnold/memory/grill_wildeye_gibs_wave_2026-09-22.md`: Q2, Q6 (measured half), A7/A16, A8, A13, A14, A18, A19. Stage-2 plan for conventions: `docs/superpowers/plans/2026-09-23-gibs-stage2-compare.md`.
+**Spec:** `grill_wildeye_gibs_wave_2026-09-22.md` (outside the repo): Q2, Q6 (measured half), A7/A16, A8, A13, A14, A18, A19. Stage-2 plan for conventions: `docs/superpowers/plans/2026-09-23-gibs-stage2-compare.md`.
 
 ## Global Constraints
 
