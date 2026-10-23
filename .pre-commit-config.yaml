@@ -147,8 +147,9 @@ repos:
         types: [text]
         exclude: '^(\.pre-commit-config\.yaml|scripts/guardrails-selftest\.sh|\.github/workflows/.*)$'
         # Bracketed last char so this file never contains the literal it hunts
-        # (a gate whose scope includes its own definition flags itself).
-        entry: '/home[/]mjarnol[d]|/mnt/c[/]Users/a2b3[2]|C:\\Users\\a2b3[2]'
+        # (a gate whose scope includes its own definition flags itself). `-home-<user>` is the same home as Claude
+        # Code writes it in a project directory name (~/.claude/projects/-home-<user>/...); PR #116 review found it.
+        entry: '/home[/]mjarnol[d]|-home-mjarnol[d]|/mnt/c[/]Users/a2b3[2]|C:\\Users\\a2b3[2]'
 
       # A tag (@v7) can be moved to different code after review; a commit SHA cannot. wildeye #79 added
       # setup-node@v7 in a new workflow and ci.yml carried two more (2026-10-11): review caught one of three.

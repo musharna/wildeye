@@ -2,7 +2,7 @@
 
 Follow-up to the adjacent-radar check (`bird-pairs.md`), where coastal radars read below their inland neighbours.
 Rules written to the grill ledger at 2026-10-17 23:00 EDT, **before any sector run**
-(`~/.claude/projects/-home-mjarnold/memory/grill_wildeye_radar_depth_2026-10-16.md`).
+(`grill_wildeye_radar_depth_2026-10-16.md` (outside the repo)).
 
 ## Rules
 

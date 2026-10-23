@@ -2,7 +2,7 @@
 
 Written and committed 2026-09-24, **before any 2024 tile is fetched**.
 
-- Grill ledger: `~/.claude/projects/-home-mjarnold/memory/grill_wildeye_s3_season_2026-09-24.md`.
+- Grill ledger: `grill_wildeye_s3_season_2026-09-24.md` (outside the repo).
 - Pilot: `s3-heat-greenness-prereg.md`. It FAILED 4/7 on one mid-September 2026 composite. That result stands and is not replaced.
 
 **Question (unchanged).** In the same region, at the same greenness (EVI), is daytime land surface warmer in cities than in cropland?
