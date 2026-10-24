@@ -50,10 +50,10 @@
     "axe-core": "4.14.0",
     "egm96-universal": "^1.1.1",
     "pbf": "^5.1.2",
-    "postcss": "^8.5.30",
-    "puppeteer": "^25.14.0",
-    "rollup": "^4.64.6",
-    "vite": "^8.3.4"
+    "postcss": "^8.5.31",
+    "puppeteer": "^25.15.0",
+    "rollup": "^4.64.12",
+    "vite": "^8.3.5"
   },
   "overrides": {
     "dompurify": "$dompurify",
