@@ -4,7 +4,7 @@ import { createTilePixelReader, gibsTileRequest } from "./gibsReadout.js";
 import { FIRST_YEAR, LAST_YEAR, decodeLossPixel, maxCodeFor, rampColour } from "./hansenPixels.js";
 
 /**
- * Tree-cover loss, 2001–2024 (Hansen et al. 2013, Science 342:850, doi:10.1126/science.1244693; UMD GFC v1.12,
+ * Tree-cover loss, 2001–2025 (Hansen et al. 2013, Science 342:850, doi:10.1126/science.1244693; UMD GFC v1.13,
  * CC BY 4.0), from Global Forest Watch's data tiles at 30% canopy (grill_wildeye_next_wave_2026-09-25 Q5–Q7).
  * The tiles carry the loss year in a channel, so a Web Worker recolours each one before it is drawn (a 512-px
  * tile took ~20 ms at 6× CPU throttle on the main thread) and a point readout decodes the year exactly.
@@ -16,8 +16,8 @@ export const TILE_FAILURE_LIMIT = 8;
 const SOURCE = "Hansen/UMD/Google/USGS/NASA via Global Forest Watch";
 
 export function hansenTileUrl(z, x, y) {
-  // v1.12 without /dynamic/ answers every tile with a 307 to this address (probe 2026-09-25)
-  return `https://tiles.globalforestwatch.org/umd_tree_cover_loss/v1.12/dynamic/${z}/${x}/${y}.png?implementation=tcd_30`;
+  // v1.12 without /dynamic/ answered every tile with a 307 to this address (probe 2026-09-25); v1.13 without it is a 404 (2026-10-24)
+  return `https://tiles.globalforestwatch.org/umd_tree_cover_loss/v1.13/dynamic/${z}/${x}/${y}.png?implementation=tcd_30`;
 }
 
 /** Posts `{id, url, maxCode}` to the recolour worker; resolves with its ImageBitmap. */
@@ -56,7 +56,7 @@ export function createRecolourClient(
 
 export function createHansenLossLayer({
   id = "hansen-loss",
-  name = "Forest loss (Hansen/UMD, 2001–2024)",
+  name = "Forest loss (Hansen/UMD, 2001–2025)",
   icon = "🪓",
   recolourTile = createRecolourClient(),
   providerFor = (requestImage) => {
@@ -179,9 +179,9 @@ export function createHansenLossLayer({
       _observed = null;
     },
     getRowControls() {
-      const years = [2001, 2006, 2012, 2018, 2024];
+      const years = [2001, 2007, 2013, 2019, 2025];
       const legend = years.map((y) => ({ label: String(y), color: `rgb(${rampColour(y).join(",")})`, count: null }));
-      legend.push({ label: "Year of tree-cover loss, 30% canopy (Hansen/UMD v1.12)", color: "transparent", count: null });
+      legend.push({ label: "Year of tree-cover loss, 30% canopy (Hansen/UMD v1.13)", color: "transparent", count: null });
       return { chips: [], legend };
     },
     /** The loss year at a point, from the full-resolution tile (z12, 512 px); null when off. */

@@ -1,13 +1,13 @@
 /**
- * Pixels of the Global Forest Watch tree-cover-loss DATA tiles (Hansen/UMD GFC v1.12, 30% canopy). No Cesium
+ * Pixels of the Global Forest Watch tree-cover-loss DATA tiles (Hansen/UMD GFC v1.13, 30% canopy). No Cesium
  * import: the recolour worker loads this module too.
  *
- * Encoding (probed 2026-09-25, `…/umd_tree_cover_loss/v1.12/dynamic/{z}/{x}/{y}.png?implementation=tcd_30`):
- * alpha 0 = no loss; otherwise blue = loss year − 2000 (1–24), red = intensity (255 at full resolution, an
+ * Encoding (probed 2026-09-25 on v1.12, again 2026-10-24 on v1.13, `…/umd_tree_cover_loss/v1.13/dynamic/{z}/{x}/{y}.png?implementation=tcd_30`):
+ * alpha 0 = no loss; otherwise blue = loss year − 2000 (1–25), red = intensity (255 at full resolution, an
  * average when zoomed out), green = 0. The tiles are data, not a picture, so they are recoloured before drawing.
  */
 export const FIRST_YEAR = 2001;
-export const LAST_YEAR = 2024;
+export const LAST_YEAR = 2025;
 const LAST_CODE = LAST_YEAR - 2000;
 
 /** One raw RGBA pixel → loss year, no loss, or an unrecognised value (named, never guessed). */

@@ -4,13 +4,16 @@ import assert from 'node:assert/strict';
 import { FIRST_YEAR, LAST_YEAR, decodeLossPixel, maxCodeFor, rampColour, recolourPixels } from './hansenPixels.js';
 
 // Probed 2026-09-25 on …/v1.12/dynamic/12/1331/2175.png: loss pixels are (255, 0, year−2000, 255); no loss is alpha 0.
+// v1.13 (probed 2026-10-24, z9 tiles over Rondônia, Borneo and Quebec): same encoding, codes now reach 25, none above.
 test('decodeLossPixel: blue is the loss year, alpha 0 is no loss, anything else is named', () => {
   assert.deepEqual(decodeLossPixel([255, 0, 19, 255]), { kind: 'loss', year: 2019 });
   assert.deepEqual(decodeLossPixel([255, 0, 1, 255]), { kind: 'loss', year: FIRST_YEAR });
-  assert.deepEqual(decodeLossPixel([255, 0, 24, 255]), { kind: 'loss', year: LAST_YEAR });
+  assert.deepEqual(decodeLossPixel([255, 0, 24, 255]), { kind: 'loss', year: 2024 });
+  assert.deepEqual(decodeLossPixel([255, 0, 25, 255]), { kind: 'loss', year: 2025 });
+  assert.equal(LAST_YEAR, 2025);
   assert.deepEqual(decodeLossPixel([0, 0, 0, 0]), { kind: 'none' });
-  // a code outside 1–24 or a non-zero green is not this encoding: named, never guessed
-  assert.deepEqual(decodeLossPixel([255, 0, 25, 255]), { kind: 'unknown', rgba: [255, 0, 25, 255] });
+  // a code outside 1–25 or a non-zero green is not this encoding: named, never guessed
+  assert.deepEqual(decodeLossPixel([255, 0, 26, 255]), { kind: 'unknown', rgba: [255, 0, 26, 255] });
   assert.deepEqual(decodeLossPixel([255, 0, 0, 255]), { kind: 'unknown', rgba: [255, 0, 0, 255] });
   assert.deepEqual(decodeLossPixel([255, 7, 12, 255]), { kind: 'unknown', rgba: [255, 7, 12, 255] });
 });
