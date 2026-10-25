@@ -24,10 +24,10 @@ function harness({ pixel = [255, 0, 19, 255] } = {}) {
   return { layer, providers, recolours, reads, list };
 }
 
-test('tile URL is the v1.12 dynamic endpoint at 30% canopy; the time bar is offered 2001–2024', () => {
-  assert.equal(hansenTileUrl(12, 1331, 2175), 'https://tiles.globalforestwatch.org/umd_tree_cover_loss/v1.12/dynamic/12/1331/2175.png?implementation=tcd_30');
+test('tile URL is the v1.13 dynamic endpoint at 30% canopy; the time bar is offered 2001–2025', () => {
+  assert.equal(hansenTileUrl(12, 1331, 2175), 'https://tiles.globalforestwatch.org/umd_tree_cover_loss/v1.13/dynamic/12/1331/2175.png?implementation=tcd_30');
   const { layer } = harness();
-  assert.deepEqual(layer.getObservedExtent(), { startMs: Date.UTC(2001, 0, 1), endMs: Date.UTC(2024, 11, 31, 23) });
+  assert.deepEqual(layer.getObservedExtent(), { startMs: Date.UTC(2001, 0, 1), endMs: Date.UTC(2025, 11, 31, 23) });
 });
 
 test('live draws every loss year; a scrubbed year rebuilds the drape with that cut-off, the same year does not', async () => {
@@ -36,8 +36,8 @@ test('live draws every loss year; a scrubbed year rebuilds the drape with that c
   assert.equal(await layer.update(), true);
   assert.equal(providers.length, 1);
   await providers[0].requestImage(1331, 2175, 12);
-  assert.deepEqual(recolours.at(-1), { url: hansenTileUrl(12, 1331, 2175), maxCode: 24 });
-  assert.equal(layer.getStats().time, '2001–2024');
+  assert.deepEqual(recolours.at(-1), { url: hansenTileUrl(12, 1331, 2175), maxCode: 25 });
+  assert.equal(layer.getStats().time, '2001–2025');
 
   await layer.setObservedTime('2010-06-01T00:00:00Z');
   assert.equal(providers.length, 2);
@@ -83,7 +83,7 @@ test('readout: a loss pixel reads its year at z12 on 512-px tiles; later-than-sh
   none.layer.enable();
   await none.layer.update();
   const n = await none.layer.readoutAt(lat, lon);
-  assert.deepEqual([n.status, n.text, n.date], ['class', 'No loss detected', '2001–2024']);
+  assert.deepEqual([n.status, n.text, n.date], ['class', 'No loss detected', '2001–2025']);
 
   const odd = harness({ pixel: [255, 9, 3, 255] });
   odd.layer.enable();
@@ -117,7 +117,7 @@ test('legend: a swatch per sampled year in the ramp colour, plus the source line
   const { legend } = layer.getRowControls();
   const first = legend.find((l) => l.label === '2001');
   assert.equal(first.color, `rgb(${rampColour(2001).join(',')})`);
-  assert.ok(legend.find((l) => l.label === '2024'));
+  assert.ok(legend.find((l) => l.label === '2025'));
   assert.ok(legend.some((l) => /30% canopy/.test(l.label)));
 });
 

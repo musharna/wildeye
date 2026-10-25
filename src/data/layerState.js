@@ -130,6 +130,7 @@ export const LAYER_STATE_REGISTRY = Object.freeze([
   Object.freeze({ id: 'gibs-anthromes', token: 'ab', disposition: 'enabled-only' }),
   Object.freeze({ id: 'gibs-biomass', token: 'gd', disposition: 'enabled-only' }),
   Object.freeze({ id: 'gibs-canopy', token: 'ch', disposition: 'enabled-only' }),
+  Object.freeze({ id: 'gibs-disturbance', token: 'vd', disposition: 'enabled-only' }),
   Object.freeze({ id: 'gibs-evi', token: 'ev', disposition: 'enabled-only' }),
   Object.freeze({ id: 'gibs-gpp', token: 'gp', disposition: 'enabled-only' }),
   Object.freeze({ id: 'gibs-landcover', token: 'lc', disposition: 'enabled-only' }),

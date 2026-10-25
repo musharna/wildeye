@@ -43,7 +43,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'nasa-gibs',
-    html: 'Land cover, vegetation (EVI), land surface temperature, night lights, forest biomass, species richness, plant productivity, canopy height and anthropogenic biomes: '
+    html: 'Land cover, vegetation (EVI), land surface temperature, night lights, forest biomass, species richness, plant productivity, canopy height, anthropogenic biomes and vegetation disturbance: '
       + 'We acknowledge the use of imagery provided by services from NASA\'s '
       + '<a href="https://nasa-gibs.github.io/gibs-api-docs/" target="_blank" rel="noopener">Global Imagery Browse Services (GIBS)</a>, '
       + 'part of NASA\'s Earth Science Data and Information System (ESDIS).',
@@ -61,6 +61,11 @@ export const DATA_CREDITS = [
       + 'Canopy height: Dubayah et al. (2021), <a href="https://doi.org/10.3334/ORNLDAAC/1952" target="_blank" rel="noopener">GEDI L3 Gridded Land Surface Metrics, Version 2</a>, ORNL DAAC. '
       + 'Anthropogenic biomes: Ellis &amp; Ramankutty (2008), <a href="https://doi.org/10.7927/H4H12ZXD" target="_blank" rel="noopener">Anthropogenic Biomes of the World, Version 1</a>, NASA SEDAC. '
       + 'Tiles load from NASA GIBS and are not re-hosted',
+  },
+  {
+    key: 'opera-dist',
+    html: 'Vegetation disturbance: Hansen, M. (2024), <a href="https://doi.org/10.5067/SNWG/OPERA_L3_DIST-ANN-HLS_V1.001" target="_blank" rel="noopener">OPERA Land Surface Disturbance Annual from Harmonized Landsat Sentinel-2 product (Version 1)</a>, NASA LP DAAC; '
+      + 'tiles load from NASA GIBS and are not re-hosted',
   },
   {
     key: 'malaria-atlas',
@@ -107,7 +112,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'hansen-loss',
-    html: 'Forest loss: Source: Hansen/UMD/Google/USGS/NASA. <a href="https://storage.googleapis.com/earthenginepartners-hansen/GFC-2024-v1.12/download.html" target="_blank" rel="noopener">Global Forest Change 2000–2024 v1.12</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Hansen et al. 2013, <i>Science</i> 342:850–853, <a href="https://doi.org/10.1126/science.1244693" target="_blank" rel="noopener">doi:10.1126/science.1244693</a>. Tiles served by Global Forest Watch; recoloured by loss year for display.',
+    html: 'Forest loss: Source: Hansen/UMD/Google/USGS/NASA. <a href="https://storage.googleapis.com/earthenginepartners-hansen/GFC-2025-v1.13/download.html" target="_blank" rel="noopener">Global Forest Change 2000–2025 v1.13</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Hansen et al. 2013, <i>Science</i> 342:850–853, <a href="https://doi.org/10.1126/science.1244693" target="_blank" rel="noopener">doi:10.1126/science.1244693</a>. Tiles served by Global Forest Watch; recoloured by loss year for display.',
   },
   {
     key: 'surface-water',

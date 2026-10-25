@@ -27,6 +27,59 @@ function blackIsNoData(entry) {
   return !data.some((c) => Math.hypot(...c) / 255 < BLACK_THRESHOLD);
 }
 
+const hiddenClasses = (entry) => (entry.classes || []).filter((c) => c.hidden);
+/**
+ * The one colour Cesium keys out (ImageryLayer.colorToAlpha takes one): a class gibs.json marks hidden (LAYERS
+ * "hide" in pipeline/gibs.py, e.g. OPERA's "No Disturbance", 90-99% of a tile), else black when it is only ever no
+ * data. A hidden class takes the key, so its layer's own no data must be transparent in the tile: OPERA's is (the
+ * open-ocean tile is all alpha 0, probe 2026-10-24).
+ */
+function keyColour(entry) {
+  const hidden = hiddenClasses(entry);
+  if (hidden.length === 1) return Cesium.Color.fromBytes(...hidden[0].rgb);
+  return blackIsNoData(entry) ? Cesium.Color.BLACK : null;
+}
+
+let _canvas = null;
+/** A Cesium tile image's RGBA bytes, read through one reused canvas (an opaque pixel's colour reads back exactly). */
+function canvasPixels(image) {
+  _canvas ??= document.createElement("canvas");
+  _canvas.width = image.width;
+  _canvas.height = image.height;
+  const ctx = _canvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(image, 0, 0);
+  return ctx.getImageData(0, 0, image.width, image.height).data;
+}
+
+/**
+ * A Cesium TileDiscardPolicy for a class map: a pixel is fully transparent or an opaque class colour, so a tile
+ * holding any other pixel is not this layer's and is discarded (Cesium marks it INVALID and draws the parent tile).
+ * GIBS serves some open-ocean OPERA tiles corrupt, RGBA with bytes of other clients' requests in the pixels (9 of
+ * 12 fetches, probe 2026-10-24); its real tiles, overviews included, hold class colours only.
+ * `onError(e)` hears a tile that could not be read: that tile is kept, since the check cannot judge it.
+ */
+export function classTileDiscardPolicy(entry, { pixelsOf = canvasPixels, onError = () => {} } = {}) {
+  const allowed = new Set(entry.classes.map(({ rgb: [r, g, b] }) => (r << 16) | (g << 8) | b));
+  return {
+    isReady: () => true,
+    shouldDiscardImage(image) {
+      let data;
+      try {
+        data = pixelsOf(image);
+      } catch (e) {
+        onError(e);
+        return false;
+      }
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a === 0) continue;
+        if (a !== 255 || !allowed.has((data[i] << 16) | (data[i + 1] << 8) | data[i + 2])) return true;
+      }
+      return false;
+    },
+  };
+}
+
 export function gibsTileUrl(entry, date) {
   // GIBS serves an undated layer at a URL with no date segment
   const when = isUndated(entry) ? "" : `${date}/`;
@@ -59,6 +112,8 @@ export function createGibsLayer({
   stack = setStackedImagery,
   // (url, px, py) → {rgba, timeActual}: one pixel of the raw tile (stage 3 readout)
   readTilePixel = createTilePixelReader(),
+  // Cesium tile image → RGBA bytes, for the class-tile check gibs.json asks for (discardForeignTiles)
+  tilePixels = canvasPixels,
 }) {
   let _viewer = null,
     _entry = null,
@@ -100,8 +155,16 @@ export function createGibsLayer({
     // a tile failure belongs to the provider that earned it, not to the layer
     if (_lastError === "map tiles failing") _lastError = null;
     const generation = _generation;
+    const tileCheckFailed = (e) => {
+      if (generation !== _generation || _lastError?.startsWith(`${id}: tiles cannot be checked`)) return;
+      _lastError = `${id}: tiles cannot be checked (${e?.message || e})`;
+      console.error(`[Data:${id}] ${_lastError}`, { date, error: e });
+    };
     const provider = providerFor(gibsTileUrl(_entry, date), {
       maximumLevel: _entry.maximumLevel,
+      ...(_entry.discardForeignTiles
+        ? { tileDiscardPolicy: classTileDiscardPolicy(_entry, { pixelsOf: tilePixels, onError: tileCheckFailed }) }
+        : {}),
     });
     provider.errorEvent.addEventListener((tileError) => {
       if (generation !== _generation) return;
@@ -117,7 +180,12 @@ export function createGibsLayer({
     // continuous overlay may let the basemap through.
     _imagery = imageryLayerFor(provider, {
       alpha: _entry.classes?.length ? 1 : alpha,
-      ...(blackIsNoData(_entry) ? { colorToAlpha: Cesium.Color.BLACK, colorToAlphaThreshold: BLACK_THRESHOLD } : {}),
+      ...(keyColour(_entry) ? { colorToAlpha: keyColour(_entry), colorToAlphaThreshold: BLACK_THRESHOLD } : {}),
+      // A hidden class borders every drawn pixel; a filtered blend of the two is neither colour, so it escapes the
+      // key and draws dark halos and specks (OPERA, local build 2026-10-24). Nearest-pixel keeps each class whole.
+      ...(hiddenClasses(_entry).length
+        ? { minificationFilter: Cesium.TextureMinificationFilter.NEAREST, magnificationFilter: Cesium.TextureMagnificationFilter.NEAREST }
+        : {}),
     });
     _imagery.show = _enabled;
     _viewer.imageryLayers.add(_imagery);
@@ -160,6 +228,12 @@ export function createGibsLayer({
         const entry = (await fetchJson(MANIFEST_URL))?.layers?.[id];
         if (!entry) {
           _lastError = `no ${id} in gibs.json`;
+          return false;
+        }
+        const hidden = hiddenClasses(entry).length;
+        if (hidden > 1) {
+          _lastError = `${id}: ${hidden} hidden classes, but Cesium can key out one colour`;
+          console.error(`[Data:${id}] ${_lastError}`, { classes: entry.classes });
           return false;
         }
         _entry = entry;
@@ -217,7 +291,12 @@ export function createGibsLayer({
       if (!req) return row("outside", { date });
       let pixel;
       try {
-        pixel = await readTilePixel(req.url, req.px, req.py);
+        // the readout fetches its own copy of the tile, which GIBS may also send corrupt (classTileDiscardPolicy)
+        const check = _entry.discardForeignTiles && classTileDiscardPolicy(_entry, { pixelsOf: (image) => image.data });
+        const reject = check
+          ? (image) => (check.shouldDiscardImage(image) ? "GIBS sent a corrupt tile; click again for a fresh copy" : null)
+          : undefined;
+        pixel = await readTilePixel(req.url, req.px, req.py, { reject });
       } catch (e) {
         console.error(`[Data:${id}] readout failed`, { lat, lon, url: req.url, error: e });
         return row("error", { date, error: e?.message || String(e) });
@@ -321,4 +400,12 @@ export const gibsAnthromesLayer = createGibsLayer({
   icon: "🏘️",
   source: "NASA GIBS · SEDAC anthromes v1",
   zrank: 26,
+});
+// OPERA DIST-ANN: one map per calendar year 2023 on, follows the bar; No disturbance keyed out (pipeline/gibs.py)
+export const gibsDisturbanceLayer = createGibsLayer({
+  id: "gibs-disturbance",
+  name: "Vegetation disturbance (NASA OPERA, yearly)",
+  icon: "🌪️",
+  source: "NASA GIBS · OPERA DIST-ANN",
+  zrank: 27,
 });

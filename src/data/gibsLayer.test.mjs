@@ -4,9 +4,11 @@ import * as Cesium from "cesium";
 import { readFileSync } from "node:fs";
 import {
   createGibsLayer,
+  classTileDiscardPolicy,
   gibsTileUrl,
   TILE_FAILURE_LIMIT,
 } from "./gibsLayer.js";
+import { decodePng } from "./pngDecode.js";
 
 const ENTRY = {
   gibsId: "VIIRS_Black_Marble",
@@ -17,7 +19,7 @@ const ENTRY = {
   legend: "Night lights, true colour (no values)",
 };
 
-function harness({ entry = ENTRY, timeless = false } = {}) {
+function harness({ entry = ENTRY, timeless = false, tilePixels } = {}) {
   const providers = [];
   const stacked = [];
   const list = [];
@@ -38,6 +40,7 @@ function harness({ entry = ENTRY, timeless = false } = {}) {
     source: "NASA GIBS",
     zrank: 18,
     timeless,
+    ...(tilePixels ? { tilePixels } : {}),
     fetchJson: async () => ({ layers: { "gibs-nightlights": entry } }),
     providerFor: (url, options) => {
       const listeners = [];
@@ -54,6 +57,8 @@ function harness({ entry = ENTRY, timeless = false } = {}) {
       provider,
       alpha: options.alpha,
       colorToAlpha: options.colorToAlpha,
+      minificationFilter: options.minificationFilter,
+      magnificationFilter: options.magnificationFilter,
       show: true,
     }),
     stack: (_layers, id, il, zrank) => stacked.push({ id, il, zrank }),
@@ -282,4 +287,97 @@ test("the live canopy and anthromes entries key black out; GPP, whose classes ar
   const gpp = await drawn(layers["gibs-gpp"]);
   assert.equal(gpp.list.at(-1).colorToAlpha, undefined);
   assert.equal(gpp.list.at(-1).alpha, 0.7);
+});
+
+test("a hidden class is the one colour keyed out, not black; two hidden classes are an error, not a guess", async () => {
+  // OPERA DIST-ANN: "No Disturbance" (18,18,18) covers 90-99% of a tile and is hidden (pipeline/gibs.py LAYERS);
+  // its no data is already transparent in the tile (probe 2026-10-24), so black does not need the key.
+  const classes = [
+    { label: "No disturbance", rgb: [18, 18, 18], hidden: true },
+    { label: "Disturbed", rgb: [224, 27, 7] },
+  ];
+  const one = harness({ entry: { ...ENTRY, classes, noData: [[0, 0, 0]] } });
+  one.layer.enable();
+  assert.equal(await one.layer.update(), true);
+  assert.ok(Cesium.Color.fromBytes(18, 18, 18).equals(one.list.at(-1).colorToAlpha));
+  assert.equal(one.list.at(-1).alpha, 1);
+  // the same entry with nothing hidden still keys out its no-data black, as before
+  const none = harness({ entry: { ...ENTRY, classes: classes.map(({ hidden, ...c }) => c), noData: [[0, 0, 0]] } });
+  none.layer.enable();
+  assert.equal(await none.layer.update(), true);
+  assert.ok(Cesium.Color.BLACK.equals(none.list.at(-1).colorToAlpha));
+  // Cesium keys out one colour: two hidden classes would draw one of them, so nothing is drawn and the error says so
+  const two = harness({ entry: { ...ENTRY, classes: classes.map((c) => ({ ...c, hidden: true })) } });
+  two.layer.enable();
+  assert.equal(await two.layer.update(), false);
+  assert.equal(two.list.length, 0);
+  assert.match(two.layer.getStats().error, /gibs-nightlights: 2 hidden classes/);
+});
+
+test("the live disturbance entry keys out No disturbance, draws opaque on the year chosen, and hides it from the legend", async () => {
+  // fixtures/gibs-disturbance.json: live pipeline output 2026-10-24
+  const { layers } = JSON.parse(readFileSync(new URL("./fixtures/gibs-disturbance.json", import.meta.url)));
+  const h = harness({ entry: layers["gibs-disturbance"] });
+  h.layer.enable();
+  assert.equal(await h.layer.update(), true);
+  assert.ok(Cesium.Color.fromBytes(18, 18, 18).equals(h.list.at(-1).colorToAlpha));
+  // a blend of a class colour and the keyed one is neither, and draws as dark halos (local build 2026-10-24): no blending
+  assert.equal(h.list.at(-1).magnificationFilter, Cesium.TextureMagnificationFilter.NEAREST);
+  assert.equal(h.list.at(-1).minificationFilter, Cesium.TextureMinificationFilter.NEAREST);
+  // a class map with nothing hidden keeps Cesium's default filtering (no change to the existing layers)
+  const shown = harness({ entry: { ...layers["gibs-disturbance"], classes: layers["gibs-disturbance"].classes.map(({ hidden, ...c }) => c) } });
+  await shown.layer.update();
+  assert.deepEqual([shown.list.at(-1).minificationFilter, shown.list.at(-1).magnificationFilter], [undefined, undefined]);
+  assert.match(h.providers[0].url, /\/OPERA_L3_DIST-ANN-HLS_Color_Index\/default\/2025-01-01\/GoogleMapsCompatible_Level12\//);
+  await h.layer.setObservedTime("2023-08-01T00:00:00Z");
+  assert.match(h.providers.at(-1).url, /\/default\/2023-01-01\//);
+  const labels = h.layer.getRowControls().legend.map((l) => l.label);
+  assert.ok(!labels.includes("No disturbance") && labels.includes("Disturbed, ongoing: half or more of the plant cover lost"));
+});
+
+// fixtures/README.md: real OPERA tiles; the corrupt one GIBS also served is not kept (its bytes are other requests')
+const DIST = () => JSON.parse(readFileSync(new URL("./fixtures/gibs-disturbance.json", import.meta.url))).layers["gibs-disturbance"];
+const tilePng = (name) => decodePng(new Uint8Array(readFileSync(new URL(`./fixtures/${name}`, import.meta.url))));
+const decoded = (img) => img.data;
+
+test("a class tile holding a pixel that is no class colour is discarded, so Cesium draws its parent; real tiles are kept", async () => {
+  const land = await tilePng("opera-dist-2025-land-9-173-151.png");
+  const ocean = await tilePng("opera-dist-2025-ocean-8-128-106.png");
+  const policy = classTileDiscardPolicy(DIST(), { pixelsOf: decoded });
+  assert.equal(policy.isReady(), true);
+  assert.equal(policy.shouldDiscardImage(land), false); // every class drawn, the carried-over 51,51,51 among them
+  assert.equal(policy.shouldDiscardImage(ocean), false);
+  // the corrupt tile's shape (probe 2026-10-24): an otherwise empty tile whose last row holds the bytes of text
+  const corrupt = { ...ocean, data: Uint8Array.from(ocean.data) };
+  corrupt.data.set(new TextEncoder().encode("AHTSE Retile"), corrupt.data.length - 64);
+  assert.equal(policy.shouldDiscardImage(corrupt), true);
+  // a class colour half transparent is a blend, not a class (the large corrupt tiles: 40,000+ such pixels)
+  const blended = { ...land, data: Uint8Array.from(land.data) };
+  blended.data.set([224, 27, 7, 128], 0);
+  assert.equal(policy.shouldDiscardImage(blended), true);
+  // GIBS's colour map alone lacks values 9 and 10, and would throw the real land tile away
+  const mapOnly = { ...DIST(), classes: DIST().classes.slice(0, 5) };
+  assert.equal(classTileDiscardPolicy(mapOnly, { pixelsOf: decoded }).shouldDiscardImage(land), true);
+});
+
+test("the tile check goes to Cesium only where gibs.json asks; a check that cannot read pixels keeps the tile and says so", async () => {
+  const land = await tilePng("opera-dist-2025-land-9-173-151.png");
+  const h = harness({ entry: DIST(), tilePixels: decoded });
+  assert.equal(await h.layer.update(), true);
+  assert.equal(h.providers[0].options.tileDiscardPolicy.shouldDiscardImage(land), false);
+  const plain = harness({ entry: { ...DIST(), discardForeignTiles: undefined }, tilePixels: decoded });
+  assert.equal(await plain.layer.update(), true);
+  assert.equal(plain.providers[0].options.tileDiscardPolicy, undefined);
+  const errors = [];
+  const original = console.error;
+  console.error = (...args) => errors.push(args);
+  try {
+    const broken = harness({ entry: DIST(), tilePixels: () => { throw new Error("tainted canvas"); } });
+    assert.equal(await broken.layer.update(), true);
+    assert.equal(broken.providers[0].options.tileDiscardPolicy.shouldDiscardImage(land), false);
+    assert.equal(broken.layer.getStats().error, "gibs-nightlights: tiles cannot be checked (tainted canvas)");
+    assert.equal(errors.length, 1);
+  } finally {
+    console.error = original;
+  }
 });

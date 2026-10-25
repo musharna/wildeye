@@ -39,7 +39,7 @@ import { biotimeLayer } from './data/biotime.js';
 import { crwOutlookLayer } from './data/crwOutlook.js';
 import { cmemsPftLayer } from './data/cmemsPft.js';
 import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, cmemsZoocLayer, setDrapeSplit, drapeStackState, onDrapeRestack } from './data/rasterDrape.js';
-import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer, gibsAmphibianLayer, gibsMammalLayer, gibsGppLayer, gibsCanopyLayer, gibsAnthromesLayer } from './data/gibsLayer.js';
+import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer, gibsAmphibianLayer, gibsMammalLayer, gibsGppLayer, gibsCanopyLayer, gibsAnthromesLayer, gibsDisturbanceLayer } from './data/gibsLayer.js';
 import { hansenLossLayer } from './data/hansenLoss.js';
 import { mangrovesLayer } from './data/mangroves.js';
 import { haedatLayer } from './data/haedat.js';
@@ -220,7 +220,7 @@ async function init() {
     dataManager.register(cmemsO2Layer);
     dataManager.register(cmemsPhLayer);
     dataManager.register(cmemsZoocLayer);
-    const gibsLayers = [gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer, gibsAmphibianLayer, gibsMammalLayer, gibsGppLayer, gibsCanopyLayer, gibsAnthromesLayer];
+    const gibsLayers = [gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer, gibsAmphibianLayer, gibsMammalLayer, gibsGppLayer, gibsCanopyLayer, gibsAnthromesLayer, gibsDisturbanceLayer];
     for (const layer of gibsLayers) dataManager.register(layer);
     dataManager.register(hansenLossLayer);
     dataManager.register(surfaceWaterLayer);

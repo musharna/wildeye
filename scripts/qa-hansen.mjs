@@ -118,7 +118,7 @@ try {
   const live = await read(P);
   const row = (r) => r && `${r.status}:${r.text ?? r.error} · ${r.date}`;
   report('known-loss', live.loss?.status === 'class' && live.loss.text === 'Forest loss' && live.loss.date === '2018', { got: row(live.loss) });
-  report('negative-ocean', live.ocean?.status === 'class' && live.ocean.text === 'No loss detected' && live.ocean.date === '2001–2024', { got: row(live.ocean) });
+  report('negative-ocean', live.ocean?.status === 'class' && live.ocean.text === 'No loss detected' && live.ocean.date === '2001–2025', { got: row(live.ocean) });
 
   // Cumulative: scrubbed to 2010, the 2018 loss is not drawn and the readout says it came later; LIVE restores it.
   const scrubbed = await page.evaluate(async (id) => {

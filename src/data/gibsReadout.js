@@ -107,8 +107,9 @@ async function decodeImageDefault(blob) {
 }
 
 /**
- * `read(url, px, py) → {rgba, timeActual}`: one fetch per tile URL (LRU of `cacheSize`); a failed fetch
+ * `read(url, px, py, {reject}) → {rgba, timeActual}`: one fetch per tile URL (LRU of `cacheSize`); a failed fetch
  * is not cached, so the next click retries. `timeActual` is GIBS's `layer-time-actual` date, if sent.
+ * `reject(image)` returns why a decoded tile is not to be trusted (or null): that tile fails like a fetch does.
  */
 export function createTilePixelReader({
   fetchImpl = (u) => fetch(u),
@@ -116,17 +117,19 @@ export function createTilePixelReader({
   cacheSize = 32,
 } = {}) {
   const cache = new Map();
-  const load = async (url) => {
+  const load = async (url, reject) => {
     const res = await fetchImpl(url);
     if (!res.ok) throw Object.assign(new Error(`GIBS tile HTTP ${res.status}`), { status: res.status });
     const image = await decodeImage(await res.blob());
+    const why = reject?.(image);
+    if (why) throw new Error(why);
     const actual = res.headers.get("layer-time-actual");
     return { image, timeActual: actual ? String(actual).slice(0, 10) : null };
   };
-  return async function read(url, px, py) {
+  return async function read(url, px, py, { reject } = {}) {
     let p = cache.get(url);
     if (p) cache.delete(url);
-    else p = load(url);
+    else p = load(url, reject);
     cache.set(url, p);
     while (cache.size > cacheSize) cache.delete(cache.keys().next().value);
     let tile;
