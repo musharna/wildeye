@@ -388,3 +388,24 @@ test('readoutAt: the shown frame\'s pixel under the point, inverted through the 
     assert.equal(cmemsZoocLayer.id, 'cmems-zooc');
   } finally { globalThis.fetch = saved; stack.clear(); }
 });
+
+test("drape: a failed manifest fetch names its reason, not only 'load error'", async () => {
+  // Live QA 2026-10-24: a bare "load error" hid a transient "Failed to fetch" (see gibsLayer.test.mjs).
+  const stack = _drapeStackForTest(); stack.clear();
+  const viewer = { imageryLayers: { add: () => {}, remove: () => {}, contains: () => false } };
+  const entry = { id: 'x', png: 'data/rasters/x.png', time: '2026-09-11T12:00:00Z', bounds: { west: -1, south: -1, east: 1, north: 1 } };
+  const saved = globalThis.fetch, warn = console.warn;
+  console.warn = () => {};
+  try {
+    const l = createRasterDrapeLayer({ id: 'x', name: 'x', icon: 'i', source: 's',
+      providerFor: async (url) => ({ url }), imageryLayerFor: (p) => ({ p, show: true }) });
+    l.init(viewer); l.enable();
+    globalThis.fetch = async () => { throw new TypeError('Failed to fetch'); };
+    assert.equal(await l.update(), false);
+    assert.equal(l.getStats().error, 'x load error: Failed to fetch');
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ products: [entry] }) }); // positive control
+    assert.equal(await l.update(), true);
+    assert.equal(l.getStats().error, null);
+    l.destroy(viewer);
+  } finally { globalThis.fetch = saved; console.warn = warn; stack.clear(); }
+});
