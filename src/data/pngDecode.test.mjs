@@ -19,6 +19,10 @@ const CASES = [
   ['png-filters-rgb-37x23.png', 37, '8dbb1ff7b80e1e295f5f7f3b103da83d9150956774838ebab7da343ce525d039'],
   // Paeth at a tie: left 0, up 15, up-left 10 → pa == pc < pb, and the predictor must take left
   ['png-paeth-tie-rgb-2x2.png', 2, '1d57d7aecee691c515ddf5a7ac7ea18c3342affbbdd409391a0739306e1b7941'],
+  // grey, and grey + alpha: GIBS sends some empty OPERA tiles in these (probe 2026-10-24)
+  ['png-gray-trns-37x23.png', 37, 'c0d73f0a4eff0e3c661b5ddd9a8fb177db578921183ac52adeba758c443bd297'], // grey 0 keyed transparent by tRNS
+  ['png-gray-alpha-37x23.png', 37, 'fc91453a7a0a4da7e733cac1e0dd58c6cf2b85e0921dcfc0df6742780d2143c0'],
+  ['opera-dist-2025-ocean-gray-11-1163-227.png', 256, '8a39d2abd3999ab73c34db2476849cddf303ce389b35826850f9a700589b4a90'], // real: GIBS's empty grey tile
 ];
 
 test('real tiles and every row filter decode to exactly the RGBA an independent decoder reads', async () => {
@@ -45,7 +49,7 @@ test('a semi-transparent pixel keeps its colour: the tile reader reads Tonle Sap
   assert.deepEqual(decodeOccurrence(rgba), { kind: 'value', percent: 83 });
 });
 
-test('anything but an 8-bit, non-interlaced RGB, RGBA or palette PNG is refused by name', async () => {
+test('anything but an 8-bit, non-interlaced grey, grey-alpha, RGB, RGBA or palette PNG is refused by name', async () => {
   const good = fixture('png-filters-rgba-37x23.png');
   assert.equal((await decodePng(good)).width, 37, 'positive control');
   const patched = (offset, value) => {
@@ -55,7 +59,7 @@ test('anything but an 8-bit, non-interlaced RGB, RGBA or palette PNG is refused 
   };
   await assert.rejects(decodePng(new TextEncoder().encode('<html>not a tile</html>')), /not a PNG/);
   await assert.rejects(decodePng(patched(24, 16)), /bit depth 16/);
-  await assert.rejects(decodePng(patched(25, 4)), /colour type 4/);
+  await assert.rejects(decodePng(patched(25, 1)), /colour type 1/);
   await assert.rejects(decodePng(patched(28, 1)), /interlaced/);
   await assert.rejects(decodePng(good.slice(0, good.length - 40)), /PNG/);
 });

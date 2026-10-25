@@ -28,6 +28,13 @@
   encoder, rows cycling through filter types None/Sub/Up/Average/Paeth (the
   2×2 one is a Paeth tie, pa == pc < pb), each checked to decode to its source
   pixels with PIL.
+- `png-gray-trns-37x23.png` (8-bit grey, grey 0 keyed transparent by tRNS),
+  `png-gray-alpha-37x23.png` (8-bit grey + alpha) — synthetic, written
+  2026-10-24 with PIL from seeded random pixels.
+- `opera-dist-2025-ocean-gray-11-1163-227.png` — a real 155-byte empty tile
+  GIBS sent for `OPERA_L3_DIST-ANN-HLS_Color_Index` (2025-01-01, z11, South
+  Pacific) on 2026-10-24: 8-bit grey, all grey 0, keyed transparent. NASA
+  open data.
 - The PNGs above are used ONLY by `src/data/pngDecode.test.mjs`, which pins
   each to the sha256 of PIL's `.convert('RGBA').tobytes()` of the same file.
 - `opera-dist-2025-land-9-173-151.png`, `opera-dist-2025-ocean-8-128-106.png` —
