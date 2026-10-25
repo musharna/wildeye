@@ -848,6 +848,91 @@ def test_fetch_opendap_grid_reads_the_catalog_file_strided_and_keeps_0_to_1():
         fetch_opendap_grid(product, catalog_xml=catalog, read_grid=lambda *a: late)
 
 
+def test_fetch_opendap_grid_downloads_the_whole_file_when_asked(monkeypatch):
+    """ndvi: NCEI's THREDDS server (catalog and OPeNDAP) answered every request with a 503 after 60 s from 2026-10-22,
+    while its plain HTTPS archive (/data/...) held every day. With `download: true` the file is fetched whole and cut
+    locally; without it the OPeNDAP reader is still used. The file list is read from the archive's HTML listing, lines
+    of which are copied verbatim here (2026-10-25)."""
+    from pipeline import raster
+
+    listing = ('<td><a href="VIIRS-Land_v001_JP113C1_NOAA-20_20261021_c20261023143013.nc">'
+               'VIIRS-Land_v001_JP113C1_NOAA-20_20261021_c20261023143013.nc</a></td>\n'
+               '<td><a href="VIIRS-Land_v001_JP113C1_NOAA-20_20261022_c20261024143011.nc">'
+               'VIIRS-Land_v001_JP113C1_NOAA-20_20261022_c20261024143011.nc</a></td>')
+
+    class DA:
+        def __init__(self, arr, dims=()): self.values, self.dims = np.asarray(arr), dims
+    ds = {"NDVI": DA(np.full((1, 2, 2), 0.5), ("time", "latitude", "longitude")),
+          "time": DA(np.array(["2026-10-22T00:00:00"], dtype="datetime64[ns]")),
+          "latitude": DA([45.0, -45.0]), "longitude": DA([-90.0, 90.0])}
+    calls = []
+    monkeypatch.setattr(raster, "_read_file_grid", lambda *a: calls.append(("file",) + a) or ds, raising=False)
+    monkeypatch.setattr(raster, "_read_opendap", lambda *a: calls.append(("opendap",) + a) or ds)
+    base = {"id": "ndvi", "catalog": "https://www.ncei.noaa.gov/data/x/access/{year}/",
+            "file_regex": "VIIRS-Land_v001_[A-Z0-9]+_NOAA-20_\\d{8}_c\\d+\\.nc", "time_regex": "_(\\d{4})(\\d{2})(\\d{2})_c",
+            "url_template": "https://www.ncei.noaa.gov/data/x/access/{year}/{file}",
+            "ramp": {"min": 0, "max": 0.9, "stops": [[0, 0, 0], [90, 90, 90]]}}
+    grid = {"variable": "NDVI", "stride": 5, "offset": 2}
+    _, when, _ = raster.fetch_opendap_grid(base | {"opendap_grid": grid | {"download": True}}, catalog_xml=listing)
+    raster.fetch_opendap_grid(base | {"opendap_grid": grid}, catalog_xml=listing)
+    url = "https://www.ncei.noaa.gov/data/x/access/2026/VIIRS-Land_v001_JP113C1_NOAA-20_20261022_c20261024143011.nc"
+    assert calls == [("file", url, "NDVI", 5, 2), ("opendap", url, "NDVI", 5, 2)], calls
+    assert when == "2026-10-22T00:00:00Z"
+
+
+def test_read_file_grid_cuts_a_real_downloaded_netcdf_and_raises_a_503():
+    """_read_file_grid against a local HTTP server holding a real netCDF file: every `stride`-th cell from `offset`, as
+    _read_opendap returns, and only `variable`. A 503 (what NCEI's THREDDS gave) is raised as an HTTPError that is
+    retried."""
+    import http.server
+    import socketserver
+    import tempfile
+    import threading
+    import urllib.error
+    from pathlib import Path
+
+    import pytest
+    xr = pytest.importorskip("xarray")
+    pytest.importorskip("netCDF4")
+    from pipeline.raster import _read_file_grid, transient
+
+    vals = np.arange(10 * 20, dtype="float32").reshape(1, 10, 20)
+    dims = ("time", "latitude", "longitude")
+    src = xr.Dataset({"NDVI": (dims, vals), "QA": (dims, vals)},
+                     coords={"time": np.array(["2026-10-22"], dtype="datetime64[ns]"),
+                             "latitude": np.linspace(45, -45, 10, dtype="float32"),
+                             "longitude": np.linspace(-180, 170, 20, dtype="float32")})
+    with tempfile.NamedTemporaryFile(suffix=".nc") as f:
+        src.to_netcdf(f.name)
+        body = Path(f.name).read_bytes()
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            ok = not self.path.endswith("busy.nc")
+            self.send_response(200 if ok else 503)
+            self.send_header("Content-Length", str(len(body) if ok else 0))
+            self.end_headers()
+            if ok:
+                self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    with socketserver.TCPServer(("127.0.0.1", 0), H) as srv:
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{srv.server_address[1]}/data/"
+        try:
+            got = _read_file_grid(base + "x.nc", "NDVI", 5, 2)
+            with pytest.raises(urllib.error.HTTPError) as e:
+                _read_file_grid(base + "busy.nc", "NDVI", 5, 2)
+        finally:
+            srv.shutdown()
+    assert list(got.data_vars) == ["NDVI"]
+    assert got["NDVI"].values.tolist() == vals[:, 2::5, 2::5].tolist()
+    assert got["latitude"].values.tolist() == src["latitude"].values[2::5].tolist()
+    assert e.value.code == 503 and transient(e.value)
+
+
 def test_process_routes_opendap_grid(monkeypatch, tmp_path):
     from pipeline import raster
     edges = {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
