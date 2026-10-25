@@ -200,7 +200,7 @@ try {
       id,
     );
   }
-  // OPERA: GIBS serves some open-ocean tiles corrupt, other clients' request bytes in the pixels (probe 2026-10-24).
+  // OPERA: GIBS sometimes serves open-ocean tiles corrupt (probe 2026-10-24).
   // Fresh tiles are decoded in the page the way Cesium decodes them (Resource.js: flipY, no premultiply, no colour
   // conversion) and judged by the live layer's own discard policy; the truth is the exact decode of the same bytes
   // here in Node. A real tile discarded blanks land; a corrupt one kept draws grey stripes over the sea.

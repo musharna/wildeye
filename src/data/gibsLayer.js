@@ -54,8 +54,8 @@ function canvasPixels(image) {
 /**
  * A Cesium TileDiscardPolicy for a class map: a pixel is fully transparent or an opaque class colour, so a tile
  * holding any other pixel is not this layer's and is discarded (Cesium marks it INVALID and draws the parent tile).
- * GIBS serves some open-ocean OPERA tiles corrupt, RGBA with bytes of other clients' requests in the pixels (9 of
- * 12 fetches, probe 2026-10-24); its real tiles, overviews included, hold class colours only.
+ * GIBS sometimes serves open-ocean OPERA tiles corrupt (probe 2026-10-24); its real tiles, overviews included, hold
+ * class colours only.
  * `onError(e)` hears a tile that could not be read: that tile is kept, since the check cannot judge it.
  */
 export function classTileDiscardPolicy(entry, { pixelsOf = canvasPixels, onError = () => {} } = {}) {

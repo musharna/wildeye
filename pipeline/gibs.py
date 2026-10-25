@@ -107,8 +107,8 @@ LAYERS = {
             {"label": "Disturbed, carried over from the year before: under half the plant cover lost", "rgb": [51, 51, 51]},
             {"label": "Disturbed, carried over from the year before: half or more of the plant cover lost", "rgb": [68, 68, 68]},
         ],
-        # GIBS serves some open-ocean tiles of this layer corrupt: RGBA, with bytes of other clients' requests in the
-        # pixels (9 of 12 fetches, probe 2026-10-24); the app drops a tile holding a pixel that is no class colour.
+        # GIBS sometimes serves open-ocean tiles of this layer corrupt (probe 2026-10-24); the app drops a tile holding a
+        # pixel that is no class colour.
         "discardForeignTiles": True,
     },
 }

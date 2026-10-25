@@ -41,10 +41,8 @@
   two real NASA GIBS `OPERA_L3_DIST-ANN-HLS_Color_Index` tiles (2025-01-01),
   captured 2026-10-24: Quebec at z9 (palette PNG with every class colour,
   including the values 9 and 10 GIBS's colour map omits) and open Atlantic at
-  z8 (all transparent). The same Atlantic URL also returned corrupt tiles, with
-  bytes of other clients' requests in the pixels; none is kept, since those
-  bytes are someone else's. Used ONLY by `src/data/gibsLayer.test.mjs`. NASA
-  open data.
+  z8 (all transparent). The same Atlantic URL also returned corrupt tiles; none
+  is kept. Used ONLY by `src/data/gibsLayer.test.mjs`. NASA open data.
 - `birds_nights_20261019.json` — `public/data/birds_nights.json` as
   `pipeline/bird_nights.py` wrote it at 2026-10-19 02:00 UTC, cut to KAKQ, KLOT
   and KMLB (three nights each: two complete, tonight in progress). Used ONLY by

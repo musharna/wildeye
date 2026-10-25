@@ -335,7 +335,7 @@ test("the live disturbance entry keys out No disturbance, draws opaque on the ye
   assert.ok(!labels.includes("No disturbance") && labels.includes("Disturbed, ongoing: half or more of the plant cover lost"));
 });
 
-// fixtures/README.md: real OPERA tiles; the corrupt one GIBS also served is not kept (its bytes are other requests')
+// fixtures/README.md: real OPERA tiles; the corrupt ones GIBS also served are not kept
 const DIST = () => JSON.parse(readFileSync(new URL("./fixtures/gibs-disturbance.json", import.meta.url))).layers["gibs-disturbance"];
 const tilePng = (name) => decodePng(new Uint8Array(readFileSync(new URL(`./fixtures/${name}`, import.meta.url))));
 const decoded = (img) => img.data;
