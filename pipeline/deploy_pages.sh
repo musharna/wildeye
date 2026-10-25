@@ -15,7 +15,10 @@ BASE="${PAGES_BASE:-/wildeye/}"
 # nights the morning after it was filled. Lower it only to make a single deploy smaller.
 KEEP_NIGHTS="${KEEP_NIGHTS:-999}"
 PY="${WILDEYE_PYTHON:-$HOME/miniconda3/bin/python3}"
-BRANCH=gh-pages
+# Pages serves gh-pages only. PAGES_BRANCH is for a trial push from a new host: make the branch first at gh-pages' tip
+# (`git push origin origin/gh-pages:refs/heads/<name>`), or the deploy below takes the first-deploy path and orphans
+# a full re-upload of the site.
+BRANCH="${PAGES_BRANCH:-gh-pages}"
 WT="$(mktemp -d "${TMPDIR:-/tmp}/wildeye-pages.XXXXXX")"
 trap 'git worktree remove --force "$WT" >/dev/null 2>&1 || true; git worktree prune' EXIT
 
