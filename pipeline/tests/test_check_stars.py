@@ -2,15 +2,18 @@
 answers from a file, the real jq, and no gh (the cron host msi-4080 has no gh login). One test reads the live API."""
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check_stars.sh"
 TOOLS = ["bash", "jq", "date", "dirname", "cat"]
 
 
-def _sandbox(tmp_path: Path, body: str, rc: int = 0) -> dict:
+def _sandbox(tmp_path: Path, body: str, rc: int = 0, stderr: str = "") -> dict:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     for tool in TOOLS:
@@ -22,7 +25,7 @@ def _sandbox(tmp_path: Path, body: str, rc: int = 0) -> dict:
     (tmp_path / "body.json").write_text(body)
     curl = bin_dir / "curl"
     curl.write_text(
-        f'#!{shutil.which("bash")}\ncat "{tmp_path / "body.json"}"\nexit {rc}\n'
+        f'#!{shutil.which("bash")}\ncat "{tmp_path / "body.json"}"\nprintf %s "{stderr}" >&2\nexit {rc}\n'
     )
     curl.chmod(0o755)
     return {
@@ -41,6 +44,20 @@ def _run(env: dict) -> subprocess.CompletedProcess:
         timeout=60,
         check=False,
     )
+
+
+def _refused_by_rate_limit(out: subprocess.CompletedProcess) -> bool:
+    """GitHub refused the unauthenticated call (60 an hour per IP, shared by CI runners): curl -f's 403 or 429."""
+    return out.returncode != 0 and re.search(r"returned error: (403|429)\b", out.stderr) is not None
+
+
+def test_a_rate_limit_refusal_is_told_apart_from_other_failures(tmp_path: Path):
+    refused = _run(_sandbox(tmp_path, "", rc=22, stderr="curl: (22) The requested URL returned error: 403"))
+    assert refused.returncode != 0 and _refused_by_rate_limit(refused)
+    broken = _run(_sandbox(tmp_path, "", rc=22, stderr="curl: (22) The requested URL returned error: 500"))
+    assert broken.returncode != 0 and not _refused_by_rate_limit(broken), "a server error is a failure, not a skip"
+    ok = _run(_sandbox(tmp_path, '{"stargazers_count": 0}'))
+    assert ok.returncode == 0 and not _refused_by_rate_limit(ok), "positive control: an answer is never a refusal"
 
 
 def test_marker_appears_at_the_threshold_once_and_not_below(tmp_path: Path):
@@ -84,6 +101,8 @@ def test_the_live_api_answers_a_count(tmp_path: Path):
         "THRESHOLD": "1000000",
     }
     out = _run(env)
+    if _refused_by_rate_limit(out):
+        pytest.skip(f"GitHub's unauthenticated limit refused this runner's IP: {out.stderr.strip()}")
     assert out.returncode == 0, out.stderr
     stars = out.stdout.rstrip().rsplit("stars=", 1)[1]
     assert stars.isdigit(), out.stdout
