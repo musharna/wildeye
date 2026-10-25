@@ -263,3 +263,28 @@ def test_run_birds_holds_the_lock_for_the_whole_build(tmp_path: Path):
         blocked.stdout + blocked.stderr
     )
     assert "skipping this run" in blocked.stderr
+
+
+def test_an_unknown_argument_fails_before_anything_runs(tmp_path: Path):
+    origin, site, home, locks, tip = _setup(tmp_path)
+    out = _deploy(tmp_path, site, home, locks, "--bird")
+    assert out.returncode == 2 and "usage: deploy_pages.sh [--birds]" in out.stderr, out.stdout + out.stderr
+    assert not (tmp_path / "npx-ran").exists(), "a typo'd flag must not run a full build and deploy"
+    assert _git(origin, "rev-parse", "gh-pages") == tip
+    ok = _deploy(tmp_path, site, home, locks, "--birds")
+    assert ok.returncode == 0, "positive control: the real flag deploys: " + ok.stderr
+
+
+def test_the_birds_set_goes_up_as_one_commit_however_big(tmp_path: Path):
+    """Nothing gates a client's reads of birds_ppi/ the way the archive manifest gates frames, so the batching that
+    splits big data pushes must not split the birds set: a tip between its parts would mix two builds' radars."""
+    origin, site, home, locks, tip = _setup(tmp_path)
+    ppi = site / "public" / "data" / "birds_ppi"
+    for name in ("A.png", "C.png", "D.png"):
+        (ppi / name).write_bytes(os.urandom(600_000))
+    assert sum(p.stat().st_size for p in ppi.glob("[ACD].png")) > 1_000_000, "the set must be over BATCH_MB=1"
+    out = _deploy(tmp_path, site, home, locks, "--birds", BATCH_MB="1")
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert _git(origin, "rev-parse", "gh-pages^") == tip, _git(origin, "log", "--format=%s", "gh-pages")
+    assert "part" not in out.stdout
+    assert {"data/birds_ppi/A.png", "data/birds_ppi/C.png", "data/birds_ppi/D.png"} <= _published(origin)

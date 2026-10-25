@@ -20,8 +20,14 @@ WT="$(mktemp -d "${TMPDIR:-/tmp}/wildeye-pages.XXXXXX")"
 trap 'git worktree remove --force "$WT" >/dev/null 2>&1 || true; git worktree prune' EXIT
 # --birds: the hourly night deploy (msi-4080 cron). Ships only the radar-birds files run_birds.sh rewrites every 10 min,
 # laid over the published tip: no build, so everything else stays as the last full deploy left it.
-MODE=full
-[ "${1:-}" = --birds ] && MODE=birds
+case "$*" in
+"") MODE=full ;;
+--birds) MODE=birds ;;
+*)
+	echo "usage: deploy_pages.sh [--birds]  (got: $*)" >&2
+	exit 2
+	;;
+esac
 BIRDS_FILES=(birds.geojson birds_field.json birds_field.png birds_nights.json birds_seasons.json)
 # Two locks, always taken in this order. Deploy: one deploy at a time (each moves gh-pages; a second would push a
 # non-fast-forward). Birds: shared with run_birds.sh, so the birds files are never copied while a build is halfway
@@ -185,6 +191,9 @@ publish() { # commit what is staged, push it
 # 10, not 40: on 2026-10-07 a 40 MB part was dropped three times ("remote end hung up") while parts of at most
 # 14 MB all landed, so ~50 MB (2026-09-12) is not a ceiling this uplink holds every day. A part can land just under
 # BATCH_MB, so the default sits well below the largest part seen to land (14 MB), not at it.
+# The birds set (about 2.5 MB) always goes up as one commit: nothing gates a client's reads of birds_ppi/ the way the
+# archive manifest gates frames, so a tip between two parts would mix two builds' radars.
+if [ "$MODE" = birds ]; then BATCH_MB=1000000; fi
 BATCH_MB="${BATCH_MB:-10}"
 mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=AM -- ':(glob)data/*/**' ':(exclude)data/birds_archive/manifest.json')
 NEW_BYTES=0
