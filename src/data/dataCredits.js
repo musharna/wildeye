@@ -115,6 +115,12 @@ export const DATA_CREDITS = [
     html: 'Forest loss: Source: Hansen/UMD/Google/USGS/NASA. <a href="https://storage.googleapis.com/earthenginepartners-hansen/GFC-2025-v1.13/download.html" target="_blank" rel="noopener">Global Forest Change 2000–2025 v1.13</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; Hansen et al. 2013, <i>Science</i> 342:850–853, <a href="https://doi.org/10.1126/science.1244693" target="_blank" rel="noopener">doi:10.1126/science.1244693</a>. Tiles served by Global Forest Watch; recoloured by loss year for display.',
   },
   {
+    key: 'loss-drivers',
+    html: 'Forest loss drivers: “Tree cover loss by dominant driver”. WRI/Google DeepMind. Accessed from <a href="https://www.globalnaturewatch.org" target="_blank" rel="noopener">Global Nature Watch</a> (tiles served live by Global Forest Watch, v1.13, 2001–2025), <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>; '
+      + 'Sims, M.J., R. Stanimirova, A. Raichuk, M. Neumann, J. Richter, F. Follett, J. MacCarthy, K. Lister, C. Randle, L. Sloat, E. Esipova, J. Jupiter, C. Stanton, D. Morris, C. M. Slay, D. Purves, and N. Harris. 2025. “Global Drivers of Forest Loss at 1 Km Resolution.” <i>Environmental Research Letters</i> 20 (7): 074027. <a href="https://doi.org/10.1088/1748-9326/add606" target="_blank" rel="noopener">doi:10.1088/1748-9326/add606</a>. '
+      + 'Drawn as served (GFW\'s colours) and not re-hosted',
+  },
+  {
     key: 'surface-water',
     html: 'Surface water: Source: EC JRC/Google. <a href="https://global-surface-water.appspot.com/download" target="_blank" rel="noopener">JRC Global Surface Water</a> occurrence 1984–2021, provided free of charge, without restriction of use; Pekel, Cottam, Gorelick &amp; Belward 2016, <i>Nature</i> 540:418–422, <a href="https://doi.org/10.1038/nature20584" target="_blank" rel="noopener">doi:10.1038/nature20584</a>.',
   },

@@ -41,6 +41,7 @@ import { cmemsPftLayer } from './data/cmemsPft.js';
 import { crwBleachingLayer, oisstLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, cmemsZoocLayer, setDrapeSplit, drapeStackState, onDrapeRestack } from './data/rasterDrape.js';
 import { gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer, gibsAmphibianLayer, gibsMammalLayer, gibsGppLayer, gibsCanopyLayer, gibsAnthromesLayer, gibsDisturbanceLayer } from './data/gibsLayer.js';
 import { hansenLossLayer } from './data/hansenLoss.js';
+import { lossDriversLayer } from './data/lossDrivers.js';
 import { mangrovesLayer } from './data/mangroves.js';
 import { haedatLayer } from './data/haedat.js';
 import { penguinsLayer } from './data/penguins.js';
@@ -223,6 +224,7 @@ async function init() {
     const gibsLayers = [gibsLandCoverLayer, gibsEviLayer, gibsLstLayer, gibsNightLightsLayer, gibsBiomassLayer, gibsAmphibianLayer, gibsMammalLayer, gibsGppLayer, gibsCanopyLayer, gibsAnthromesLayer, gibsDisturbanceLayer];
     for (const layer of gibsLayers) dataManager.register(layer);
     dataManager.register(hansenLossLayer);
+    dataManager.register(lossDriversLayer);
     dataManager.register(surfaceWaterLayer);
     dataManager.register(humanFootprintLayer);
     dataManager.register(malariaLayer);
@@ -241,7 +243,7 @@ async function init() {
     dataManager.register(cameraTrapsLayer);
     dataManager.register(ednaLayer);
     // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
-    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, cmemsPftLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, naturalLandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
+    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, cmemsPftLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, cmemsO2Layer, cmemsPhLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, lossDriversLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, naturalLandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
     const drapeIds = drapeLayers.map((l) => l.id);
     const compare = createCompare({
       dataManager,
@@ -360,7 +362,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[crwOutlookLayer, oisstLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, chlorALayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, hotspotsLayer, haedatLayer, penguinsLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[crwOutlookLayer, oisstLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, chlorALayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, lossDriversLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, hotspotsLayer, haedatLayer, penguinsLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     let groundPickInFlight = false;
