@@ -62,6 +62,7 @@ export function createObservedTime(opts = {}) {
   /** layerId -> {startMs, endMs} | {rollingDays}: what that layer says it can serve. */
   const extents = new Map();
   let instant = null; // ms since epoch, or null = live
+  let holds = 0; // open holdClamp() calls
   let timer = null;
   let tickMs = null; // the play tick while playing
 
@@ -131,9 +132,28 @@ export function createObservedTime(opts = {}) {
       if (extent === null || extent === undefined) extents.delete(id);
       else extents.set(id, extent);
       if (key(extents.get(id)) === before) return false;
-      if (instant !== null) instant = clamp(instant);
+      if (instant !== null && holds === 0) instant = clamp(instant);
       notify();
       return true;
+    },
+    /**
+     * Defer re-clamping while a layer's span is on its way: swapping drapes withdraws the old span before
+     * the new one is declared, and clamping into that gap sent the bar to LIVE. Returns a release; the
+     * last release re-clamps once, against the spans then declared.
+     */
+    holdClamp() {
+      holds += 1;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        holds -= 1;
+        if (holds > 0 || instant === null) return;
+        const next = clamp(instant);
+        if (next === instant) return;
+        instant = next;
+        notify();
+      };
     },
     /** What each active layer declared, for the bar's coverage read and for tests. */
     extents() {
@@ -241,11 +261,35 @@ export function attachObservedTime(store, dataManager, layers) {
   // {type:"visibility", enabled} (manager.js:954, and again right after _settleLifecycle at :1228).
   // Asking the transitional event for settled state meant this branch never ran in a browser: a layer
   // switched on while the bar was scrubbed back kept showing live data under a past timestamp.
+  // A layer asked to come on holds the store's re-clamp until its request ends: drape exclusivity switches
+  // the old drape off in answer to the same request (drapeExclusive.js), and its span is withdrawn before
+  // the new one's lands. The request event is synchronous, so the hold is in place before that withdrawal.
+  const holds = new Map(); // layerId -> {intentEpoch, release}
+  const releaseHold = (id, intentEpoch) => {
+    const h = holds.get(id);
+    if (!h || (intentEpoch !== undefined && h.intentEpoch !== undefined && intentEpoch !== h.intentEpoch)) return;
+    holds.delete(id);
+    h.release();
+  };
+  const unsubRequests =
+    typeof dataManager.subscribeVisibilityRequests === "function"
+      ? dataManager.subscribeVisibilityRequests((change) => {
+          if (change?.type !== "visibility-requested") return;
+          if (!samplers.some((x) => x.id === change.layerId)) return;
+          releaseHold(change.layerId);
+          if (change.enabled === true) holds.set(change.layerId, { intentEpoch: change.intentEpoch, release: store.holdClamp() });
+        })
+      : () => {};
+  const ENDED = new Set(["visibility-cancelled", "visibility-failed", "visibility-blocked"]);
   const unsubManager = dataManager.subscribe((change) => {
-    if (change?.type !== "visibility") return;
-    const l = samplers.find((x) => x.id === change.layerId);
+    const l = samplers.find((x) => x.id === change?.layerId);
     if (!l) return;
-    refreshExtent(l);
+    if (ENDED.has(change.type)) {
+      releaseHold(l.id, change.intentEpoch);
+      return;
+    }
+    if (change.type !== "visibility") return;
+    refreshExtent(l).finally(() => releaseHold(l.id, change.intentEpoch));
     if (change.enabled === true && (!store.isLive() || (told.get(l.id) ?? null) !== null))
       push(l, store.get());
   });
@@ -253,6 +297,8 @@ export function attachObservedTime(store, dataManager, layers) {
   return () => {
     unsubStore();
     unsubManager();
+    unsubRequests();
+    for (const id of [...holds.keys()]) releaseHold(id);
     for (const l of samplers) store.setLayerExtent(l.id, null);
   };
 }
