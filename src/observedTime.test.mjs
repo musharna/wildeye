@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createObservedTime, attachObservedTime, describeObservedTime, isoHour, installObservedTimeUi } from './observedTime.js';
 import { DataLayerManager } from './data/manager.js';
+import { installDrapeExclusivity } from './data/drapeExclusive.js';
 
 const NOW = Date.parse('2026-09-11T15:37:12Z');
 const HOUR = 3_600_000;
@@ -322,4 +323,75 @@ test('bar: shows and hides by display, driven by the REAL manager', async () => 
   await mgr.setEnabled('birds', false);
   await new Promise((r) => setTimeout(r, 0));
   assert.equal(root.style.display, 'none', 'and goes away again');
+});
+
+const settled = async () => { for (let i = 0; i < 10; i += 1) await new Promise((r) => setTimeout(r, 0)); };
+
+test('bridge: swapping one dated drape for another keeps the selected time instead of snapping to live', async () => {
+  // Exclusivity switches the old drape off in answer to the new one's request; its span is withdrawn
+  // before the new drape's span is declared, and re-clamping into that empty gap made the bar LIVE.
+  const s = createObservedTime({ now: () => NOW });
+  const mgr = new DataLayerManager({}, { hasBackend: false });
+  const nhm = samplingLayer('bii', { startMs: at('2000-01-01T00:00:00Z'), endMs: at('2020-12-31T23:00:00Z') });
+  const io = samplingLayer('bii100', { startMs: at('2017-01-01T00:00:00Z'), endMs: at('2025-12-31T23:00:00Z') });
+  mgr.register(nhm.module);
+  mgr.register(io.module);
+  installDrapeExclusivity(mgr, ['bii', 'bii100']);
+  const off = attachObservedTime(s, mgr, [nhm.module, io.module]);
+  await mgr.setEnabled('bii', true);
+  await settled();
+  s.set('2018-06-01T00:00:00Z');
+  await mgr.setEnabled('bii100', true);
+  await settled();
+  assert.equal(mgr.isEnabled('bii'), false, 'exclusivity switched the old drape off');
+  assert.equal(s.get(), '2018-06-01T00:00:00Z', 'the bar keeps 2018, which the incoming drape covers');
+  assert.equal(io.seen.at(-1), '2018-06-01T00:00:00Z', 'and the incoming drape is told 2018, not live');
+  assert.ok(!io.seen.includes(null), 'it was never told live on the way');
+
+  // into a drape that does not cover the instant: clamped once, into the incoming span
+  s.set('2024-03-01T00:00:00Z');
+  await mgr.setEnabled('bii', true);
+  await settled();
+  assert.equal(s.get(), '2020-12-31T23:00:00Z', 'clamped to the end of the incoming span, not to live');
+
+  // positive control: switching the last dated drape off still returns the bar to live
+  await mgr.setEnabled('bii', false);
+  await settled();
+  assert.equal(s.get(), null);
+  off();
+});
+
+test('bridge: an enable that fails releases the hold, so the bar re-clamps as before', async () => {
+  const s = createObservedTime({ now: () => NOW });
+  const mgr = new DataLayerManager({}, { hasBackend: false });
+  const nhm = samplingLayer('bii', { startMs: at('2000-01-01T00:00:00Z'), endMs: at('2020-12-31T23:00:00Z') });
+  const broken = samplingLayer('bii100', { startMs: at('2017-01-01T00:00:00Z'), endMs: at('2025-12-31T23:00:00Z') });
+  broken.module.enable = async () => { throw new Error('enable failed'); };
+  mgr.register(nhm.module);
+  mgr.register(broken.module);
+  installDrapeExclusivity(mgr, ['bii', 'bii100']);
+  const off = attachObservedTime(s, mgr, [nhm.module, broken.module]);
+  await mgr.setEnabled('bii', true);
+  await settled();
+  s.set('2018-06-01T00:00:00Z');
+  const { warn, error } = console;
+  console.warn = () => {};
+  console.error = () => {};
+  try {
+    await mgr.setEnabled('bii100', true).catch(() => false);
+    await settled();
+  } finally {
+    console.warn = warn;
+    console.error = error;
+  }
+  assert.equal(mgr.isEnabled('bii100'), false, 'the broken drape did not come on');
+  assert.equal(mgr.isEnabled('bii'), false, 'and the old one was switched off for it');
+  assert.equal(s.get(), null, 'nothing dated is left on, so the bar is live: the hold did not outlive the failed request');
+  await mgr.setEnabled('bii', true);
+  await settled();
+  s.set('2005-01-01T00:00:00Z');
+  await mgr.setEnabled('bii', false);
+  await settled();
+  assert.equal(s.get(), null, 'and later withdrawals still re-clamp');
+  off();
 });
