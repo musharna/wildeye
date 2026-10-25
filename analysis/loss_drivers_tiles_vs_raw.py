@@ -1,7 +1,8 @@
 """Do GFW's drawn drivers tiles say what the raw v1.13 category GeoTIFFs say? For random points in four 10-degree
 source tiles, the raw class at the point (read over HTTPS from the data API's signed download, GFW_API_KEY from the
 environment, never printed) against the class decoded from the drawn tile pixel at levels 8 and 12, through the colour
-table in src/data/lossDrivers.js. Writes docs/analysis/loss_drivers_tiles_vs_raw.md. Run: python analysis/loss_drivers_tiles_vs_raw.py
+table in src/data/lossDrivers.js. Writes docs/analysis/loss_drivers_tiles_vs_raw.md and docs/analysis/loss_drivers_samples.tsv.
+Run: python3 -m analysis.loss_drivers_tiles_vs_raw
 """
 
 import io
@@ -12,12 +13,15 @@ import re
 import signal
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 import numpy as np
 import rasterio
 from PIL import Image
+
+from pipeline.net import urlopen
 
 signal.signal(
     signal.SIGALRM,
@@ -70,12 +74,28 @@ _tiles = {}
 
 def tile_rgba(z, x, y):
     if (z, x, y) not in _tiles:
-        with urllib.request.urlopen(
-            urllib.request.Request(TILE.format(z=z, x=x, y=y), headers=UA), timeout=90
-        ) as r:
-            _tiles[(z, x, y)] = np.asarray(
-                Image.open(io.BytesIO(r.read())).convert("RGBA")
-            )
+        # three tries on a dropped connection: the tile host resolves to IPv6 only, and a laptop's IPv6 route dropped
+        # mid-run three times on 2026-10-25 ("Network is unreachable"); an HTTP error is not retried
+        for attempt in (1, 2, 3):
+            try:
+                with urlopen(
+                    urllib.request.Request(TILE.format(z=z, x=x, y=y), headers=UA),
+                    timeout=90,
+                ) as r:
+                    _tiles[(z, x, y)] = np.asarray(
+                        Image.open(io.BytesIO(r.read())).convert("RGBA")
+                    )
+                break
+            except urllib.error.HTTPError:
+                raise
+            except urllib.error.URLError as e:
+                if attempt == 3:
+                    raise
+                print(
+                    f"tile {z}/{x}/{y} try {attempt} failed: {e!r}; again in 30 s",
+                    file=sys.stderr,
+                )
+                time.sleep(30)
         time.sleep(0.3)
     return _tiles[(z, x, y)]
 
@@ -126,7 +146,10 @@ for tid, region in SOURCES.items():
         file=sys.stderr,
     )
 
-norm = lambda v: v if v in range(1, 8) else 0  # 0 and 255 (no data) both draw black
+
+def norm(v):
+    """The class a raw value draws as: 0 and 255 (no data) both draw black."""
+    return v if v in range(1, 8) else 0
 
 
 def score(level):
