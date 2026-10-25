@@ -56,8 +56,9 @@ flock -u 9
 	exit 1
 }
 # A writer killed between mkstemp and os.replace (pipeline/atomic.py) leaves tmp*.tmp beside its data file, and
-# vite copies public/ whole: one shipped on 2026-10-17. It is never data. Name each so the dead writer is seen.
-find dist -type f -name 'tmp*.tmp' -print -delete | sed 's/^/not shipped (unfinished write): /' >&2
+# vite copies public/ whole: one shipped on 2026-10-17. ppi.py and field.py write *.tmp.png then rename it the same way.
+# Neither is ever data. Name each so the dead writer is seen.
+find dist -type f \( -name 'tmp*.tmp' -o -name '*.tmp.png' \) -print -delete | sed 's/^/not shipped (unfinished write): /' >&2
 "$PY" - "$KEEP_NIGHTS" <<'PYEOF'
 import json, shutil, sys, pathlib
 keep = int(sys.argv[1])
