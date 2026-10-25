@@ -413,7 +413,7 @@ def test_build_writes_the_disturbance_entry_with_its_class_config():
     assert e["times"] == ["2023-01-01/2025-01-01/P1Y"] and e["maximumLevel"] == 12
     assert [c["label"] for c in e["classes"]] == ["No disturbance", *DIST_LABELS]
     assert e["classes"][0]["hidden"] is True and e["noData"] == [[0, 0, 0]]
-    # GIBS serves corrupt OPERA tiles (bytes of other requests in the pixels, probe 2026-10-24): the app drops a
+    # GIBS sometimes serves corrupt OPERA tiles (probe 2026-10-24): the app drops a
     # tile holding a pixel that is no class colour, and only where gibs.json asks it to
     assert e["discardForeignTiles"] is True
     assert "discardForeignTiles" not in g.build(

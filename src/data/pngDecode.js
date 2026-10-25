@@ -3,10 +3,11 @@
  * semi-transparent pixel back through one rounds its colour (JRC's 83% water, 43,0,211,212, read back as
  * 43,0,210,212: QA 2026-10-01). Decoding the file's own bytes returns exactly what the tile holds.
  * Every readout source is an 8-bit, non-interlaced RGB, RGBA or palette PNG (probe 2026-10-01: GIBS palette +
- * tRNS, GFW and JRC RGBA, JRC open-sea RGB); anything else is refused by name rather than guessed at.
+ * tRNS, GFW and JRC RGBA, JRC open-sea RGB), or grey / grey + alpha: GIBS sends some empty OPERA tiles as grey with
+ * a tRNS key, and corrupt ones as grey + alpha (probe 2026-10-24). Anything else is refused by name, not guessed at.
  */
 const SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
-const CHANNELS = { 2: 3, 3: 1, 6: 4 };
+const CHANNELS = { 0: 1, 2: 3, 3: 1, 4: 2, 6: 4 };
 
 async function inflateZlib(data) {
   const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream("deflate"));
@@ -38,7 +39,7 @@ export async function decodePng(bytes) {
       height = view.getUint32(at + 12);
       const [depth, colour, , , interlace] = data.subarray(8, 13);
       if (depth !== 8) throw new Error(`PNG bit depth ${depth} is not supported (8 only)`);
-      if (!(colour in CHANNELS)) throw new Error(`PNG colour type ${colour} is not supported (2, 3, 6 only)`);
+      if (!(colour in CHANNELS)) throw new Error(`PNG colour type ${colour} is not supported (0, 2, 3, 4, 6 only)`);
       if (interlace !== 0) throw new Error("interlaced PNG is not supported");
       type = colour;
     } else if (kind === "PLTE") palette = data;
@@ -49,7 +50,9 @@ export async function decodePng(bytes) {
   }
   if (type < 0) throw new Error("PNG has no IHDR");
   if (type === 3 && !palette) throw new Error("palette PNG has no PLTE");
-  if (alpha && type !== 3) throw new Error(`PNG colour type ${type} with a tRNS colour key is not supported`);
+  if (alpha && type !== 3 && type !== 0) throw new Error(`PNG colour type ${type} with a tRNS colour key is not supported`);
+  // grey's tRNS is one 16-bit sample; at 8 bits its low byte is the grey drawn transparent
+  if (alpha && type === 0 && alpha.length !== 2) throw new Error(`grey PNG tRNS is ${alpha.length} bytes, expected 2`);
 
   const joined = new Uint8Array(idat.reduce((n, c) => n + c.length, 0));
   idat.reduce((off, c) => (joined.set(c, off), off + c.length), 0);
@@ -80,7 +83,13 @@ export async function decodePng(bytes) {
   for (let p = 0; p < width * height; p += 1) {
     const o = p * 4;
     if (type === 6) data.set(pixels.subarray(o, o + 4), o);
-    else if (type === 2) {
+    else if (type === 0) {
+      const v = pixels[p];
+      data.set([v, v, v, alpha && v === alpha[1] && alpha[0] === 0 ? 0 : 255], o);
+    } else if (type === 4) {
+      const v = pixels[p * 2];
+      data.set([v, v, v, pixels[p * 2 + 1]], o);
+    } else if (type === 2) {
       data.set(pixels.subarray(p * 3, p * 3 + 3), o);
       data[o + 3] = 255;
     } else {

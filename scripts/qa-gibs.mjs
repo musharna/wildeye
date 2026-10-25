@@ -200,7 +200,7 @@ try {
       id,
     );
   }
-  // OPERA: GIBS serves some open-ocean tiles corrupt, other clients' request bytes in the pixels (probe 2026-10-24).
+  // OPERA: GIBS sometimes serves open-ocean tiles corrupt (probe 2026-10-24).
   // Fresh tiles are decoded in the page the way Cesium decodes them (Resource.js: flipY, no premultiply, no colour
   // conversion) and judged by the live layer's own discard policy; the truth is the exact decode of the same bytes
   // here in Node. A real tile discarded blanks land; a corrupt one kept draws grey stripes over the sea.
@@ -222,7 +222,9 @@ try {
     const template = String(layer.imageryProvider.url);
     const tiles = [...Array(10).fill([8, 128, 106]), [9, 173, 151], [9, 173, 151], [12, 1635, 699]];
     const out = [];
-    for (const [z, y, x] of tiles) {
+    for (const [k, [z, y, x]] of tiles.entries()) {
+      // paced at the top, so a failed fetch waits too (an early `continue` skipped a delay at the bottom)
+      if (k) await new Promise((r) => setTimeout(r, 500));
       const url = template.replace("{z}", z).replace("{y}", y).replace("{x}", x);
       // GIBS's HTTP 500 carries no CORS header, so the browser reports it as a network error
       const res = await fetch(url, { cache: "no-store" }).catch((e) => ({ ok: false, status: `network: ${e.message}` }));
@@ -233,7 +235,6 @@ try {
       let b64 = "";
       for (let i = 0; i < bytes.length; i += 0x8000) b64 += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
       out.push({ url, status: 200, discarded: policy.shouldDiscardImage(bitmap), png: btoa(b64) });
-      await new Promise((r) => setTimeout(r, 500));
     }
     await g.dataManager.setEnabled("gibs-disturbance", false);
     return { out };

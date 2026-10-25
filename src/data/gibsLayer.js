@@ -54,8 +54,8 @@ function canvasPixels(image) {
 /**
  * A Cesium TileDiscardPolicy for a class map: a pixel is fully transparent or an opaque class colour, so a tile
  * holding any other pixel is not this layer's and is discarded (Cesium marks it INVALID and draws the parent tile).
- * GIBS serves some open-ocean OPERA tiles corrupt, RGBA with bytes of other clients' requests in the pixels (9 of
- * 12 fetches, probe 2026-10-24); its real tiles, overviews included, hold class colours only.
+ * GIBS sometimes serves open-ocean OPERA tiles corrupt (probe 2026-10-24); its real tiles, overviews included, hold
+ * class colours only.
  * `onError(e)` hears a tile that could not be read: that tile is kept, since the check cannot judge it.
  */
 export function classTileDiscardPolicy(entry, { pixelsOf = canvasPixels, onError = () => {} } = {}) {
@@ -178,9 +178,10 @@ export function createGibsLayer({
     });
     // In a class map the colour is the datum, so it is drawn opaque to match its legend swatch; only a
     // continuous overlay may let the basemap through.
+    const key = keyColour(_entry);
     _imagery = imageryLayerFor(provider, {
       alpha: _entry.classes?.length ? 1 : alpha,
-      ...(keyColour(_entry) ? { colorToAlpha: keyColour(_entry), colorToAlphaThreshold: BLACK_THRESHOLD } : {}),
+      ...(key ? { colorToAlpha: key, colorToAlphaThreshold: BLACK_THRESHOLD } : {}),
       // A hidden class borders every drawn pixel; a filtered blend of the two is neither colour, so it escapes the
       // key and draws dark halos and specks (OPERA, local build 2026-10-24). Nearest-pixel keeps each class whole.
       ...(hiddenClasses(_entry).length
