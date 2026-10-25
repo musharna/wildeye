@@ -455,12 +455,13 @@
     "id": "ndvi",
     "name": "Vegetation greenness NDVI (NOAA VIIRS CDR)",
     "icon": "🌿",
-    "catalog": "https://www.ncei.noaa.gov/thredds/catalog/cdr/ndvi/{year}/catalog.xml",
+    "catalog": "https://www.ncei.noaa.gov/data/land-normalized-difference-vegetation-index/access/{year}/",
     "file_regex": "VIIRS-Land_v001_[A-Z0-9]+_NOAA-20_\\d{8}_c\\d+\\.nc",
     "time_regex": "_(\\d{4})(\\d{2})(\\d{2})_c",
-    "url_template": "https://www.ncei.noaa.gov/thredds/dodsC/cdr/ndvi/{year}/{file}",
+    "url_template": "https://www.ncei.noaa.gov/data/land-normalized-difference-vegetation-index/access/{year}/{file}",
     "opendap_grid": {
       "variable": "NDVI",
+      "download": true,
       "stride": 5,
       "offset": 2,
       "clear_outside": [

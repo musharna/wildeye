@@ -278,15 +278,32 @@ def _read_opendap(url: str, variable: str, stride: int, offset: int):
         return ds[[variable]].isel(latitude=cut, longitude=cut).load()
 
 
+def _read_file_grid(url: str, variable: str, stride: int, offset: int, timeout: int = 600):
+    """`variable` from a whole netCDF file fetched over plain HTTP(S), cut like _read_opendap once it is here. ndvi:
+    NCEI's THREDDS server, which serves OPeNDAP, answered a 503 after 60 s from 2026-10-22 while its /data/ archive
+    served every file (66 MB a day)."""
+    import tempfile
+
+    import xarray as xr
+    data = _read_bytes(url, timeout)
+    with tempfile.NamedTemporaryFile(suffix=".nc") as f:
+        f.write(data)
+        f.flush()
+        with xr.open_dataset(f.name) as ds:
+            cut = slice(offset, None, stride)
+            return ds[[variable]].isel(latitude=cut, longitude=cut).load()
+
+
 def fetch_opendap_grid(product: dict, catalog_xml: str | None = None, read_grid=None) -> tuple[np.ndarray, str, dict]:
     """The newest catalog file (resolve_source) read as numbers over OPeNDAP and drawn like fetch_erddap_grid. ndvi:
     NCEI's WMS PNG was coloured by its own seq-YlGn palette, which the manifest ramp only approximated; the numbers make
     the legend exact and a click readable. Optional `clear_outside` [lo, hi] makes values outside it clear (ndvi: the WMS
-    hid < 0 and > 1, 2026-10-12). The file's own time must be the date in its name."""
+    hid < 0 and > 1, 2026-10-12). `download: true` fetches the whole file instead (_read_file_grid). The file's own time
+    must be the date in its name."""
     c = product["opendap_grid"]
     url, named = resolve_source(product, catalog_xml)
-    rgba, when, extras = _draw_grid(
-        product, c, (read_grid or _read_opendap)(url, c["variable"], int(c["stride"]), int(c["offset"])))
+    read = read_grid or (_read_file_grid if c.get("download") else _read_opendap)
+    rgba, when, extras = _draw_grid(product, c, read(url, c["variable"], int(c["stride"]), int(c["offset"])))
     if named and when != named:
         raise ValueError(f"{product['id']}: the file says {when}, its name says {named}")
     return rgba, when, extras
