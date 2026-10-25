@@ -381,3 +381,33 @@ test("the tile check goes to Cesium only where gibs.json asks; a check that cann
     console.error = original;
   }
 });
+
+test("a failed manifest fetch names its reason, not only 'load error'", async () => {
+  // Live QA 2026-10-24: a transient "Failed to fetch" showed as "gibs-disturbance load error", which read as a
+  // broken layer and took two more full runs to tell from one.
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const failing = createGibsLayer({
+      id: "gibs-evi",
+      name: "EVI",
+      icon: "🌱",
+      source: "x",
+      zrank: 16,
+      fetchJson: async () => {
+        throw new TypeError("Failed to fetch");
+      },
+      providerFor: () => assert.fail("no provider"),
+      imageryLayerFor: () => ({}),
+      stack: () => {},
+    });
+    failing.init({ imageryLayers: {} });
+    assert.equal(await failing.update(), false);
+    assert.equal(failing.getStats().error, "gibs-evi load error: Failed to fetch");
+  } finally {
+    console.warn = warn;
+  }
+  const { layer } = harness(); // positive control
+  assert.equal(await layer.update(), true);
+  assert.equal(layer.getStats().error, null);
+});

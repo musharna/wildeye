@@ -245,7 +245,7 @@ export function createGibsLayer({
         return true;
       } catch (e) {
         console.warn(`[Data:${id}] update error:`, e);
-        _lastError = `${id} load error`;
+        _lastError = `${id} load error: ${e?.message || e}`;
         return false;
       }
     },

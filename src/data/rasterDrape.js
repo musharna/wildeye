@@ -277,7 +277,7 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
         return true;
       } catch (e) {
         console.warn(`[Data:${id}] update error:`, e);
-        _lastError = `${id} load error`;
+        _lastError = `${id} load error: ${e?.message || e}`;
         return false;
       }
     },
