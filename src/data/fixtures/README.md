@@ -28,8 +28,16 @@
   encoder, rows cycling through filter types None/Sub/Up/Average/Paeth (the
   2×2 one is a Paeth tie, pa == pc < pb), each checked to decode to its source
   pixels with PIL.
-- All PNGs are used ONLY by `src/data/pngDecode.test.mjs`, which pins each to
-  the sha256 of PIL's `.convert('RGBA').tobytes()` of the same file.
+- The PNGs above are used ONLY by `src/data/pngDecode.test.mjs`, which pins
+  each to the sha256 of PIL's `.convert('RGBA').tobytes()` of the same file.
+- `opera-dist-2025-land-9-173-151.png`, `opera-dist-2025-ocean-8-128-106.png` —
+  two real NASA GIBS `OPERA_L3_DIST-ANN-HLS_Color_Index` tiles (2025-01-01),
+  captured 2026-10-24: Quebec at z9 (palette PNG with every class colour,
+  including the values 9 and 10 GIBS's colour map omits) and open Atlantic at
+  z8 (all transparent). The same Atlantic URL also returned corrupt tiles, with
+  bytes of other clients' requests in the pixels; none is kept, since those
+  bytes are someone else's. Used ONLY by `src/data/gibsLayer.test.mjs`. NASA
+  open data.
 - `birds_nights_20261019.json` — `public/data/birds_nights.json` as
   `pipeline/bird_nights.py` wrote it at 2026-10-19 02:00 UTC, cut to KAKQ, KLOT
   and KMLB (three nights each: two complete, tonight in progress). Used ONLY by

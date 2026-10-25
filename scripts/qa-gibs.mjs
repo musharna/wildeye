@@ -10,6 +10,7 @@ import puppeteer from "puppeteer";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { bootSettled } from './bootSettled.mjs';
+import { decodePng } from '../src/data/pngDecode.js';
 
 const argv = process.argv.slice(2);
 const arg = (n, f) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : f);
@@ -27,6 +28,7 @@ const IDS = [
   "gibs-gpp",
   "gibs-canopy",
   "gibs-anthromes",
+  "gibs-disturbance",
 ];
 // Known answers decoded independently (Python + Pillow on the live level-7 tile, 2026-10-02): 81 amphibian
 // species at 3°S 60°W; the open Atlantic at 0° 30°W is GIBS's empty tile, opaque black, which must read no data.
@@ -49,6 +51,15 @@ const KNOWN = {
     { lat: -5, lon: -65, status: "class", text: "Remote forest", date: "2001–2006" },
     { lat: 40, lon: -90, status: "class", text: "Residential rainfed mosaic", date: "2001–2006" },
     { lat: 0, lon: -30, status: "nodata" },
+  ],
+  // OPERA DIST-ANN, decoded the same way from the live level-12 tiles (2026-10-24), each the centre of a 7x7 block of
+  // one class: the Palisades fire (Jan 2025) and Flin Flon (2025 Manitoba fires; value 9, missing from GIBS's
+  // colour map). No disturbance is drawn transparent but still reads by its name.
+  "gibs-disturbance": [
+    { lat: 34.08807, lon: -118.55982, status: "class", text: "Disturbed, ended: half or more of the plant cover lost", date: "2025-01-01" },
+    { lat: 54.72631, lon: -101.53067, status: "class", text: "Disturbed, carried over from the year before: under half the plant cover lost", date: "2025-01-01" },
+    { lat: 23, lon: 10, status: "class", text: "No disturbance", date: "2025-01-01" },
+    { lat: 50.2326, lon: -73.35829, observed: "2023-08-01T00:00:00Z", status: "class", text: "Disturbed, ongoing: half or more of the plant cover lost", date: "2023-01-01" },
   ],
 };
 const results = [];
@@ -188,6 +199,66 @@ try {
       (id) => window.__godsEyeView.dataManager.setEnabled(id, false),
       id,
     );
+  }
+  // OPERA: GIBS serves some open-ocean tiles corrupt, other clients' request bytes in the pixels (probe 2026-10-24).
+  // Fresh tiles are decoded in the page the way Cesium decodes them (Resource.js: flipY, no premultiply, no colour
+  // conversion) and judged by the live layer's own discard policy; the truth is the exact decode of the same bytes
+  // here in Node. A real tile discarded blanks land; a corrupt one kept draws grey stripes over the sea.
+  const verdicts = await page.evaluate(async () => {
+    const g = window.__godsEyeView;
+    await g.dataManager.setEnabled("gibs-disturbance", true);
+    const deadline = Date.now() + 30000;
+    let layer = null;
+    while (Date.now() < deadline && !layer) {
+      for (let i = 0; i < g.viewer.imageryLayers.length; i++) {
+        const l = g.viewer.imageryLayers.get(i);
+        if (String(l.imageryProvider?.url).includes("/OPERA_L3_DIST-ANN-HLS_Color_Index/")) layer = l;
+      }
+      if (!layer) await new Promise((r) => setTimeout(r, 200));
+    }
+    if (!layer) return { error: "no OPERA imagery layer" };
+    const policy = layer.imageryProvider.tileDiscardPolicy;
+    if (!policy) return { error: "OPERA provider has no tileDiscardPolicy" };
+    const template = String(layer.imageryProvider.url);
+    const tiles = [...Array(10).fill([8, 128, 106]), [9, 173, 151], [9, 173, 151], [12, 1635, 699]];
+    const out = [];
+    for (const [z, y, x] of tiles) {
+      const url = template.replace("{z}", z).replace("{y}", y).replace("{x}", x);
+      // GIBS's HTTP 500 carries no CORS header, so the browser reports it as a network error
+      const res = await fetch(url, { cache: "no-store" }).catch((e) => ({ ok: false, status: `network: ${e.message}` }));
+      if (!res.ok) { out.push({ url, status: res.status }); continue; }
+      const blob = await res.blob();
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const bitmap = await createImageBitmap(blob, { imageOrientation: "flipY", premultiplyAlpha: "none", colorSpaceConversion: "none" });
+      let b64 = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) b64 += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      out.push({ url, status: 200, discarded: policy.shouldDiscardImage(bitmap), png: btoa(b64) });
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    await g.dataManager.setEnabled("gibs-disturbance", false);
+    return { out };
+  });
+  if (verdicts.error) report("gibs-disturbance:tile-check", false, { error: verdicts.error });
+  else {
+    const classes = new Set((manifest.layers?.["gibs-disturbance"]?.classes ?? []).map((c) => c.rgb.join(",")));
+    const rows = [];
+    for (const v of verdicts.out) {
+      if (v.status !== 200) { rows.push({ url: v.url.split("/default/")[1], status: v.status }); continue; }
+      const { data } = await decodePng(Buffer.from(v.png, "base64"));
+      let foreign = 0;
+      for (let i = 0; i < data.length; i += 4)
+        if (data[i + 3] && (data[i + 3] !== 255 || !classes.has(`${data[i]},${data[i + 1]},${data[i + 2]}`))) foreign += 1;
+      rows.push({ url: v.url.split("/default/")[1], foreign, discarded: v.discarded, agree: v.discarded === foreign > 0 });
+    }
+    const judged = rows.filter((r) => r.agree !== undefined);
+    // the land tiles are real and must be judged so; corrupt sea tiles come and go with GIBS, so they are counted
+    const landKept = judged.filter((r) => !r.url.includes("/8/128/106")).every((r) => !r.discarded && r.foreign === 0);
+    report("gibs-disturbance:tile-check", judged.length >= 3 && judged.every((r) => r.agree) && landKept, {
+      judged: judged.length,
+      corruptSeen: judged.filter((r) => r.foreign > 0).length,
+      disagree: judged.filter((r) => !r.agree).slice(0, 3),
+      failedFetches: rows.filter((r) => r.status).length,
+    });
   }
   // Review focus 5: land cover stretches the bar to 2001; LIVE must still come back.
   const live = await page.evaluate(async () => {

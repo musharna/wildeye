@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -307,3 +308,123 @@ def test_anthromes_are_21_classes_and_black_is_no_data():
         "classes"
     ]
     assert "decode" not in cm and cm["noData"] == [[0, 0, 0]]
+
+
+# OPERA DIST-ANN (survey wildeye_fresh_global_data_survey_2026-10-24): live colour map saved 2026-10-24 from
+# https://gibs.earthdata.nasa.gov/colormaps/v1.3/OPERA_Vegetation_Disturbance_Annual.xml
+OPERA = FIX / "gibs_colormap_opera_dist_ann.xml"
+DIST_LABELS = [
+    "Disturbed, ongoing: under half the plant cover lost",
+    "Disturbed, ongoing: half or more of the plant cover lost",
+    "Disturbed, ended: under half the plant cover lost",
+    "Disturbed, ended: half or more of the plant cover lost",
+    "Disturbed, carried over from the year before: under half the plant cover lost",
+    "Disturbed, carried over from the year before: half or more of the plant cover lost",
+]
+
+
+def test_a_legend_entry_that_is_only_ever_no_data_is_not_a_class():
+    # OPERA's legend lists "No Data" (black, transparent in every entry): it is no data, not a class to draw a swatch for
+    cm = g.parse_colormap(OPERA.read_bytes())
+    assert [c["label"] for c in cm["classes"]] == [
+        "No Disturbance",
+        "Confirmed < 50%",
+        "Confirmed >= 50%",
+        "Confirmed < 50% finished",
+        "Confirmed >= 50% finished",
+    ]
+    assert cm["noData"] == [[0, 0, 0]]
+
+
+def test_disturbance_relabels_nasa_classes_and_hides_no_disturbance():
+    cfg = g.LAYERS["gibs-disturbance"]
+    assert cfg["gibsId"] == "OPERA_L3_DIST-ANN-HLS_Color_Index"
+    classes = g.configure_classes(
+        "gibs-disturbance", g.parse_colormap(OPERA.read_bytes())["classes"], cfg
+    )
+    assert classes[0] == {
+        "label": "No disturbance",
+        "rgb": [18, 18, 18],
+        "hidden": True,
+    }
+    assert [c["label"] for c in classes[1:]] == DIST_LABELS
+    assert classes[2]["rgb"] == [224, 27, 7] and not any(
+        c.get("hidden") for c in classes[1:]
+    )
+    # values 9 and 10 (OPERA DIST spec, VEG-DIST-STATUS) are drawn in the tile but absent from the colour map:
+    # palette index = value in the live tile (index 9 = 51,51,51, 10 = 68,68,68, probe 2026-10-24)
+    assert [c["rgb"] for c in classes[-2:]] == [[51, 51, 51], [68, 68, 68]]
+
+
+def test_an_extra_class_whose_colour_is_already_a_class_or_no_data_is_an_error():
+    classes = g.parse_colormap(OPERA.read_bytes())["classes"]
+    for rgb in ([224, 27, 7], [0, 0, 0]):
+        with pytest.raises(LookupError, match=re.escape(f"extra class {rgb}")):
+            g.configure_classes(
+                "x",
+                classes,
+                {"extra_classes": [{"label": "y", "rgb": rgb}]},
+                no_data=[[0, 0, 0]],
+            )
+    # a new colour goes through, after NASA's classes
+    out = g.configure_classes(
+        "x",
+        classes,
+        {"extra_classes": [{"label": "y", "rgb": [51, 51, 51]}]},
+        no_data=[[0, 0, 0]],
+    )
+    assert (
+        out[-1] == {"label": "y", "rgb": [51, 51, 51]} and len(out) == len(classes) + 1
+    )
+
+
+def test_class_config_naming_a_label_the_colour_map_lacks_is_an_error():
+    classes = g.parse_colormap(OPERA.read_bytes())["classes"]
+    with pytest.raises(LookupError, match="Confirmed > 50%"):
+        g.configure_classes("x", classes, {"labels": {"Confirmed > 50%": "y"}})
+    with pytest.raises(LookupError, match="Fill"):
+        g.configure_classes("x", classes, {"hide": ["Fill"]})
+    # the same call with a label the map has goes through, and leaves the input alone
+    assert (
+        g.configure_classes("x", classes, {"hide": ["No Disturbance"]})[0]["hidden"]
+        is True
+    )
+    assert "hidden" not in classes[0]
+
+
+def _caps_with(gibs_id, times="2023-01-01/2025-01-01/P1Y"):
+    return f"""<Capabilities xmlns="http://www.opengis.net/wmts/1.0" xmlns:ows="http://www.opengis.net/ows/1.1"
+      xmlns:xlink="http://www.w3.org/1999/xlink"><Contents><Layer>
+      <ows:Identifier>{gibs_id}</ows:Identifier>
+      <ows:Metadata xlink:href="https://gibs.earthdata.nasa.gov/colormaps/v1.3/X.xml"/>
+      <Format>image/png</Format>
+      <Dimension><ows:Identifier>Time</ows:Identifier><Value>{times}</Value></Dimension>
+      <TileMatrixSetLink><TileMatrixSet>GoogleMapsCompatible_Level12</TileMatrixSet></TileMatrixSetLink>
+    </Layer></Contents></Capabilities>""".encode()
+
+
+def test_build_writes_the_disturbance_entry_with_its_class_config():
+    layers = {"gibs-disturbance": g.LAYERS["gibs-disturbance"]}
+    caps = _caps_with("OPERA_L3_DIST-ANN-HLS_Color_Index")
+    doc = g.build(
+        lambda url: OPERA.read_bytes() if "colormaps" in url else caps, layers
+    )
+    e = doc["layers"]["gibs-disturbance"]
+    assert e["times"] == ["2023-01-01/2025-01-01/P1Y"] and e["maximumLevel"] == 12
+    assert [c["label"] for c in e["classes"]] == ["No disturbance", *DIST_LABELS]
+    assert e["classes"][0]["hidden"] is True and e["noData"] == [[0, 0, 0]]
+    # GIBS serves corrupt OPERA tiles (bytes of other requests in the pixels, probe 2026-10-24): the app drops a
+    # tile holding a pixel that is no class colour, and only where gibs.json asks it to
+    assert e["discardForeignTiles"] is True
+    assert "discardForeignTiles" not in g.build(
+        lambda url: OPERA.read_bytes() if "colormaps" in url else caps,
+        {"x": {**g.LAYERS["gibs-disturbance"], "discardForeignTiles": False}},
+    )["layers"]["x"]
+
+
+def test_a_tile_check_on_a_layer_without_classes_is_an_error():
+    caps = _caps_with("VIIRS_Black_Marble")
+    cfg = {"gibsId": "VIIRS_Black_Marble", "legend": "x", "colormap": False}
+    assert "classes" not in g.build(lambda url: caps, {"x": cfg})["layers"]["x"]
+    with pytest.raises(LookupError, match="discardForeignTiles given but VIIRS_Black_Marble has no classes"):
+        g.build(lambda url: caps, {"x": {**cfg, "discardForeignTiles": True}})

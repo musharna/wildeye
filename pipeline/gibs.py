@@ -84,6 +84,33 @@ LAYERS = {
         "legend": "Anthropogenic biomes: how people use and live in each ~9 km cell (v1, 2001–2006)",
         "asOf": "2001–2006",
     },
+    # OPERA vegetation disturbance, calendar-year summary (survey wildeye_fresh_global_data_survey_2026-10-24).
+    # Meanings from the OPERA DIST product specification (lpdaac.usgs.gov/documents/1766): "confirmed" = detected with
+    # high confidence; < / >= 50% = the largest drop in vegetation cover; "finished" = no anomaly in two later looks.
+    # "No Disturbance" covers 90-99% of a tile (probe 2026-10-24), so it is keyed out and only disturbance is drawn.
+    "gibs-disturbance": {
+        "gibsId": "OPERA_L3_DIST-ANN-HLS_Color_Index",
+        "legend": "Vegetation disturbance confirmed in the year (NASA OPERA, 30 m Landsat + Sentinel-2): fire, "
+        "drought, clearing, storms and other losses of plant cover; no disturbance not drawn",
+        "hide": ["No Disturbance"],
+        "labels": {
+            "No Disturbance": "No disturbance",
+            "Confirmed < 50%": "Disturbed, ongoing: under half the plant cover lost",
+            "Confirmed >= 50%": "Disturbed, ongoing: half or more of the plant cover lost",
+            "Confirmed < 50% finished": "Disturbed, ended: under half the plant cover lost",
+            "Confirmed >= 50% finished": "Disturbed, ended: half or more of the plant cover lost",
+        },
+        # Status values 9 and 10 (spec: "confirmed previous year <50% / >=50%") are drawn in the tile but missing
+        # from GIBS's colour map; the tile's palette index is the value (0, 3, 6, 7, 8 match the map's sourceValue),
+        # and index 9 = 51,51,51, 10 = 68,68,68 in the live tiles at every zoom (probe 2026-10-24).
+        "extra_classes": [
+            {"label": "Disturbed, carried over from the year before: under half the plant cover lost", "rgb": [51, 51, 51]},
+            {"label": "Disturbed, carried over from the year before: half or more of the plant cover lost", "rgb": [68, 68, 68]},
+        ],
+        # GIBS serves some open-ocean tiles of this layer corrupt: RGBA, with bytes of other clients' requests in the
+        # pixels (9 of 12 fetches, probe 2026-10-24); the app drops a tile holding a pixel that is no class colour.
+        "discardForeignTiles": True,
+    },
 }
 
 
@@ -174,8 +201,13 @@ def parse_colormap(xml: bytes) -> dict:
     no_data = sorted(rgbs(True) - rgbs(False))
     extra = {"noData": [list(c) for c in no_data]} if no_data else {}
     if legend.get("type") == "classification":
+        # a legend entry whose colour is only ever no data (OPERA's "No Data") is not a class to draw a swatch for
         return {
-            "classes": [{"label": label, "rgb": rgb} for rgb, label in entries]
+            "classes": [
+                {"label": label, "rgb": rgb}
+                for rgb, label in entries
+                if tuple(rgb) not in no_data
+            ]
         } | extra
     idx = [round(i * (len(entries) - 1) / (RAMP_STOPS - 1)) for i in range(RAMP_STOPS)]
     unit = cm.get("units")
@@ -210,6 +242,28 @@ def _interval(value: str) -> tuple[float | None, float | None]:
     return (None if lo == "-INF" else float(lo)), (None if hi == "+INF" else float(hi))
 
 
+def configure_classes(key: str, classes: list[dict], cfg: dict, no_data=()) -> list[dict]:
+    """A copy of NASA's classes with LAYERS' plain labels ("labels": NASA label -> ours) and the "hide" classes
+    marked hidden (drawn transparent, still read by a click), then the "extra_classes" the tiles draw but the colour
+    map omits. A NASA label the colour map lacks raises: a renamed class must not silently keep its old wording or
+    stop being hidden. An extra class in a colour the map already uses raises: one colour cannot mean two things."""
+    labels, hide = cfg.get("labels", {}), set(cfg.get("hide", []))
+    names = {c["label"] for c in classes}
+    unknown = sorted((set(labels) | hide) - names)
+    if unknown:
+        raise LookupError(f"{key}: no class {unknown} in the colour map (it has {sorted(names)})")
+    taken = [c["rgb"] for c in classes] + [list(c) for c in no_data]
+    for extra in cfg.get("extra_classes", []):
+        if extra["rgb"] in taken:
+            raise LookupError(f"{key}: extra class {extra['rgb']} is a colour the map already uses")
+        taken.append(extra["rgb"])
+    return [
+        {**c, "label": labels.get(c["label"], c["label"])}
+        | ({"hidden": True} if c["label"] in hide else {})
+        for c in classes
+    ] + [dict(e) for e in cfg.get("extra_classes", [])]
+
+
 def build(fetch=_get, layers=LAYERS) -> dict:
     caps = parse_layers(fetch(CAPABILITIES), {v["gibsId"] for v in layers.values()})
     out = {}
@@ -226,6 +280,14 @@ def build(fetch=_get, layers=LAYERS) -> dict:
                     f"{key}: GIBS lists no v1.3 colour map for {cfg['gibsId']}"
                 )
             entry |= parse_colormap(fetch(c["colormapUrl"]))
+        if {"labels", "hide", "extra_classes"} & cfg.keys():
+            if "classes" not in entry:
+                raise LookupError(f"{key}: labels/hide/extra_classes given but {cfg['gibsId']} has no classes")
+            entry["classes"] = configure_classes(key, entry["classes"], cfg, entry.get("noData", ()))
+        if cfg.get("discardForeignTiles"):
+            if "classes" not in entry:
+                raise LookupError(f"{key}: discardForeignTiles given but {cfg['gibsId']} has no classes")
+            entry["discardForeignTiles"] = True
         if not c["times"] and "asOf" not in cfg:
             raise LookupError(
                 f"{key}: GIBS serves no dates and LAYERS gives no asOf for {cfg['gibsId']}"

@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createGibsLayer } from './gibsLayer.js';
+import { createTilePixelReader } from './gibsReadout.js';
+import { decodePng } from './pngDecode.js';
 
 const { layers } = JSON.parse(readFileSync(new URL('./fixtures/gibs-readout.json', import.meta.url)));
 const LST = { ...layers['gibs-lst'], times: ['2026-08-13/2026-08-21/P8D'] };
@@ -105,4 +107,49 @@ test('a disabled layer reads nothing', async () => {
   layer.disable();
   assert.equal(await layer.readoutAt(0, 0), null);
   assert.equal(reads.length, 0);
+});
+
+test("a disturbance click on a corrupt tile says so and the next click fetches a fresh one; a real tile reads its class", async () => {
+  // real tiles (fixtures/README.md); the corrupt one has the observed shape: text bytes in an empty tile's last row
+  const png = (n) => decodePng(new Uint8Array(readFileSync(new URL(`./fixtures/${n}`, import.meta.url))));
+  const ocean = await png('opera-dist-2025-ocean-8-128-106.png');
+  const corrupt = { ...ocean, data: Uint8Array.from(ocean.data) };
+  corrupt.data.set(new TextEncoder().encode('AHTSE Retile'), corrupt.data.length - 12);
+  const DIST = JSON.parse(readFileSync(new URL('./fixtures/gibs-disturbance.json', import.meta.url))).layers['gibs-disturbance'];
+  const served = [corrupt, ocean];
+  const make = (entry) => {
+    const layer = createGibsLayer({
+      id: 'gibs-disturbance', name: 'd', icon: '·', source: 'NASA GIBS',
+      fetchJson: async () => ({ layers: { 'gibs-disturbance': entry } }),
+      providerFor: (url) => ({ url, errorEvent: { addEventListener() {} } }),
+      imageryLayerFor: (provider) => ({ provider, show: true }),
+      stack: () => {},
+      // the tile at 0°, 30°W's level-12 pixel is the last row's end when served as this 1-tile stand-in
+      readTilePixel: ((read) => (url, px, py, opts) => read(url, 255, 255, opts))(createTilePixelReader({
+        fetchImpl: async () => ({ ok: true, status: 200, headers: new Map(), blob: async () => served.shift() }),
+        decodeImage: async (image) => image,
+      })),
+    });
+    layer.init({ imageryLayers: { add() {}, remove: () => true, contains: () => false } });
+    return layer;
+  };
+  const layer = make(DIST);
+  await layer.update();
+  layer.enable();
+  const first = await layer.readoutAt(0, -30);
+  assert.deepEqual([first.status, first.error], ['error', 'GIBS sent a corrupt tile; click again for a fresh copy']);
+  assert.equal((await layer.readoutAt(0, -30)).status, 'nodata');
+  // without the flag the same corrupt tile is only an unknown colour: the check is what names it
+  served.push(corrupt);
+  const plain = make({ ...DIST, discardForeignTiles: undefined });
+  await plain.update();
+  plain.enable();
+  assert.match((await plain.readoutAt(0, -30)).error, /^unknown colour /);
+  // a real land tile reads its class through the same check
+  served.push(await png('opera-dist-2025-land-9-173-151.png'));
+  const land = make(DIST);
+  await land.update();
+  land.enable();
+  const r = await land.readoutAt(50.2, -73.3);
+  assert.equal(r.status, 'class');
 });

@@ -23,7 +23,7 @@ export const LAYER_GROUPS = Object.freeze([
     layers: ['ifl', 'natural-lands', 'wetlands', 'tidal-marsh', 'seagrass', 'kelp', 'gmw', 'surface-water',
       'gibs-landcover', 'gibs-biomass', 'gibs-canopy', 'ecoregions', 'marine-realms'],
   },
-  { id: 'land', label: 'Land conditions', layers: ['ndvi', 'gibs-evi', 'gibs-gpp', 'gibs-lst', 'drought', 'fires', 'rivers'] },
+  { id: 'land', label: 'Land conditions', layers: ['ndvi', 'gibs-evi', 'gibs-gpp', 'gibs-lst', 'drought', 'fires', 'gibs-disturbance', 'rivers'] },
   {
     id: 'ocean',
     label: 'Ocean conditions',

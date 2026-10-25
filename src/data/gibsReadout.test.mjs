@@ -171,3 +171,15 @@ test('GPP, canopy height and anthromes decode the pixels read independently from
     assert.ok(shown >= lo && shown < hi, `${e.gibsId} [${lo},${hi}) shown as ${text}`);
   }
 });
+
+test('a tile the caller rejects is an error naming why, and is not cached: the next read fetches it again', async () => {
+  let n = 0;
+  const fetchImpl = async () => ({ ok: true, status: 200, headers: new Map(), blob: async () => ++n });
+  // the first fetch is corrupt (GIBS's OPERA ocean tiles, probe 2026-10-24), the second is clean
+  const decodeImage = async (k) => ({ width: 1, data: new Uint8ClampedArray(k === 1 ? [65, 72, 84, 83] : [0, 0, 0, 0]) });
+  const read = createTilePixelReader({ fetchImpl, decodeImage });
+  const reject = (image) => (image.data[3] === 83 ? 'corrupt tile' : null);
+  await assert.rejects(read('u', 0, 0, { reject }), /^Error: corrupt tile$/);
+  assert.deepEqual((await read('u', 0, 0, { reject })).rgba, [0, 0, 0, 0]);
+  assert.equal(n, 2);
+});
