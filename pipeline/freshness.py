@@ -2,14 +2,14 @@
 
 HPAI failed every night from 2026-09-12 to 2026-10-06 and nobody saw it: the error only reached
 cron_hpai.log on the laptop. .github/workflows/stale-data.yml runs this daily on a GitHub-hosted
-runner against the deployed site, so it also fires when the laptop, its cron or the deploy stops,
+runner against the deployed site, so it also fires when msi-4080, its cron or the deploy stops,
 and opens, updates or closes a GitHub issue labelled stale-data.
 
 A layer is stale when its file's generated_at is older than two missed runs plus 6 hours. Anything
 written more often than daily counts as daily, because the site only changes at the daily deploy.
 Each raster product is also checked on its own data `time`: rasters.json is rewritten every day
 even when one product's fetch fails. A file that cannot be read is a problem, never a pass.
-LAYERS mirrors the laptop crontab, which is not in the repo: keep the two in step.
+LAYERS mirrors the msi-4080 crontab (the laptop's until 2026-10-25), which is not in the repo: keep the two in step.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ DAY = dt.timedelta(days=1)
 PERIOD = {"daily": DAY, "weekly": 7 * DAY, "monthly": 31 * DAY}
 SLACK = dt.timedelta(hours=6)
 
-# file under data/ -> how often the cron job that writes it runs (crontab on the laptop)
+# file under data/ -> how often the cron job that writes it runs (crontab on msi-4080)
 LAYERS = {
     "birds.geojson": "daily",  # every 10 minutes; the site changes daily
     "birds_field.json": "daily",
@@ -147,7 +147,7 @@ def report(problems: list[dict], now: dt.datetime, checked: int) -> str:
     return (f"<!-- stale: {names} -->\n"
             f"{len(problems)} layer(s) on {BASE} have stopped updating (checked {stamp}, by `pipeline/freshness.py`).\n\n"
             f"| layer | why |\n|---|---|\n{rows}\n\n"
-            "Look at the layer's `pipeline/cron_*.log` on the laptop. This issue closes itself when every layer is fresh again.\n")
+            "Look at the layer's `pipeline/cron_*.log` on msi-4080. This issue closes itself when every layer is fresh again.\n")
 
 
 def _get(name: str, head: int | None) -> bytes:

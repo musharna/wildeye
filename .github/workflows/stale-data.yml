@@ -4,8 +4,8 @@ name: stale data
 # reached a log on the laptop. This job reads every cron-fed layer on the live site
 # (pipeline/freshness.py) and keeps one GitHub issue, labelled stale-data, in step with it:
 # opened when a layer has missed two runs, updated daily, commented on only when the list of
-# stale layers changes, closed when everything is fresh again. It runs off the laptop, so it
-# also fires when the laptop, its cron or the deploy stops.
+# stale layers changes, closed when everything is fresh again. It runs off msi-4080, where cron
+# and the deploy have run since 2026-10-25, so it also fires when msi-4080, its cron or the deploy stops.
 # On a pull request it checks and prints the report but does not touch issues.
 
 on:
