@@ -105,7 +105,7 @@ def drawn(lat, lon, z):
     fx = (lon + 180) / 360 * n
     fy = (1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * n
     gx, gy = min(int(fx * 512), n * 512 - 1), min(int(fy * 512), n * 512 - 1)
-    r, g, b, a = tile_rgba(z, gx // 512, gy // 512)[gy % 512, gx % 512].tolist()
+    r, g, b, _a = tile_rgba(z, gx // 512, gy // 512)[gy % 512, gx % 512].tolist()
     if (r, g, b) == (0, 0, 0):
         return 0
     return TABLE.get((r, g, b), f"?{r},{g},{b}")
@@ -161,8 +161,10 @@ drivers = sorted({x["raw"] for x in rows if x["raw"] in range(1, 8)})
 out = [
     "# Loss drivers: drawn tiles vs the raw v1.13 category GeoTIFFs",
     "",
-    f"Written by `analysis/loss_drivers_tiles_vs_raw.py` on {time.strftime('%Y-%m-%d')}: {len(rows)} cell centres in "
-    f"{', '.join(f'{t} ({r})' for t, r in SOURCES.items())}; raw classes seen: {drivers}.",
+    (
+        f"Written by `analysis/loss_drivers_tiles_vs_raw.py` on {time.strftime('%Y-%m-%d')}: {len(rows)} cell centres in "
+        f"{', '.join(f'{t} ({r})' for t, r in SOURCES.items())}; raw classes seen: {drivers}."
+    ),
     "",
 ]
 for level in ("z12", "z8"):
