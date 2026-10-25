@@ -18,15 +18,53 @@ PY="${WILDEYE_PYTHON:-$HOME/miniconda3/bin/python3}"
 BRANCH=gh-pages
 WT="$(mktemp -d "${TMPDIR:-/tmp}/wildeye-pages.XXXXXX")"
 trap 'git worktree remove --force "$WT" >/dev/null 2>&1 || true; git worktree prune' EXIT
+# --birds: the hourly night deploy (msi-4080 cron). Ships only the radar-birds files run_birds.sh rewrites every 10 min,
+# laid over the published tip: no build, so everything else stays as the last full deploy left it.
+case "$*" in
+"") MODE=full ;;
+--birds) MODE=birds ;;
+*)
+	echo "usage: deploy_pages.sh [--birds]  (got: $*)" >&2
+	exit 2
+	;;
+esac
+BIRDS_FILES=(birds.geojson birds_field.json birds_field.png birds_nights.json birds_seasons.json)
+# Two locks, always taken in this order. Deploy: one deploy at a time (each moves gh-pages; a second would push a
+# non-fast-forward). Birds: shared with run_birds.sh, so the birds files are never copied while a build is halfway
+# through rewriting them (the 13:00 UTC full deploy and a build start in the same minute).
+LOCKS="${WILDEYE_LOCK_DIR:-/tmp}"
+exec 8>"$LOCKS/wildeye-deploy.lock"
+if [ "$MODE" = birds ]; then
+	flock -n 8 || {
+		echo "$(date -Is) deploy --birds: another deploy is running and ships birds too; skipping"
+		exit 0
+	}
+else
+	flock -w "${DEPLOY_LOCK_WAIT:-1800}" 8 || {
+		echo "another deploy still holds $LOCKS/wildeye-deploy.lock" >&2
+		exit 1
+	}
+fi
+exec 9>"$LOCKS/wildeye-birds.lock"
+birds_lock() {
+	flock -w "${BIRDS_LOCK_WAIT:-600}" 9 || {
+		echo "a birds build still holds $LOCKS/wildeye-birds.lock after ${BIRDS_LOCK_WAIT:-600} s; not copying half-written files" >&2
+		exit 1
+	}
+}
 
+if [ "$MODE" = full ]; then
+birds_lock
 npx vite build --base="$BASE" >/dev/null
+flock -u 9
 [ -f dist/index.html ] || {
 	echo "build produced no dist/index.html" >&2
 	exit 1
 }
 # A writer killed between mkstemp and os.replace (pipeline/atomic.py) leaves tmp*.tmp beside its data file, and
-# vite copies public/ whole: one shipped on 2026-10-17. It is never data. Name each so the dead writer is seen.
-find dist -type f -name 'tmp*.tmp' -print -delete | sed 's/^/not shipped (unfinished write): /' >&2
+# vite copies public/ whole: one shipped on 2026-10-17. ppi.py and field.py write *.tmp.png then rename it the same way.
+# Neither is ever data. Name each so the dead writer is seen.
+find dist -type f \( -name 'tmp*.tmp' -o -name '*.tmp.png' \) -print -delete | sed 's/^/not shipped (unfinished write): /' >&2
 "$PY" - "$KEEP_NIGHTS" <<'PYEOF'
 import json, shutil, sys, pathlib
 keep = int(sys.argv[1])
@@ -65,6 +103,7 @@ PYEOF
 # Bytes, not disk blocks: `du -sh` counted each of ~87,000 small files as a whole 4 KB block and printed 1.1G for a
 # site of 866 MB (a 704 MB Pages artifact) on 2026-10-16, which read as over the 1 GB Pages limit.
 echo "dist size: $(du -sh --apparent-size dist | cut -f1) in $(find dist -type f | wc -l) files"
+fi
 
 SRC="$(git rev-parse --short HEAD)"
 # Every deploy before 2026-09-20 was `checkout --orphan` + `push --force`, so the whole site went up
@@ -86,6 +125,10 @@ case "$LS" in
 	exit 1
 	;;
 esac
+if [ "$MODE" = birds ] && [ "$REMOTE_EXISTS" = 0 ]; then
+	echo "deploy --birds lays files over the published site, and $BRANCH does not exist: run a full deploy first" >&2
+	exit 1
+fi
 if [ "$REMOTE_EXISTS" = 1 ]; then
 	git fetch -q origin "$BRANCH"
 	# the local branch must sit exactly on the remote tip, or the push below is a non-fast-forward
@@ -96,15 +139,29 @@ else
 	git worktree add --detach "$WT" HEAD >/dev/null 2>&1
 	(cd "$WT" && git checkout -q --orphan "$BRANCH")
 fi
-# replace the published tree wholesale: identical files are content-addressed, so only real changes ship
-(cd "$WT" && git rm -rfq . >/dev/null 2>&1 || true)
-cp -a dist/. "$WT"/
+if [ "$MODE" = full ]; then
+	# replace the published tree wholesale: identical files are content-addressed, so only real changes ship
+	(cd "$WT" && git rm -rfq . >/dev/null 2>&1 || true)
+	cp -a dist/. "$WT"/
+else
+	# birds_ppi/ is replaced whole, so a radar dropped from sites.json leaves the site too
+	birds_lock
+	mkdir -p "$WT/data"
+	rm -rf "$WT/data/birds_ppi"
+	cp -a public/data/birds_ppi "$WT/data/"
+	for f in "${BIRDS_FILES[@]}"; do cp -a "public/data/$f" "$WT/data/"; done
+	flock -u 9
+	# a killed writer's temp file (ppi.py/field.py: *.tmp.png, atomic.py: tmp*.tmp) is never data
+	find "$WT/data/birds_ppi" -type f \( -name '*.tmp.png' -o -name 'tmp*.tmp' \) -print -delete |
+		sed "s#^$WT/#not shipped (unfinished write): #" >&2
+fi
 (cd "$WT" && git add -A >/dev/null)
 if (cd "$WT" && git diff --cached --quiet); then
 	echo "no change to publish; $BRANCH left at $(git rev-parse --short "$BRANCH")"
 	exit 0
 fi
 STAMP="$(date -u +%Y-%m-%dT%H:%MZ)"
+[ "$MODE" = birds ] && STAMP="birds $STAMP"
 publish() { # commit what is staged, push it
 	(cd "$WT" && git -c user.name="wildeye deploy" -c user.email="deploy@wildeye.local" commit -qm "$1")
 	# the regression this design exists to prevent: a commit with no parent means the history was orphaned
@@ -134,6 +191,9 @@ publish() { # commit what is staged, push it
 # 10, not 40: on 2026-10-07 a 40 MB part was dropped three times ("remote end hung up") while parts of at most
 # 14 MB all landed, so ~50 MB (2026-09-12) is not a ceiling this uplink holds every day. A part can land just under
 # BATCH_MB, so the default sits well below the largest part seen to land (14 MB), not at it.
+# The birds set (about 2.5 MB) always goes up as one commit: nothing gates a client's reads of birds_ppi/ the way the
+# archive manifest gates frames, so a tip between two parts would mix two builds' radars.
+if [ "$MODE" = birds ]; then BATCH_MB=1000000; fi
 BATCH_MB="${BATCH_MB:-10}"
 mapfile -t NEW < <(cd "$WT" && git diff --cached --name-only --diff-filter=AM -- ':(glob)data/*/**' ':(exclude)data/birds_archive/manifest.json')
 NEW_BYTES=0

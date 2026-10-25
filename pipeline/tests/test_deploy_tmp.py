@@ -1,4 +1,4 @@
-"""deploy_pages.sh drops the tmp*.tmp a killed writer leaves in public/data, run for real on a scratch dist/: the line is
+"""deploy_pages.sh drops the temp files a killed writer leaves in public/data (atomic.py: tmp*.tmp; ppi.py/field.py: *.tmp.png), run for real on a scratch dist/: the line is
 cut out of the script itself, so the test runs the shipped code."""
 
 import subprocess
@@ -8,7 +8,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "deploy_pages.sh"
 
 
 def _line() -> str:
-    lines = [x for x in SCRIPT.read_text().splitlines() if x.startswith("find dist -type f -name 'tmp*.tmp'")]
+    lines = [x for x in SCRIPT.read_text().splitlines() if x.startswith("find dist -type f") and "-print -delete" in x]
     assert len(lines) == 1, "tmp-file line not found in deploy_pages.sh"
     return lines[0]
 
@@ -20,6 +20,8 @@ def test_deploy_drops_unfinished_writes_and_ships_everything_else(tmp_path: Path
         "dist/data/birds_nights.json": b"{}",
         "dist/data/tmp_tiles/0/0.png": b"png",            # a directory named tmp*: data
         "dist/data/attempt.tmp": b"x",                    # not mkstemp's tmp* name: left alone
+        "dist/data/birds_ppi/KBOX.tmp.png": b"\x89P",     # ppi.py killed before its replace
+        "dist/data/birds_field.tmp.png": b"\x89P",        # field.py likewise
         "dist/index.html": b"<html>",
     }
     for rel, data in files.items():
@@ -33,5 +35,7 @@ def test_deploy_drops_unfinished_writes_and_ships_everything_else(tmp_path: Path
                     "dist/index.html"]
     assert sorted(out.stderr.splitlines()) == [
         "not shipped (unfinished write): dist/data/birds/tmpab12cd.tmp",
+        "not shipped (unfinished write): dist/data/birds_field.tmp.png",
+        "not shipped (unfinished write): dist/data/birds_ppi/KBOX.tmp.png",
         "not shipped (unfinished write): dist/data/tmpf9_virpb.tmp",
     ]
