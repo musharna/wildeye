@@ -178,9 +178,10 @@ export function createGibsLayer({
     });
     // In a class map the colour is the datum, so it is drawn opaque to match its legend swatch; only a
     // continuous overlay may let the basemap through.
+    const key = keyColour(_entry);
     _imagery = imageryLayerFor(provider, {
       alpha: _entry.classes?.length ? 1 : alpha,
-      ...(keyColour(_entry) ? { colorToAlpha: keyColour(_entry), colorToAlphaThreshold: BLACK_THRESHOLD } : {}),
+      ...(key ? { colorToAlpha: key, colorToAlphaThreshold: BLACK_THRESHOLD } : {}),
       // A hidden class borders every drawn pixel; a filtered blend of the two is neither colour, so it escapes the
       // key and draws dark halos and specks (OPERA, local build 2026-10-24). Nearest-pixel keeps each class whole.
       ...(hiddenClasses(_entry).length
