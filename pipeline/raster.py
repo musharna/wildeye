@@ -325,6 +325,12 @@ def _draw_grid(product: dict, c: dict, ds) -> tuple[np.ndarray, str, dict]:
     if "clear_outside" in c:
         lo, hi = (float(x) for x in c["clear_outside"])
         vals[(vals < lo) | (vals > hi)] = np.nan
+    if "bins" in c:
+        # a continuous field classed by its source's legend edges (soil-moisture: GDO's ±1, ±1.5 and ±2 σ): code k for
+        # edges[k-1] <= v < edges[k], so values past either end, however far, take the end class as on GDO's own map
+        if product.get("kind") != "classes":
+            raise ValueError(f"{product['id']}: bins need kind classes, got {product.get('kind')!r}")
+        vals = np.where(np.isfinite(vals), np.digitize(vals, np.asarray(c["bins"], dtype=float)), np.nan)
     lat = np.asarray(ds["latitude"].values)  # native dtype: edge_align judges regularity at its precision
     lon = np.asarray(ds["longitude"].values)
     if vals.shape != (len(lat), len(lon)):
@@ -363,6 +369,9 @@ def render(product: dict, out_dir: Path) -> tuple[np.ndarray, str | None, dict, 
         rgba, when_from_name, extras = fetch_erddap_grid(product)
     elif "opendap_grid" in product:
         rgba, when_from_name, extras = fetch_opendap_grid(product)
+    elif "nc_series" in product:
+        from .nc_series import fetch_nc_series
+        rgba, when_from_name, extras = fetch_nc_series(product)
     elif "cmems_dominant" in product:
         from . import cmems_pft
         rgba, when_from_name = cmems_pft.fetch_cmems_dominant(product)
@@ -474,7 +483,11 @@ GAP_MAX = 7  # steps drawn per product per run: ~200 s each for oisst at 06:45, 
 def source_steps(product: dict, since: str, read_json=None, catalog_xml: str | None = None) -> list[tuple[str, dict]]:
     """[(time, product variant that fetches that step)] for every time step the source holds from `since` on, oldest
     first; [] for a source that only offers its newest step (cmems, cmems_dominant, crw_outlook). An ERDDAP url asking
-    for `(last)` lists the dataset's own time axis; a catalog product lists its files (this year's catalog only)."""
+    for `(last)` lists the dataset's own time axis; a catalog product lists its files (this year's catalog only); an
+    nc_series product lists the steps of its newest file (nc_series.series_steps)."""
+    if "nc_series" in product:
+        from .nc_series import series_steps
+        return series_steps(product, since)
     if "opendap_grid" in product and "catalog" in product:
         steps = []
         for f in _catalog_files(product, catalog_xml):
