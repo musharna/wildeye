@@ -101,12 +101,12 @@ try {
   // Another drape first: switching ForTy on must switch it off (one drape at a time).
   const state = await page.evaluate(async (id) => {
     const { dataManager } = window.__godsEyeView;
-    await dataManager.setEnabled('ifl', true, { origin: 'user' });
-    const otherOn = dataManager.isEnabled('ifl');
+    await dataManager.setEnabled('surface-water', true, { origin: 'user' });
+    const otherOn = dataManager.isEnabled('surface-water');
     await dataManager.setEnabled(id, true, { origin: 'user' });
     const s = () => dataManager.getAll().find((l) => l.id === id)?.stats;
     for (let i = 0; i < 60 && !s()?.lastUpdate; i += 1) await new Promise((r) => setTimeout(r, 500));
-    return { on: dataManager.isEnabled(id), otherOn, otherAfter: dataManager.isEnabled('ifl') };
+    return { on: dataManager.isEnabled(id), otherOn, otherAfter: dataManager.isEnabled('surface-water') };
   }, ID);
   await settle();
   const on = await grab();
@@ -122,7 +122,7 @@ try {
   // a blank 'on' screenshot (one colour) would make 'off' meaningless, so it is reported and must not pass
   report('drew', state.on && onColours.size > 20 && changed > 5000 && !s1?.error && s1?.time === DATE && s1?.count > 1000 && tiles.ok > 0 && tiles.bad.length === 0,
     { at: `${at.lat},${at.lon} (${at.drawn})`, coloursWhenOn: onColours.size, pixelsChangedWhenOff: changed, stats: s1, tiles200: tiles.ok, tilesBad: tiles.bad.slice(0, 3) });
-  report('one-drape-at-a-time', state.otherOn === true && state.otherAfter === false, { iflBefore: state.otherOn, iflAfter: state.otherAfter });
+  report('one-drape-at-a-time', state.otherOn === true && state.otherAfter === false, { surfaceWaterBefore: state.otherOn, surfaceWaterAfter: state.otherAfter });
   await page.evaluate(async (id) => window.__godsEyeView.dataManager.setEnabled(id, true, { origin: 'user' }), ID);
 
   // only tiles the manifest lists were ever requested
