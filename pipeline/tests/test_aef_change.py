@@ -390,3 +390,75 @@ def test_paint_keeps_the_first_scored_cell_where_two_locations_meet():
     assert (first == 3).sum() > 4000 and (first == 0).sum() == 0
     second = ac.paint_block([loc("a"), loc("b")], {"a": empty, "b": quiet}, block, 6)
     assert (second == 0).sum() > 4000, "where the first has no score, the second fills"
+
+
+def test_deserts_and_the_far_south_are_not_drawn_and_their_area_is_counted(tmp_path):
+    from pyproj import Transformer
+    from rasterio.warp import transform_bounds
+
+    def loc(key, crs, x0, y0):
+        fp = (x0, y0, x0 + SIDE, y0 + SIDE)
+        return {
+            "key": key,
+            "crs": crs,
+            "utm": fp,
+            "wgs84": transform_bounds(crs, "EPSG:4326", *fp),
+            "paths": {},
+        }
+
+    north = loc("31N_400000_5000000", CRS, 400000.0, 5000000.0)  # ~45°N
+    south = loc("31S_400000_2700000", "EPSG:32731", 400000.0, 2700000.0)  # ~66°S
+    assert south["wgs84"][3] < ac.SOUTH < north["wgs84"][1]
+    flagged = np.full((ac.CELL, ac.CELL), 25.0, np.float32)
+    w, s, e, n = north["wgs84"]
+    mid = (w + e) / 2
+    desert = {
+        "type": "Polygon",
+        "coordinates": [
+            [(w - 1, s - 1), (mid, s - 1), (mid, n + 1), (w - 1, n + 1), (w - 1, s - 1)]
+        ],
+    }
+    m = ac.build(
+        [north, south],
+        {north["key"]: flagged, south["key"]: flagged},
+        tmp_path,
+        max_level=6,
+        deserts=[desert],
+    )
+    one = SIDE**2 / 1e6
+    assert (
+        0.4 * one < m["notDrawn"]["desertKm2"] < 0.6 * one
+    )  # the west half of the northern footprint
+    assert 0.9 * one < m["notDrawn"]["southKm2"] < 1.1 * one  # all of the southern one
+    assert (
+        0.4 * one < m["classes"][2]["km2"] < 0.6 * one
+    )  # the east half is drawn: very strong change
+    assert m["notDrawn"]["desertBiome"].startswith("Deserts & Xeric Shrublands")
+    to_geo = Transformer.from_crs(CRS, "EPSG:4326", always_xy=True)
+    d = 180 / 2**6 / 256
+
+    def pixel(lon, lat):
+        gx, gy = int((lon + 180) / d), int((90 - lat) / d)
+        tile = tmp_path / "aef_change" / "6" / str(gx // 256) / f"{gy // 256}.png"
+        return (
+            Image.open(tile).getpixel((gx % 256, gy % 256)) if tile.exists() else None
+        )
+
+    y_mid = 5000000.0 + SIDE / 2
+    assert pixel(*to_geo.transform(400000.0 + SIDE * 0.75, y_mid)) == 3
+    assert pixel(*to_geo.transform(400000.0 + SIDE * 0.25, y_mid)) in (0, None)
+    assert not any(ty * 256 * d > 90 - ac.SOUTH for _, ty in m["tiles"]["6"]), (
+        "no tile drawn south of 60°S"
+    )
+    plain = ac.build([north], {north["key"]: flagged}, tmp_path / "plain", max_level=6)
+    assert (
+        plain["notDrawn"]["desertKm2"] == 0 and plain["notDrawn"]["desertBiome"] is None
+    )
+    assert 0.9 * one < plain["classes"][2]["km2"] < 1.1 * one
+
+
+def test_a_changed_ecoregions_zip_is_refused(tmp_path):
+    z = tmp_path / "Ecoregions2017.zip"
+    z.write_bytes(b"PK not the pinned zip")
+    with pytest.raises(ValueError, match="sha256 .* pinned"):
+        ac.desert_shapes(z)

@@ -46,6 +46,29 @@ fires, but only 18% of the Manitoba fire cells (mid-year boreal fires move an an
 - Partial files at UTM-zone edges (Côte d'Ivoire, Tibet): a global mosaic must take each cell from the file that
   covers it fully; on the pilot tiles, cells next to no-data flag at 33% vs 5% elsewhere and must be dropped.
 
+## The global build, and what the pilot missed (score v2)
+
+The first global build (v1, all 32,931 footprints with nine years) flagged 4.1% of 159M km², 71% of it in files
+whose median cell was itself an outlier: in some files 2022 and 2025 sit ~0.025 from every other year in every
+cell, so the Sahara and Sahel showed file-shaped blocks with straight edges (next-door files 43% vs 0% flagged).
+None of the 26 pilot and held-out tiles held such a file, so the frozen checks could not see it.
+
+Score v2 subtracts, each year, the median novelty of the file's scored cells (files with fewer than 64 scored
+cells get no score). On the pilot and held-out tables at the unchanged threshold 6.5: intact forest 0.4%, AUROC
+MATOPIBA 0.89, LA 0.87, Manitoba 0.91, farmland at most 4.5%, edges 1.49× chance; catch rates 55%, 65% and 7%.
+Those tables were no longer unseen when v2 was chosen. Rejected: masking files by median score (a continuum;
+real regional events such as Flin Flon and the Chaco sit inside it) and a local 9- or 15-cell median (large fires
+vanish: Manitoba AUROC 0.74/0.82).
+
+v2 flagged 1.7%; part-file steps were left in the Sahara, and deserts held 24.6% of the flags (2.55% of their area)
+and Antarctica 11.8% (3.32%), against 0.6–2.9% elsewhere. The layer does not draw the Deserts & Xeric Shrublands
+biome (RESOLVE Ecoregions 2017) or land south of 60°S; with both masked the build flags 1.73M of 123M km² (1.4%).
+
+Left in and seen on the world map: wide Siberian rivers (Lena, Aldan, Yenisei) drawn as lines, where water or ice
+changed; a region-wide patch in western Russia (31–42°E, 53–59°N, 10–27% of cells per file, smooth across the
+UTM 36/37 boundary, so not one file's processing); scattered flags on the Moroccan and Algerian coast after the
+2025 rains; a few short straight seams in North Africa.
+
 ## Named examples
 
 GERD and Navi Mumbai airport change in the right years (GERD 2019→22 while the reservoir filled, distance to 0.39;

@@ -74,6 +74,13 @@ CHUNK = 256
 RETRIES = 3
 WORKERS = 64
 NO_SCORE = 255
+# not drawn: in hyper-arid desert the source's year-to-year shifts between processing runs (straight-edged blocks in the
+# Sahara even after the file-median correction) outweigh real change, and Antarctica is ice; deserts are RESOLVE
+# Ecoregions 2017 biome 13, by the pixel centre (24.6% and 11.8% of the v2 build's flags)
+SOUTH = -60.0
+DESERT_BIOME = 13
+# the RESOLVE zip served 2026-10-26 (149,248,653 bytes, last modified 2019-05-07)
+RESOLVE_SHA256 = "be36d6209e443038d02e309f0447c6e7f2a62f5fe60c605ffe90d064952f2a60"
 CLASSES = [
     {"index": 1, "label": "unusual change", "min": 6.5, "rgb": [0xFE, 0xD9, 0x76]},
     {"index": 2, "label": "strong change", "min": 10.0, "rgb": [0xFD, 0x8D, 0x3C]},
@@ -367,6 +374,56 @@ def paint_block(
     return out
 
 
+def desert_shapes(zip_path: Path, sha: str = RESOLVE_SHA256) -> list[dict]:
+    """GeoJSON geometries of RESOLVE Ecoregions 2017's desert biome, from the pinned zip."""
+    from .ecoregions import BIOMES, read_rows
+
+    got = _sha256(zip_path)
+    if got != sha:
+        raise ValueError(
+            f"{zip_path}: sha256 {got}, pinned {sha}; the ecoregions changed"
+        )
+    shapes = []
+    for rec, geom in read_rows(zip_path):
+        if int(rec["BIOME_NUM"]) == DESERT_BIOME:
+            if rec["BIOME_NAME"] != BIOMES[DESERT_BIOME][0]:
+                raise ValueError(
+                    f"biome {DESERT_BIOME} is {rec['BIOME_NAME']!r}, not {BIOMES[DESERT_BIOME][0]!r}"
+                )
+            shapes.append(geom)
+    if not shapes:
+        raise ValueError(f"{zip_path}: no ecoregion in biome {DESERT_BIOME}")
+    return shapes
+
+
+def not_drawn(
+    block: tuple[int, int], max_level: int, deserts: list[dict]
+) -> tuple[np.ndarray, np.ndarray]:
+    """(desert, south) masks on one block's finest-level pixels, each by the pixel centre."""
+    from rasterio.features import rasterize
+    from rasterio.transform import from_origin
+
+    bl = max(0, max_level - BLOCK_LEVELS)
+    n = TILE * 2 ** (max_level - bl)
+    west, _south, east, north = tile_bounds(bl, *block)
+    px = (east - west) / n
+    lat = north - (np.arange(n) + 0.5) * px
+    south = np.broadcast_to((lat < SOUTH)[:, None], (n, n))
+    desert = (
+        rasterize(
+            deserts,
+            out_shape=(n, n),
+            transform=from_origin(west, north, px, px),
+            fill=0,
+            default_value=1,
+            dtype="uint8",
+        ).astype(bool)
+        if deserts
+        else np.zeros((n, n), bool)
+    )
+    return desert, south
+
+
 def one_hot(bands: np.ndarray) -> np.ndarray:
     """(len(CLASSES) + 1, h, w) float32: per pixel, 1 in the slot of its band (0 = scored, not flagged)."""
     k = len(CLASSES) + 1
@@ -413,9 +470,11 @@ def build(
     skipped: int = 0,
     locations: int | None = None,
     max_level: int = MAX_LEVEL,
+    deserts: list[dict] | None = None,
     now=None,
 ) -> dict:
-    """Tiles into out_dir/aef_change (replaced whole), then out_dir/aef_change.json; returns the manifest."""
+    """Tiles into out_dir/aef_change (replaced whole), then out_dir/aef_change.json; returns the manifest. Pixels in
+    `deserts` (GeoJSON geometries) or south of SOUTH are not drawn."""
     bl = max(0, max_level - BLOCK_LEVELS)
     d = 180 / 2**bl
     blocks: dict[tuple[int, int], list[dict]] = {}
@@ -434,11 +493,17 @@ def build(
     listed: dict[str, list[list[int]]] = {}
     tile_bytes = 0
     km2 = np.zeros(len(CLASSES) + 1)
+    hidden = {"desert": 0.0, "south": 0.0}
     coarse: dict[tuple[int, int], np.ndarray] = {}
     for block, its in sorted(blocks.items()):
         bands = paint_block(its, scores, block, max_level)
         west, _south, east, north = tile_bounds(bl, *block)
         areas = row_areas_km2(north, bands.shape[0], (east - west) / bands.shape[1])
+        pixel_km2 = np.broadcast_to(areas[:, None], bands.shape)
+        desert, south = not_drawn(block, max_level, deserts or [])
+        hidden["desert"] += float(pixel_km2[(bands != NO_SCORE) & desert].sum())
+        hidden["south"] += float(pixel_km2[(bands != NO_SCORE) & south & ~desert].sum())
+        bands = np.where(desert | south, NO_SCORE, bands).astype(np.uint8)
         scored = bands != NO_SCORE
         km2 += np.bincount(
             bands[scored],
@@ -497,6 +562,14 @@ def build(
         "locations": len(locs) + skipped if locations is None else locations,
         "locationsScored": len(locs),
         "locationsSkipped": skipped,
+        "notDrawn": {
+            "desertBiome": "Deserts & Xeric Shrublands (RESOLVE Ecoregions 2017)"
+            if deserts
+            else None,
+            "desertKm2": round(hidden["desert"]),
+            "south": SOUTH,
+            "southKm2": round(hidden["south"]),
+        },
         "tileBytes": tile_bytes,
         "source": SOURCE,
     }
@@ -521,6 +594,11 @@ def main(
     )
     ap.add_argument("--max-level", type=int, default=MAX_LEVEL)
     ap.add_argument("--workers", type=int, default=WORKERS)
+    ap.add_argument(
+        "--ecoregions",
+        type=Path,
+        help="RESOLVE Ecoregions2017.zip (default: the cache's, fetched once)",
+    )
     ap.add_argument(
         "--bbox",
         help="west,south,east,north: only the locations inside, for a trial run",
@@ -552,6 +630,11 @@ def main(
     scores = score_all(
         locs, a.cache / f"scores_{sha[:12]}_v{SCORE_VERSION}_{tag}", a.workers, opener
     )
+    from .ecoregions import fetch_zip
+
+    deserts = desert_shapes(
+        a.ecoregions or fetch_zip(a.cache.parent / "Ecoregions2017.zip")
+    )
     m = build(
         locs,
         scores,
@@ -559,6 +642,7 @@ def main(
         skipped=skipped,
         locations=total,
         max_level=a.max_level,
+        deserts=deserts,
         now=now,
     )
     log.info(
