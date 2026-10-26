@@ -14,7 +14,9 @@ Intact Forest Landscape 2025 polygon with no Hansen loss 2001–2025. Code: `ana
 `nov3(k)` = cosine distance from year *k* to the closest of the three years before it, so a state seen recently
 (the other crop of a rotation, regrowth after a fire) scores low.
 `score = (nov3(2025) − median nov3(2020…2024)) / max(1.4826·MAD, 0.003)`: how unusual this year's novelty is for
-this cell. Flagged above 6.5, the strict-stable 99.9th percentile on the pilot tiles, frozen before the held-out run.
+this cell. Flagged above 6.5, the strict-stable 99.9th percentile on the pilot tiles, frozen before the held-out run
+(the pilot's tables count scores > 6.5; the layer's first band starts at 6.5 inclusive, so a score of exactly 6.5
+is drawn).
 
 Rejected on the pilot tiles (`aef_change_pilot.png`):
 - raw 2024→25 distance flagged 95% of Iowa and 100% of a Bolivian tile at the stable 99th percentile: farmland and
