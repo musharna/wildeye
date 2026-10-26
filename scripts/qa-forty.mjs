@@ -46,12 +46,16 @@ const browser = await puppeteer.launch({
 const pageErrors = [];
 const consoleErrors = [];
 const tiles = { ok: 0, bad: [], urls: new Set() };
+const failedRequests = []; // Chrome's own reason for a fetch that never got a response ("Failed to fetch" in the page)
 let manifest = null;
 try {
   const page = await browser.newPage();
   page.on('pageerror', (e) => pageErrors.push(String(e?.stack || e?.message || e).slice(0, 400)));
   page.on('console', (m) => {
     if (m.type() === 'error' && /forty|forest|Data|what-lives-here/i.test(m.text())) consoleErrors.push(m.text().slice(0, 200));
+  });
+  page.on('requestfailed', (r) => {
+    if (/\/data\/forty/.test(r.url())) failedRequests.push(`${r.failure()?.errorText} ${r.url()}`);
   });
   page.on('response', async (r) => {
     if (/\/data\/forty\.json(\?|$)/.test(r.url())) manifest = await r.json().catch(() => null);
@@ -92,8 +96,9 @@ try {
   };
   const stats = () => page.evaluate((id) => window.__godsEyeView.dataManager.getAll().find((l) => l.id === id)?.stats ?? null, ID);
 
-  // over the first sure sample, 400 km up
-  const at = sure[0];
+  // 400 km over the sure sample nearest the central Amazon, where the drape covers the view (the first sample, at the
+  // Chukotka tundra edge, changed 323 pixels and could not tell a drawn drape from a missing one)
+  const at = sure.reduce((a, s) => (Math.hypot(s.lat - -3, s.lon - -60) < Math.hypot(a.lat - -3, a.lon - -60) ? s : a));
   await page.evaluate(([lat, lon]) => {
     const v = window.__godsEyeView.viewer;
     v.camera.setView({ destination: v.camera.position.constructor.fromDegrees(lon, lat, 400000), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
@@ -180,8 +185,8 @@ try {
 } finally {
   await browser.close();
 }
-report('no-404-or-console-errors', tiles.bad.length === 0 && consoleErrors.length === 0 && pageErrors.length === 0,
-  { tilesBad: tiles.bad.slice(0, 5), consoleErrors: consoleErrors.slice(0, 8), pageErrors: pageErrors.slice(0, 5) });
+report('no-404-or-console-errors', tiles.bad.length === 0 && failedRequests.length === 0 && consoleErrors.length === 0 && pageErrors.length === 0,
+  { tilesBad: tiles.bad.slice(0, 5), failedRequests: failedRequests.slice(0, 5), consoleErrors: consoleErrors.slice(0, 8), pageErrors: pageErrors.slice(0, 5) });
 const failed = results.filter((r) => !r.ok).length;
 console.log(JSON.stringify({ summary: true, checks: results.length, failed, tiles200: tiles.ok, tilesBad: tiles.bad.length }));
 process.exit(failed ? 1 : 0);
