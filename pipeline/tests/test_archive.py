@@ -156,6 +156,13 @@ def test_the_cron_prunes_to_the_scripts_keep_nights():
     assert re.findall(r"--keep-nights (\d+)", sh) == [str(ba.KEEP_NIGHTS)]
     assert ba.parser().parse_args(["--catch-up"]).keep_nights == ba.KEEP_NIGHTS == 14
     assert ba.parser().parse_args(["--catch-up", "--keep-nights", "3"]).keep_nights == 3
+    # the live QA scrubs back --back-days (and that less one) from the newest frame; past the first night it
+    # can only land on the archive's start, and 2 nights back would not catch an archive pruned to 2 nights
+    qa = (
+        Path(__file__).resolve().parents[2] / "scripts" / "qa-observed-time.mjs"
+    ).read_text()
+    back = re.findall(r"arg\('--back-days', (\d+)\)", qa)
+    assert len(back) == 1 and 2 < int(back[0]) <= ba.KEEP_NIGHTS - 2
 
 
 def test_start_without_end_is_a_usage_error(tmp_path):
