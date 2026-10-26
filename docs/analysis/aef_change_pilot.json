@@ -1,0 +1,292 @@
+{
+ "threshold": 6.5,
+ "floor": 0.003,
+ "pilot": [
+  {
+   "region": "para_xingu",
+   "kind": "change",
+   "cells": 4096,
+   "flagged_2025": 0.012,
+   "flagged_2024": 0.0427,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "rondonia_labrea",
+   "kind": "change",
+   "cells": 4096,
+   "flagged_2025": 0.0325,
+   "flagged_2024": 0.01,
+   "fresh25_cells": 1,
+   "fresh25_caught": 0.0,
+   "auroc_within": null
+  },
+  {
+   "region": "bolivia_santacruz",
+   "kind": "change",
+   "cells": 4096,
+   "flagged_2025": 0.0496,
+   "flagged_2024": 0.0068,
+   "fresh25_cells": 7,
+   "fresh25_caught": 0.143,
+   "auroc_within": null
+  },
+  {
+   "region": "canada_flinflon",
+   "kind": "change",
+   "cells": 1427,
+   "flagged_2025": 0.1177,
+   "flagged_2024": 0.0166,
+   "fresh25_cells": 294,
+   "fresh25_caught": 0.371,
+   "auroc_within": 0.92
+  },
+  {
+   "region": "papua_merauke",
+   "kind": "change",
+   "cells": 4096,
+   "flagged_2025": 0.0122,
+   "flagged_2024": 0.0005,
+   "fresh25_cells": 46,
+   "fresh25_caught": 0.848,
+   "auroc_within": 0.981
+  },
+  {
+   "region": "paraguay_chaco",
+   "kind": "change",
+   "cells": 3251,
+   "flagged_2025": 0.2661,
+   "flagged_2024": 0.0239,
+   "fresh25_cells": 56,
+   "fresh25_caught": 0.946,
+   "auroc_within": 0.949
+  },
+  {
+   "region": "amazon_interior",
+   "kind": "stable",
+   "cells": 4096,
+   "flagged_2025": 0.0,
+   "flagged_2024": 0.0002,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "congo_interior",
+   "kind": "stable",
+   "cells": 4096,
+   "flagged_2025": 0.0059,
+   "flagged_2024": 0.0,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "gerd",
+   "kind": "readout",
+   "cells": 4096,
+   "flagged_2025": 0.002,
+   "flagged_2024": 0.0095,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "navi_mumbai",
+   "kind": "readout",
+   "cells": 4068,
+   "flagged_2025": 0.0,
+   "flagged_2024": 0.0146,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "iowa_crops",
+   "kind": "readout",
+   "cells": 4096,
+   "flagged_2025": 0.0896,
+   "flagged_2024": 0.0239,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "sahara_dunes",
+   "kind": "readout",
+   "cells": 4096,
+   "flagged_2025": 0.0,
+   "flagged_2024": 0.0,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  }
+ ],
+ "holdout": [
+  {
+   "region": "matopiba_cerrado",
+   "kind": "change",
+   "cells": 4096,
+   "flagged_2025": 0.0117,
+   "flagged_2024": 0.0217,
+   "fresh25_cells": 29,
+   "fresh25_caught": 0.414,
+   "auroc_within": 0.899
+  },
+  {
+   "region": "kalimantan_east",
+   "kind": "change",
+   "cells": 4051,
+   "flagged_2025": 0.0054,
+   "flagged_2024": 0.0183,
+   "fresh25_cells": 1,
+   "fresh25_caught": 0.0,
+   "auroc_within": null
+  },
+  {
+   "region": "ivory_coast",
+   "kind": "change",
+   "cells": 256,
+   "flagged_2025": 0.0034,
+   "flagged_2024": 0.0,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "la_palisades",
+   "kind": "change",
+   "cells": 4096,
+   "flagged_2025": 0.0845,
+   "flagged_2024": 0.0481,
+   "fresh25_cells": 92,
+   "fresh25_caught": 0.728,
+   "auroc_within": 0.872
+  },
+  {
+   "region": "manitoba_fires",
+   "kind": "change",
+   "cells": 4096,
+   "flagged_2025": 0.04,
+   "flagged_2024": 0.0068,
+   "fresh25_cells": 568,
+   "fresh25_caught": 0.178,
+   "auroc_within": 0.879
+  },
+  {
+   "region": "gabon_interior",
+   "kind": "stable",
+   "cells": 4096,
+   "flagged_2025": 0.021,
+   "flagged_2024": 0.0,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "peru_interior",
+   "kind": "stable",
+   "cells": 4096,
+   "flagged_2025": 0.0022,
+   "flagged_2024": 0.0024,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "ukraine_farm",
+   "kind": "farm",
+   "cells": 4096,
+   "flagged_2025": 0.001,
+   "flagged_2024": 0.002,
+   "fresh25_cells": 1,
+   "fresh25_caught": 0.0,
+   "auroc_within": null
+  },
+  {
+   "region": "punjab_farm",
+   "kind": "farm",
+   "cells": 4096,
+   "flagged_2025": 0.0,
+   "flagged_2024": 0.0,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "matogrosso_soy",
+   "kind": "farm",
+   "cells": 4096,
+   "flagged_2025": 0.012,
+   "flagged_2024": 0.0239,
+   "fresh25_cells": 1,
+   "fresh25_caught": 0.0,
+   "auroc_within": null
+  },
+  {
+   "region": "kansas_wheat",
+   "kind": "farm",
+   "cells": 4096,
+   "flagged_2025": 0.0288,
+   "flagged_2024": 0.0903,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "wheatbelt_au",
+   "kind": "farm",
+   "cells": 4096,
+   "flagged_2025": 0.0076,
+   "flagged_2024": 0.0127,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "greenland_margin",
+   "kind": "snow",
+   "cells": 4096,
+   "flagged_2025": 0.0,
+   "flagged_2024": 0.0,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  },
+  {
+   "region": "tibet_plateau",
+   "kind": "snow",
+   "cells": 1776,
+   "flagged_2025": 0.001,
+   "flagged_2024": 0.0518,
+   "fresh25_cells": 0,
+   "fresh25_caught": null,
+   "auroc_within": null
+  }
+ ],
+ "gate": {
+  "strict_stable_flagged": 0.005,
+  "strict_stable_cells": 2997,
+  "change_auroc_within": {
+   "matopiba_cerrado": 0.899,
+   "la_palisades": 0.872,
+   "manitoba_fires": 0.879
+  },
+  "farm_flagged": {
+   "ukraine_farm": 0.001,
+   "punjab_farm": 0.0,
+   "matogrosso_soy": 0.012,
+   "kansas_wheat": 0.0288,
+   "wheatbelt_au": 0.0076
+  },
+  "edge_share_top": 0.098,
+  "edge_share_base": 0.062
+ },
+ "checks": {
+  "strict stable flagged <= 0.5%": true,
+  "change tiles AUROC >= 0.85": true,
+  "farm tiles flagged <= 15%": true,
+  "top cells not edge-piled": false
+ }
+}

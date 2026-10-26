@@ -103,6 +103,7 @@ const OPTION_GROUPS = Object.freeze({
  * owns stable URL ordering.
  */
 export const LAYER_STATE_REGISTRY = Object.freeze([
+  Object.freeze({ id: 'aef-change', token: 'ac', disposition: 'enabled-only' }),
   Object.freeze({ id: 'aloft', token: 'k', disposition: 'enabled-only' }),
   Object.freeze({ id: 'arbonet', token: 'ar', disposition: 'enabled-only' }),
   Object.freeze({ id: 'bii', token: 'bi', disposition: 'enabled-only' }),

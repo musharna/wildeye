@@ -55,6 +55,7 @@ import { soilBacteriaLayer } from './data/soilBacteria.js';
 import { wetlandsLayer } from './data/wetlands.js';
 import { iflLayer } from './data/ifl.js';
 import { fortyLayer } from './data/forty.js';
+import { aefChangeLayer } from './data/aefChange.js';
 import { naturalLandsLayer } from './data/naturalLands.js';
 import { tidalMarshLayer } from './data/tidalMarsh.js';
 import { seagrassLayer } from './data/seagrass.js';
@@ -238,6 +239,7 @@ async function init() {
     dataManager.register(wetlandsLayer);
     dataManager.register(iflLayer);
     dataManager.register(fortyLayer);
+    dataManager.register(aefChangeLayer);
     dataManager.register(naturalLandsLayer);
     dataManager.register(tidalMarshLayer);
     dataManager.register(seagrassLayer);
@@ -247,7 +249,7 @@ async function init() {
     dataManager.register(cameraTrapsLayer);
     dataManager.register(ednaLayer);
     // One drape at a time (W0-3) — except the two sides of a swipe compare (GIBS stage 2).
-    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, cmemsPftLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, mhwLayer, ndviLayer, soilMoistureLayer, cmemsO2Layer, cmemsPhLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, lossDriversLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, fortyLayer, naturalLandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
+    const drapeLayers = [crwBleachingLayer, crwOutlookLayer, oisstLayer, chlorALayer, cmemsPftLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, mhwLayer, ndviLayer, soilMoistureLayer, cmemsO2Layer, cmemsPhLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, lossDriversLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, fortyLayer, aefChangeLayer, naturalLandsLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer];
     const drapeIds = drapeLayers.map((l) => l.id);
     const compare = createCompare({
       dataManager,
@@ -366,7 +368,7 @@ async function init() {
     const modeledRangeLayer = createModeledRangeLayer();
     modeledRangeLayer.init(viewer);
     const readGibsLayers = ({ lat, lon }) => [
-      ...[crwOutlookLayer, oisstLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, mhwLayer, ndviLayer, soilMoistureLayer, chlorALayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, lossDriversLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, fortyLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, hotspotsLayer, haedatLayer, penguinsLayer].filter((l) => dataManager.isEnabled(l.id)),
+      ...[crwOutlookLayer, oisstLayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, mhwLayer, ndviLayer, soilMoistureLayer, chlorALayer, cmemsPftLayer, cmemsZoocLayer, ...gibsLayers, hansenLossLayer, lossDriversLayer, surfaceWaterLayer, humanFootprintLayer, malariaLayer, biiLayer, reptilesLayer, mammalsLayer, soilBacteriaLayer, wetlandsLayer, tidalMarshLayer, seagrassLayer, kelpLayer, iflLayer, fortyLayer, aefChangeLayer, obisGridLayer, protectedAreasLayer, cameraTrapsLayer, ednaLayer, mangrovesLayer, invasivesLayer, marineRealmsLayer, freshwaterFishLayer, plantsWcvpLayer, hotspotsLayer, haedatLayer, penguinsLayer].filter((l) => dataManager.isEnabled(l.id)),
       ...(modeledRangeLayer.isEnabled() ? [modeledRangeLayer] : []),
     ].map((l) => ({ icon: l.icon, name: l.name, result: l.readoutAt(lat, lon) }));
     let groundPickInFlight = false;
