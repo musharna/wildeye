@@ -175,7 +175,7 @@ test('readout: the band and its score range at level 6; none in a transparent pi
   const sea = await h.layer.readoutAt(...SEA);
   assert.deepEqual([sea.status, sea.text], ['class', NONE_TEXT]);
   assert.equal(h.reads.length, 1, 'an unlisted tile was never written: no read');
-  assert.match(NONE_TEXT, /no unusual change, or no score here/);
+  assert.match(NONE_TEXT, /no unusual change, or no score here \(desert, Antarctica,/);
   assert.equal((await h.layer.readoutAt(95, 0)).status, 'outside');
 
   const top = harness({ pixel: [128, 0, 38, 255] });
@@ -217,11 +217,14 @@ test('legend: one swatch per band in its colour with its area, then what the sco
     ],
   );
   assert.equal(legend.at(-1).label, NOTE);
-  // the held-out figures of docs/analysis/aef-change-pilot.md: catch rates 18% (Manitoba) to 73% (LA), 0.50% of strict-stable cells flagged
+  // the held-out figures for score v2 at 6.5 (docs/analysis/aef-change-pilot.md): caught 7% (Manitoba) to 65% (LA), 0.4% of strict-stable cells flagged
   assert.match(NOTE, /~1\.3 km/);
   assert.match(NOTE, /a quarter of it changed/, 'the coarse-pixel rule');
   assert.match(NOTE, /not only forest loss/);
-  assert.match(NOTE, /found 18–73% of 2025 forest loss and flagged 0\.5% of untouched forest/);
+  assert.match(NOTE, /wide rivers whose water or ice changed and region-wide weather swings/, 'seen in the global build: Lena and Yenisei, western Russia');
+  assert.match(NOTE, /found 7–65% of 2025 forest loss \(least for large boreal fires\) and flagged 0\.4% of untouched forest/);
+  assert.match(NOTE, /deserts and Antarctica are not drawn/, 'the two masks of pipeline/aef_change.py');
+  assert.match(NOTE, /the rest of its 82 km tile/, 'the score is relative to the file');
   assert.match(NOTE, /CC BY 4\.0/);
 });
 
@@ -232,7 +235,8 @@ test('credit: the required text verbatim, the licence and what was changed, as C
   assert.ok(credit.html.includes(ATTRIBUTION), 'the README asks for this sentence');
   assert.match(credit.html, /creativecommons\.org\/licenses\/by\/4\.0\//);
   assert.match(credit.html, /GOOGLE_SATELLITE_EMBEDDING_V1_ANNUAL/);
-  assert.match(credit.html, /Changed: .*1\.28 km overview.*four bands/);
+  assert.match(credit.html, /Changed: .*1\.28 km overview.*rest of its file.*four bands/);
+  assert.match(credit.html, /RESOLVE Ecoregions 2017.*Antarctica are not drawn/, 'the desert mask\'s source is credited');
 });
 
 test('wiring: registered, a drape (one at a time), read on click, in Land conditions, with a share-link token; not on the time bar', async () => {

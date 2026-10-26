@@ -162,7 +162,7 @@ export const DATA_CREDITS = [
   },
   {
     key: 'aef-change',
-    html: 'Land change 2025: The AlphaEarth Foundations Satellite Embedding dataset is produced by Google and Google DeepMind. <a href="https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_SATELLITE_EMBEDDING_V1_ANNUAL" target="_blank" rel="noopener">Satellite Embedding v1, annual</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Changed: each file\'s 1.28 km overview read for 2017–2025 and scored for how unlike the three years before it 2025 is, against how unlike its own recent years usually are; only cells above a threshold set on intact forest are drawn, in four bands.',
+    html: 'Land change 2025: The AlphaEarth Foundations Satellite Embedding dataset is produced by Google and Google DeepMind. <a href="https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_SATELLITE_EMBEDDING_V1_ANNUAL" target="_blank" rel="noopener">Satellite Embedding v1, annual</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. Changed: each file\'s 1.28 km overview read for 2017–2025 and scored for how unlike the three years before it 2025 is, against how unlike its own recent years usually are, each year measured against the rest of its file; only cells above a threshold set on intact forest are drawn, in four bands; deserts (the Deserts &amp; Xeric Shrublands biome of <a href="https://ecoregions.appspot.com/" target="_blank" rel="noopener">RESOLVE Ecoregions 2017</a>, CC BY 4.0) and Antarctica are not drawn.',
   },
   {
     key: 'natural-lands',

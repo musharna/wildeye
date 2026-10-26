@@ -18,9 +18,9 @@ export const TILE_FAILURE_LIMIT = 8;
 export const ATTRIBUTION = "The AlphaEarth Foundations Satellite Embedding dataset is produced by Google and Google DeepMind.";
 const TILE = 256;
 const SOURCE = "AlphaEarth Foundations: Google, Google DeepMind";
-export const NONE_TEXT = "no unusual change, or no score here (no data, a UTM zone edge, or a year missing)";
+export const NONE_TEXT = "no unusual change, or no score here (desert, Antarctica, no data, a UTM zone edge, or a year missing)";
 export const NOTE =
-  "Where 2025 looks unlike any of the three years before it, more than is usual for that place, over ~1.3 km cells; zoomed out, a pixel is coloured where a quarter of it changed · not only forest loss: also fires, floods, building and crop changes, and whole regions can shift in an odd weather year · on test tiles it found 18–73% of 2025 forest loss and flagged 0.5% of untouched forest · Google, Google DeepMind, CC BY 4.0";
+  "Where 2025 looks unlike any of the three years before it, more than is usual for that place and for the rest of its 82 km tile, over ~1.3 km cells; zoomed out, a pixel is coloured where a quarter of it changed · not only forest loss: also fires, floods, building, crop changes, wide rivers whose water or ice changed and region-wide weather swings · deserts and Antarctica are not drawn: there the source shifts between processing runs more than the land does · on test tiles it found 7–65% of 2025 forest loss (least for large boreal fires) and flagged 0.4% of untouched forest · Google, Google DeepMind, CC BY 4.0";
 
 const isRgb = (c) => Array.isArray(c) && c.length === 3 && c.every((v) => Number.isInteger(v) && v >= 0 && v <= 255);
 const isCount = (v) => Number.isInteger(v) && v >= 0;
