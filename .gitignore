@@ -66,6 +66,8 @@ public/data/ifl.json
 public/data/ifl/
 public/data/forty.json
 public/data/forty/
+public/data/aef_change.json
+public/data/aef_change/
 public/data/fishing.geojson
 public/data/phenology.geojson
 public/data/fires.geojson
