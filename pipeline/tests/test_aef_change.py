@@ -462,3 +462,21 @@ def test_a_changed_ecoregions_zip_is_refused(tmp_path):
     z.write_bytes(b"PK not the pinned zip")
     with pytest.raises(ValueError, match="sha256 .* pinned"):
         ac.desert_shapes(z)
+
+
+def test_threshold_and_floor_are_the_pilots_frozen_values():
+    """The pilot module froze the threshold and the MAD floor and the pipeline copies them, so a recalibration of
+    one must fail here until the other follows. Read by ast: CI's python has no pandas or scipy for the pilot."""
+    import ast
+
+    src = Path(__file__).resolve().parents[2] / "analysis" / "aef_change_stats.py"
+    frozen = {
+        t.id: ast.literal_eval(node.value)
+        for node in ast.parse(src.read_text()).body
+        if isinstance(node, ast.Assign)
+        for t in node.targets
+        if isinstance(t, ast.Name) and t.id in ("FLOOR", "FROZEN_THRESHOLD")
+    }
+    assert frozen.keys() == {"FLOOR", "FROZEN_THRESHOLD"}
+    assert ac.FLOOR == frozen["FLOOR"]
+    assert ac.THRESHOLD == frozen["FROZEN_THRESHOLD"] == ac.BANDS[0]
