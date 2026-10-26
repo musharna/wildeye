@@ -946,7 +946,7 @@ export function createBirdsLayer() {
      *
      * The archive is written by pipeline/build_archive.py. Since 2026-09-22 a
      * daily cron (pipeline/run_archive.sh, 08:35 local) appends the previous
-     * night's 00-12 UTC frames in one batch and prunes to 30 nights, so a
+     * night's 00-12 UTC frames in one batch and prunes to 14 nights, so a
      * refresh during the day usually returns the same span. This comment once
      * claimed a cron appended a frame every hour when none existed, which is
      * the belief the stale-archive defect rested on. getObservedExtent() below

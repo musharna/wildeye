@@ -7,7 +7,7 @@ import pytest
 import pipeline.build_archive as ba
 
 UTC = dt.UTC
-NIGHT = set(range(0, 13))
+NIGHT = set(range(13))
 SETTLE = dt.timedelta(minutes=35)
 
 
@@ -146,3 +146,23 @@ def test_catch_up_fills_to_the_settled_edge_and_prunes(tmp_path, monkeypatch):
     assert frames[0] == "2026-09-11T00" and frames[-1] == "2026-09-12T12"
     assert len(frames) == 26
     assert not (tmp_path / "2026/09/10").exists()
+
+
+def test_the_cron_prunes_to_the_scripts_keep_nights():
+    """run_archive.sh passes --keep-nights itself, so a change to KEEP_NIGHTS alone would not reach the cron."""
+    import re
+
+    sh = (Path(__file__).resolve().parents[1] / "run_archive.sh").read_text()
+    assert re.findall(r"--keep-nights (\d+)", sh) == [str(ba.KEEP_NIGHTS)]
+    assert ba.parser().parse_args(["--catch-up"]).keep_nights == ba.KEEP_NIGHTS == 14
+    assert ba.parser().parse_args(["--catch-up", "--keep-nights", "3"]).keep_nights == 3
+
+
+def test_start_without_end_is_a_usage_error(tmp_path):
+    with pytest.raises(SystemExit) as e:
+        ba.main(["--start", "2026-09-10", "--out", str(tmp_path)])
+    assert e.value.code == 2
+    assert (
+        ba.parser().parse_args(["--start", "2026-09-10", "--end", "2026-09-10"]).end
+        == "2026-09-10"
+    )
