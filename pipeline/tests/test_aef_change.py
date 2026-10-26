@@ -76,6 +76,34 @@ def test_score_looks_back_three_years_against_the_median_year():
     assert z[14, 14] > 40
 
 
+def test_a_whole_file_shift_in_one_year_is_not_change_but_a_cell_inside_it_still_is():
+    # some AEF files' 2025 (and 2022) sit ~0.02 from every other year in every cell: Sahara blocks in the first build
+    a = stack_years(vec(31))
+    for yr, away in (
+        (2022, vec(32)),
+        (2025, vec(35)),
+    ):  # each year shifted its own way, as in the real files
+        v = a[yr].astype(np.float32)
+        v = np.sign(v) * (v / 127.5) ** 2 + 0.2 * away[:, None, None]
+        a[yr] = q(v / np.linalg.norm(v, axis=0))
+    a[2025][:, 50, 50] = q(vec(33))
+    z = ac.score(a)
+    assert (ac.band(z) > 0).mean() < 0.01
+    assert z[50, 50] > 40
+
+
+def test_a_file_with_too_few_scored_cells_has_no_score():
+    a = stack_years(vec(34))
+    a[2017][
+        :, :, 2:
+    ] = -128  # two columns with data; the right one is next to no data, so column 0 is scored: 64 cells
+    assert np.isfinite(ac.score(a)).sum() == ac.MIN_CELLS == 64
+    a[2017][
+        :, 63, 0
+    ] = -128  # one more no-data cell: rows 62-63 of column 0 drop out, 62 cells, below the minimum
+    assert np.isfinite(ac.score(a)).sum() == 0
+
+
 def test_score_floor_keeps_tiny_jumps_on_constant_ground_clear():
     a = stack_years(vec(4), noise=0.0)
     assert np.isfinite(ac.score(a)).all()

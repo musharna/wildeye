@@ -62,7 +62,8 @@ BANDS = [
     20.0,
     40.0,
 ]  # lower edges; on the pilot + held-out tiles 28%, 42%, 54%, 93% of flags sat on 2025 forest loss
-SCORE_VERSION = 1  # bump when the score changes, so a cache of old scores is not reused
+SCORE_VERSION = 2  # bump when the score changes, so a cache of old scores is not reused (2: novelty relative to the file)
+MIN_CELLS = 64  # a file with fewer scored cells has no file median to measure against
 TILE = 256
 MAX_LEVEL = 6  # 0.011 degrees, about 1.2 km at the equator
 BLOCK_LEVELS = (
@@ -230,10 +231,16 @@ def score(arrays: dict[int, np.ndarray]) -> np.ndarray:
         for dx in (0, 1, 2):
             near |= pad[dy : dy + h, dx : dx + w]
 
+    if (~near).sum() < MIN_CELLS:
+        return np.full(near.shape, np.nan, np.float32)
+
     def nov3(k):
-        return np.min(
+        """Novelty of year k, less the file's median novelty that year: some files' years were made differently
+        and sit ~0.02 from every other year in every cell (whole-file blocks in the Sahara), which this cancels."""
+        n = np.min(
             np.stack([1.0 - (e[k] * e[j]).sum(0) for j in range(k - LOOKBACK, k)]), 0
         )
+        return n - np.median(n[~near])
 
     hist = np.stack([nov3(k) for k in HISTORY])
     med = np.median(hist, 0)
