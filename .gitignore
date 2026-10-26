@@ -64,6 +64,8 @@ public/data/protected_areas.json
 public/data/protected/
 public/data/ifl.json
 public/data/ifl/
+public/data/forty.json
+public/data/forty/
 public/data/fishing.geojson
 public/data/phenology.geojson
 public/data/fires.geojson
