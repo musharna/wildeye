@@ -216,6 +216,7 @@ test('legend: one swatch per type in its colour with its area, then the method a
   assert.equal(legend.at(-1).label, NOTE);
   // the preprint's figures (doi:10.31223/X58R27 v2: "overall accuracy of 90.2%", "planted forest class shows the lowest F1-score (58.2%)")
   assert.match(NOTE, /~610 m/);
+  assert.match(NOTE, /areas are of this map as drawn/, 'the areas are the drape\'s, not the 10 m map\'s (docs/analysis/forty_drape_vs_native.md)');
   assert.match(NOTE, /overall accuracy 90\.2%/);
   assert.match(NOTE, /planted forest is the least reliable class \(F1 58\.2%\)/);
   assert.match(NOTE, /CC BY 4\.0/);

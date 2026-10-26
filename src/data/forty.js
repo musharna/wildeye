@@ -19,7 +19,7 @@ const TILE = 256;
 const SOURCE = "Forest Typology 2020 (ForTy): Nature Trace";
 export const NONE_TEXT = "no forest type: other land, water or no data";
 export const NOTE =
-  "Forest types in 2020: the most likely of six types (other land not drawn) over each ~610 m pixel, from 10 m probabilities · overall accuracy 90.2%; planted forest is the least reliable class (F1 58.2%) · Neumann et al. 2026, Nature Trace, CC BY 4.0";
+  "Forest types in 2020: the most likely of six types (other land not drawn) over each ~610 m pixel, from 10 m probabilities; areas are of this map as drawn · overall accuracy 90.2%; planted forest is the least reliable class (F1 58.2%) · Neumann et al. 2026, Nature Trace, CC BY 4.0";
 
 const isRgb = (c) => Array.isArray(c) && c.length === 3 && c.every((v) => Number.isInteger(v) && v >= 0 && v <= 255);
 const isCount = (v) => Number.isInteger(v) && v >= 0;

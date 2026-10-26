@@ -30,6 +30,8 @@ signal.signal(
 signal.alarm(3000)
 ROOT = Path(__file__).resolve().parents[1]
 SEED = 20261026
+# map-based global areas from the 10 m map, Mha (Neumann et al. 2026, doi:10.31223/X58R27 v2, Table 26, row Global)
+PREPRINT_MHA = {1: 2330, 2: 1508, 3: 129, 4: 70, 5: 130}
 PER_TYPE = 40  # drawn pixels sampled per type (fewer if the map has fewer)
 CLEAR = 60  # clear pixels in drawn tiles
 TILES_SCANNED = 600  # random listed level-7 tiles the samples are drawn from
@@ -187,7 +189,7 @@ def main(argv=None):
     with open(out / "forty_samples.tsv", "w") as fh:
         fh.write("lat\tlon\tdrawn\tnative\tnative_px\titems\tmargin\n")
         for r in rows:
-            mg = "" if r["margin"] is None else f"{r['margin']:.3f}"
+            mg = "NA" if r["margin"] is None else f"{r['margin']:.3f}"
             fh.write(
                 f"{r['lat']:.5f}\t{r['lon']:.5f}\t{labels[r['drawn']]}\t{labels[r['native']]}\t{r['native_px']}\t{r['items']}\t{mg}\n"
             )
@@ -243,6 +245,24 @@ def main(argv=None):
         )
         + "). Median native pixels per footprint: "
         + f"{int(np.median([r['native_px'] for r in rows if r['native_px']]))}.",
+        "",
+        "Footprints on a seam between source tiles: "
+        + f"{sum(r['drawn'] == r['native'] for r in rows if r['items'] > 1)} of {sum(r['items'] > 1 for r in rows)} agree; "
+        + f"inside one tile {sum(r['drawn'] == r['native'] for r in rows if r['items'] == 1)} of {sum(r['items'] == 1 for r in rows)}.",
+        "",
+        "## Area drawn against the preprint's own map-based areas",
+        "",
+        (
+            "The legend's areas are of the drape as drawn (one type per ~610 m pixel). The preprint counts its 10 m map "
+            "(Table 26, Global): a type that is a minority inside most ~610 m pixels loses ground here."
+        ),
+        "",
+        "| type | drawn (Mha) | preprint map (Mha) | drawn / preprint |",
+        "|---|---|---|---|",
+        *(
+            f"| {c['label']} | {c['km2'] / 1e4:,.0f} | {PREPRINT_MHA[c['index']]:,} | {c['km2'] / 1e4 / PREPRINT_MHA[c['index']]:.3f} |"
+            for c in m["classes"]
+        ),
         "",
         "Samples: `docs/analysis/forty_samples.tsv`.",
         "",
