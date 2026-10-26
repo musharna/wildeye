@@ -452,6 +452,72 @@
     "credit": "Courtesy NOAA Coral Reef Watch (daily 5 km sea ice fraction v3.1)"
   },
   {
+    "id": "mhw",
+    "name": "Marine heatwaves (NOAA CRW)",
+    "icon": "🌊",
+    "erddap_grid": {
+      "url": "https://pae-paha.pacioos.hawaii.edu/erddap/griddap/mhw_5km.nc?heatwave_category%5B(last)%5D%5B(-89.875):5:(89.875)%5D%5B(-179.875):5:(179.875)%5D",
+      "variable": "heatwave_category"
+    },
+    "transparent": "none",
+    "kind": "classes",
+    "zrank": 35,
+    "classes": [
+      {
+        "label": "no heatwave",
+        "rgb": [
+          179,
+          242,
+          255
+        ],
+        "hidden": true
+      },
+      {
+        "label": "moderate",
+        "rgb": [
+          255,
+          255,
+          128
+        ]
+      },
+      {
+        "label": "strong",
+        "rgb": [
+          255,
+          179,
+          51
+        ]
+      },
+      {
+        "label": "severe",
+        "rgb": [
+          255,
+          128,
+          0
+        ]
+      },
+      {
+        "label": "extreme",
+        "rgb": [
+          204,
+          77,
+          0
+        ]
+      },
+      {
+        "label": "beyond extreme",
+        "rgb": [
+          153,
+          26,
+          0
+        ]
+      }
+    ],
+    "legend": "Hobday et al. 2018 categories: sea surface temperature past the local 90th percentile, graded by how many times the gap between that percentile and the mean it exceeds; no heatwave hidden",
+    "credit_key": "noaa-crw",
+    "credit": "Courtesy NOAA Coral Reef Watch (daily 5 km Marine Heatwave Watch v1.0.1, categories after Hobday et al. 2018, doi:10.5670/oceanog.2018.205)"
+  },
+  {
     "id": "ndvi",
     "name": "Vegetation greenness NDVI (NOAA VIIRS CDR)",
     "icon": "🌿",

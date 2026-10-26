@@ -332,8 +332,25 @@ def _draw_grid(product: dict, c: dict, ds) -> tuple[np.ndarray, str, dict]:
     if lat[0] < lat[-1]:
         vals, lat = vals[::-1], lat[::-1]  # north-up
     when = str(np.datetime_as_string(times[0].astype("datetime64[s]"), unit="s")) + "Z"
-    rgba, bounds = edge_align(ramp_rgba(vals, product["ramp"]), lat, lon)
+    drawn = classes_rgba(vals, product) if product.get("kind") == "classes" else ramp_rgba(vals, product["ramp"])
+    rgba, bounds = edge_align(drawn, lat, lon)
     return rgba, when, {"bounds": bounds}
+
+
+def classes_rgba(vals: np.ndarray, product: dict) -> np.ndarray:
+    """A grid of class codes 0..n-1 coloured by the product's `classes` list (code k is classes[k]); NaN (the fill value,
+    land) and classes marked hidden are clear. A code with no class is refused: drawn clear it would read as no data.
+    mhw: NOAA CRW's heatwave categories 0 (none, hidden) to 5 (beyond extreme)."""
+    from .crw_outlook import drape_rgba
+    palette = product["classes"]
+    if any(c.get("hidden") and list(c["rgb"]) == [0, 0, 0] for c in palette):
+        # a cell with no value is (0,0,0,0); the click readout names a clear pixel by its hidden class's colour
+        raise ValueError(f"{product['id']}: a hidden class drawn black would read as a cell with no value")
+    ok = np.isfinite(vals)
+    bad = np.unique(vals[ok & ((vals != np.round(vals)) | (vals < 0) | (vals >= len(palette)))])
+    if bad.size:
+        raise ValueError(f"{product['id']}: codes {bad[:5].tolist()} have no class (classes 0..{len(palette) - 1})")
+    return drape_rgba(np.where(ok, vals, -1).astype(np.int16), palette)
 
 
 def render(product: dict, out_dir: Path) -> tuple[np.ndarray, str | None, dict, float]:

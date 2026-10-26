@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, drapePixel, cmemsZoocLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer } from './rasterDrape.js';
+import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, classReadoutText, drapePixel, mhwLayer, cmemsZoocLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer } from './rasterDrape.js';
 
 test('pickProduct: finds by id, null when absent or malformed', () => {
   const m = { products: [{ id: 'a', png: 'x' }, { id: 'b' }] };
@@ -408,4 +408,44 @@ test("drape: a failed manifest fetch names its reason, not only 'load error'", a
     assert.equal(l.getStats().error, null);
     l.destroy(viewer);
   } finally { globalThis.fetch = saved; console.warn = warn; stack.clear(); }
+});
+
+test('classes readout (mhw): a class colour reads as its label, a hidden one at alpha 0 too; land is no data; a ramp layer still reads its ramp', async () => {
+  assert.equal(mhwLayer.id, 'mhw');
+  assert.equal(typeof mhwLayer.readoutAt, 'function', 'mhw is drawn by classes_rgba from ERDDAP codes, so it opts in');
+  const classes = [{ label: 'no heatwave', rgb: [179, 242, 255], hidden: true }, { label: 'moderate', rgb: [255, 255, 128] },
+    { label: 'severe', rgb: [255, 128, 0] }];
+  assert.deepEqual(classReadoutText([255, 128, 0], classes), { kind: 'value', text: 'severe' });
+  assert.deepEqual(classReadoutText([179, 242, 255], classes), { kind: 'unknown', rgb: [179, 242, 255] }, 'a hidden colour shown is no class');
+  assert.deepEqual(classReadoutText([179, 242, 255], classes, true), { kind: 'value', text: 'no heatwave' });
+  assert.deepEqual(classReadoutText([255, 255, 128], classes, true), { kind: 'unknown', rgb: [255, 255, 128] }, 'a visible colour cleared is no class');
+  const bounds = { west: -180, south: -90, east: 180, north: 90 };
+  // one row, four cells at lon -135, -45, 45, 135: moderate, hidden no-heatwave, land, off every class
+  const pixels = [255, 255, 128, 255, 179, 242, 255, 0, 0, 0, 0, 0, 1, 2, 3, 255];
+  const ramp = { min: 0, max: 1, stops: [[0, 0, 0], [255, 255, 255]] };
+  const saved = globalThis.fetch;
+  const viewer = { imageryLayers: fakeImagery() };
+  try {
+    const read = async (entry) => {
+      globalThis.fetch = async () => ({ ok: true, json: async () => ({ products: [entry] }) });
+      const l = createRasterDrapeLayer({ id: entry.id, name: 'n', icon: 'i', source: 's', readout: true,
+        providerFor: async (url) => ({ url }), imageryLayerFor: (p) => ({ p, show: true }),
+        decodeImage: async () => ({ width: 4, height: 1, data: Uint8Array.from(pixels) }) });
+      l.init(viewer); l.enable();
+      assert.equal(await l.update(), true);
+      const rows = [];
+      for (const lon of [-135, -45, 45, 135]) rows.push(await l.readoutAt(0, lon));
+      l.destroy(viewer);
+      return rows;
+    };
+    const [mod, none, land, off] = await read({ id: 'mhw', png: 'p.png', time: '2026-10-24T12:00:00Z', bounds, width: 4, height: 1, kind: 'classes', classes });
+    assert.deepEqual([mod.status, mod.text, mod.date], ['value', 'moderate', '2026-10-24']);
+    assert.deepEqual([none.status, none.text], ['value', 'no heatwave'], 'open ocean with no heatwave says so, not "no data"');
+    assert.equal(land.status, 'nodata');
+    assert.deepEqual([off.status, off.error], ['error', 'colour 1,2,3 is not a class colour']);
+    const [r0, , rLand] = await read({ id: 'r', png: 'p.png', time: '2026-10-24T12:00:00Z', bounds, width: 4, height: 1, ramp });
+    assert.equal(r0.status, 'error', 'a ramp layer reads its ramp: (255,255,128) is off this grey ramp');
+    assert.match(r0.error, /not on the ramp/);
+    assert.equal(rLand.status, 'nodata');
+  } finally { globalThis.fetch = saved; _drapeStackForTest().clear(); }
 });

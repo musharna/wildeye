@@ -131,6 +131,16 @@ export function drapePixel(lat, lon, b, width, height) {
     py: Math.min(height - 1, Math.floor(((b.north - lat) / (b.north - b.south)) * height)),
   };
 }
+/**
+ * A drape pixel's class as readout text: the class whose colour it is, exactly. pipeline/raster.py classes_rgba draws
+ * code k in classes[k]'s colour, and a hidden class keeps its colour at alpha 0, so `clear` (alpha 0) is matched only
+ * against hidden classes and a visible pixel only against visible ones; anything else is not a class colour.
+ */
+export function classReadoutText(c, classes, clear = false) {
+  const hit = classes.find((k) => Boolean(k.hidden) === clear && k.rgb[0] === c[0] && k.rgb[1] === c[1] && k.rgb[2] === c[2]);
+  return hit ? { kind: 'value', text: hit.label } : { kind: 'unknown', rgb: [c[0], c[1], c[2]] };
+}
+
 /** Legend items (label + colour) from the manifest entry: discrete classes or a continuous ramp. */
 export function legendItems(entry) {
   if (!entry) return [];
@@ -172,8 +182,9 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
   // test seams: node has no WebGL, so tests substitute the provider/layer constructors
   providerFor = (url, rectangle) => Cesium.SingleTileImageryProvider.fromUrl(url, { rectangle }),
   imageryLayerFor = (provider, opts) => new Cesium.ImageryLayer(provider, opts),
-  // readout: true adds readoutAt, which inverts the shown frame's pixels through the manifest ramp. Only for a PNG
-  // that pipeline/raster.py drew with ramp_rgba from that ramp (cmems and erddap_grid products), not one ERDDAP coloured.
+  // readout: true adds readoutAt, which inverts the shown frame's pixels through the manifest ramp, or names the class
+  // of a classes product. Only for a PNG that pipeline/raster.py drew with ramp_rgba from that ramp (cmems and
+  // erddap_grid products) or with classes_rgba from those classes (mhw), not one ERDDAP coloured.
   readout = false,
   decodeImage = async (url) => {
     const res = await fetch(url);
@@ -321,8 +332,16 @@ export function createRasterDrapeLayer({ id, name, icon, source, alpha = 0.6, up
           throw new Error(`${id} image is ${bad.image.width}×${bad.image.height}, the manifest says ${_entry.width}×${_entry.height}`);
         }
         const i = (at.py * width + at.px) * 4;
+        const rgb = [data[i], data[i + 1], data[i + 2]];
+        if (Array.isArray(_entry.classes)) {
+          const v = classReadoutText(rgb, _entry.classes, data[i + 3] === 0);
+          if (v.kind === 'value') return row('value', { date, text: v.text });
+          // a clear pixel that is no hidden class is a cell with no value (land); a shown one off the classes is a bug
+          if (data[i + 3] === 0) return row('nodata', { date });
+          return row('error', { date, error: `colour ${v.rgb.join(',')} is not a class colour` });
+        }
         if (data[i + 3] === 0) return row('nodata', { date });
-        const v = rampReadoutText([data[i], data[i + 1], data[i + 2]], _entry.ramp);
+        const v = rampReadoutText(rgb, _entry.ramp);
         if (v.kind === 'unknown') return row('error', { date, error: `colour ${v.rgb.join(',')} is not on the ramp` });
         return row('value', { date, text: v.text });
       } catch (e) {
@@ -359,6 +378,10 @@ export const crwSeaIceLayer = createRasterDrapeLayer({
 });
 export const ndviLayer = createRasterDrapeLayer({
   id: 'ndvi', name: 'Vegetation greenness (NDVI)', icon: '🌿', source: 'NOAA NDVI CDR via NCEI', alpha: 0.7, zrank: 15,
+  readout: true,
+});
+export const mhwLayer = createRasterDrapeLayer({
+  id: 'mhw', name: 'Marine heatwaves', icon: '🌊', source: 'NOAA Coral Reef Watch', alpha: 0.7, zrank: 35,
   readout: true,
 });
 export const cmemsO2Layer = createRasterDrapeLayer({
