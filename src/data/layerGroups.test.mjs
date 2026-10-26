@@ -9,10 +9,10 @@ const NOT_IN_PANEL = new Set(['species']);
 test('every panel layer the app registers is in exactly one group, and the map names no unknown layer', () => {
   const index = groupIndex(LAYER_GROUPS);
   const panelIds = REGISTERED_LAYER_IDS.filter((id) => !NOT_IN_PANEL.has(id));
-  assert.equal(panelIds.length, 73);
+  assert.equal(panelIds.length, 74);
   assert.deepEqual(panelIds.filter((id) => !index.has(id)), [], 'registered but ungrouped');
   assert.deepEqual([...index.keys()].filter((id) => !REGISTERED_LAYER_IDS.includes(id)), [], 'grouped but not registered');
-  assert.equal(index.size, 73);
+  assert.equal(index.size, 74);
 });
 
 test('nine named groups, none empty and none a catch-all', () => {
@@ -25,6 +25,7 @@ test('nine named groups, none empty and none a catch-all', () => {
   assert.equal(index.get('malaria'), index.get('neon-vectors'));
   assert.equal(index.get('arbonet'), 'disease');
   assert.equal(index.get('gibs-disturbance'), 'land'); // beside fires and drought, its commonest causes
+  assert.equal(index.get('aef-change'), 'land'); // beside disturbance: both say where land changed this year
 });
 
 test('a layer filed in two groups is refused', () => {
