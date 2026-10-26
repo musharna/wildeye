@@ -12,7 +12,7 @@ smang value at that cell classed by GDO's legend edges with explicit comparisons
 | class | cells |
 |---|---:|
 | no data | 618,794 |
-| drier, ≤ −2 σ | 22,269 |
+| drier, < −2 σ | 22,269 |
 | drier, −2 to −1.5 σ | 12,255 |
 | drier, −1.5 to −1 σ | 19,851 |
 | near normal, −1 to 1 σ | 156,046 |

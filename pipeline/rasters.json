@@ -602,7 +602,7 @@
     "keep_days": 120,
     "classes": [
       {
-        "label": "drier, ≤ −2 σ",
+        "label": "drier, < −2 σ",
         "rgb": [
           179,
           88,

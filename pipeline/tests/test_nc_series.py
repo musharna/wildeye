@@ -225,3 +225,70 @@ def test_raster_routes_nc_series_to_its_fetch_and_its_steps(monkeypatch, tmp_pat
     assert raster.source_steps({"id": "x", "cmems": {}}, "s") == [], (
         "positive control: a newest-only source lists none"
     )
+
+
+def test_soil_moisture_labels_say_where_the_bins_put_each_edge():
+    """np.digitize puts a value on an edge in the class above it (edges[k-1] <= v < edges[k]), so the bottom class is
+    "< −2" and the top "≥ 2"; it was labelled "≤ −2" while −2.0 itself was drawn one class up (PR #132 review)."""
+    import json
+    from pathlib import Path
+
+    p = next(
+        x
+        for x in json.loads((Path(__file__).parents[1] / "rasters.json").read_text())
+        if x["id"] == "soil-moisture"
+    )
+    edges, labels = p["nc_series"]["bins"], [c["label"] for c in p["classes"]]
+    num = lambda e: f"{e:g}".replace("-", "−")
+    assert len(labels) == len(edges) + 1
+    assert labels[0].endswith(f"< {num(edges[0])} σ") and labels[-1].endswith(
+        f"≥ {num(edges[-1])} σ"
+    )
+    for k in range(1, len(edges)):
+        assert labels[k].endswith(f"{num(edges[k - 1])} to {num(edges[k])} σ"), labels[
+            k
+        ]
+    assert list(
+        np.digitize(np.array(edges, dtype=float), np.array(edges, dtype=float))
+    ) == list(range(1, len(edges) + 1)), "each edge falls in the class it opens"
+
+
+def test_a_strided_read_draws_the_picked_cells_on_their_own_centres(tmp_path):
+    """Every 3rd cell from the 2nd (stride 3, offset 1), as soil-moisture takes every 5th from the 3rd: the picked cells'
+    values must land on the picked cells' centres. With stride 1 and offset 0 any slicing lines up (PR #132 review), so
+    here every cell not picked holds a near-normal 0 and each picked cell a value of its own class."""
+    xr = pytest.importorskip("xarray")
+    pytest.importorskip("netCDF4")
+    lon = -165.0 + 30.0 * np.arange(12)  # 12 x 6 cells of 30 degrees, north first
+    lat = 75.0 - 30.0 * np.arange(6)
+    v = np.zeros((1, 6, 12), dtype="float32")
+    v[0, 1, [1, 4, 7, 10]] = [-2.5, -1.7, -1.2, 1.2]
+    v[0, 4, [1, 4, 7, 10]] = [1.7, 2.5, np.nan, -2.0]
+    v[0, 1, 0] = v[0, 0, 1] = v[0, 2, 2] = (
+        9.0  # a neighbour of a picked cell, in the top class: a slip would show it
+    )
+    xr.Dataset(
+        {"smang": (("time", "lat", "lon"), v)},
+        coords={
+            "time": np.array(["2026-10-11"], dtype="datetime64[ns]"),
+            "lat": lat.astype("float32"),
+            "lon": lon.astype("float32"),
+        },
+    ).to_netcdf(tmp_path / "s.nc")
+    product = _product(
+        stride=3,
+        offset=1,
+        grid={"west": -180, "north": 90, "cell": 30, "width": 12, "height": 6},
+    )
+    rgba, when, extras = nc_series.fetch_nc_series(product, file=tmp_path / "s.nc")
+    assert rgba.shape == (2, 4, 4) and when == "2026-10-11T00:00:00Z"
+    assert extras == {
+        "bounds": {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+    }
+    codes = [
+        [None if px[3] == 0 and px[0] == 0 else px[0] // 30 for px in row]
+        for row in rgba.tolist()
+    ]
+    assert codes == [[0, 1, 2, 4], [5, 6, None, 1]], (
+        "-2.0 itself is drawn in the class it opens"
+    )
