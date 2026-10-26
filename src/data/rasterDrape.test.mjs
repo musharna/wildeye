@@ -2,6 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { LAYER_GROUPS } from './layerGroups.js';
+import { DATA_CREDITS } from './dataCredits.js';
 import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, classReadoutText, drapePixel, mhwLayer, cmemsZoocLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer } from './rasterDrape.js';
 
 test('pickProduct: finds by id, null when absent or malformed', () => {
@@ -448,4 +450,20 @@ test('classes readout (mhw): a class colour reads as its label, a hidden one at 
     assert.match(r0.error, /not on the ramp/);
     assert.equal(rLand.status, 'nodata');
   } finally { globalThis.fetch = saved; _drapeStackForTest().clear(); }
+});
+
+test('mhw wiring: registered, a drape, read on click and on the time bar, in Ocean conditions, credited to CRW', () => {
+  const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+  assert.match(main, /import \{[^}]*\bmhwLayer\b[^}]*\} from '\.\/data\/rasterDrape\.js';/);
+  assert.match(main, /dataManager\.register\(mhwLayer\);/);
+  const list = (re) => main.match(re)?.[1].split(',').map((s) => s.trim());
+  const drapes = list(/const drapeLayers = \[([^\]]+)\];/);
+  const reads = list(/const readGibsLayers = \(\{ lat, lon \}\) => \[\n\s*\.\.\.\[([^\]]+)\]/);
+  const observed = list(/const observedLayers = \[([^\]]+)\];/);
+  assert.ok(drapes?.includes('crwSeaIceLayer') && reads?.includes('crwSeaIceLayer') && observed?.includes('crwSeaIceLayer'),
+    'positive control: the three lists were found');
+  for (const [name, l] of [['drapes', drapes], ['read on click', reads], ['time bar', observed]]) assert.ok(l.includes('mhwLayer'), name);
+  assert.ok(LAYER_GROUPS.find((g) => g.id === 'ocean').layers.includes('mhw'));
+  const crw = DATA_CREDITS.find((c) => c.key === 'noaa-crw').html;
+  assert.ok(crw.includes('marine heatwaves') && crw.includes('Marine Heatwave Watch v1.0.1') && crw.includes('doi:10.5670/oceanog.2018.205'));
 });
