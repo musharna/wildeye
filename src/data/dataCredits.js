@@ -39,7 +39,11 @@ export const DATA_CREDITS = [
   },
   {
     key: 'noaa-ndvi-cdr',
-    html: 'Vegetation greenness: <a href="https://www.ncei.noaa.gov/products/climate-data-records/normalized-difference-vegetation-index" target="_blank" rel="noopener">NOAA NDVI Climate Data Record</a> (VIIRS daily 0.05°, NCEI THREDDS OPeNDAP)',
+    html: 'Vegetation greenness: <a href="https://www.ncei.noaa.gov/products/climate-data-records/normalized-difference-vegetation-index" target="_blank" rel="noopener">NOAA NDVI Climate Data Record</a> (VIIRS daily 0.05°, downloaded from NCEI\'s archive, every 5th cell)',
+  },
+  {
+    key: 'jrc-gdo',
+    html: 'Soil moisture anomaly: contains modified Copernicus Emergency Management Service information 2026. <a href="https://drought.emergency.copernicus.eu/" target="_blank" rel="noopener">Copernicus Global Drought Observatory</a>, Soil Moisture Index Anomaly v3.0.1 (European Commission, Joint Research Centre; LISFLOOD, 1995–2024 baseline; doi:10.2905/JRC.NXWJPVG; <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>), dekadal 0.05°, every 5th cell, classed as on GDO\'s maps. Provided as is; not an early warning.',
   },
   {
     key: 'nasa-gibs',

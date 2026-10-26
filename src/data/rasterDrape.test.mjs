@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { LAYER_GROUPS } from './layerGroups.js';
 import { DATA_CREDITS } from './dataCredits.js';
-import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, classReadoutText, drapePixel, mhwLayer, cmemsZoocLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer } from './rasterDrape.js';
+import { pickProduct, createRasterDrapeLayer, crwBleachingLayer, oisstLayer, legendItems, restackDrapes, _drapeStackForTest, frameAtOrBefore, setStackedImagery, setDrapeSplit, drapeStackState, onDrapeRestack, rampValue, rampPosition, rampReadoutText, classReadoutText, drapePixel, mhwLayer, cmemsZoocLayer, chlorALayer, crwDhwLayer, crwHotspotLayer, crwSeaIceLayer, ndviLayer, soilMoistureLayer } from './rasterDrape.js';
 
 test('pickProduct: finds by id, null when absent or malformed', () => {
   const m = { products: [{ id: 'a', png: 'x' }, { id: 'b' }] };
@@ -466,4 +466,23 @@ test('mhw wiring: registered, a drape, read on click and on the time bar, in Oce
   assert.ok(LAYER_GROUPS.find((g) => g.id === 'ocean').layers.includes('mhw'));
   const crw = DATA_CREDITS.find((c) => c.key === 'noaa-crw').html;
   assert.ok(crw.includes('marine heatwaves') && crw.includes('Marine Heatwave Watch v1.0.1') && crw.includes('doi:10.5670/oceanog.2018.205'));
+});
+
+test('soil-moisture wiring: registered, a drape, read on click and on the time bar, in Land conditions, credited with the CEMS wording', () => {
+  assert.equal(soilMoistureLayer.id, 'soil-moisture');
+  assert.equal(typeof soilMoistureLayer.readoutAt, 'function', 'each class is named on click');
+  const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+  assert.match(main, /import \{[^}]*\bsoilMoistureLayer\b[^}]*\} from '\.\/data\/rasterDrape\.js';/);
+  assert.match(main, /dataManager\.register\(soilMoistureLayer\);/);
+  const list = (re) => main.match(re)?.[1].split(',').map((s) => s.trim());
+  const drapes = list(/const drapeLayers = \[([^\]]+)\];/);
+  const reads = list(/const readGibsLayers = \(\{ lat, lon \}\) => \[\n\s*\.\.\.\[([^\]]+)\]/);
+  const observed = list(/const observedLayers = \[([^\]]+)\];/);
+  assert.ok(drapes?.includes('ndviLayer') && reads?.includes('ndviLayer') && observed?.includes('ndviLayer'),
+    'positive control: the three lists were found');
+  for (const [name, l] of [['drapes', drapes], ['read on click', reads], ['time bar', observed]]) assert.ok(l.includes('soilMoistureLayer'), name);
+  assert.ok(LAYER_GROUPS.find((g) => g.id === 'land').layers.includes('soil-moisture'));
+  const gdo = DATA_CREDITS.find((c) => c.key === 'jrc-gdo').html;
+  for (const s of ['contains modified Copernicus Emergency Management Service information 2026', 'v3.0.1', 'doi:10.2905/JRC.NXWJPVG', 'CC BY 4.0'])
+    assert.ok(gdo.includes(s), s);
 });
