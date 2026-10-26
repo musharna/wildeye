@@ -38,7 +38,7 @@ export const LAYER_GROUPS = Object.freeze([
   {
     id: 'human',
     label: 'Human impact',
-    layers: ['human-footprint', 'hansen-loss', 'gfw', 'gibs-nightlights', 'gibs-anthromes', 'protected-areas'],
+    layers: ['human-footprint', 'hansen-loss', 'loss-drivers', 'gfw', 'gibs-nightlights', 'gibs-anthromes', 'protected-areas'],
   },
 ].map((group) => Object.freeze({ ...group, layers: Object.freeze(group.layers) })));
 
