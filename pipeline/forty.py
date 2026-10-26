@@ -139,8 +139,8 @@ def read_items(path: Path) -> list[dict]:
 
     rows = duckdb.sql(
         "select id, assets.forty.href, bbox.xmin, bbox.ymin, bbox.xmax, bbox.ymax,"
-        ' list_transform(assets.forty."classification:classes", c -> c.name),'
-        ' list_transform(assets.forty."classification:classes", c -> c.value)'
+        ' list_transform(assets.forty."classification:classes", lambda c: c.name),'
+        ' list_transform(assets.forty."classification:classes", lambda c: c.value)'
         " from read_parquet(?)",
         params=[str(path)],
     ).fetchall()
@@ -251,8 +251,10 @@ def paint(
             dst_transform=from_origin(west + c0 * px, north - r0 * px, px, px),
             dst_crs="EPSG:4326",
             resampling=Resampling.average,
+            # no nodata either side: validity is band 6, and GDAL 3.12.2 writes a genuine 0 next to a declared
+            # nodata of 0 as the smallest float (1.4e-45), which classify would read as covered ground
             src_nodata=None,
-            dst_nodata=0,
+            dst_nodata=None,
         )
         return r0, r1, c0, c1, out
 
