@@ -27,7 +27,7 @@ export const LAYER_GROUPS = Object.freeze([
   {
     id: 'ocean',
     label: 'Ocean conditions',
-    layers: ['oisst', 'chlor-a', 'cmems-pft', 'cmems-o2', 'cmems-ph', 'cmems-zooc', 'crw-seaice', 'haedat'],
+    layers: ['oisst', 'chlor-a', 'cmems-pft', 'cmems-o2', 'cmems-ph', 'cmems-zooc', 'crw-seaice', 'mhw', 'haedat'],
   },
   { id: 'coral', label: 'Coral heat stress', layers: ['crw-bleaching', 'crw-outlook', 'crw-dhw', 'crw-hotspot'] },
   {

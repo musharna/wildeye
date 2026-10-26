@@ -800,6 +800,39 @@ def test_fetch_erddap_grid_hides_at_or_below_scales_and_refuses_transposed_axes(
         fetch_erddap_grid(base | {"erddap_grid": {"url": "u", "variable": "v"}}, read_nc=lambda url: square)
 
 
+def test_fetch_erddap_grid_colours_class_codes_by_the_classes_list():
+    """mhw: NOAA CRW's heatwave category is a code (0 none .. 5 beyond extreme), not a quantity, so a `kind: classes`
+    product colours code k with classes[k] instead of interpolating a ramp: a ramp would blend codes into colours no class
+    has, and the click readout could not name the category. The fill value (land, NaN once decoded) and hidden classes are
+    clear; a code with no class is refused rather than drawn clear, where it would read as no data."""
+    import numpy as np
+    import pytest
+
+    from pipeline.raster import fetch_erddap_grid
+
+    class DA:
+        def __init__(self, arr, dims=()): self.values, self.dims = np.asarray(arr), dims
+    codes = np.array([[[0.0, 1.0, 2.0], [np.nan, 3.0, 1.0]]])  # time, lat (south first, as mhw_5km), lon
+    ds = {"heatwave_category": DA(codes, ("time", "latitude", "longitude")),
+          "time": DA(np.array(["2026-10-24T12:00:00"], dtype="datetime64[ns]")),
+          "latitude": DA([-45.0, 45.0]), "longitude": DA([-120.0, 0.0, 120.0])}
+    classes = [{"label": "none", "rgb": [179, 242, 255], "hidden": True}, {"label": "moderate", "rgb": [255, 255, 128]},
+               {"label": "strong", "rgb": [255, 179, 51]}, {"label": "severe", "rgb": [255, 128, 0]}]
+    product = {"id": "mhw", "kind": "classes", "classes": classes,
+               "erddap_grid": {"url": "u", "variable": "heatwave_category"}}
+    rgba, when, extras = fetch_erddap_grid(product, read_nc=lambda url: ds)
+    assert when == "2026-10-24T12:00:00Z" and extras["bounds"]["north"] == 90.0
+    assert rgba[0].tolist() == [[0, 0, 0, 0], [255, 128, 0, 255], [255, 255, 128, 255]], "north row first; NaN clear"
+    assert rgba[1].tolist() == [[179, 242, 255, 0], [255, 255, 128, 255], [255, 179, 51, 255]], "0 hidden, 1 and 2 exact"
+    for bad in (4.0, 1.5, -1.0):
+        odd = dict(ds, heatwave_category=DA(np.where(codes == 3.0, bad, codes), ds["heatwave_category"].dims))
+        with pytest.raises(ValueError, match=r"have no class \(classes 0\.\.3\)"):
+            fetch_erddap_grid(product, read_nc=lambda url, odd=odd: odd)
+    black = [{"label": "none", "rgb": [0, 0, 0], "hidden": True}, *classes[1:]]
+    with pytest.raises(ValueError, match="hidden class drawn black"):
+        fetch_erddap_grid(product | {"classes": black}, read_nc=lambda url: ds)
+
+
 def test_process_routes_erddap_grid_and_puts_its_cell_edge_bounds_in_the_manifest(monkeypatch, tmp_path):
     from pipeline import raster
     edges = {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
