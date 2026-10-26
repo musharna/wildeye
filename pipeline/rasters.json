@@ -567,7 +567,101 @@
     },
     "legend": "NDVI, one day of VIIRS: pale = bare/sparse · dark green = dense canopy; gaps = clouds, night, water",
     "credit_key": "noaa-ndvi-cdr",
-    "credit": "NOAA Climate Data Record of NDVI, VIIRS daily 0.05°, served by NCEI THREDDS"
+    "credit": "NOAA Climate Data Record of NDVI, VIIRS daily 0.05°, downloaded from NCEI's archive, every 5th cell"
+  },
+  {
+    "id": "soil-moisture",
+    "name": "Soil moisture anomaly (Copernicus GDO)",
+    "icon": "💧",
+    "catalog": "https://drought.emergency.copernicus.eu/data/Drought_Observatories_datasets/GDO_Soil_Moisture_Index_Anomaly/ver3-0-1/",
+    "file_regex": "smang_m_gdo_\\d{8}_\\d{8}_t\\.nc",
+    "url_template": "https://drought.emergency.copernicus.eu/data/Drought_Observatories_datasets/GDO_Soil_Moisture_Index_Anomaly/ver3-0-1/{file}",
+    "nc_series": {
+      "variable": "smang",
+      "stride": 5,
+      "offset": 2,
+      "grid": {
+        "west": -180,
+        "north": 90,
+        "cell": 0.05,
+        "width": 7200,
+        "height": 3000
+      },
+      "bins": [
+        -2,
+        -1.5,
+        -1,
+        1,
+        1.5,
+        2
+      ]
+    },
+    "transparent": "none",
+    "kind": "classes",
+    "zrank": 17,
+    "keep_days": 120,
+    "classes": [
+      {
+        "label": "drier, < −2 σ",
+        "rgb": [
+          179,
+          88,
+          6
+        ]
+      },
+      {
+        "label": "drier, −2 to −1.5 σ",
+        "rgb": [
+          241,
+          163,
+          64
+        ]
+      },
+      {
+        "label": "drier, −1.5 to −1 σ",
+        "rgb": [
+          254,
+          224,
+          182
+        ]
+      },
+      {
+        "label": "near normal, −1 to 1 σ",
+        "rgb": [
+          255,
+          255,
+          255
+        ],
+        "hidden": true
+      },
+      {
+        "label": "wetter, 1 to 1.5 σ",
+        "rgb": [
+          209,
+          229,
+          240
+        ]
+      },
+      {
+        "label": "wetter, 1.5 to 2 σ",
+        "rgb": [
+          103,
+          169,
+          207
+        ]
+      },
+      {
+        "label": "wetter, ≥ 2 σ",
+        "rgb": [
+          33,
+          102,
+          172
+        ]
+      }
+    ],
+    "legend": "root-zone soil moisture over 10 days against the 1995–2024 mean for the same 10 days, in standard deviations (LISFLOOD model); below −1 usually means drought; near normal hidden; dated by the 10 days' first day",
+    "credit_key": "jrc-gdo",
+    "credit": "Contains modified Copernicus Emergency Management Service information 2026: GDO Soil Moisture Index Anomaly v3.0.1, JRC (CC BY 4.0, doi:10.2905/JRC.NXWJPVG), every 5th cell, classed as on GDO's maps"
   },
   {
     "id": "cmems-o2",

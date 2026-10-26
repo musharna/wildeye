@@ -400,15 +400,17 @@ def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_hi
 
 def test_catalog_products_take_the_year_from_the_date_not_the_manifest():
     """ndvi's catalog and data URLs had 2026 written in (ncei .../cdr/ndvi/2026/...), so from 1 January the layer would
-    have kept reading 2026's last file. Every catalog product writes {year} instead."""
+    have kept reading 2026's last file. Every catalog product writes {year} instead, except an nc_series product, whose
+    one directory holds every year's file and whose newest year is picked from the file names (nc_series.newest_file)."""
     import json
     import re
     from pathlib import Path
     products = [p for p in json.loads((Path(__file__).parents[1] / "rasters.json").read_text()) if "catalog" in p]
-    assert [p["id"] for p in products] == ["ndvi"], "control: the catalog products this test covers"
+    assert [p["id"] for p in products] == ["ndvi", "soil-moisture"], "control: the catalog products this test covers"
     for p in products:
         for k in ("catalog", "url_template"):
-            assert "{year}" in p[k] and not re.search(r"/(19|20)\d\d/", p[k]), f"{p['id']}.{k}: {p[k]}"
+            assert not re.search(r"/(19|20)\d\d/", p[k]), f"{p['id']}.{k}: {p[k]}"
+            assert ("{year}" in p[k]) == ("nc_series" not in p), f"{p['id']}.{k}: {p[k]}"
 
 
 def test_resolve_source_reads_this_years_catalog_and_last_years_only_when_this_one_is_missing():

@@ -55,6 +55,11 @@ def test_each_raster_product_is_checked_on_its_own_data_time():
     # the monthly outlook gets a monthly limit, not the daily products' 7 days
     rasters = _rasters(ago(hours=4), **{"crw-outlook": ago(days=63)})
     assert [p["layer"] for p in f.assess({"rasters.json": ago(hours=4)}, rasters, NOW, layers={"rasters.json": "daily"})] == ["rasters.json: crw-outlook"]
+    # the dekadal soil moisture: 30 days old is one missed update, 36 is two
+    rasters = _rasters(ago(hours=4), **{"soil-moisture": ago(days=30), "crw-outlook": ago(days=36)})
+    assert f.assess({"rasters.json": ago(hours=4)}, rasters, NOW, layers={"rasters.json": "daily"}) == []
+    rasters = _rasters(ago(hours=4), **{"soil-moisture": ago(days=36)})
+    assert [p["layer"] for p in f.assess({"rasters.json": ago(hours=4)}, rasters, NOW, layers={"rasters.json": "daily"})] == ["rasters.json: soil-moisture"]
 
 
 class _Resp(io.BytesIO):

@@ -380,6 +380,10 @@ export const ndviLayer = createRasterDrapeLayer({
   id: 'ndvi', name: 'Vegetation greenness (NDVI)', icon: '🌿', source: 'NOAA NDVI CDR via NCEI', alpha: 0.7, zrank: 15,
   readout: true,
 });
+export const soilMoistureLayer = createRasterDrapeLayer({
+  id: 'soil-moisture', name: 'Soil moisture anomaly', icon: '💧', source: 'Copernicus GDO (JRC)', alpha: 0.7, zrank: 17,
+  readout: true,
+});
 export const mhwLayer = createRasterDrapeLayer({
   id: 'mhw', name: 'Marine heatwaves', icon: '🌊', source: 'NOAA Coral Reef Watch', alpha: 0.7, zrank: 35,
   readout: true,
