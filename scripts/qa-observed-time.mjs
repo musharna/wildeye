@@ -2,7 +2,7 @@
 /**
  * qa-observed-time.mjs — real-browser checks that the shared observed-time scrubber spans exactly the
  * data the enabled layers hold, and reaches archived birds frames well before the last two nights.
- * Run: node scripts/qa-observed-time.mjs [--url https://musharna.github.io/wildeye/] [--back-days 25] [--shots <dir>]
+ * Run: node scripts/qa-observed-time.mjs [--url https://musharna.github.io/wildeye/] [--back-days 12] [--shots <dir>]
  * Prints one JSON line per check; exits 1 when any check fails.
  *
  * Why this exists, twice over:
@@ -25,7 +25,8 @@ import { bootSettled } from './bootSettled.mjs';
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
-const BACK_DAYS = Number(arg('--back-days', 25));
+// inside the archive's 14 nights (pipeline/build_archive.py KEEP_NIGHTS; tied by pipeline/tests/test_archive.py)
+const BACK_DAYS = Number(arg('--back-days', 12));
 const SHOTS = arg('--shots', null);
 if (SHOTS) mkdirSync(SHOTS, { recursive: true });
 
