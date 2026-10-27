@@ -18,9 +18,8 @@ export const MAX_LEVEL = 14; // 256 px at z14 ≈ 9.6 m at the equator, the data
 export const TILE_FAILURE_LIMIT = 8;
 export const SERVICE =
   "https://ic.imagery1.arcgis.com/arcgis/rest/services/Sentinel2_10m_LandCover/ImageServer";
-const RENDERER = "Cartographic Renderer for Visualization and Analysis";
 const SOURCE = "Impact Observatory, Microsoft and Esri";
-// The service's legend for that renderer, read 2026-10-26 (value = the class code in the raster)
+// The service's legend for its Cartographic Renderer, read 2026-10-26 (value = the class code in the raster)
 export const CLASSES = Object.freeze([
   { value: 1, label: "Water", rgb: [26, 91, 171] },
   { value: 2, label: "Trees", rgb: [53, 130, 33] },
@@ -53,10 +52,13 @@ export function tileBox(z, x, y) {
 
 export function lulcTileUrl(z, x, y, year) {
   const time = Date.UTC(year, 6, 1); // mid-year: inside the one raster tagged with that Year
-  const rule = encodeURIComponent(JSON.stringify({ rasterFunction: RENDERER }));
+  // No renderingRule: the service's default draws its Cartographic Renderer pixel for pixel (checked 2026-10-26 at
+  // zooms 1–14 in docs/analysis/esri_lulc_drawn_vs_source.md), and a JSON rule cannot get through Cesium, whose
+  // Resource turns %7B/%7D back into braces that the service refuses with a 400 and no CORS header. A changed
+  // default would read as an unrecognised colour, never as a wrong class: decodeLulcPixel does not snap.
   return (
     `${SERVICE}/exportImage?bbox=${tileBox(z, x, y).join(",")}&bboxSR=3857&imageSR=3857` +
-    `&size=${TILE_SIZE},${TILE_SIZE}&format=png32&time=${time}&renderingRule=${rule}&f=image`
+    `&size=${TILE_SIZE},${TILE_SIZE}&format=png32&time=${time}&f=image`
   );
 }
 

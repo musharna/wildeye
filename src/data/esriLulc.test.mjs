@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as Cesium from 'cesium';
 import {
   CLASSES, FIRST_YEAR, LAST_YEAR, MAX_LEVEL, NONE_TEXT, SERVICE, TILE_FAILURE_LIMIT,
   createEsriLulcLayer, decodeLulcPixel, lulcTileUrl, tileBox, yearFor,
@@ -60,7 +61,7 @@ test('tile boxes are web-mercator metres as Cesium cuts them, and hold the point
   }
 });
 
-test('tile URL: exportImage of the box for the year at 1 July, PNG32, the cartographic renderer, 256 px', () => {
+test('tile URL: exportImage of the box for the year at 1 July, PNG32 in the service default renderer, 256 px', () => {
   const u = new URL(lulcTileUrl(3, 2, 5, 2021));
   assert.equal(`${u.origin}${u.pathname}`, `${SERVICE}/exportImage`);
   const q = u.searchParams;
@@ -70,9 +71,21 @@ test('tile URL: exportImage of the box for the year at 1 July, PNG32, the cartog
   assert.equal(q.get('size'), '256,256');
   assert.equal(q.get('format'), 'png32');
   assert.equal(q.get('time'), String(Date.UTC(2021, 6, 1)));
-  assert.deepEqual(JSON.parse(q.get('renderingRule')), { rasterFunction: 'Cartographic Renderer for Visualization and Analysis' });
+  assert.equal(q.get('renderingRule'), null, 'the default is the cartographic renderer; a JSON rule cannot pass through Cesium (next test)');
   assert.equal(q.get('f'), 'image');
   assert.notEqual(lulcTileUrl(3, 2, 5, 2017), lulcTileUrl(3, 2, 5, 2021), 'another year is another request');
+});
+
+// Cesium's Resource turns every %7B/%7D back into a brace (its URL-template placeholders), and the service answers a raw
+// brace with a 400 that has no CORS header, so the browser drew no tile at all (qa-esri-lulc, 2026-10-26).
+test('tile URL reaches the service as written: through Cesium Resource every parameter survives and no raw brace is sent', () => {
+  for (const url of [lulcTileUrl(3, 2, 5, 2021), lulcTileUrl(MAX_LEVEL, 4000, 6000, FIRST_YEAR)]) {
+    const sent = new Cesium.Resource({ url }).url;
+    const want = [...new URL(url).searchParams].sort();
+    assert.deepEqual([...new URL(sent).searchParams].sort(), want);
+    assert.ok(want.length >= 7);
+    assert.doesNotMatch(sent, /[{}]/);
+  }
 });
 
 test('pixels: each legend colour is its class, transparent is none, any other colour or partial alpha is named', () => {
