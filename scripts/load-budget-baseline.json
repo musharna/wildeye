@@ -7,7 +7,7 @@
     "index.html"
   ],
   "vendorBytes": {
-    "chunk:vendor-cesium": 4170461,
+    "chunk:vendor-cesium": 4170464,
     "/cesium/Assets/approximateTerrainHeights.json": 299471,
     "/cesium/Assets/IAU2006_XYS/IAU2006_XYS_18.json": 65310
   }
