@@ -3,6 +3,7 @@ local bare repo stands in for GitHub, `flock` is the real util-linux one, and th
 birds builder (WILDEYE_PYTHON for run_birds.sh), each of which reports whether the birds lock was held while it ran."""
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -183,7 +184,7 @@ def test_birds_deploy_refuses_when_nothing_is_published(tmp_path: Path):
 def test_birds_copy_waits_for_a_build_holding_the_lock_and_gives_up_loud(
     tmp_path: Path,
 ):
-    origin, site, home, locks, tip = _setup(tmp_path)
+    origin, site, home, locks, _tip = _setup(tmp_path)
     field = site / "public" / "data" / "birds_field.json"
     build = _hold(
         locks / "wildeye-birds.lock", tmp_path, then=f'printf final > "{field}"'
@@ -229,7 +230,15 @@ def test_full_deploy_builds_inside_the_birds_lock(tmp_path: Path):
     origin, site, home, locks, tip = _setup(tmp_path)
     out = _deploy(tmp_path, site, home, locks)
     assert out.returncode == 0, out.stdout + out.stderr
-    assert _git(origin, "rev-parse", "gh-pages^") == tip
+    # the deploy went up as a commit on the published tip (a delta), then the branch was squashed to a root commit of
+    # the same tree; the pushed commit is still in the bare repo, unreachable
+    pushed = re.search(r"^pushed gh-pages ([0-9a-f]{7})", out.stdout, re.MULTILINE)
+    assert pushed, out.stdout
+    assert _git(origin, "rev-parse", f"{pushed.group(1)}^") == tip
+    assert _git(origin, "rev-parse", "gh-pages^{tree}") == _git(
+        origin, "rev-parse", f"{pushed.group(1)}^{{tree}}"
+    )
+    assert "squashed gh-pages" in out.stdout, out.stdout
     assert _git(origin, "show", "gh-pages:assets/lock") == "held", (
         "vite copied public/ with no lock against a build"
     )
@@ -268,8 +277,13 @@ def test_run_birds_holds_the_lock_for_the_whole_build(tmp_path: Path):
 def test_an_unknown_argument_fails_before_anything_runs(tmp_path: Path):
     origin, site, home, locks, tip = _setup(tmp_path)
     out = _deploy(tmp_path, site, home, locks, "--bird")
-    assert out.returncode == 2 and "usage: deploy_pages.sh [--birds]" in out.stderr, out.stdout + out.stderr
-    assert not (tmp_path / "npx-ran").exists(), "a typo'd flag must not run a full build and deploy"
+    assert (
+        out.returncode == 2
+        and "usage: deploy_pages.sh [--birds | --squash]" in out.stderr
+    ), out.stdout + out.stderr
+    assert not (tmp_path / "npx-ran").exists(), (
+        "a typo'd flag must not run a full build and deploy"
+    )
     assert _git(origin, "rev-parse", "gh-pages") == tip
     ok = _deploy(tmp_path, site, home, locks, "--birds")
     assert ok.returncode == 0, "positive control: the real flag deploys: " + ok.stderr
@@ -282,9 +296,17 @@ def test_the_birds_set_goes_up_as_one_commit_however_big(tmp_path: Path):
     ppi = site / "public" / "data" / "birds_ppi"
     for name in ("A.png", "C.png", "D.png"):
         (ppi / name).write_bytes(os.urandom(600_000))
-    assert sum(p.stat().st_size for p in ppi.glob("[ACD].png")) > 1_000_000, "the set must be over BATCH_MB=1"
+    assert sum(p.stat().st_size for p in ppi.glob("[ACD].png")) > 1_000_000, (
+        "the set must be over BATCH_MB=1"
+    )
     out = _deploy(tmp_path, site, home, locks, "--birds", BATCH_MB="1")
     assert out.returncode == 0, out.stdout + out.stderr
-    assert _git(origin, "rev-parse", "gh-pages^") == tip, _git(origin, "log", "--format=%s", "gh-pages")
+    assert _git(origin, "rev-parse", "gh-pages^") == tip, _git(
+        origin, "log", "--format=%s", "gh-pages"
+    )
     assert "part" not in out.stdout
-    assert {"data/birds_ppi/A.png", "data/birds_ppi/C.png", "data/birds_ppi/D.png"} <= _published(origin)
+    assert {
+        "data/birds_ppi/A.png",
+        "data/birds_ppi/C.png",
+        "data/birds_ppi/D.png",
+    } <= _published(origin)
