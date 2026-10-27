@@ -52,8 +52,8 @@ export function tileBox(z, x, y) {
 
 export function lulcTileUrl(z, x, y, year) {
   const time = Date.UTC(year, 6, 1); // mid-year: inside the one raster tagged with that Year
-  // No renderingRule: the service's default draws its Cartographic Renderer pixel for pixel (checked 2026-10-26 at
-  // zooms 1–14 in docs/analysis/esri_lulc_drawn_vs_source.md), and a JSON rule cannot get through Cesium, whose
+  // No renderingRule: the service's default draws its Cartographic Renderer pixel for pixel (checked 2026-10-26 on
+  // 192 sampled level-14 tiles and at zooms 1, 5, 9 and 14 in docs/analysis/esri_lulc_drawn_vs_source.md), and a JSON rule cannot get through Cesium, whose
   // Resource turns %7B/%7D back into braces that the service refuses with a 400 and no CORS header. A changed
   // default would read as an unrecognised colour, never as a wrong class: decodeLulcPixel does not snap.
   return (
