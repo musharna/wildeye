@@ -1,0 +1,53 @@
+name: squash gh-pages
+
+# Every deploy is a commit on gh-pages, so each file a deploy dropped stays in the branch's history: 248 commits made
+# the repo 1.95 GB on 2026-10-26 for a 668 MB site. scripts/squash_pages.sh replaces the branch with one parentless
+# commit of the same tree, made through the API from the tree GitHub already holds (a git push of a root commit
+# re-uploads the whole site, which the deploy host's uplink drops). The ref moves only if no deploy landed since
+# the tip was read. On a pull request it reads and checks but writes nothing.
+
+on:
+  schedule:
+    - cron: '35 14 * * *' # clear of msi-4080's deploys: the full one at 13:00 UTC, the birds ones at :05 from 00 to 12 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/squash-pages.yml
+      - scripts/squash_pages.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: squash-pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Dry run against the live branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: '1'
+        run: scripts/squash_pages.sh
+
+  squash:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Squash gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/squash_pages.sh
