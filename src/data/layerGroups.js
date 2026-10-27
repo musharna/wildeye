@@ -21,7 +21,7 @@ export const LAYER_GROUPS = Object.freeze([
     id: 'habitats',
     label: 'Habitats',
     layers: ['ifl', 'forty', 'natural-lands', 'wetlands', 'tidal-marsh', 'seagrass', 'kelp', 'gmw', 'surface-water',
-      'gibs-landcover', 'gibs-biomass', 'gibs-canopy', 'ecoregions', 'marine-realms'],
+      'gibs-landcover', 'esri-lulc', 'gibs-biomass', 'gibs-canopy', 'ecoregions', 'marine-realms'],
   },
   { id: 'land', label: 'Land conditions', layers: ['ndvi', 'soil-moisture', 'gibs-evi', 'gibs-gpp', 'gibs-lst', 'drought', 'fires', 'gibs-disturbance', 'aef-change', 'rivers'] },
   {
