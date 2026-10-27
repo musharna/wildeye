@@ -20,13 +20,11 @@ WT="$(mktemp -d "${TMPDIR:-/tmp}/wildeye-pages.XXXXXX")"
 trap 'git worktree remove --force "$WT" >/dev/null 2>&1 || true; git worktree prune' EXIT
 # --birds: the hourly night deploy (msi-4080 cron). Ships only the radar-birds files run_birds.sh rewrites every 10 min,
 # laid over the published tip: no build, so everything else stays as the last full deploy left it.
-# --squash: only the step every full deploy ends with (squash_branch below), for a branch that has grown since.
 case "$*" in
 "") MODE=full ;;
 --birds) MODE=birds ;;
---squash) MODE=squash ;;
 *)
-	echo "usage: deploy_pages.sh [--birds | --squash]  (got: $*)" >&2
+	echo "usage: deploy_pages.sh [--birds]  (got: $*)" >&2
 	exit 2
 	;;
 esac
@@ -48,48 +46,6 @@ else
 	}
 fi
 exec 9>"$LOCKS/wildeye-birds.lock"
-# Each deploy is a commit on the last, so every file a deploy dropped (pruned archive nights, rebuilt tiles) stays in
-# the branch's history: 242 commits made the repo 1.95 GB on 2026-10-26 for a 668 MB site, past GitHub's recommended
-# 1 GB. A parentless commit of the published tip's own tree pushes one commit object, since GitHub holds every tree
-# and file in it already, so this is not the full re-upload the uplink drops; the old commits become unreachable and
-# GitHub collects them in its own time. The lease refuses if anything moved the branch since it was read.
-squash_branch() {
-	git fetch -q origin "$BRANCH"
-	local tip tree new files remote
-	tip="$(git rev-parse FETCH_HEAD)"
-	tree="$(git rev-parse "$tip^{tree}")"
-	if ! git rev-parse -q --verify "$tip^" >/dev/null; then
-		echo "$BRANCH ${tip:0:7} has no history; nothing to squash"
-		return 0
-	fi
-	files="$(git ls-tree -r "$tree" | wc -l)"
-	[ "$files" -gt 0 ] || {
-		echo "$BRANCH ${tip:0:7} has an empty tree; refusing to squash" >&2
-		exit 1
-	}
-	new="$(git -c user.name="wildeye deploy" -c user.email="deploy@wildeye.local" commit-tree "$tree" -m "squash of $BRANCH ${tip:0:7} ($(git rev-list --count "$tip") commits), same tree")"
-	[ -n "$new" ] && [ "$(git rev-parse "$new^{tree}")" = "$tree" ] || {
-		echo "squash commit '$new' does not carry tree $tree; not pushing" >&2
-		exit 1
-	}
-	git push -q --force-with-lease="refs/heads/$BRANCH:$tip" origin "$new:refs/heads/$BRANCH" || {
-		echo "squash push refused or failed; $BRANCH left at ${tip:0:7}" >&2
-		exit 1
-	}
-	remote="$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)"
-	[ "$remote" = "$new" ] || {
-		echo "remote $BRANCH is $remote after the squash, expected $new" >&2
-		exit 1
-	}
-	# the local branch is left behind on purpose: a full deploy still has it checked out in $WT, and every deploy
-	# resets it to the remote tip before building on it
-	echo "squashed $BRANCH ${tip:0:7} -> ${new:0:7}: $files files, tree ${tree:0:7} unchanged"
-}
-if [ "$MODE" = squash ]; then
-	rmdir "$WT"
-	squash_branch
-	exit 0
-fi
 birds_lock() {
 	flock -w "${BIRDS_LOCK_WAIT:-600}" 9 || {
 		echo "a birds build still holds $LOCKS/wildeye-birds.lock after ${BIRDS_LOCK_WAIT:-600} s; not copying half-written files" >&2
@@ -154,7 +110,7 @@ SRC="$(git rev-parse --short HEAD)"
 # the uplink each night (108 MB, landing on attempt 2 or 3) and the archive had to be pruned to 2
 # nights to stay near the ~50 MB that survives. Building on the remote tip instead makes the push a
 # delta — one new night is ~14 MB — so KEEP_NIGHTS is bounded by the 1 GB Pages limit, not the uplink.
-# Pruned frames would stay in the branch's history; squash_branch, the last step of every full deploy, drops them.
+# Cost: pruned frames stay in the branch's history, so re-orphan this branch when it grows unwieldy.
 # `--exit-code`: 0 = branch exists, 2 = no such ref, anything else is a real failure. A network error
 # must NOT read as "first deploy" and silently orphan the history back to a full re-upload.
 set +e
@@ -267,4 +223,3 @@ REMOTE="$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)"
 	exit 1
 }
 echo "pushed $BRANCH ${LOCAL:0:7} from $SRC"
-if [ "$MODE" = full ]; then squash_branch; fi
