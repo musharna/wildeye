@@ -143,24 +143,65 @@ try {
   }
   // a real screenshot of the middle of the page: the WebGL canvas read back through a 2D canvas came back unchanged
   // with the drape on and off, while screenshots of the same two states differed in 260,309 pixels
-  const grab = async () => decodePng(new Uint8Array(await page.screenshot({ type: 'png', clip: { x: 600, y: 350, width: 200, height: 200 } })));
-  await page.evaluate(async ([lat, lon]) => {
+  const grab = async () => (await decodePng(new Uint8Array(await page.screenshot({ type: 'png', clip: { x: 600, y: 350, width: 200, height: 200 } })))).data;
+  const differ = (a, b) => {
+    let n = 0;
+    for (let i = 0; i < a.length; i += 4) if (Math.hypot(a[i] - b[i], a[i + 1] - b[i + 1], a[i + 2] - b[i + 2]) > 30) n += 1;
+    return n;
+  };
+  // Settled = two drawn Cesium frames, then globe tiles loaded. Browser frames are not enough: the render governor puts
+  // an idle scene in requestRenderMode, where an animation frame draws nothing. And tilesLoaded keeps the last view's
+  // value until the scene has drawn the new one. With neither wait, a live run passed with no drape in either
+  // screenshot: 'on' was the basemap before the drape arrived, 'off' a blurrier redraw of it, and the two differed
+  // in all 40,000 pixels.
+  const settle = () => page.evaluate(async () => {
+    const v = window.__godsEyeView.viewer;
+    for (let n = 0; n < 2; n += 1) await new Promise((r) => { const off = v.scene.postRender.addEventListener(() => { off(); r(); }); v.scene.requestRender(); });
+    // a scene in requestRenderMode only updates tilesLoaded when it draws, so each poll asks for a frame
+    for (let i = 0; i < 120 && !v.scene.globe.tilesLoaded; i += 1) {
+      v.scene.requestRender();
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    return v.scene.globe.tilesLoaded;
+  });
+  // a frame is used only if a second settle leaves it alone, so a picture still filling in cannot stand for a state
+  const steady = async () => {
+    await settle();
+    const a = await grab();
+    const tilesLoaded = await settle();
+    const b = await grab();
+    return { frame: b, drift: differ(a, b), tilesLoaded };
+  };
+  await page.evaluate(([lat, lon]) => {
     const v = window.__godsEyeView.viewer;
     v.camera.setView({ destination: v.camera.position.constructor.fromDegrees(lon, lat, 2000000), orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 } });
-    for (let i = 0; i < 120 && !v.scene.globe.tilesLoaded; i += 1) await new Promise((r) => setTimeout(r, 500));
   }, [hot.lat, hot.lon]);
-  const on = (await grab()).data;
+  const on = await steady();
+  const onColours = new Set();
+  for (let i = 0; i < on.frame.length; i += 4) onColours.add((on.frame[i] << 16) | (on.frame[i + 1] << 8) | on.frame[i + 2]);
   await page.evaluate(async (id) => window.__godsEyeView.dataManager.setEnabled(id, false, { origin: 'user' }), ID);
   await page.waitForFunction(() => {
     const il = window.__godsEyeView.viewer.imageryLayers;
     for (let i = 0; i < il.length; i += 1) if (/data\/rasters\/mhw/.test(String(il.get(i).imageryProvider?.url ?? '')) && il.get(i).show) return false;
     return true;
   }, { timeout: 30000 });
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-  const off = (await grab()).data;
-  let changed = 0;
-  for (let i = 0; i < on.length; i += 4) if (Math.hypot(on[i] - off[i], on[i + 1] - off[i + 1], on[i + 2] - off[i + 2]) > 30) changed += 1;
-  report('drawn', hot.n > 100 && changed > 4000, { at: `${hot.lat},${hot.lon}`, heatwaveCellsInBlock: hot.n, pixelsChangedWhenOff: changed });
+  const off = await steady();
+  const changed = differ(on.frame, off.frame);
+  // The block is open sea, where the basemap is blue and every heatwave class is warm (red above blue), so the drape is
+  // seen only in pixels that go from warm with it to blue without it. A count of changed pixels alone passed a live run
+  // whose measured 'on' crop held 0 warm pixels of 40,000: two basemap frames at different sharpness differ everywhere.
+  let warmed = 0;
+  for (let i = 0; i < on.frame.length; i += 4) {
+    const a = on.frame;
+    const b = off.frame;
+    if (Math.hypot(a[i] - b[i], a[i + 1] - b[i + 1], a[i + 2] - b[i + 2]) > 30 && a[i] > a[i + 2] && b[i + 2] > b[i]) warmed += 1;
+  }
+  // a blank 'on' screenshot (one colour) or a frame still changing (drift) would also make the comparison meaningless
+  const steadyMax = 400; // 1% of the 200x200 block
+  report('drawn', hot.n > 100 && onColours.size > 20 && on.drift <= steadyMax && off.drift <= steadyMax && warmed > 4000, {
+    at: `${hot.lat},${hot.lon}`, heatwaveCellsInBlock: hot.n, coloursWhenOn: onColours.size, onDrift: on.drift, offDrift: off.drift, pixelsChangedWhenOff: changed, warmedWhenOn: warmed,
+    onTilesLoaded: on.tilesLoaded, offTilesLoaded: off.tilesLoaded, onFirstPixel: [...on.frame.slice(0, 3)],
+  });
 
 } catch (e) {
   report('run', false, { error: String(e?.stack || e?.message || e).slice(0, 400) });
