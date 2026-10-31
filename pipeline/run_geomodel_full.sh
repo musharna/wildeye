@@ -11,7 +11,8 @@ PY="${WILDEYE_PYTHON:-$HOME/miniconda3/bin/python3}"
 # The list is only built from verdicts of the model it lists, so a new geomodel version stopped it until the monthly
 # check (2.34 -> 2.35, 2026-10-28, #140). Check a new model first, once; with the verdicts on the model served now this
 # reads its metadata and does nothing. A failed check stops here: the listing would refuse the old verdicts anyway.
-bash pipeline/run_geomodel_check.sh --if-new-model
+# Exit 75 = another check holds the verdicts: list anyway, the listing refuses verdicts of another model itself.
+bash pipeline/run_geomodel_check.sh --if-new-model || { rc=$?; [ "$rc" -eq 75 ] || exit "$rc"; }
 exec flock -n -E 75 public/data/.geomodel_species.lock \
   timeout 43200 "$PY" -m pipeline.geomodel_species --mode full --max-tiles-per-day "${GEOMODEL_TILES_PER_DAY:-8000}" \
   --verdicts public/data/geomodel_verdicts.json --out public/data/geomodel_species.json "$@"
