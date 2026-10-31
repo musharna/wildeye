@@ -61,5 +61,8 @@
     "js-yaml": "^4.3.2",
     "postcss": "$postcss",
     "ip-address": "^10.3.1"
+  },
+  "allowScripts": {
+    "puppeteer": true
   }
 }
