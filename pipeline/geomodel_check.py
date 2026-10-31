@@ -681,6 +681,17 @@ def main(argv=None, *, sources=None, now=None) -> int:
         default=None,
         help="judge a saved run's species rows again, against --prior, instead of running (no network)",
     )
+    ap.add_argument(
+        "--if-new-model",
+        action="store_true",
+        help="run only if the verdicts did not check the model served now, and only once per model (the daily job)",
+    )
+    ap.add_argument(
+        "--attempts",
+        type=Path,
+        default=None,
+        help="the models --if-new-model has tried (default: new_model_attempts.json under --work)",
+    )
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     log = logging.getLogger("geomodel")
@@ -691,6 +702,7 @@ def main(argv=None, *, sources=None, now=None) -> int:
             ("--seed", args.seed),
             ("--species-per-group", args.species_per_group),
             ("--keep-ranges", args.keep_ranges or None),
+            ("--if-new-model", args.if_new_model or None),
         ]:
             if value is not None:
                 ap.error(
@@ -709,6 +721,40 @@ def main(argv=None, *, sources=None, now=None) -> int:
     # read before hours of GBIF work: an unreadable prior must stop the run, not lose its evidence after it
     prior_path = args.prior or args.out
     prior = json.loads(prior_path.read_text()) if prior_path.exists() else None
+    if args.if_new_model:
+        # the species list is only built from verdicts of the model it lists, so a new model left it stale until the
+        # monthly run (2.34 -> 2.35, 2026-10-28, #140). The daily job asks here: it reads the ranges' metadata and checks the GBIF keys, and downloads no range
+        probe = sources or LiveSources(args.work)
+        probe.verify()
+        version = probe.version()
+        if prior is not None and prior["geomodel_version"] == version:
+            log.info(
+                "the verdicts checked geomodel %s, the model served now: nothing to do",
+                version,
+            )
+            return 0
+        attempts_path = args.attempts or args.work / "new_model_attempts.json"
+        attempts = (
+            json.loads(attempts_path.read_text()) if attempts_path.exists() else {}
+        )
+        if version in attempts:
+            # a control that fails on this model would otherwise start hours of GBIF work every night
+            log.info(
+                "geomodel %s was tried at %s and wrote no verdicts: the monthly run tries it again",
+                version,
+                attempts[version],
+            )
+            return 0
+        # recorded before the run, so a run killed part way is the one try too
+        attempts[version] = (
+            now or (lambda: dt.datetime.now(dt.timezone.utc))
+        )().isoformat(timespec="seconds")
+        write_atomic(attempts_path, attempts)
+        log.info(
+            "the verdicts checked geomodel %s, the model served now is %s: checking it",
+            prior and prior["geomodel_version"],
+            version,
+        )
     if args.rejudge:
         doc = json.loads(args.rejudge.read_text())
         log.info(

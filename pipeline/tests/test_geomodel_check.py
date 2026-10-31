@@ -235,7 +235,7 @@ def test_run_scores_a_group_and_writes_the_verdicts(tmp_path):
     ]
     month_later = lambda: (
         dt.datetime.fromisoformat(doc["generated_at"]) + dt.timedelta(days=31)
-    )  # noqa: E731
+    )
     assert (
         gc.main(argv, sources=FakeSources(n=17, unmatched=2, sparse=3), now=month_later)
         == 0
@@ -628,7 +628,13 @@ def test_rejudge_judges_a_saved_run_against_an_earlier_file_without_gbif_work(tm
 
 
 @pytest.mark.parametrize(
-    "flag", [["--groups", "Aves"], ["--seed", "3"], ["--species-per-group", "12"]]
+    "flag",
+    [
+        ["--groups", "Aves"],
+        ["--seed", "3"],
+        ["--species-per-group", "12"],
+        ["--if-new-model"],
+    ],
 )
 def test_rejudge_refuses_the_flags_of_a_run(tmp_path, capsys, flag):
     # review of PR #36: `--rejudge FILE --groups Aves` judged and wrote every collection in FILE, the flag silently
@@ -649,3 +655,70 @@ def test_rejudge_refuses_the_flags_of_a_run(tmp_path, capsys, flag):
         gc.main(["--rejudge", str(octo), "--prior", str(sep), "--out", str(out)]) == 0
     )
     assert out.exists()
+
+
+IF_NEW_MODEL = [
+    "--groups",
+    "Aves",
+    "--species-per-group",
+    "12",
+    "--seed",
+    "5",
+    "--if-new-model",
+]
+
+
+def test_if_new_model_checks_a_new_model_and_leaves_a_checked_one_alone(tmp_path):
+    # 2026-10-28: iNaturalist moved to geomodel 2.35 while the verdicts held 2.34. The species list is never built from
+    # verdicts of another model, so it went stale until the monthly check on the 1st (#140). The daily job now asks.
+    out, attempts = tmp_path / "verdicts.json", tmp_path / "attempts.json"
+    argv = ["--out", str(out), "--attempts", str(attempts), *IF_NEW_MODEL]
+    out.write_text(
+        json.dumps(_doc("2026-10-02T18:48:00+00:00", version="2.34", Aves=(20, 10)))
+    )
+    before = out.read_bytes()
+    fake = FakeSources()  # serves 2.34, the model the verdicts checked
+    assert gc.main(argv, sources=fake) == 0
+    assert fake.verified and fake.presence_calls == 0 and not fake.tiles_asked
+    assert out.read_bytes() == before and not attempts.exists()
+    # positive control in the same test: verdicts of the model before are checked again, against the one served now
+    out.write_text(
+        json.dumps(_doc("2026-10-02T18:48:00+00:00", version="2.33", Aves=(20, 10)))
+    )
+    fake = FakeSources()
+    assert gc.main(argv, sources=fake) == 0
+    assert (
+        fake.presence_calls > 0
+        and json.loads(out.read_text())["geomodel_version"] == "2.34"
+    )
+
+
+def test_if_new_model_tries_a_model_once_and_leaves_retries_to_the_monthly_check(
+    tmp_path,
+):
+    # a control that fails on a new model would otherwise start hours of GBIF work every night
+    out, attempts = tmp_path / "verdicts.json", tmp_path / "attempts.json"
+    argv = ["--out", str(out), "--attempts", str(attempts), *IF_NEW_MODEL]
+    out.write_text(
+        json.dumps(_doc("2026-10-02T18:48:00+00:00", version="2.33", Aves=(20, 10)))
+    )
+    before = out.read_bytes()
+    tried = lambda: dt.datetime(2026, 10, 31, 3, 0, tzinfo=dt.timezone.utc)
+    assert gc.main(argv, sources=FakeSources(tiles_agree=False), now=tried) == 2
+    assert out.read_bytes() == before
+    assert json.loads(attempts.read_text()) == {"2.34": "2026-10-31T03:00:00+00:00"}
+    fake = FakeSources()
+    assert gc.main(argv, sources=fake) == 0
+    assert (
+        fake.verified
+        and fake.presence_calls == 0
+        and not fake.tiles_asked
+        and out.read_bytes() == before
+    )
+    # positive control in the same test: the monthly run, without the flag, still checks the model
+    fake = FakeSources()
+    assert gc.main([a for a in argv if a != "--if-new-model"], sources=fake) == 0
+    assert (
+        fake.presence_calls > 0
+        and json.loads(out.read_text())["geomodel_version"] == "2.34"
+    )
