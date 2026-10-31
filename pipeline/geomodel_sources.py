@@ -140,7 +140,8 @@ class SourceError(RuntimeError):
 
 
 def fetch(url: str, *, attempts: int = 6, pause: float = 0.0) -> bytes:
-    """GET with retries on 429 and 5xx; anything else, or the last failure, raises with the URL.
+    """GET with retries on 429, 5xx and a 404 from GBIF's occurrence search; anything else, or the last failure, raises
+    with the URL.
 
     429 means the server is loaded (GBIF's limit follows its load): wait its Retry-After, else a minute
     doubling each time, about half an hour in all before giving up."""
@@ -156,7 +157,13 @@ def fetch(url: str, *, attempts: int = 6, pause: float = 0.0) -> bytes:
                 return r.read()
         except urllib.error.HTTPError as e:
             last = e
-            if e.code != 429 and e.code < 500:
+            # GBIF's search answers no matches with 200 and count 0 and a bad query with 400, so a 404 from it is the
+            # server (2026-10-31: one, empty-bodied, in a burst of 429s ended a 6 h check; the same URL then gave 200).
+            # Elsewhere a 404 can be the answer: a species key, an iNaturalist tile, another API's search
+            search_404 = (
+                e.code == 404 and url.split("?")[0] == GBIF + "occurrence/search"
+            )
+            if e.code != 429 and e.code < 500 and not search_404:
                 body = e.read().decode("utf-8", "replace").strip()
                 raise SourceError(
                     f"{e.code} for {url}: {body[:200]}", e.code, body
@@ -165,6 +172,8 @@ def fetch(url: str, *, attempts: int = 6, pause: float = 0.0) -> bytes:
                 after = (e.headers or {}).get("Retry-After", "")
                 wait = int(after) if after.isdigit() else 60 * 2**attempt
                 log.info("429 from %s, waiting %d s", url.split("?")[0], wait)
+            if search_404:
+                log.info("404 from %s, waiting %d s", url.split("?")[0], wait)
         except (urllib.error.URLError, TimeoutError) as e:
             last = e
         if attempt < attempts - 1:
@@ -196,7 +205,11 @@ def verify_group_keys(get_json: Callable[[str], dict] = fetch_json) -> None:
     """Every GBIF key in GROUPS still names the taxon it was chosen for and has records filed under it,
     or the run stops."""
     wrong = []
-    keys = {k: n for spec in GROUPS.values() for k, n in {**spec["include"], **spec.get("exclude", {})}.items()}
+    keys = {
+        k: n
+        for spec in GROUPS.values()
+        for k, n in {**spec["include"], **spec.get("exclude", {})}.items()
+    }
     for key, name in keys.items():
         got = get_json(f"{GBIF}species/{key}").get("canonicalName")
         if got != name:
