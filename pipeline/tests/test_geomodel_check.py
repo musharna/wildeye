@@ -104,12 +104,33 @@ def test_planted_fake_scores_as_effort():
 class FakeSources:
     """A group 'Aves' of `n` species whose ranges are RANGE, with known right answers."""
 
-    def __init__(self, n=40, presence_share=0.85, tiles_agree=True, unmatched=0, sparse=0, placement=0.1, inat_down=False, disagree=()):
-        self.n, self.share, self.tiles_agree, self.placement = n, presence_share, tiles_agree, placement
+    def __init__(
+        self,
+        n=40,
+        presence_share=0.85,
+        tiles_agree=True,
+        unmatched=0,
+        sparse=0,
+        placement=0.1,
+        inat_down=False,
+        disagree=(),
+    ):
+        self.n, self.share, self.tiles_agree, self.placement = (
+            n,
+            presence_share,
+            tiles_agree,
+            placement,
+        )
         self.inat_down, self.presence_calls = inat_down, 0
         self.backgrounds = []  # groups whose effort background was drawn, in order
-        self.disagree, self.tiles_asked = set(disagree), set()  # taxa whose tiles draw nothing; taxa asked for
-        self.unmatched, self.sparse = set(range(unmatched)), set(range(unmatched, unmatched + sparse))
+        self.disagree, self.tiles_asked = (
+            set(disagree),
+            set(),
+        )  # taxa whose tiles draw nothing; taxa asked for
+        self.unmatched, self.sparse = (
+            set(range(unmatched)),
+            set(range(unmatched, unmatched + sparse)),
+        )
         self.verified = False
 
     def verify(self):
@@ -128,7 +149,9 @@ class FakeSources:
         return RANGE
 
     def range_bounds(self, group, taxon_id):
-        return self.range_geom(group, taxon_id).bounds  # LiveSources reads these from the file's headers
+        return self.range_geom(
+            group, taxon_id
+        ).bounds  # LiveSources reads these from the file's headers
 
     def background(self, group, n, rng):
         self.backgrounds.append(group)
@@ -140,7 +163,9 @@ class FakeSources:
 
     def presences(self, key, rng):
         self.presence_calls += 1
-        return _points_with_share_inside(rng, 5 if key - 1000 in self.sparse else 200, self.share)
+        return _points_with_share_inside(
+            rng, 5 if key - 1000 in self.sparse else 200, self.share
+        )
 
     def training(self, key, rng):
         # the model's own records sit far from its range, so circles around them do worse than the model
@@ -150,11 +175,18 @@ class FakeSources:
         if self.inat_down:
             from pipeline.geomodel_sources import SourceError
 
-            raise SourceError("503 for https://api.inaturalist.org/v2/geomodel/1/3/4/3.png: downtime", 503)
+            raise SourceError(
+                "503 for https://api.inaturalist.org/v2/geomodel/1/3/4/3.png: downtime",
+                503,
+            )
         size = 64
         self.tiles_asked.add(taxon_id)
         agree = self.tiles_agree and taxon_id not in self.disagree
-        return gc.range_tile_mask(RANGE, z, x, y, size) if agree else np.zeros((size, size), bool)
+        return (
+            gc.range_tile_mask(RANGE, z, x, y, size)
+            if agree
+            else np.zeros((size, size), bool)
+        )
 
 
 def test_run_scores_a_group_and_writes_the_verdicts(tmp_path):
@@ -163,7 +195,22 @@ def test_run_scores_a_group_and_writes_the_verdicts(tmp_path):
     out = tmp_path / "verdicts.json"
     # 17 species: 2 with no GBIF match, 3 with too few presences, 12 good. Asking for 13 tries all 17.
     fake = FakeSources(n=17, unmatched=2, sparse=3)
-    assert gc.main(["--out", str(out), "--groups", "Aves", "--species-per-group", "13", "--seed", "5"], sources=fake) == 0
+    assert (
+        gc.main(
+            [
+                "--out",
+                str(out),
+                "--groups",
+                "Aves",
+                "--species-per-group",
+                "13",
+                "--seed",
+                "5",
+            ],
+            sources=fake,
+        )
+        == 0
+    )
     doc = json.loads(out.read_text())
     aves = doc["groups"]["Aves"]
     assert fake.verified and doc["geomodel_version"] == "2.34" and doc["seed"] == 5
@@ -172,17 +219,41 @@ def test_run_scores_a_group_and_writes_the_verdicts(tmp_path):
     # read back from the file the first run wrote, is
     w, l = aves["beats_baseline"]["wins"], aves["beats_baseline"]["losses"]
     assert aves["verdict"] == "fail"
-    assert aves["evidence"] == {"llr": round(w * math.log(1.2) + l * math.log(0.8), 4), "months": 1}
-    argv = ["--out", str(out), "--groups", "Aves", "--species-per-group", "13", "--seed", "6"]
-    month_later = lambda: dt.datetime.fromisoformat(doc["generated_at"]) + dt.timedelta(days=31)  # noqa: E731
-    assert gc.main(argv, sources=FakeSources(n=17, unmatched=2, sparse=3), now=month_later) == 0
+    assert aves["evidence"] == {
+        "llr": round(w * math.log(1.2) + l * math.log(0.8), 4),
+        "months": 1,
+    }
+    argv = [
+        "--out",
+        str(out),
+        "--groups",
+        "Aves",
+        "--species-per-group",
+        "13",
+        "--seed",
+        "6",
+    ]
+    month_later = lambda: (
+        dt.datetime.fromisoformat(doc["generated_at"]) + dt.timedelta(days=31)
+    )
+    assert (
+        gc.main(argv, sources=FakeSources(n=17, unmatched=2, sparse=3), now=month_later)
+        == 0
+    )
     again = json.loads(out.read_text())["groups"]["Aves"]
     assert again["verdict"] == "pass" and again["evidence"]["months"] == 2
     assert aves["median_tss"] == pytest.approx(0.70, abs=0.06)
     # unscored species are findings with their reason, not silently dropped
-    assert aves["skipped"] == {"no exact GBIF species match": 2, "fewer than 30 non-iNaturalist presences": 3}
+    assert aves["skipped"] == {
+        "no exact GBIF species match": 2,
+        "fewer than 30 non-iNaturalist presences": 3,
+    }
     c = doc["controls"]["per_group"]["Aves"]
-    assert c["fake_tss"] < gc.FAKE_TSS_MAX and c["positive_tss"] >= gc.POSITIVE_TSS_MIN and abs(c["shuffle_tss"]) < 0.05
+    assert (
+        c["fake_tss"] < gc.FAKE_TSS_MAX
+        and c["positive_tss"] >= gc.POSITIVE_TSS_MIN
+        and abs(c["shuffle_tss"]) < 0.05
+    )
     assert doc["controls"]["tile_agreement"][0]["iou"] == 1.0
     assert doc["controls"]["effort_placement_error"] == 0.1
 
@@ -190,22 +261,66 @@ def test_run_scores_a_group_and_writes_the_verdicts(tmp_path):
 def test_a_failed_control_writes_nothing_and_exits_nonzero(tmp_path):
     out = tmp_path / "verdicts.json"
     # iNaturalist's tiles draw nothing where the GeoPackage has a range: what is tested is not what is shown
-    assert gc.main(["--out", str(out), "--groups", "Aves", "--species-per-group", "12", "--seed", "5"], sources=FakeSources(tiles_agree=False)) == 2
+    assert (
+        gc.main(
+            [
+                "--out",
+                str(out),
+                "--groups",
+                "Aves",
+                "--species-per-group",
+                "12",
+                "--seed",
+                "5",
+            ],
+            sources=FakeSources(tiles_agree=False),
+        )
+        == 2
+    )
     assert not out.exists()
     # positive control in the same test: the same run with agreeing tiles writes
-    assert gc.main(["--out", str(out), "--groups", "Aves", "--species-per-group", "12", "--seed", "5"], sources=FakeSources()) == 0
+    assert (
+        gc.main(
+            [
+                "--out",
+                str(out),
+                "--groups",
+                "Aves",
+                "--species-per-group",
+                "12",
+                "--seed",
+                "5",
+            ],
+            sources=FakeSources(),
+        )
+        == 0
+    )
     assert out.exists()
 
 
 def test_a_group_with_too_few_scorable_species_is_insufficient():
-    doc = gc.run(FakeSources(n=8), ["Aves"], np.random.default_rng(2), species_per_group=30)
-    assert doc["groups"]["Aves"]["verdict"] == "insufficient" and doc["groups"]["Aves"]["n_scored"] == 8
+    doc = gc.run(
+        FakeSources(n=8), ["Aves"], np.random.default_rng(2), species_per_group=30
+    )
+    assert (
+        doc["groups"]["Aves"]["verdict"] == "insufficient"
+        and doc["groups"]["Aves"]["n_scored"] == 8
+    )
 
 
 def test_misplaced_effort_tiles_write_nothing(tmp_path):
     out = tmp_path / "verdicts.json"
     # the count tiles put records a cell or more away from GBIF's own search: the background is not effort
-    argv = ["--out", str(out), "--groups", "Aves", "--species-per-group", "12", "--seed", "5"]
+    argv = [
+        "--out",
+        str(out),
+        "--groups",
+        "Aves",
+        "--species-per-group",
+        "12",
+        "--seed",
+        "5",
+    ]
     assert gc.main(argv, sources=FakeSources(placement=0.9)) == 2
     assert not out.exists()
     # positive control in the same test: tiles within the bar write
@@ -217,13 +332,20 @@ def test_a_run_reports_progress_as_it_goes(caplog):
     # a monthly run takes hours; jobd kills a job silent for an hour, and a silent run cannot be followed
     import logging
 
-    fake = FakeSources(n=12, unmatched=1)  # asking for 12 of 12 tries every one, the unmatched one too
+    fake = FakeSources(
+        n=12, unmatched=1
+    )  # asking for 12 of 12 tries every one, the unmatched one too
     with caplog.at_level(logging.INFO, logger="geomodel"):
         gc.run(fake, ["Aves"], np.random.default_rng(2), species_per_group=12)
     lines = [r.getMessage() for r in caplog.records]
     assert any(m.startswith("effort placement error 0.1") for m in lines)
-    assert sum(m.startswith("Aves: Species ") for m in lines) == 11  # one line per scored species
-    assert any(m.startswith("Aves: skipped Species ") and "no exact GBIF species match" in m for m in lines)
+    assert (
+        sum(m.startswith("Aves: Species ") for m in lines) == 11
+    )  # one line per scored species
+    assert any(
+        m.startswith("Aves: skipped Species ") and "no exact GBIF species match" in m
+        for m in lines
+    )
     assert any(m.startswith("Aves: pass (11 scored") for m in lines)
 
 
@@ -233,7 +355,9 @@ def test_the_inaturalist_check_runs_before_hours_of_gbif_work():
 
     down = FakeSources(inat_down=True)
     with pytest.raises(SourceError, match="downtime"):
-        gc.run(down, ["Aves", "Mammalia"], np.random.default_rng(1), species_per_group=12)
+        gc.run(
+            down, ["Aves", "Mammalia"], np.random.default_rng(1), species_per_group=12
+        )
     assert down.presence_calls == 0
     # positive control in the same test: with iNaturalist up, the run goes on to score species
     up = FakeSources()
@@ -247,16 +371,30 @@ def test_a_group_failing_its_controls_stops_the_run_before_the_next_group(monkey
     # failure on top, as a failed planted fake would give it.
     real = gc.check_controls
     monkeypatch.setattr(
-        gc, "check_controls", lambda g, c: real(g, c) + (["Aves: planted fake scored 0.5"] if g == "Aves" else [])
+        gc,
+        "check_controls",
+        lambda g, c: (
+            real(g, c) + (["Aves: planted fake scored 0.5"] if g == "Aves" else [])
+        ),
     )
     bad = FakeSources()
     with pytest.raises(gc.ControlFailure, match="Aves: planted fake"):
-        gc.run(bad, ["Aves", "Mammalia", "Amphibia"], np.random.default_rng(1), species_per_group=12)
+        gc.run(
+            bad,
+            ["Aves", "Mammalia", "Amphibia"],
+            np.random.default_rng(1),
+            species_per_group=12,
+        )
     assert bad.backgrounds == ["Aves"]
     # positive control in the same test: with sound controls every group is scored
     monkeypatch.setattr(gc, "check_controls", real)
     good = FakeSources()
-    gc.run(good, ["Aves", "Mammalia", "Amphibia"], np.random.default_rng(1), species_per_group=12)
+    gc.run(
+        good,
+        ["Aves", "Mammalia", "Amphibia"],
+        np.random.default_rng(1),
+        species_per_group=12,
+    )
     assert good.backgrounds == ["Aves", "Mammalia", "Amphibia"]
 
 
@@ -269,8 +407,14 @@ def test_tile_agreement_is_a_median_over_the_species_checked():
     two_off = FakeSources(n=5, disagree={0})
     doc = gc.run(two_off, groups, np.random.default_rng(3), species_per_group=5)
     checked = doc["controls"]["tile_agreement"]
-    assert len(checked) == 10 and len({(a["group"], a["species"]) for a in checked}) == 10
-    assert sorted(a["iou"] for a in checked)[:3] == [0.0, 0.0, 1.0]  # the two misses are recorded, and pass
+    assert (
+        len(checked) == 10 and len({(a["group"], a["species"]) for a in checked}) == 10
+    )
+    assert sorted(a["iou"] for a in checked)[:3] == [
+        0.0,
+        0.0,
+        1.0,
+    ]  # the two misses are recorded, and pass
     # six of ten drawing nothing fails the run before any scoring
     most_off = FakeSources(n=5, disagree={0, 1, 2})
     with pytest.raises(gc.ControlFailure, match="median IoU"):
@@ -288,13 +432,19 @@ def test_tile_agreement_checks_two_species_in_every_collection():
     # random species over all 13 collections, 26 species (two in each) fail 0.85 about 0.15% of the time
     groups = [f"Group{i:02d}" for i in range(13)]
     for seed in range(20):
-        checked = gc.check_tile_agreement(FakeSources(n=40), groups, np.random.default_rng(seed))
+        checked = gc.check_tile_agreement(
+            FakeSources(n=40), groups, np.random.default_rng(seed)
+        )
         per = {g: sum(a["group"] == g for a in checked) for g in groups}
         assert len(checked) == 26 and set(per.values()) == {2}
-        assert len({(a["group"], a["species"]) for a in checked}) == 26  # never the same species twice
+        assert (
+            len({(a["group"], a["species"]) for a in checked}) == 26
+        )  # never the same species twice
     # positive control in the same test: a failing median still stops the run
     with pytest.raises(gc.ControlFailure, match="median IoU"):
-        gc.check_tile_agreement(FakeSources(n=40, tiles_agree=False), groups, np.random.default_rng(0))
+        gc.check_tile_agreement(
+            FakeSources(n=40, tiles_agree=False), groups, np.random.default_rng(0)
+        )
 
 
 def test_each_run_gets_its_own_work_dir_and_removes_only_that(tmp_path):
@@ -318,7 +468,10 @@ def test_each_run_gets_its_own_work_dir_and_removes_only_that(tmp_path):
 def _rows(wins, losses, median=0.7, ties=0):
     """Species with model TSS `median` that beat the baseline `wins` times and lose `losses` times."""
     gaps = [-0.1] * wins + [0.1] * losses + [0.0] * ties
-    return [gc.SpeciesResult(i, f"s{i}", 100, median, round(median + d, 4)) for i, d in enumerate(gaps)]
+    return [
+        gc.SpeciesResult(i, f"s{i}", 100, median, round(median + d, 4))
+        for i, d in enumerate(gaps)
+    ]
 
 
 def _month(wins, losses, median=0.7):
@@ -340,12 +493,20 @@ def test_evidence_on_the_real_september_and_october_counts():
     listed, month_passed = set(), set()
     for group, (sep, octo) in real.items():
         first = gc.carry_evidence(_month(*sep), None)
-        assert first["verdict"] == "fail", group  # September alone lists nothing (Arachnida 22-6: 2.67 < 2.89)
+        assert first["verdict"] == "fail", (
+            group
+        )  # September alone lists nothing (Arachnida 22-6: 2.67 < 2.89)
         second = gc.carry_evidence(_month(*octo), first)
         listed |= {group} if second["verdict"] == "pass" else set()
         month_passed |= {group} if second["month_verdict"] == "pass" else set()
     assert listed == {"Arachnida", "Insecta", "Mollusca"}
-    assert month_passed == {"Arachnida", "Insecta", "Mollusca", "Actinopterygii", "Plantae"}
+    assert month_passed == {
+        "Arachnida",
+        "Insecta",
+        "Mollusca",
+        "Actinopterygii",
+        "Plantae",
+    }
 
 
 def test_evidence_lists_only_on_a_month_whose_median_tss_clears_the_bar():
@@ -360,7 +521,9 @@ def test_a_listed_group_survives_a_losing_month_and_drops_on_sustained_losses():
     group = None
     for _ in range(4):
         group = gc.carry_evidence(_month(28, 2), group)
-    assert group["evidence"]["llr"] == pytest.approx(gc.EVIDENCE_CAP, abs=1e-4)  # capped, so it can still drop
+    assert group["evidence"]["llr"] == pytest.approx(
+        gc.EVIDENCE_CAP, abs=1e-4
+    )  # capped, so it can still drop
     group = gc.carry_evidence(_month(10, 20), group)
     # one losing month: the month's own sign test fails, the group stays listed
     assert group["month_verdict"] == "fail" and group["verdict"] == "pass"
@@ -378,7 +541,9 @@ def test_doubt_is_floored_so_a_collection_that_improves_can_still_list():
     for _ in range(6):
         group = gc.carry_evidence(_month(5, 25), group)
     assert group["verdict"] == "fail"
-    assert group["evidence"]["llr"] == pytest.approx(gc.DROP_AT, abs=1e-4)  # not 6 months of banked doubt
+    assert group["evidence"]["llr"] == pytest.approx(
+        gc.DROP_AT, abs=1e-4
+    )  # not 6 months of banked doubt
     group = gc.carry_evidence(_month(24, 6), group)
     assert group["verdict"] == "fail"
     group = gc.carry_evidence(_month(24, 6), group)
@@ -391,14 +556,20 @@ def test_an_insufficient_month_leaves_the_evidence_alone():
     assert thin["month_verdict"] == "insufficient"
     assert thin["verdict"] == "pass" and thin["evidence"] == listed["evidence"]
     # positive control in the same test: with no listing to keep, an insufficient month is insufficient
-    assert gc.carry_evidence(gc.group_verdict(_rows(9, 0), skipped={}), None)["verdict"] == "insufficient"
+    assert (
+        gc.carry_evidence(gc.group_verdict(_rows(9, 0), skipped={}), None)["verdict"]
+        == "insufficient"
+    )
 
 
 def _doc(generated_at, version="2.34", **groups):
     out = {}
     for name, (wins, losses) in groups.items():
         rows = _rows(wins, losses)
-        out[name] = {**gc.group_verdict(rows, skipped={}), "species": [r.__dict__ for r in rows]}
+        out[name] = {
+            **gc.group_verdict(rows, skipped={}),
+            "species": [r.__dict__ for r in rows],
+        }
     return {
         "generated_at": generated_at,
         "seed": 1,
@@ -414,7 +585,10 @@ def test_prior_evidence_comes_only_from_an_earlier_file_on_the_same_model():
     sep = _doc("2026-09-30T17:32:03+00:00", Insecta=(22, 8))
     # a file from before the evidence rule counts as one month: its own species rows are replayed
     got = gc.prior_evidence(sep, "2.34", "2026-10-02T18:48:00+00:00")
-    assert got["Insecta"]["evidence"] == {"llr": round(22 * math.log(1.2) + 8 * math.log(0.8), 4), "months": 1}
+    assert got["Insecta"]["evidence"] == {
+        "llr": round(22 * math.log(1.2) + 8 * math.log(0.8), 4),
+        "months": 1,
+    }
     # another model version: what was learnt about the old ranges does not carry
     assert gc.prior_evidence(sep, "2.35", "2026-10-02T18:48:00+00:00") == {}
     assert gc.prior_evidence(None, "2.34", "2026-10-02T18:48:00+00:00") == {}
@@ -426,13 +600,24 @@ def test_prior_evidence_comes_only_from_an_earlier_file_on_the_same_model():
 def test_rejudge_judges_a_saved_run_against_an_earlier_file_without_gbif_work(tmp_path):
     # the October run was held when the rule changed: its saved species rows are judged again
     sep, octo = tmp_path / "sep.json", tmp_path / "oct.json"
-    sep.write_text(json.dumps(_doc("2026-09-30T17:32:03+00:00", Insecta=(19, 11), Plantae=(18, 12))))
-    octo.write_text(json.dumps(_doc("2026-10-02T18:48:00+00:00", Insecta=(22, 8), Plantae=(20, 10))))
+    sep.write_text(
+        json.dumps(
+            _doc("2026-09-30T17:32:03+00:00", Insecta=(19, 11), Plantae=(18, 12))
+        )
+    )
+    octo.write_text(
+        json.dumps(_doc("2026-10-02T18:48:00+00:00", Insecta=(22, 8), Plantae=(20, 10)))
+    )
     out = tmp_path / "verdicts.json"
-    assert gc.main(["--rejudge", str(octo), "--prior", str(sep), "--out", str(out)]) == 0
+    assert (
+        gc.main(["--rejudge", str(octo), "--prior", str(sep), "--out", str(out)]) == 0
+    )
     doc = json.loads(out.read_text())
     assert doc["generated_at"] == "2026-10-02T18:48:00+00:00" and doc["seed"] == 1
-    assert doc["groups"]["Insecta"]["verdict"] == "pass" and doc["groups"]["Plantae"]["verdict"] == "fail"
+    assert (
+        doc["groups"]["Insecta"]["verdict"] == "pass"
+        and doc["groups"]["Plantae"]["verdict"] == "fail"
+    )
     assert doc["groups"]["Plantae"]["month_verdict"] == "pass"
     assert doc["thresholds"]["evidence"]["edge"] == 0.6
     # a run judged against itself is refused, and nothing is written
@@ -443,7 +628,13 @@ def test_rejudge_judges_a_saved_run_against_an_earlier_file_without_gbif_work(tm
 
 
 @pytest.mark.parametrize(
-    "flag", [["--groups", "Aves"], ["--seed", "3"], ["--species-per-group", "12"]]
+    "flag",
+    [
+        ["--groups", "Aves"],
+        ["--seed", "3"],
+        ["--species-per-group", "12"],
+        ["--if-new-model"],
+    ],
 )
 def test_rejudge_refuses_the_flags_of_a_run(tmp_path, capsys, flag):
     # review of PR #36: `--rejudge FILE --groups Aves` judged and wrote every collection in FILE, the flag silently
@@ -454,8 +645,80 @@ def test_rejudge_refuses_the_flags_of_a_run(tmp_path, capsys, flag):
     out = tmp_path / "verdicts.json"
     with pytest.raises(SystemExit) as exc:
         gc.main(["--rejudge", str(octo), "--prior", str(sep), "--out", str(out), *flag])
-    assert exc.value.code == 2 and f"{flag[0]} does not apply to --rejudge" in capsys.readouterr().err
+    assert (
+        exc.value.code == 2
+        and f"{flag[0]} does not apply to --rejudge" in capsys.readouterr().err
+    )
     assert not out.exists()
     # positive control in the same test: without the run flag the re-judge writes
-    assert gc.main(["--rejudge", str(octo), "--prior", str(sep), "--out", str(out)]) == 0
+    assert (
+        gc.main(["--rejudge", str(octo), "--prior", str(sep), "--out", str(out)]) == 0
+    )
     assert out.exists()
+
+
+IF_NEW_MODEL = [
+    "--groups",
+    "Aves",
+    "--species-per-group",
+    "12",
+    "--seed",
+    "5",
+    "--if-new-model",
+]
+
+
+def test_if_new_model_checks_a_new_model_and_leaves_a_checked_one_alone(tmp_path):
+    # 2026-10-28: iNaturalist moved to geomodel 2.35 while the verdicts held 2.34. The species list is never built from
+    # verdicts of another model, so it went stale until the monthly check on the 1st (#140). The daily job now asks.
+    out, attempts = tmp_path / "verdicts.json", tmp_path / "attempts.json"
+    argv = ["--out", str(out), "--attempts", str(attempts), *IF_NEW_MODEL]
+    out.write_text(
+        json.dumps(_doc("2026-10-02T18:48:00+00:00", version="2.34", Aves=(20, 10)))
+    )
+    before = out.read_bytes()
+    fake = FakeSources()  # serves 2.34, the model the verdicts checked
+    assert gc.main(argv, sources=fake) == 0
+    assert fake.verified and fake.presence_calls == 0 and not fake.tiles_asked
+    assert out.read_bytes() == before and not attempts.exists()
+    # positive control in the same test: verdicts of the model before are checked again, against the one served now
+    out.write_text(
+        json.dumps(_doc("2026-10-02T18:48:00+00:00", version="2.33", Aves=(20, 10)))
+    )
+    fake = FakeSources()
+    assert gc.main(argv, sources=fake) == 0
+    assert (
+        fake.presence_calls > 0
+        and json.loads(out.read_text())["geomodel_version"] == "2.34"
+    )
+
+
+def test_if_new_model_tries_a_model_once_and_leaves_retries_to_the_monthly_check(
+    tmp_path,
+):
+    # a control that fails on a new model would otherwise start hours of GBIF work every night
+    out, attempts = tmp_path / "verdicts.json", tmp_path / "attempts.json"
+    argv = ["--out", str(out), "--attempts", str(attempts), *IF_NEW_MODEL]
+    out.write_text(
+        json.dumps(_doc("2026-10-02T18:48:00+00:00", version="2.33", Aves=(20, 10)))
+    )
+    before = out.read_bytes()
+    tried = lambda: dt.datetime(2026, 10, 31, 3, 0, tzinfo=dt.timezone.utc)
+    assert gc.main(argv, sources=FakeSources(tiles_agree=False), now=tried) == 2
+    assert out.read_bytes() == before
+    assert json.loads(attempts.read_text()) == {"2.34": "2026-10-31T03:00:00+00:00"}
+    fake = FakeSources()
+    assert gc.main(argv, sources=fake) == 0
+    assert (
+        fake.verified
+        and fake.presence_calls == 0
+        and not fake.tiles_asked
+        and out.read_bytes() == before
+    )
+    # positive control in the same test: the monthly run, without the flag, still checks the model
+    fake = FakeSources()
+    assert gc.main([a for a in argv if a != "--if-new-model"], sources=fake) == 0
+    assert (
+        fake.presence_calls > 0
+        and json.loads(out.read_text())["geomodel_version"] == "2.34"
+    )

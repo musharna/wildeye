@@ -154,8 +154,12 @@ def group_verdict(results: list[SpeciesResult], skipped: dict[str, int]) -> dict
 EVIDENCE_EDGE = 0.60
 EVIDENCE_ALPHA, EVIDENCE_BETA = 0.05, 0.10
 LIST_AT = math.log((1 - EVIDENCE_BETA) / EVIDENCE_ALPHA)  # 2.89
-DROP_AT = math.log(EVIDENCE_BETA / (1 - EVIDENCE_ALPHA))  # -2.25, also the floor while not listed
-EVIDENCE_CAP = LIST_AT + 3.0  # a listed collection that stops beating the baseline drops within months, not years
+DROP_AT = math.log(
+    EVIDENCE_BETA / (1 - EVIDENCE_ALPHA)
+)  # -2.25, also the floor while not listed
+EVIDENCE_CAP = (
+    LIST_AT + 3.0
+)  # a listed collection that stops beating the baseline drops within months, not years
 
 
 class EvidenceError(ValueError):
@@ -170,11 +174,20 @@ def carry_evidence(month: dict, prior: dict | None) -> dict:
     if prior is not None:
         llr, months = prior["evidence"]["llr"], prior["evidence"]["months"]
         listed = prior["verdict"] == "pass"
-    if month["verdict"] == "insufficient":  # too few species scored: no evidence either way
+    if (
+        month["verdict"] == "insufficient"
+    ):  # too few species scored: no evidence either way
         verdict = "pass" if listed else "insufficient"
-        return {**month, "month_verdict": "insufficient", "verdict": verdict, "evidence": {"llr": llr, "months": months}}
+        return {
+            **month,
+            "month_verdict": "insufficient",
+            "verdict": verdict,
+            "evidence": {"llr": llr, "months": months},
+        }
     b = month["beats_baseline"]
-    step = b["wins"] * math.log(EVIDENCE_EDGE / 0.5) + b["losses"] * math.log((1 - EVIDENCE_EDGE) / 0.5)
+    step = b["wins"] * math.log(EVIDENCE_EDGE / 0.5) + b["losses"] * math.log(
+        (1 - EVIDENCE_EDGE) / 0.5
+    )
     llr = min(llr + step, EVIDENCE_CAP)
     if listed and llr <= DROP_AT:
         listed, llr = False, 0.0
@@ -200,9 +213,15 @@ def prior_evidence(prior_doc: dict | None, version: str, generated_at: str) -> d
     if prior_doc is None:
         return {}
     if prior_doc["geomodel_version"] != version:
-        log.info("last verdicts checked geomodel %s, this run %s: evidence starts over", prior_doc["geomodel_version"], version)
+        log.info(
+            "last verdicts checked geomodel %s, this run %s: evidence starts over",
+            prior_doc["geomodel_version"],
+            version,
+        )
         return {}
-    if dt.datetime.fromisoformat(prior_doc["generated_at"]) >= dt.datetime.fromisoformat(generated_at):
+    if dt.datetime.fromisoformat(
+        prior_doc["generated_at"]
+    ) >= dt.datetime.fromisoformat(generated_at):
         raise EvidenceError(
             f"the last verdicts ({prior_doc['generated_at']}) are not earlier than this run ({generated_at}): "
             "one run would be counted twice"
@@ -526,7 +545,9 @@ class LiveSources:
 
         self.gs, self.work, self.meta = gs, work, None
         self.files: dict[str, dict[int, Path]] = {}
-        self._bounds: dict[Path, dict] = {}  # each file's range bounds, read once from its geometry headers
+        self._bounds: dict[
+            Path, dict
+        ] = {}  # each file's range bounds, read once from its geometry headers
 
     def verify(self):
         self.gs.verify_group_keys()
@@ -565,7 +586,9 @@ class LiveSources:
         if taxon_id not in self._bounds[path]:
             raise self.gs.SourceError(f"taxon {taxon_id} not in {path.name}")
         if self._bounds[path][taxon_id] is None:
-            raise self.gs.SourceError(f"taxon {taxon_id} has an empty range in {path.name}")
+            raise self.gs.SourceError(
+                f"taxon {taxon_id} has an empty range in {path.name}"
+            )
         return self._bounds[path][taxon_id]
 
     def background(self, group: str, n: int, rng):
@@ -658,15 +681,36 @@ def main(argv=None, *, sources=None, now=None) -> int:
         default=None,
         help="judge a saved run's species rows again, against --prior, instead of running (no network)",
     )
+    ap.add_argument(
+        "--if-new-model",
+        action="store_true",
+        help="run only if the verdicts did not check the model served now, and only once per model (the daily job)",
+    )
+    ap.add_argument(
+        "--attempts",
+        type=Path,
+        default=None,
+        help="the models --if-new-model has tried (default: new_model_attempts.json under --work)",
+    )
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     log = logging.getLogger("geomodel")
 
     if args.rejudge:  # the saved run fixed its collections, seed and species: a run flag here would go unused
-        for flag, value in [("--groups", args.groups), ("--seed", args.seed), ("--species-per-group", args.species_per_group), ("--keep-ranges", args.keep_ranges or None)]:
+        for flag, value in [
+            ("--groups", args.groups),
+            ("--seed", args.seed),
+            ("--species-per-group", args.species_per_group),
+            ("--keep-ranges", args.keep_ranges or None),
+            ("--if-new-model", args.if_new_model or None),
+        ]:
             if value is not None:
-                ap.error(f"{flag} does not apply to --rejudge: the saved run's own is used")
-    species_per_group = SPECIES_PER_GROUP if args.species_per_group is None else args.species_per_group
+                ap.error(
+                    f"{flag} does not apply to --rejudge: the saved run's own is used"
+                )
+    species_per_group = (
+        SPECIES_PER_GROUP if args.species_per_group is None else args.species_per_group
+    )
     seed = (
         args.seed if args.seed is not None else int.from_bytes(os.urandom(4), "little")
     )
@@ -677,13 +721,54 @@ def main(argv=None, *, sources=None, now=None) -> int:
     # read before hours of GBIF work: an unreadable prior must stop the run, not lose its evidence after it
     prior_path = args.prior or args.out
     prior = json.loads(prior_path.read_text()) if prior_path.exists() else None
+    if args.if_new_model:
+        # the species list is only built from verdicts of the model it lists, so a new model left it stale until the
+        # monthly run (2.34 -> 2.35, 2026-10-28, #140). The daily job asks here: it reads the ranges' metadata and checks the GBIF keys, and downloads no range
+        probe = sources or LiveSources(args.work)
+        probe.verify()
+        version = probe.version()
+        if prior is not None and prior["geomodel_version"] == version:
+            log.info(
+                "the verdicts checked geomodel %s, the model served now: nothing to do",
+                version,
+            )
+            return 0
+        attempts_path = args.attempts or args.work / "new_model_attempts.json"
+        attempts = (
+            json.loads(attempts_path.read_text()) if attempts_path.exists() else {}
+        )
+        if version in attempts:
+            # a control that fails on this model would otherwise start hours of GBIF work every night
+            log.info(
+                "geomodel %s was tried at %s and wrote no verdicts: the monthly run tries it again",
+                version,
+                attempts[version],
+            )
+            return 0
+        # recorded before the run, so a run killed part way is the one try too
+        attempts[version] = (
+            now or (lambda: dt.datetime.now(dt.timezone.utc))
+        )().isoformat(timespec="seconds")
+        write_atomic(attempts_path, attempts)
+        log.info(
+            "the verdicts checked geomodel %s, the model served now is %s: checking it",
+            prior and prior["geomodel_version"],
+            version,
+        )
     if args.rejudge:
         doc = json.loads(args.rejudge.read_text())
-        log.info("judging %s (%s) again against %s", args.rejudge, doc["generated_at"], prior_path)
+        log.info(
+            "judging %s (%s) again against %s",
+            args.rejudge,
+            doc["generated_at"],
+            prior_path,
+        )
     else:
         live = sources is None
         with (
-            run_workdir(args.work, keep=args.keep_ranges) if live else nullcontext() as work
+            run_workdir(args.work, keep=args.keep_ranges)
+            if live
+            else nullcontext() as work
         ):
             sources = sources or LiveSources(work)
             try:
@@ -694,7 +779,9 @@ def main(argv=None, *, sources=None, now=None) -> int:
                 log.error("controls failed, no verdicts written: %s", e)
                 return 2
         doc = {
-            "generated_at": (now or (lambda: dt.datetime.now(dt.timezone.utc)))().isoformat(timespec="seconds"),
+            "generated_at": (
+                now or (lambda: dt.datetime.now(dt.timezone.utc))
+            )().isoformat(timespec="seconds"),
             "seed": seed,
             **doc,
         }
