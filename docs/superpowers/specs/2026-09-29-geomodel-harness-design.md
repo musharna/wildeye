@@ -106,9 +106,12 @@ Sample size: 30 species per collection (fewer where the collection or the data r
   2026-10-31: the value is the mean of 5 shuffles, as the own-surface probe has used since its spec
   (2026-10-02). One shuffle's noise is up to 0.023 TSS at 500 presences and 5000 background, so it reaches
   0.05 in up to 3.5% of groups and up to one run of 13 in three; the mean of 5 does so about twice in a
-  million groups, and a bias of 0.075 or more still fails it 99% of the time (the test plants 0.10). The 2.35 check of 2026-10-31 (jobd 7902)
-  failed this control at -0.0794 on a single shuffle, a value one shuffle reaches by chance less than once
-  in 17,000 runs on that species (bounded from its real TSS); it is not explained.
+  million groups. A bias in every draw of 0.075 or more still fails it 99% of the time (the test plants
+  0.10); one outlying draw does not, since the other four dilute it, so all 5 draws are recorded
+  (`controls.per_group.<group>.shuffle_draws`). The 2.35 check of 2026-10-31 (jobd 7902) failed this
+  control at -0.0794 on a single shuffle, a value one shuffle reaches by chance less than once in 17,000 runs
+  on that species (bounded from its real TSS); it is not explained. Under the mean of 5 that draw alone
+  would pass (-0.0159) and show in the recorded draws.
 - **Effort placement** (added 2026-09-29, before the first full run): GBIF's count tiles rebuilt over a 6 x 6
   block of grid cells (birds around Switzerland) must agree with GBIF occurrence search over the same cells to
   an L1 error ≤ 0.40 of the block's records. The z3 tiles the grid was first built from scored 2.57 (records

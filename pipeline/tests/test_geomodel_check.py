@@ -55,14 +55,15 @@ def test_the_shuffle_control_does_not_fail_by_chance_and_still_sees_a_bias(monke
     rng = np.random.default_rng(11)
     background = _points_with_share_inside(rng, gc.BACKGROUND_POINTS, 0.45)
     presences = _points_with_share_inside(rng, gc.PRESENCES_WANTED, 1.0)
-    draws = [
-        gc.shuffle_null_mean_tss(RANGE, presences, background, rng) for _ in range(400)
+    means = [
+        np.mean(gc.shuffle_null_draws(RANGE, presences, background, rng))
+        for _ in range(400)
     ]
-    assert max(abs(d) for d in draws) < gc.SHUFFLE_TSS_MAX
-    # the mean does not average a bias away: shuffles biased by 0.10 still fail the control
+    assert max(abs(m) for m in means) < gc.SHUFFLE_TSS_MAX
+    # the mean does not average away a bias in every draw: shuffles biased by 0.10 still fail the control
     real = gc.shuffle_null_tss
     monkeypatch.setattr(gc, "shuffle_null_tss", lambda *a: real(*a) + 0.10)
-    biased = gc.shuffle_null_mean_tss(RANGE, presences, background, rng)
+    biased = float(np.mean(gc.shuffle_null_draws(RANGE, presences, background, rng)))
     assert biased == pytest.approx(0.10, abs=0.035)
     failures = gc.check_controls(
         "Aves", {"fake_tss": 0.0, "positive_tss": 1.0, "shuffle_tss": biased}
@@ -78,7 +79,26 @@ def test_a_group_controls_record_the_mean_of_the_shuffles(monkeypatch):
         "Aves", FakeSources(n=3), np.random.default_rng(1), species_per_group=3
     )
     assert controls["shuffle_tss"] == 0.01
+    assert controls["shuffle_draws"] == [0.3, -0.2, 0.1, -0.1, -0.05]
     assert next(draws, None) is None  # all five shuffles were drawn, once each
+
+
+def test_one_outlying_shuffle_is_recorded_not_failed(monkeypatch):
+    # jobd 7902's case: one draw at -0.0794 (unexplained, under 1 in 17,000 by chance). Among four ordinary
+    # draws the mean is -0.0159, inside the limit: the control passes, and the draw is in the verdicts to see.
+    # Failing on any single draw would bring back the chance failures (up to 16% of groups at 5 draws)
+    draws = iter([-0.0794, 0.0, 0.0, 0.0, 0.0])
+    monkeypatch.setattr(gc, "shuffle_null_tss", lambda *a: next(draws))
+    _, controls = gc.score_group(
+        "Aves", FakeSources(n=3), np.random.default_rng(1), species_per_group=3
+    )
+    assert controls["shuffle_draws"][0] == -0.0794
+    assert controls["shuffle_tss"] == -0.0159
+    assert gc.check_controls("Aves", controls) == []
+    # the same draw alone, as the single-shuffle control recorded it, fails
+    assert gc.check_controls("Aves", {**controls, "shuffle_tss": -0.0794}) == [
+        "Aves: label shuffle scored -0.0794 (|mean| must be < 0.05)"
+    ]
 
 
 def test_equal_area_baseline_matches_the_range_area():

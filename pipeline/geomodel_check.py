@@ -86,18 +86,11 @@ def shuffle_null_tss(
     return tss(geom, pooled[order[: len(presences)]], pooled[order[len(presences) :]])
 
 
-def shuffle_null_mean_tss(
+def shuffle_null_draws(
     geom, presences: np.ndarray, background: np.ndarray, rng: np.random.Generator
-) -> float:
-    """The shuffle control's value: the mean TSS of SHUFFLES label shuffles, steady enough that chance cannot fail a run."""
-    return float(
-        np.mean(
-            [
-                shuffle_null_tss(geom, presences, background, rng)
-                for _ in range(SHUFFLES)
-            ]
-        )
-    )
+) -> list[float]:
+    """SHUFFLES label shuffles' TSS. The control is their mean; the draws are kept so one outlying draw shows."""
+    return [shuffle_null_tss(geom, presences, background, rng) for _ in range(SHUFFLES)]
 
 
 def area_km2(geom) -> float:
@@ -294,7 +287,9 @@ PRESENCES_WANTED = 500
 POSITIVE_BUFFER_KM = 25.0
 SHUFFLE_TSS_MAX = 0.05
 # the shuffle control is the mean of this many shuffles: one shuffle's noise (up to 0.023 TSS at 500 presences
-# and 5000 background) reaches 0.05 in up to 3.5% of groups, so up to one run of 13 in three (own-surface spec)
+# and 5000 background) reaches 0.05 in up to 3.5% of groups, so up to one run of 13 in three (own-surface spec).
+# The mean catches a bias in every draw; one outlying draw is diluted by the others and only shows in the
+# recorded draws (controls.per_group.<group>.shuffle_draws)
 SHUFFLES = 5
 # two in each of the 13 collections (ruling 2026-10-02, spec)
 TILE_AGREEMENT_SPECIES = 26
@@ -415,6 +410,7 @@ def score_group(
                     ]
                 ),
             )
+            draws = shuffle_null_draws(geom, presences, background, rng)
             controls = {
                 "species": name,
                 "fake_tss": round(
@@ -426,9 +422,8 @@ def score_group(
                     4,
                 ),
                 "positive_tss": round(tss(positive, presences, background), 4),
-                "shuffle_tss": round(
-                    shuffle_null_mean_tss(geom, presences, background, rng), 4
-                ),
+                "shuffle_tss": round(float(np.mean(draws)), 4),
+                "shuffle_draws": [round(d, 4) for d in draws],
                 "real_tss": result.model_tss,
                 "taxon_id": taxon_id,
             }
@@ -449,7 +444,7 @@ def check_controls(group: str, controls: dict) -> list[str]:
         )
     if abs(controls["shuffle_tss"]) >= SHUFFLE_TSS_MAX:
         failures.append(
-            f"{group}: label shuffle scored {controls['shuffle_tss']} (mean of {SHUFFLES}; |TSS| must be < {SHUFFLE_TSS_MAX})"
+            f"{group}: label shuffle scored {controls['shuffle_tss']} (|mean| must be < {SHUFFLE_TSS_MAX})"
         )
     return failures
 
