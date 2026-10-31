@@ -497,10 +497,12 @@ def test_fetch_retries_a_404_from_occurrence_search_and_nothing_else(monkeypatch
         == b"{}"
     )
     assert len(waits) == 1
-    # elsewhere a 404 can be the answer (a species key, an iNaturalist tile): raised at once, not waited out
+    # elsewhere a 404 can be the answer (a species key, an iNaturalist tile, another API's search: review of #143,
+    # USGS NAS's path also ends in /occurrence/search): raised at once, not waited out
     for url in (
         "https://api.gbif.org/v1/species/999999999",
         "https://api.inaturalist.org/v2/geomodel/1/3/4/3.png",
+        "https://nas.er.usgs.gov/api/v2/occurrence/search?genus=Dreissena",
     ):
         waits.clear()
         answers[:] = [_http_error(404, "Not found")]

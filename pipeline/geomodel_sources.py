@@ -159,9 +159,9 @@ def fetch(url: str, *, attempts: int = 6, pause: float = 0.0) -> bytes:
             last = e
             # GBIF's search answers no matches with 200 and count 0 and a bad query with 400, so a 404 from it is the
             # server (2026-10-31: one, empty-bodied, in a burst of 429s ended a 6 h check; the same URL then gave 200).
-            # Elsewhere a 404 can be the answer: a species key, an iNaturalist tile
-            search_404 = e.code == 404 and urllib.parse.urlsplit(url).path.endswith(
-                "/occurrence/search"
+            # Elsewhere a 404 can be the answer: a species key, an iNaturalist tile, another API's search
+            search_404 = (
+                e.code == 404 and url.split("?")[0] == GBIF + "occurrence/search"
             )
             if e.code != 429 and e.code < 500 and not search_404:
                 body = e.read().decode("utf-8", "replace").strip()
