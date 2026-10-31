@@ -55,14 +55,23 @@ def test_range_bounds_read_from_the_headers_equal_the_decoded_ranges_bounds():
     assert gs.range_bounds(FIXTURES / "geomodel_protozoa_empty.gpkg")[56565] is None
     # species rank only, as species_index lists (review of #39): the amphibian file's genus row is not read
     amphibia = FIXTURES / "geomodel_amphibia_2rows.gpkg"
-    assert sorted(gs.range_bounds(amphibia)) == sorted(t for t, _, _ in gs.species_index(amphibia))
+    assert sorted(gs.range_bounds(amphibia)) == sorted(
+        t for t, _, _ in gs.species_index(amphibia)
+    )
 
 
 def test_header_bounds_refuses_a_header_it_cannot_read_bounds_from():
     import struct
 
-    def head(flags=0b0011, srs=4326, env=(1.0, 2.0, 3.0, 4.0)):  # little-endian, XY envelope
-        return b"GP\x00" + bytes([flags]) + struct.pack("<i", srs) + struct.pack("<4d", *env)
+    def head(
+        flags=0b0011, srs=4326, env=(1.0, 2.0, 3.0, 4.0)
+    ):  # little-endian, XY envelope
+        return (
+            b"GP\x00"
+            + bytes([flags])
+            + struct.pack("<i", srs)
+            + struct.pack("<4d", *env)
+        )
 
     # positive control: the envelope is minx, maxx, miny, maxy; the bounds are min lon, min lat, max lon, max lat
     assert gs.header_bounds(head()) == (1.0, 3.0, 2.0, 4.0)
@@ -199,7 +208,11 @@ def test_verify_group_keys_stops_on_a_moved_key():
     def gbif(moved=None, empty=None):
         def get(url):
             if "/occurrence/search?" in url:
-                k = int(urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["taxonKey"][0])
+                k = int(
+                    urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["taxonKey"][
+                        0
+                    ]
+                )
                 return {"count": 0 if k == empty else 1000}
             k = int(url.rsplit("/", 1)[1])
             return {"canonicalName": "Reptilia" if k == moved else names[k]}
@@ -207,7 +220,9 @@ def test_verify_group_keys_stops_on_a_moved_key():
         return get
 
     gs.verify_group_keys(gbif())
-    with pytest.raises(gs.SourceError, match="11592253 is 'Reptilia', expected 'Squamata'"):
+    with pytest.raises(
+        gs.SourceError, match="11592253 is 'Reptilia', expected 'Squamata'"
+    ):
         gs.verify_group_keys(gbif(moved=11592253))
     # a key that still names its taxon but has nothing filed under it (GBIF's class 204 Actinopterygii,
     # 2026-09-30: its fish now sit in orders directly under Chordata) empties the group without a word
@@ -219,7 +234,9 @@ def test_verify_group_keys_stops_on_a_moved_key():
 def test_fish_are_the_orders_gbif_files_without_a_class():
     fish = gs.GROUPS["Actinopterygii"]["include"]
     assert 204 not in fish and len(fish) == 46
-    assert {"Perciformes", "Cypriniformes", "Pleuronectiformes", "Siluriformes"} <= set(fish.values())
+    assert {"Perciformes", "Cypriniformes", "Pleuronectiformes", "Siluriformes"} <= set(
+        fish.values()
+    )
     # OtherAnimalia excludes the same fish, or its background counts every fish record as other animals
     assert set(fish) <= set(gs.GROUPS["OtherAnimalia"]["exclude"])
 
@@ -253,7 +270,9 @@ def _http_error(code, body):
     import io
     import urllib.error
 
-    return urllib.error.HTTPError("https://api.gbif.org/x", code, "err", {}, io.BytesIO(body.encode()))
+    return urllib.error.HTTPError(
+        "https://api.gbif.org/x", code, "err", {}, io.BytesIO(body.encode())
+    )
 
 
 def test_fetch_tile_reads_gbifs_filtered_empty_400_as_no_records(monkeypatch):
@@ -296,9 +315,15 @@ def _block_sources(truth: dict, shift_rows: int):
         z, x, y = (int(v) for v in url.split("/adhoc/")[1].split(".")[0].split("/"))
         assert z == gs.TILE_ZOOM
         feats = [
-            ((c - x * per) * gs.SQUARE, (r + shift_rows - y * per) * gs.SQUARE, gs.SQUARE, n)
+            (
+                (c - x * per) * gs.SQUARE,
+                (r + shift_rows - y * per) * gs.SQUARE,
+                gs.SQUARE,
+                n,
+            )
             for (r, c), n in truth.items()
-            if r + shift_rows in range(y * per, (y + 1) * per) and c in range(x * per, (x + 1) * per)
+            if r + shift_rows in range(y * per, (y + 1) * per)
+            and c in range(x * per, (x + 1) * per)
         ]
         return _tile(feats) if feats else b""
 
@@ -307,7 +332,9 @@ def _block_sources(truth: dict, shift_rows: int):
         assert q["license"] == ["CC0_1_0", "CC_BY_4_0"] and q["limit"] == ["0"]
         la0, la1 = (float(v) for v in q["decimalLatitude"][0].split(","))
         lo0, lo1 = (float(v) for v in q["decimalLongitude"][0].split(","))
-        return {"count": truth.get(gs._lonlat_to_cell((lo0 + lo1) / 2, (la0 + la1) / 2), 0)}
+        return {
+            "count": truth.get(gs._lonlat_to_cell((lo0 + lo1) / 2, (la0 + la1) / 2), 0)
+        }
 
     return get_tile, get_json
 
@@ -315,13 +342,19 @@ def _block_sources(truth: dict, shift_rows: int):
 def test_placement_error_reads_misplaced_tiles():
     r0, c0 = gs._lonlat_to_cell(7.0, 47.5)
     rng = np.random.default_rng(4)
-    truth = {(r0 + i, c0 + j): int(rng.integers(1, 1000)) for i in range(6) for j in range(6)}
+    truth = {
+        (r0 + i, c0 + j): int(rng.integers(1, 1000)) for i in range(6) for j in range(6)
+    }
     # tiles that put every record in its own cell agree with search exactly
     get_tile, get_json = _block_sources(truth, 0)
-    assert gs.placement_error(7.0, 47.5, 212, get_tile=get_tile, get_json=get_json) == 0.0
+    assert (
+        gs.placement_error(7.0, 47.5, 212, get_tile=get_tile, get_json=get_json) == 0.0
+    )
     # tiles that put every record one cell south, as GBIF's z3 adhoc tiles did, do not
     get_tile, get_json = _block_sources(truth, 1)
-    assert gs.placement_error(7.0, 47.5, 212, get_tile=get_tile, get_json=get_json) > 0.4
+    assert (
+        gs.placement_error(7.0, 47.5, 212, get_tile=get_tile, get_json=get_json) > 0.4
+    )
 
 
 class _FakeGbif:
@@ -329,7 +362,11 @@ class _FakeGbif:
     does, by dataset). Pages past offset 10,000 are refused: live, they take minutes."""
 
     def __init__(self, lon, lat):
-        self.lon, self.lat, self.requests = np.asarray(lon, float), np.asarray(lat, float), []
+        self.lon, self.lat, self.requests = (
+            np.asarray(lon, float),
+            np.asarray(lat, float),
+            [],
+        )
 
     def __call__(self, url):
         q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
@@ -345,7 +382,15 @@ class _FakeGbif:
         limit, offset = int(q["limit"][0]), int(q.get("offset", ["0"])[0])
         assert offset + limit <= 10_000, f"deep page requested: offset {offset}"
         page = idx[offset : offset + limit]
-        results = [{"key": int(i), "datasetKey": "d", "decimalLongitude": self.lon[i], "decimalLatitude": self.lat[i]} for i in page]
+        results = [
+            {
+                "key": int(i),
+                "datasetKey": "d",
+                "decimalLongitude": self.lon[i],
+                "decimalLatitude": self.lat[i],
+            }
+            for i in page
+        ]
         return {"count": int(len(idx)), "results": results}
 
 
@@ -355,25 +400,44 @@ def test_presences_are_a_spatial_random_sample_of_a_common_species():
     lon = np.concatenate([rng.uniform(-100, -90, n_b), rng.uniform(0, 10, n_a)])
     lat = np.concatenate([rng.uniform(30, 40, n_b), rng.uniform(40, 50, n_a)])
     gbif = _FakeGbif(lon, lat)
-    pts = gs.occurrence_points(99, inat=False, want=500, rng=np.random.default_rng(0), get_json=gbif)
+    pts = gs.occurrence_points(
+        99, inat=False, want=500, rng=np.random.default_rng(0), get_json=gbif
+    )
     assert len(pts) == 500
     # the first 10,000 records are all B; a sample of the species is ~80% A
     assert (pts[:, 0] >= 0).mean() == pytest.approx(0.8, abs=0.15)
     # positive control in the same test: a rare species comes back whole
     few = _FakeGbif(rng.uniform(0, 10, 420), rng.uniform(40, 50, 420))
-    assert len(gs.occurrence_points(99, inat=False, want=500, rng=np.random.default_rng(0), get_json=few)) == 420
+    assert (
+        len(
+            gs.occurrence_points(
+                99, inat=False, want=500, rng=np.random.default_rng(0), get_json=few
+            )
+        )
+        == 420
+    )
     # and one with a few thousand records is read in full and subsampled, not taken in clustered pages
-    mid = _FakeGbif(np.r_[rng.uniform(-100, -90, 500), rng.uniform(0, 10, 2000)], np.r_[rng.uniform(30, 40, 500), rng.uniform(40, 50, 2000)])
-    pts = gs.occurrence_points(99, inat=False, want=500, rng=np.random.default_rng(0), get_json=mid)
+    mid = _FakeGbif(
+        np.r_[rng.uniform(-100, -90, 500), rng.uniform(0, 10, 2000)],
+        np.r_[rng.uniform(30, 40, 500), rng.uniform(40, 50, 2000)],
+    )
+    pts = gs.occurrence_points(
+        99, inat=False, want=500, rng=np.random.default_rng(0), get_json=mid
+    )
     assert len(pts) == 500 and (pts[:, 0] >= 0).mean() == pytest.approx(0.8, abs=0.06)
-    assert sum(int(q["limit"][0]) for q in mid.requests) >= 2500  # every record was read
+    assert (
+        sum(int(q["limit"][0]) for q in mid.requests) >= 2500
+    )  # every record was read
 
 
 def test_fetch_backs_off_for_minutes_when_gbif_says_too_many_requests(monkeypatch):
     # GBIF's limit follows server load; a run of hours met 429 and the old 5-40 s backoff gave up
     import urllib.request
 
-    waits, answers = [], [_http_error(429, "Too Many Requests"), _http_error(429, "Too Many Requests")]
+    waits, answers = (
+        [],
+        [_http_error(429, "Too Many Requests"), _http_error(429, "Too Many Requests")],
+    )
 
     class Ok:
         def __enter__(self):

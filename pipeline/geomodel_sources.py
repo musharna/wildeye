@@ -196,7 +196,11 @@ def verify_group_keys(get_json: Callable[[str], dict] = fetch_json) -> None:
     """Every GBIF key in GROUPS still names the taxon it was chosen for and has records filed under it,
     or the run stops."""
     wrong = []
-    keys = {k: n for spec in GROUPS.values() for k, n in {**spec["include"], **spec.get("exclude", {})}.items()}
+    keys = {
+        k: n
+        for spec in GROUPS.values()
+        for k, n in {**spec["include"], **spec.get("exclude", {})}.items()
+    }
     for key, name in keys.items():
         got = get_json(f"{GBIF}species/{key}").get("canonicalName")
         if got != name:
