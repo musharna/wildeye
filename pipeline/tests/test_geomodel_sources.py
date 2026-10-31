@@ -259,7 +259,7 @@ def test_match_species_takes_only_exact_species_matches():
     }
     get = lambda url: answers[
         urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)["name"][0]
-    ]  # noqa: E731
+    ]
     assert gs.match_species("Turdus migratorius", get) == 9510564
     assert gs.match_species("Old name", get) == 2
     assert gs.match_species("Turdus", get) is None
@@ -391,7 +391,7 @@ class _FakeGbif:
             }
             for i in page
         ]
-        return {"count": int(len(idx)), "results": results}
+        return {"count": len(idx), "results": results}
 
 
 def test_presences_are_a_spatial_random_sample_of_a_common_species():
@@ -464,3 +464,46 @@ def test_fetch_backs_off_for_minutes_when_gbif_says_too_many_requests(monkeypatc
     with pytest.raises(gs.SourceError, match="400"):
         gs.fetch("https://api.gbif.org/v1/occurrence/search?bad")
     assert waits == []
+
+
+def test_fetch_retries_a_404_from_occurrence_search_and_nothing_else(monkeypatch):
+    # 2026-10-31, jobd 7853: one search page answered 404 with an empty body in a burst of 429s and ended a 6 h check;
+    # the same URL then gave 200. A search with no matches is 200 with count 0 (checked live), so a 404 is the server
+    import urllib.request
+
+    waits, answers = [], [_http_error(404, "")]
+
+    class Ok:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"{}"
+
+    def fake_urlopen(req, timeout=None):
+        if answers:
+            raise answers.pop(0)
+        return Ok()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(gs.time, "sleep", waits.append)
+    assert (
+        gs.fetch(
+            "https://api.gbif.org/v1/occurrence/search?taxonKey=2264734&offset=1938"
+        )
+        == b"{}"
+    )
+    assert len(waits) == 1
+    # elsewhere a 404 can be the answer (a species key, an iNaturalist tile): raised at once, not waited out
+    for url in (
+        "https://api.gbif.org/v1/species/999999999",
+        "https://api.inaturalist.org/v2/geomodel/1/3/4/3.png",
+    ):
+        waits.clear()
+        answers[:] = [_http_error(404, "Not found")]
+        with pytest.raises(gs.SourceError, match="404"):
+            gs.fetch(url)
+        assert waits == []
