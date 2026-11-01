@@ -63,6 +63,13 @@ test('the report CLI exits 10 when a script failed twice, and 0 when none did', 
   const fail = cli(ok, bad);
   assert.equal(fail.status, FAILED_EXIT);
   assert.match(fail.stdout, /Failed twice[\s\S]*`qa-c`: matches-tile/);
+  // a shard that crashed wrote no file: with --expect, the missing shard fails the sweep even when the rest passed
+  const short = spawnSync(process.execPath, [path.join(SCRIPTS, 'qa-sweep.mjs'), '--report', '--expect', '2', ok], { encoding: 'utf8' });
+  assert.equal(short.status, FAILED_EXIT);
+  assert.match(short.stdout, /1 shard\(s\) wrote no results/);
+  const whole = spawnSync(process.execPath, [path.join(SCRIPTS, 'qa-sweep.mjs'), '--report', '--expect', '2', ok, ok], { encoding: 'utf8' });
+  assert.equal(whole.status, 0); // positive control: every shard wrote, nothing failed
+  assert.doesNotMatch(whole.stdout, /wrote no results/);
 });
 
 test('the report lists the not-run scripts with their reason', () => {

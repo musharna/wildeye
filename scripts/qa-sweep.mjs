@@ -2,7 +2,8 @@
 /**
  * qa-sweep.mjs — run the browser QA scripts against the live site, one at a time, and report (.github/workflows/qa-sweep.yml).
  * Run:    node scripts/qa-sweep.mjs [--url <site>] [--shard i/n] [--only qa-a,qa-b] [--out results.json]
- * Report: node scripts/qa-sweep.mjs --report results-0.json results-1.json ... > report.md  (exit 10: a script failed twice)
+ * Report: node scripts/qa-sweep.mjs --report [--expect n] results-0.json ... > report.md
+ *         (exit 10: a script failed twice, or fewer than n result files: a shard that crashed ran nothing it can report)
  *
  * The 60 scripts ran only by hand until 2026-11-01, when a sweep of all of them found two that had gone stale on a
  * correct site (a hard-coded layer count, a seasonal assumption) and one real stale layer (OBIS absences). A script
@@ -62,7 +63,7 @@ export function failedChecks(output) {
   return bad.length ? bad : lines.slice(-1).map((l) => l.slice(0, 200));
 }
 
-export function renderReport(results, notRun) {
+export function renderReport(results, notRun, missingShards = 0) {
   const by = (v) => results.filter((r) => r.verdict === v);
   const fail = by('fail');
   const flaky = by('flaky');
@@ -76,6 +77,7 @@ export function renderReport(results, notRun) {
     for (const r of rows) out.push(`- \`${r.name}\`: ${r.checks.join('; ')}`);
     out.push('');
   };
+  if (missingShards) out.push(`**${missingShards} shard(s) wrote no results**: the shard itself failed (install, browser, runner), so its scripts are unchecked this week; see the run's log.`, '');
   list('Failed twice', fail);
   list('Flaky (failed, then passed)', flaky);
   if (notRun.length) out.push('**Not run here** (need a downloaded source or credentials; run by hand)', '', ...notRun.map((n) => `- \`${n}\`: ${NOT_RUN[n]}`), '');
@@ -96,12 +98,19 @@ function runOne(name, url) {
 function main(argv) {
   const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
   if (argv.includes('--report')) {
-    const files = argv.slice(argv.indexOf('--report') + 1);
+    let files = argv.slice(argv.indexOf('--report') + 1);
+    let expect = 0;
+    if (files[0] === '--expect') {
+      expect = Number(files[1]);
+      if (!(Number.isInteger(expect) && expect > 0)) throw new Error(`bad --expect ${files[1]}`);
+      files = files.slice(2);
+    }
     const parts = files.map((f) => JSON.parse(readFileSync(f, 'utf8')));
     const results = parts.flatMap((p) => p.results);
     const notRun = parts.flatMap((p) => p.notRun);
-    process.stdout.write(`${renderReport(results, notRun)}\n`);
-    return results.some((r) => r.verdict === 'fail') ? FAILED_EXIT : 0;
+    const missing = Math.max(0, expect - files.length);
+    process.stdout.write(`${renderReport(results, notRun, missing)}\n`);
+    return missing || results.some((r) => r.verdict === 'fail') ? FAILED_EXIT : 0;
   }
   const url = arg('--url', 'https://musharna.github.io/wildeye/');
   const only = arg('--only', null)?.split(',');
