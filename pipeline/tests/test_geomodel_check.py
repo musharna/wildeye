@@ -974,3 +974,62 @@ def test_live_sources_verify_once_per_run(tmp_path):
     other.gs = Stub()
     other.verify()
     assert other.gs.calls == 1 and other.version() == "2.35"
+
+
+def test_a_failed_run_logs_what_it_takes_to_replay_it(tmp_path, monkeypatch, caplog):
+    # 2026-10-31: jobd 7902 failed its shuffle control at -0.0794 and could not be replayed: a run that writes
+    # nothing logged neither its seed nor the failing group's draws
+    import logging
+
+    out = tmp_path / "verdicts.json"
+    argv = ["--out", str(out), "--groups", "Aves", "--species-per-group", "12"]
+    real = gc.check_controls
+    monkeypatch.setattr(
+        gc,
+        "check_controls",
+        lambda g, c: real(g, c) + ["Aves: planted fake scored 0.5"],
+    )
+    with caplog.at_level(logging.INFO, logger="geomodel"):
+        assert gc.main(argv, sources=FakeSources()) == 2
+    lines = [r.getMessage() for r in caplog.records]
+    seeds = [int(m.split()[1].rstrip(",")) for m in lines if m.startswith("seed ")]
+    prefix = "Aves: controls that failed: "
+    failed = [json.loads(m[len(prefix) :]) for m in lines if m.startswith(prefix)]
+    assert len(seeds) == 1 and len(failed) == 1
+    assert len(failed[0]["shuffle_draws"]) == gc.SHUFFLES
+    # positive control in the same test: the logged seed replays the run, failing group's controls and all
+    monkeypatch.setattr(gc, "check_controls", real)
+    assert gc.main(argv + ["--seed", str(seeds[0])], sources=FakeSources()) == 0
+    doc = json.loads(out.read_text())
+    assert doc["seed"] == seeds[0]
+    assert doc["controls"]["per_group"]["Aves"] == failed[0]
+
+
+def test_a_resume_dropped_for_a_new_model_draws_its_own_seed(tmp_path, caplog):
+    # review of #148: a run that dropped saved progress of another model kept that run's seed, so "the seed came
+    # from the saved run" no longer meant "this run resumed", and the logged seed was labelled as a fresh one
+    import logging
+
+    out = tmp_path / "verdicts.json"
+    _broken_run(out)  # saved with --seed 6
+    new_model = BreaksAt(None, version="2.35")
+    with caplog.at_level(logging.INFO, logger="geomodel"):
+        assert gc.main(_resume_argv(out, seed=None), sources=new_model) == 0
+    seeds = [
+        r.getMessage() for r in caplog.records if r.getMessage().startswith("seed ")
+    ]
+    doc = json.loads(out.read_text())
+    assert new_model.backgrounds == THREE and seeds == [f"seed {doc['seed']}"]
+    assert doc["seed"] != 6
+    # positive control in the same test: the same model resumes, with the saved run's seed, and says so
+    caplog.clear()
+    _broken_run(out2 := tmp_path / "again.json")
+    with caplog.at_level(logging.INFO, logger="geomodel"):
+        assert gc.main(_resume_argv(out2, seed=None), sources=FakeSources()) == 0
+    seeds = [
+        r.getMessage() for r in caplog.records if r.getMessage().startswith("seed ")
+    ]
+    assert (
+        seeds == ["seed 6, the resumed run's"]
+        and json.loads(out2.read_text())["seed"] == 6
+    )

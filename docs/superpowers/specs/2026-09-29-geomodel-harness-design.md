@@ -111,7 +111,14 @@ Sample size: 30 species per collection (fewer where the collection or the data r
   (`controls.per_group.<group>.shuffle_draws`). The 2.35 check of 2026-10-31 (jobd 7902) failed this
   control at -0.0794 on a single shuffle, a value one shuffle reaches by chance less than once in 17,000 runs
   on that species (bounded from its real TSS); it is not explained. Under the mean of 5 that draw alone
-  would pass (-0.0159) and show in the recorded draws.
+  would pass (-0.0159) and show in the recorded draws. Looked into the same day: 7902 ran this shuffle code
+  unchanged; the point-in-range test is decided point by point, so any label shuffle is an exact permutation
+  (3000 shuffles on that species' real data centred on 0); and the 26 earlier shuffle controls (runs of
+  2026-09-30 and 2026-10-02) split 13 negative and 13 positive, mean -0.0023, none with an exact tail
+  probability under 0.08. No mechanism was found; chance (at most 1 in 24,000 per draw, about 0.2% over every
+  draw made so far) is the explanation left. It could not be replayed: a failed run logged neither its seed nor
+  the failing collection's controls. Both are logged now (the seed before any scoring, the controls with all
+  5 draws on failure), so a recurrence can be replayed with `--seed`.
 - **Effort placement** (added 2026-09-29, before the first full run): GBIF's count tiles rebuilt over a 6 x 6
   block of grid cells (birds around Switzerland) must agree with GBIF occurrence search over the same cells to
   an L1 error ≤ 0.40 of the block's records. The z3 tiles the grid was first built from scored 2.57 (records

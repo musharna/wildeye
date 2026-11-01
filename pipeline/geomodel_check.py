@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import json
 import logging
 import math
 import shutil
@@ -588,6 +589,9 @@ def run(
         )
         failures = check_controls(group, controls)
         if failures:  # the run will write nothing: stop now, not after hours more of the other groups
+            # everything the verdicts would have held for this group's controls, all 5 shuffle draws too:
+            # with the logged seed, a failure can be replayed (jobd 7902's -0.0794 could not be, 2026-10-31)
+            log.error("%s: controls that failed: %s", group, json.dumps(controls))
             raise ControlFailure("; ".join(failures))
         state["per_group"][group] = controls
         state["groups"][group] = {
@@ -899,6 +903,9 @@ def main(argv=None, *, sources=None, now=None) -> int:
                         sources.version(),
                     )
                     saved = None
+                    # the dropped run's seed is not this run's: draw one, as a fresh run does
+                    if args.seed is None:
+                        seed = int.from_bytes(os.urandom(4), "little")
             identity = {
                 "seed": seed,
                 "collections": groups,  # not "groups": that key holds the scored groups
@@ -908,6 +915,8 @@ def main(argv=None, *, sources=None, now=None) -> int:
                 if saved
                 else clock().isoformat(timespec="seconds"),
             }
+            # logged before any scoring: a run that fails writes no verdicts, and so records its seed nowhere else
+            log.info("seed %s%s", seed, ", the resumed run's" if saved else "")
             try:
                 doc = run(
                     sources,
