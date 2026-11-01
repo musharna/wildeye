@@ -42,6 +42,10 @@ TABLE: dict[str, str] = {
     "appropriate parties": CC_BY,
     "http://creativecommons.org/licenses/by/4.0/deed.en_US and "
     "http://biodiversity.ku.edu/research/university-kansas-biodiversity-institute-data-publication-and-use-norms": CC_BY,
+    # read 2026-11-01 (KUBI Ichthyology Tissue Collection): the norms at biodiversity.ku.edu/data-publication-use say
+    # "These norms are not a legal document" and ask for citation, notice and a link, adding no term to CC BY 4.0
+    "This work is licensed under a Creative Commons Attribution (CC-BY) 4.0 License University of Kansas Biodiversity "
+    "Institute Data Publication and Use Norms": CC_BY,
     "Crown copyright ©. Copyright material on the Protected Species Captures website is protected by copyright owned by "
     "the Ministry for Primary Industries on behalf of the Crown. Unless indicated otherwise for specific items or "
     "collections of content (either below or within specific items or collections), this copyright material is licensed "
