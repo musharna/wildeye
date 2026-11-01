@@ -6,8 +6,9 @@
  *
  * Known points were decoded 2026-09-23 by a Python probe straight from the same GIBS tiles, independent
  * of the site's decoder: forest (-5, -65) = Evergreen Broadleaf Forests, EVI 0.43, LST 298.7 K; Sahara
- * (23, 12) = Barren, EVI 0.07, LST 310.7 K; Chicago Loop = Urban and Built-up Lands. Ramp checks assert
- * ordering, not exact bins, because the composites move nightly.
+ * (23, 12) = Barren, EVI 0.07, LST 310.7 K; Chicago Loop = Urban and Built-up Lands. The EVI check asserts
+ * ordering, not exact bins, because the composites move nightly; LST is checked against tonight's tile itself
+ * (matches-tile), and the cloud hole is found in tonight's tiles (nodata-honest), since both move with the season.
  *
  * The one-drape rule shows one GIBS layer at a time (two while comparing), so each layer is read with
  * only itself on, and the real-click card check uses a Compare pair.
@@ -18,7 +19,7 @@ import { bootSettled } from './bootSettled.mjs';
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
-const P = { forest: [-5.0, -65.0], sahara: [23.0, 12.0], chicago: [41.88, -87.63], delhi: [28.61, 77.21] };
+const P = { forest: [-5.0, -65.0], sahara: [23.0, 12.0], chicago: [41.88, -87.63] };
 
 const results = [];
 const report = (check, ok, detail = {}) => {
@@ -81,9 +82,78 @@ try {
     { got: Object.fromEntries(Object.entries(lc.rows).map(([k, r]) => [k, r && `${r.status}:${r.text ?? r.error}`])) });
 
   const evi = await readWith('gibs-evi', { forest: P.forest, sahara: P.sahara });
-  const lst = await readWith('gibs-lst', { forest: P.forest, sahara: P.sahara, delhi: P.delhi });
-  const eF = num(evi.rows.forest?.text), eS = num(evi.rows.sahara?.text), tF = num(lst.rows.forest?.text), tS = num(lst.rows.sahara?.text);
-  report('ramp-ordered', eF > 0.3 && eS < 0.3 && tS > tF, { eviForest: evi.rows.forest?.text, eviSahara: evi.rows.sahara?.text, lstForest: lst.rows.forest?.text, lstSahara: lst.rows.sahara?.text });
+  const lst = await readWith('gibs-lst', { forest: P.forest, sahara: P.sahara });
+  const eF = num(evi.rows.forest?.text), eS = num(evi.rows.sahara?.text);
+  report('ramp-ordered', eF > 0.3 && eS < 0.3, { eviForest: evi.rows.forest?.text, eviSahara: evi.rows.sahara?.text });
+
+  // LST is read against the tile itself, not against a season: on 2026-10-16 the forest and Sahara points held the same
+  // bin (26.8 °C, decoded by a Python probe straight from GIBS), so "Sahara is hotter" failed on a correct readout. The
+  // truth: the same tile fetched here, decoded by the browser's own PNG decoder (exact for opaque pixels), its colour
+  // looked up in gibs.json's table. QA_SELFTEST_TRUTH=1 moves every truth one bin up, so this can be seen to fail.
+  await page.evaluate((selftest) => {
+    const tileOf = (e, lat, lon) => {
+      const n = 2 ** e.maximumLevel;
+      const fx = ((lon + 180) / 360) * n;
+      const fy = ((1 - Math.asinh(Math.tan((lat * Math.PI) / 180)) / Math.PI) / 2) * n;
+      return { x: Math.floor(fx), y: Math.floor(fy), fx, fy, n };
+    };
+    const pixels = async (id, date, t) => {
+      const e = (await (await fetch(`data/gibs.json?t=${Date.now()}`)).json()).layers[id];
+      const res = await fetch(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${e.gibsId}/default/${date}/${e.tileMatrixSet}/${e.maximumLevel}/${t.y}/${t.x}.${e.format}`);
+      if (!res.ok) return { e, error: `HTTP ${res.status}` };
+      const bmp = await createImageBitmap(await res.blob(), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+      const ctx = new OffscreenCanvas(bmp.width, bmp.height).getContext('2d');
+      ctx.drawImage(bmp, 0, 0);
+      return { e, w: bmp.width, h: bmp.height, data: ctx.getImageData(0, 0, bmp.width, bmp.height).data };
+    };
+    window.__qaTileTruth = async (id, date, lat, lon) => {
+      const e0 = (await (await fetch(`data/gibs.json?t=${Date.now()}`)).json()).layers[id];
+      const t = tileOf(e0, lat, lon);
+      const { e, w, h, data, error } = await pixels(id, date, t);
+      if (error) return { error };
+      const i = 4 * (Math.floor((t.fy - t.y) * h) * w + Math.floor((t.fx - t.x) * w));
+      const [r, g, b, a] = data.slice(i, i + 4);
+      if (a === 0 || (e.noData || []).some((k) => k[0] === r && k[1] === g && k[2] === b)) return { nodata: true, rgba: [r, g, b, a] };
+      if (a !== 255) return { error: 'semi-transparent pixel: a canvas rounds its colour', rgba: [r, g, b, a] };
+      const bin = (e.decode || []).find((k) => k[0] === r && k[1] === g && k[2] === b);
+      if (!bin) return { error: 'colour not in the table', rgba: [r, g, b, a] };
+      // an open-ended bin ([250,+INF) has hi null) has no midpoint: say so rather than compare against NaN
+      if (typeof bin[3] !== 'number' || typeof bin[4] !== 'number') return { error: `open-ended bin [${bin[3]}, ${bin[4]}]: no midpoint`, rgba: [r, g, b, a] };
+      return { value: (bin[3] + bin[4]) / 2 + (selftest ? bin[4] - bin[3] : 0), rgba: [r, g, b, a] };
+    };
+    // the first cloud hole in a tile that lies wholly over land: a transparent pixel whose 8 neighbours are transparent
+    // too (so the readout's own pixel lands in it), in a tile that also holds values. QA_SELFTEST_HOLE=1 returns a
+    // valued pixel instead, so nodata-honest can be seen to fail.
+    window.__qaFindHole = async (id, date, centres, wantHole) => {
+      for (const [lat, lon] of centres) {
+        const e0 = (await (await fetch(`data/gibs.json?t=${Date.now()}`)).json()).layers[id];
+        const t = tileOf(e0, lat, lon);
+        const { w, h, data, error } = await pixels(id, date, t);
+        if (error) continue;
+        const alpha = (x, y) => data[4 * (y * w + x) + 3];
+        if (![...Array(w * h).keys()].some((k) => data[4 * k + 3] === 255)) continue;
+        for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
+          const ok = wantHole
+            ? [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => alpha(x + dx, y + dy) === 0))
+            : [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => alpha(x + dx, y + dy) === 255));
+          if (!ok) continue;
+          const lonP = ((t.x + (x + 0.5) / w) / t.n) * 360 - 180;
+          const latP = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (t.y + (y + 0.5) / h)) / t.n))) * 180) / Math.PI;
+          return { lat: latP, lon: lonP, tile: [t.y, t.x], pixel: [x, y] };
+        }
+      }
+      return null;
+    };
+  }, Boolean(process.env.QA_SELFTEST_TRUTH));
+  const truth = {};
+  for (const k of ['forest', 'sahara']) truth[k] = await page.evaluate((d, la, lo) => window.__qaTileTruth('gibs-lst', d, la, lo), lst.shown, ...P[k]);
+  // the readout prints a kelvin table in °C, at 0.1
+  const agrees = (k) => (truth[k]?.nodata
+    ? lst.rows[k]?.status === 'nodata'
+    : truth[k]?.value !== undefined && lst.rows[k]?.text != null && Math.abs(num(lst.rows[k].text) - (truth[k].value - 273.15)) < 0.051);
+  report('matches-tile', agrees('forest') && agrees('sahara'), {
+    forest: [lst.rows.forest?.text, truth.forest], sahara: [lst.rows.sahara?.text, truth.sahara], date: lst.shown,
+  });
 
   // Each row's date is the date its layer is drawing, and GIBS's own layer-time-actual for that tile agrees
   // (fetched here independently of the site's reader).
@@ -100,16 +170,14 @@ try {
     lc: [lc.rows.forest?.date, lc.shown], evi: [evi.rows.forest?.date, evi.shown], lst: [lst.rows.forest?.date, lst.shown], lstHeader: header,
   });
 
-  // A cloud hole in the 8-day LST composite reads as "no data" on that date, never a value. Delhi was one on
-  // 2026-08-21; if tonight's composite filled it, the first hole on a monsoon transect stands in (logged).
-  let hole = lst.rows.delhi?.status === 'nodata' ? { point: 'delhi', row: lst.rows.delhi } : null;
-  if (!hole) {
-    const transect = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`t${i}`, [20 + i, 77 + (i % 3)]]));
-    const t = await readWith('gibs-lst', transect);
-    const k = Object.keys(t.rows).find((key) => t.rows[key]?.status === 'nodata');
-    hole = k ? { point: `${k} ${transect[k]}`, row: t.rows[k] } : null;
-  }
-  report('nodata-honest', !!hole && hole.row.text === null && hole.row.date === lst.shown, { hole });
+  // A cloud hole in the 8-day LST composite reads as "no data" on that date, never a value. Holes move with the
+  // weather (Delhi's of 2026-08-21 was gone by October, and the monsoon transect that stood in for it with it), so the
+  // hole is found in tonight's tiles: tiles wholly over land in usually cloudy places (Congo, Amazon, Borneo, New Guinea).
+  const LAND = [[0.5, 20.5], [-3.5, -62.5], [0.5, 114.5], [-5.5, 142.5], [5.5, -67.5]];
+  const spot = await page.evaluate((d, c, want) => window.__qaFindHole('gibs-lst', d, c, want), lst.shown, LAND, !process.env.QA_SELFTEST_HOLE);
+  const read = spot ? await readWith('gibs-lst', { hole: [spot.lat, spot.lon] }) : null;
+  const holeRow = read?.rows.hole;
+  report('nodata-honest', !!holeRow && holeRow.status === 'nodata' && holeRow.text === null && holeRow.date === lst.shown, { spot, row: holeRow });
 
   const bm = await readWith('gibs-nightlights', { chicago: P.chicago });
   const gedi = await readWith('gibs-biomass', { forest: P.forest });
