@@ -14,6 +14,13 @@ from shapely.geometry import box
 
 from pipeline import geomodel_check as gc
 
+
+@pytest.fixture(autouse=True)
+def _work(tmp_path, monkeypatch):
+    """--work defaults to $WILDEYE_WORK: keep every test's progress and attempts files out of the real cache."""
+    monkeypatch.setenv("WILDEYE_WORK", str(tmp_path / "work"))
+
+
 WORLD = (-60.0, -40.0, 60.0, 40.0)  # lon/lat box the synthetic data lives in
 RANGE = box(0.0, -10.0, 20.0, 10.0)  # the synthetic "modeled range"
 
@@ -687,6 +694,7 @@ def test_rejudge_judges_a_saved_run_against_an_earlier_file_without_gbif_work(tm
         ["--seed", "3"],
         ["--species-per-group", "12"],
         ["--if-new-model"],
+        ["--progress", "progress.json"],
     ],
 )
 def test_rejudge_refuses_the_flags_of_a_run(tmp_path, capsys, flag):
@@ -775,3 +783,194 @@ def test_if_new_model_tries_a_model_once_and_leaves_retries_to_the_monthly_check
         fake.presence_calls > 0
         and json.loads(out.read_text())["geomodel_version"] == "2.34"
     )
+
+
+# ---- resuming a run that failed part way ------------------------------------------------------------
+
+THREE = ["Aves", "Mammalia", "Amphibia"]
+
+
+class BreaksAt(FakeSources):
+    """GBIF fails for good when the run reaches `group`, as it did for jobd 7853 in its 13th collection."""
+
+    def __init__(self, group, version="2.34", **kw):
+        super().__init__(**kw)
+        self.breaks_at, self.served = group, version
+
+    def version(self):
+        return self.served
+
+    def background(self, group, n, rng):
+        if group == self.breaks_at:
+            from pipeline.geomodel_sources import SourceError
+
+            raise SourceError(
+                f"404 for https://api.gbif.org/v1/occurrence/search ({group})", 404
+            )
+        return super().background(group, n, rng)
+
+
+def _resume_argv(out, *extra, seed="6", groups=THREE, per_group="12"):
+    argv = [
+        "--out",
+        str(out),
+        "--groups",
+        ",".join(groups),
+        "--species-per-group",
+        per_group,
+    ]
+    return argv + (["--seed", seed] if seed is not None else []) + list(extra)
+
+
+def _broken_run(out):
+    """A run that scores Aves and Mammalia, then dies in Amphibia; returns the progress file it leaves."""
+    from pipeline.geomodel_sources import SourceError
+
+    with pytest.raises(SourceError, match="Amphibia"):
+        gc.main(_resume_argv(out), sources=BreaksAt("Amphibia"))
+    assert not out.exists()
+    progress = gc.default_work() / "check_progress.json"
+    assert sorted(json.loads(progress.read_text())["groups"]) == ["Aves", "Mammalia"]
+    return progress
+
+
+def test_a_run_resumed_after_a_failure_writes_what_an_unbroken_run_writes(
+    tmp_path, caplog
+):
+    import logging
+
+    unbroken = tmp_path / "unbroken.json"
+    assert gc.main(_resume_argv(unbroken), sources=FakeSources()) == 0
+    out = tmp_path / "verdicts.json"
+    progress = _broken_run(out)
+    rerun = FakeSources()
+    with caplog.at_level(logging.INFO, logger="geomodel"):
+        # no --seed: the run takes the saved one, as the next cron job (which passes none) would
+        assert gc.main(_resume_argv(out, seed=None), sources=rerun) == 0
+    assert rerun.backgrounds == [
+        "Amphibia"
+    ]  # only the group that had not finished is scored again
+    assert any(
+        r.getMessage().startswith("resuming: 2 of 3 groups") for r in caplog.records
+    )
+    got, want = json.loads(out.read_text()), json.loads(unbroken.read_text())
+    assert got.pop("resumed_from") and "resumed_from" not in want
+    for doc in (got, want):
+        doc.pop("generated_at")
+    assert got == want
+    assert not progress.exists()  # a finished run leaves nothing to resume
+
+
+def test_a_failed_control_voids_the_saved_groups(tmp_path, monkeypatch):
+    # resuming after a failed control would redraw only the failed group until it passed
+    out = tmp_path / "verdicts.json"
+    progress = _broken_run(out)
+    real = gc.check_controls
+    monkeypatch.setattr(
+        gc,
+        "check_controls",
+        lambda g, c: (
+            real(g, c)
+            + (["Amphibia: planted fake scored 0.5"] if g == "Amphibia" else [])
+        ),
+    )
+    rerun = FakeSources()
+    assert gc.main(_resume_argv(out), sources=rerun) == 2
+    assert (
+        rerun.backgrounds == ["Amphibia"] and not progress.exists() and not out.exists()
+    )
+    # positive control in the same test: the next run starts again at the first group and writes
+    monkeypatch.setattr(gc, "check_controls", real)
+    fresh = FakeSources()
+    assert gc.main(_resume_argv(out), sources=fresh) == 0
+    assert fresh.backgrounds == THREE and out.exists()
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["seed", "groups", "species", "model", "code", "age"],
+)
+def test_saved_groups_are_not_resumed_into_a_different_run(
+    tmp_path, monkeypatch, change
+):
+    out = tmp_path / "verdicts.json"
+    _broken_run(out)
+    later = dt.datetime.now(dt.timezone.utc) + dt.timedelta(
+        days=gc.PROGRESS_MAX_AGE_DAYS + 1
+    )
+    kwargs, sources = {}, FakeSources()
+    if change == "seed":
+        kwargs["seed"] = "7"
+    elif change == "groups":
+        kwargs["groups"] = THREE + ["Reptilia"]
+    elif change == "species":
+        kwargs["per_group"] = "11"
+    elif change == "model":
+        sources = BreaksAt(None, version="2.35")
+    elif change == "code":
+        monkeypatch.setattr(gc, "code_fingerprint", lambda: "another")
+    now = (lambda: later) if change == "age" else None
+    assert gc.main(_resume_argv(out, **kwargs), sources=sources, now=now) == 0
+    assert sources.backgrounds[:3] == THREE  # started again at the first group
+    # positive control in the same test: the same run resumes
+    out2 = tmp_path / "again.json"
+    monkeypatch.undo()
+    monkeypatch.setenv("WILDEYE_WORK", str(tmp_path / "work"))
+    _broken_run(out2)
+    same = FakeSources()
+    assert gc.main(_resume_argv(out2), sources=same) == 0
+    assert same.backgrounds == ["Amphibia"]
+
+
+def test_if_new_model_goes_on_with_a_run_of_that_model_that_failed_part_way(tmp_path):
+    # the one try per model is spent by a run that dies in its last group; its saved groups let the next
+    # night finish that run instead of waiting for the monthly check
+    from pipeline.geomodel_sources import SourceError
+
+    out, attempts = tmp_path / "verdicts.json", tmp_path / "attempts.json"
+    out.write_text(
+        json.dumps(_doc("2026-10-02T18:48:00+00:00", version="2.34", Aves=(20, 10)))
+    )
+    argv = _resume_argv(out, "--attempts", str(attempts), "--if-new-model")
+    with pytest.raises(SourceError):
+        gc.main(argv, sources=BreaksAt("Amphibia", version="2.35"))
+    assert "2.35" in json.loads(attempts.read_text())
+    rerun = BreaksAt(None, version="2.35")
+    assert gc.main(argv, sources=rerun) == 0
+    assert rerun.backgrounds == ["Amphibia"]
+    assert json.loads(out.read_text())["geomodel_version"] == "2.35"
+    # positive control in the same test: with nothing saved, a model already tried is still left alone
+    out.write_text(
+        json.dumps(_doc("2026-10-02T18:48:00+00:00", version="2.34", Aves=(20, 10)))
+    )
+    before = out.read_bytes()
+    idle = BreaksAt(None, version="2.35")
+    assert gc.main(argv, sources=idle) == 0
+    assert idle.presence_calls == 0 and out.read_bytes() == before
+
+
+def test_live_sources_verify_once_per_run(tmp_path):
+    # review of #147: a resumed run read the model version in main() and verified again in run(), a second round
+    # of GBIF and metadata calls, each a new chance of the transient error a resume exists to recover from
+    class Stub:
+        RANGES = "https://example.org/ranges/"
+
+        def __init__(self):
+            self.calls = 0
+
+        def verify_group_keys(self):
+            self.calls += 1
+
+        def fetch_json(self, url):
+            return {"version": "2.35"}
+
+    src = gc.LiveSources(tmp_path)
+    src.gs = Stub()
+    src.verify()
+    src.verify()
+    assert src.gs.calls == 1 and src.version() == "2.35"
+    # positive control in the same test: another run's sources verify for themselves
+    other = gc.LiveSources(tmp_path)
+    other.gs = Stub()
+    other.verify()
+    assert other.gs.calls == 1 and other.version() == "2.35"
