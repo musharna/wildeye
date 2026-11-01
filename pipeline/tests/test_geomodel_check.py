@@ -554,9 +554,8 @@ def test_a_run_stopped_with_sigterm_removes_its_work_dir(tmp_path):
     proc, work = start("wait")
     assert (work / "ranges.gpkg").exists()
     proc.send_signal(signal.SIGTERM)
-    assert (
-        proc.wait(timeout=30) != 0
-    )  # still stopped, and stopped as a failure: the signal is not swallowed
+    # still stopped, with the code a shell gives a SIGTERM'd process: the signal is not swallowed
+    assert proc.wait(timeout=30) == 128 + signal.SIGTERM
     assert not work.exists()
     # positive control in the same test: a run that ends normally removes its dir too, and leaves the shared root
     proc, work = start("done")
