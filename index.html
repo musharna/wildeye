@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="/wildeye/cesium/Widgets/widgets.css">
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>wildeye</title>
+  <link rel="icon" type="image/svg+xml" href="/wildeye/logo.svg" />
+  <!-- Self-hosted type: three Google stylesheets once cost a slow-4G visit 1.6 s. The Latin file every page draws is preloaded. -->
+  <link rel="preload" href="/wildeye/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/wildeye/fonts/fonts.css" />
+  <script type="module" crossorigin src="/wildeye/assets/index-C2I-Jbuo.js"></script>
+  <link rel="modulepreload" crossorigin href="/wildeye/assets/vendor-cesium-BlyadQ7r.js">
+  <link rel="stylesheet" crossorigin href="/wildeye/assets/index-CNKSAbV4.css">
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <!-- Title -->
+  <div id="title-bar">
+    <h1>wildeye</h1>
+  </div>
+
+  <!-- Top-center camera and share actions -->
+  <nav id="top-center-actions" aria-label="Globe actions">
+    <button id="clear-selected-layers" type="button" aria-label="Clear selected data layers" title="Turn off all selected data layers">
+      <svg class="action-icon" viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="m631-455-51-51 119-94-219-173-93 74-51-51 144-114 336 264-185 145Zm108 108-52-52 71-55 58 46-77 61Zm29 233L624-258 480-144 144-408l58-46 278 218 93-73-56-57-37 30-336-264 77-61L90-793l51-51 678 679-51 51ZM480-603Z"/></svg>
+    </button>
+    <button id="share-btn" type="button" aria-label="Copy share link" title="Copy share link">
+      <span class="share-icon" aria-hidden="true">&#x1F517;</span>
+    </button>
+    <button id="reset-globe-view" type="button" aria-label="Reset to full globe view" title="Reset camera and return to full globe view">
+      <svg class="action-icon" viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M331-126q-70-30-122.5-82.5T126-331q-30-70-30-149.5t30-149q30-69.5 82.5-122T331-834q70-30 149.5-30t149 30q69.5 30 122 82.5t82.5 122q30 69.5 30 149T834-331q-30 70-82.5 122.5t-122 82.5q-69.5 30-149 30T331-126Zm101-46v-68q-20 0-34-14t-14-34v-48L175-545q-4 19-5.5 35t-1.5 30q0 115 74.5 203T432-172Zm288-109q36-42 54-93t18-106q0-95-52-173T600-768v24q0 30-21 51t-51 21h-96v48q0 20-14 34t-34 14h-48v96h240q20 0 34 14t14 34v96h41q23 0 39 16t16 39Z"/></svg>
+    </button>
+  </nav>
+  <div id="global-loading-status" role="status" aria-live="polite" aria-atomic="true" hidden>
+    <span id="global-loading-label">Loading live data</span>
+    <span id="global-loading-detail"></span>
+  </div>
+  <!-- Toast notification -->
+  <div id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Safe frame guides for recording composition -->
+  <div id="safe-frame-overlay">
+    <div id="safe-frame-box"></div>
+  </div>
+
+  <button id="clean-view-exit" title="Return UI controls">Exit clean view</button>
+
+  <!-- Bottom command dock: the basemap choice -->
+  <div id="command-dock" aria-label="Basemap">
+  <!-- Control panel -->
+  <div id="control-panel" class="panel-collapsible collapsed">
+    <div class="panel-inner">
+      <button id="control-panel-toggle" class="panel-header dock-tray-toggle" type="button"
+        data-dock-toggle-target="control-panel" aria-expanded="false"
+        aria-controls="control-panel-popover" aria-label="Expand Basemap">
+        <span class="panel-title"><span class="dock-label-icon dock-label-icon-presets" aria-hidden="true"></span>Basemap</span>
+        <span class="panel-divider"></span>
+      </button>
+      <div id="control-panel-popover" class="dock-popover-content">
+      <button class="dock-pin-btn" data-pin-target="control-panel" type="button" aria-label="Pin basemap" aria-pressed="false" title="Keep the basemap choice open"><img src="/wildeye/pin.svg" alt="" /></button>
+      <section class="map-source-section" aria-labelledby="map-source-label">
+        <div class="map-source-heading">
+          <span id="map-source-label">Map source</span>
+          <span id="map-stack-status" class="pp-stack-status" aria-live="polite">3D</span>
+        </div>
+        <div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source"></div>
+      </section>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <div id="left-panel-stack">
+  <!-- Data Layer Toggle Panel -->
+  <div id="data-panel" class="panel-collapsible collapsed active" data-panel-id="data-panel">
+    <div class="data-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title">Layers</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="data-panel" title="Collapse panel"></button>
+      </div>
+      <div id="data-toggles" class="data-toggle-list"></div>
+    </div>
+  </div>
+
+  <!-- Species search: any GBIF species on the map, and what has been recorded around a clicked point -->
+  <div id="species-panel" class="panel-collapsible collapsed" data-panel-id="species-panel">
+    <div class="species-panel-inner">
+      <div class="panel-header">
+        <span class="panel-title">Species</span>
+        <span class="panel-divider"></span>
+        <button class="panel-collapse-btn" data-collapse-target="species-panel" title="Collapse panel"></button>
+      </div>
+      <div id="species-body" class="species-body">
+        <label class="species-label" for="species-search">Find a species</label>
+        <input type="search" id="species-search" placeholder="monarch, humpback, red maple…" autocomplete="off" spellcheck="false" />
+        <ul id="species-suggestions" class="species-suggestions" aria-label="Species suggestions" hidden></ul>
+        <div id="species-status" class="species-status" role="status" aria-live="polite"></div>
+        <div id="species-chosen" class="species-chosen" hidden>
+          <span id="species-chosen-name" class="species-chosen-name"></span>
+          <button type="button" id="species-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Species map">Map off</button>
+          <span id="species-chosen-note" class="species-chosen-note" hidden></span>
+        </div>
+        <button type="button" id="species-what-lives-here" class="scene-btn species-action" aria-pressed="false">What lives here</button>
+        <div id="species-modeled" class="species-modeled" hidden>
+          <button type="button" id="species-modeled-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Modeled range" hidden>Modeled range off</button>
+          <span id="species-modeled-note" class="species-modeled-note" role="status" aria-live="polite"></span>
+        </div>
+        <div id="species-effort" class="species-modeled" hidden>
+          <button type="button" id="species-effort-toggle" class="scene-btn species-switch" role="switch" aria-checked="false" aria-label="Recording effort" hidden>Recording effort off</button>
+          <span id="species-effort-note" class="species-modeled-note" role="status" aria-live="polite"></span>
+        </div>
+        <div class="species-chip-group">
+          <span id="species-years-label" class="species-label">Years</span>
+          <div id="species-years" class="species-chip-row" role="group" aria-labelledby="species-years-label">
+            <button type="button" class="scene-btn species-chip" data-years="recent" aria-pressed="true">Last 10 years</button>
+            <button type="button" class="scene-btn species-chip" data-years="all" aria-pressed="false">All years</button>
+          </div>
+        </div>
+        <div class="species-chip-group">
+          <span id="species-radius-label" class="species-label">What lives here radius</span>
+          <div id="species-radius" class="species-chip-row" role="group" aria-labelledby="species-radius-label">
+            <button type="button" class="scene-btn species-chip" data-radius="1" aria-pressed="false">1 km</button>
+            <button type="button" class="scene-btn species-chip" data-radius="10" aria-pressed="true">10 km</button>
+            <button type="button" class="scene-btn species-chip" data-radius="50" aria-pressed="false">50 km</button>
+          </div>
+        </div>
+        <div id="species-legend" class="species-legend" hidden></div>
+        <div id="species-datasets" class="species-datasets" tabindex="-1" hidden>
+          <span id="species-datasets-heading" class="dataset-list-heading">Top datasets for this species</span>
+          <p id="species-datasets-status" class="species-datasets-status" role="status" aria-live="polite"></p>
+          <div id="species-datasets-content" class="species-datasets-content"></div>
+        </div>
+        <p class="species-credit"><span>Names: iNaturalist and GBIF</span> <span>Records: GBIF.org, CC0/CC BY only</span> <span>Top datasets: a DOI link where GBIF has one,</span> <span>otherwise a gbif.org dataset page</span></p>
+      </div>
+      <div id="species-more" class="species-more" aria-hidden="true">more ↓</div>
+    </div>
+  </div>
+
+  </div>
+
+  <!-- Latitude and longitude under the pointer -->
+  <div id="pointer-readout" class="pointer-readout" aria-hidden="true" hidden></div>
+
+  <!-- Loading screen -->
+  <div id="loading-screen">
+    <div class="loader-content">
+      <h2>wildeye</h2>
+      <p class="loader-status">Loading the globe…</p>
+    </div>
+  </div>
+
+</body>
+</html>
