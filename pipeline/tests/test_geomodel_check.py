@@ -522,6 +522,28 @@ def test_each_run_gets_its_own_work_dir_and_removes_only_that(tmp_path):
     assert kept.exists()
 
 
+def test_run_workdir_puts_back_the_sigterm_handler_it_found(tmp_path):
+    # review of #149: a run_workdir that left its handler installed would turn a later SIGTERM, outside any run, into an
+    # exit through code that has nothing left to clean up, and the caller's own handler would be lost
+    import signal
+
+    def callers(signum, frame):
+        pass
+
+    before = signal.signal(signal.SIGTERM, callers)
+    try:
+        with gc.run_workdir(tmp_path):
+            assert (
+                signal.getsignal(signal.SIGTERM) is not callers
+            )  # positive control: set while the dir is open
+        assert signal.getsignal(signal.SIGTERM) is callers
+        with gc.run_workdir(tmp_path):  # and again for a second run in the same process
+            pass
+        assert signal.getsignal(signal.SIGTERM) is callers
+    finally:
+        signal.signal(signal.SIGTERM, before)
+
+
 def test_a_run_stopped_with_sigterm_removes_its_work_dir(tmp_path):
     # 2026-10-31: msi-4080 held a 1.6 GB run dir from jobd 6144 (2026-10-10), ended from outside; timeout(1) and jobd's
     # cancel and preempt stop a run with SIGTERM, which ends Python without running the cleanup in run_workdir's finally

@@ -720,16 +720,19 @@ def run_workdir(root: Path, keep: bool = False):
     """A fresh directory under `root` for one run's GeoPackages, removed on exit unless `keep`. The monthly check and the
     species listing (or a rerun) can overlap, so a run removes only its own directory, never the shared root."""
     root.mkdir(parents=True, exist_ok=True)
-    work = Path(tempfile.mkdtemp(prefix="run-", dir=root))
     # timeout(1) and jobd's cancel and preempt stop a run with SIGTERM, which by default ends Python without running the
-    # finally below (jobd 6144 left 1.6 GB of ranges, 2026-10-10): leave through it instead, with the shell's exit code
+    # finally below (jobd 6144 left 1.6 GB of ranges, 2026-10-10): leave through it instead, with the shell's exit code.
+    # Set before the dir exists and put back after it is gone; a SIGTERM during the removal itself still stops it there.
     previous = signal.signal(signal.SIGTERM, _exit_on_sigterm)
     try:
-        yield work
+        work = Path(tempfile.mkdtemp(prefix="run-", dir=root))
+        try:
+            yield work
+        finally:
+            if not keep:
+                shutil.rmtree(work, ignore_errors=True)
     finally:
         signal.signal(signal.SIGTERM, previous)
-        if not keep:
-            shutil.rmtree(work, ignore_errors=True)
 
 
 def _exit_on_sigterm(signum, frame):
