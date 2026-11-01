@@ -57,6 +57,7 @@ LAYERS = {
     "ecoregions.geojson": "monthly",
     "gmw.geojson": "monthly",
     "griis.geojson": "monthly",
+    "obis_grid.json": "monthly",
     "geomodel_verdicts.json": "monthly",
 }
 # A raster product's data time trails its fetch by up to 3 days (NDVI, chlorophyll), so 7 days

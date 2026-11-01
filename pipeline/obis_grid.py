@@ -289,7 +289,8 @@ def main(argv=None, *, get=_get, now=None, source_url=None) -> int:
         all_datasets = [d for d in all_datasets if d["id"] in wanted]
     doc, listing = build(all_datasets, files, a.staging, source_url=source_url)
     when = (now or (lambda: dt.datetime.now(dt.timezone.utc)))()
-    doc = {"asOf": when.date().isoformat(), **doc}
+    # generated_at first: stale-data.yml reads only a file's first 4096 bytes (pipeline/freshness.py)
+    doc = {"generated_at": when.strftime("%Y-%m-%dT%H:%M:%SZ"), "asOf": when.date().isoformat(), **doc}
     write_atomic(
         a.out_dir / "obis_grid_datasets.json",
         {"asOf": doc["asOf"], "datasets": listing},
