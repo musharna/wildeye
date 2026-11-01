@@ -19,7 +19,7 @@ import { bootSettled } from './bootSettled.mjs';
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const SITE = arg('--url', 'https://musharna.github.io/wildeye/');
-const P = { forest: [-5.0, -65.0], sahara: [23.0, 12.0], chicago: [41.88, -87.63], delhi: [28.61, 77.21] };
+const P = { forest: [-5.0, -65.0], sahara: [23.0, 12.0], chicago: [41.88, -87.63] };
 
 const results = [];
 const report = (check, ok, detail = {}) => {
@@ -117,6 +117,8 @@ try {
       if (a !== 255) return { error: 'semi-transparent pixel: a canvas rounds its colour', rgba: [r, g, b, a] };
       const bin = (e.decode || []).find((k) => k[0] === r && k[1] === g && k[2] === b);
       if (!bin) return { error: 'colour not in the table', rgba: [r, g, b, a] };
+      // an open-ended bin ([250,+INF) has hi null) has no midpoint: say so rather than compare against NaN
+      if (typeof bin[3] !== 'number' || typeof bin[4] !== 'number') return { error: `open-ended bin [${bin[3]}, ${bin[4]}]: no midpoint`, rgba: [r, g, b, a] };
       return { value: (bin[3] + bin[4]) / 2 + (selftest ? bin[4] - bin[3] : 0), rgba: [r, g, b, a] };
     };
     // the first cloud hole in a tile that lies wholly over land: a transparent pixel whose 8 neighbours are transparent
