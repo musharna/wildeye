@@ -18,6 +18,7 @@ import json
 import logging
 import math
 import shutil
+import signal
 import statistics
 import tempfile
 from contextlib import contextmanager, nullcontext
@@ -720,11 +721,19 @@ def run_workdir(root: Path, keep: bool = False):
     species listing (or a rerun) can overlap, so a run removes only its own directory, never the shared root."""
     root.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="run-", dir=root))
+    # timeout(1) and jobd's cancel and preempt stop a run with SIGTERM, which by default ends Python without running the
+    # finally below (jobd 6144 left 1.6 GB of ranges, 2026-10-10): leave through it instead, with the shell's exit code
+    previous = signal.signal(signal.SIGTERM, _exit_on_sigterm)
     try:
         yield work
     finally:
+        signal.signal(signal.SIGTERM, previous)
         if not keep:
             shutil.rmtree(work, ignore_errors=True)
+
+
+def _exit_on_sigterm(signum, frame):
+    raise SystemExit(128 + signum)
 
 
 def main(argv=None, *, sources=None, now=None) -> int:
