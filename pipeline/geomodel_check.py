@@ -903,6 +903,9 @@ def main(argv=None, *, sources=None, now=None) -> int:
                         sources.version(),
                     )
                     saved = None
+                    # the dropped run's seed is not this run's: draw one, as a fresh run does
+                    if args.seed is None:
+                        seed = int.from_bytes(os.urandom(4), "little")
             identity = {
                 "seed": seed,
                 "collections": groups,  # not "groups": that key holds the scored groups
