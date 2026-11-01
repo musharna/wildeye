@@ -50,9 +50,9 @@
     "axe-core": "4.14.0",
     "egm96-universal": "^1.1.1",
     "pbf": "^5.1.2",
-    "postcss": "^8.5.31",
+    "postcss": "^8.5.32",
     "puppeteer": "^25.16.0",
-    "rollup": "^4.65.0",
+    "rollup": "^4.66.0",
     "vite": "^8.3.5"
   },
   "overrides": {
