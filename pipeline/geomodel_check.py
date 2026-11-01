@@ -636,6 +636,9 @@ class LiveSources:
         ] = {}  # each file's range bounds, read once from its geometry headers
 
     def verify(self):
+        # verified already: main() reads the model version before resuming a run
+        if self.meta is not None:
+            return
         self.gs.verify_group_keys()
         self.meta = self.gs.fetch_json(self.gs.RANGES + "metadata.json")
 

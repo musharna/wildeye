@@ -947,3 +947,30 @@ def test_if_new_model_goes_on_with_a_run_of_that_model_that_failed_part_way(tmp_
     idle = BreaksAt(None, version="2.35")
     assert gc.main(argv, sources=idle) == 0
     assert idle.presence_calls == 0 and out.read_bytes() == before
+
+
+def test_live_sources_verify_once_per_run(tmp_path):
+    # review of #147: a resumed run read the model version in main() and verified again in run(), a second round
+    # of GBIF and metadata calls, each a new chance of the transient error a resume exists to recover from
+    class Stub:
+        RANGES = "https://example.org/ranges/"
+
+        def __init__(self):
+            self.calls = 0
+
+        def verify_group_keys(self):
+            self.calls += 1
+
+        def fetch_json(self, url):
+            return {"version": "2.35"}
+
+    src = gc.LiveSources(tmp_path)
+    src.gs = Stub()
+    src.verify()
+    src.verify()
+    assert src.gs.calls == 1 and src.version() == "2.35"
+    # positive control in the same test: another run's sources verify for themselves
+    other = gc.LiveSources(tmp_path)
+    other.gs = Stub()
+    other.verify()
+    assert other.gs.calls == 1 and other.version() == "2.35"
