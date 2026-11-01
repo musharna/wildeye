@@ -974,3 +974,32 @@ def test_live_sources_verify_once_per_run(tmp_path):
     other.gs = Stub()
     other.verify()
     assert other.gs.calls == 1 and other.version() == "2.35"
+
+
+def test_a_failed_run_logs_what_it_takes_to_replay_it(tmp_path, monkeypatch, caplog):
+    # 2026-10-31: jobd 7902 failed its shuffle control at -0.0794 and could not be replayed: a run that writes
+    # nothing logged neither its seed nor the failing group's draws
+    import logging
+
+    out = tmp_path / "verdicts.json"
+    argv = ["--out", str(out), "--groups", "Aves", "--species-per-group", "12"]
+    real = gc.check_controls
+    monkeypatch.setattr(
+        gc,
+        "check_controls",
+        lambda g, c: real(g, c) + ["Aves: planted fake scored 0.5"],
+    )
+    with caplog.at_level(logging.INFO, logger="geomodel"):
+        assert gc.main(argv, sources=FakeSources()) == 2
+    lines = [r.getMessage() for r in caplog.records]
+    seeds = [int(m.split()[1].rstrip(",")) for m in lines if m.startswith("seed ")]
+    prefix = "Aves: controls that failed: "
+    failed = [json.loads(m[len(prefix) :]) for m in lines if m.startswith(prefix)]
+    assert len(seeds) == 1 and len(failed) == 1
+    assert len(failed[0]["shuffle_draws"]) == gc.SHUFFLES
+    # positive control in the same test: the logged seed replays the run, failing group's controls and all
+    monkeypatch.setattr(gc, "check_controls", real)
+    assert gc.main(argv + ["--seed", str(seeds[0])], sources=FakeSources()) == 0
+    doc = json.loads(out.read_text())
+    assert doc["seed"] == seeds[0]
+    assert doc["controls"]["per_group"]["Aves"] == failed[0]
