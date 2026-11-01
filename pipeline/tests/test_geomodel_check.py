@@ -522,6 +522,69 @@ def test_each_run_gets_its_own_work_dir_and_removes_only_that(tmp_path):
     assert kept.exists()
 
 
+def test_run_workdir_puts_back_the_sigterm_handler_it_found(tmp_path):
+    # review of #149: a run_workdir that left its handler installed would turn a later SIGTERM, outside any run, into an
+    # exit through code that has nothing left to clean up, and the caller's own handler would be lost
+    import signal
+
+    def callers(signum, frame):
+        pass
+
+    before = signal.signal(signal.SIGTERM, callers)
+    try:
+        with gc.run_workdir(tmp_path):
+            assert (
+                signal.getsignal(signal.SIGTERM) is not callers
+            )  # positive control: set while the dir is open
+        assert signal.getsignal(signal.SIGTERM) is callers
+        with gc.run_workdir(tmp_path):  # and again for a second run in the same process
+            pass
+        assert signal.getsignal(signal.SIGTERM) is callers
+    finally:
+        signal.signal(signal.SIGTERM, before)
+
+
+def test_a_run_stopped_with_sigterm_removes_its_work_dir(tmp_path):
+    # 2026-10-31: msi-4080 held a 1.6 GB run dir from jobd 6144 (2026-10-10), ended from outside; timeout(1) and jobd's
+    # cancel and preempt stop a run with SIGTERM, which ends Python without running the cleanup in run_workdir's finally
+    import signal
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = Path(gc.__file__).resolve().parents[1]
+    child = (
+        "import sys, time\n"
+        "from pathlib import Path\n"
+        "from pipeline.geomodel_check import run_workdir\n"
+        "with run_workdir(Path(sys.argv[1])) as work:\n"
+        "    (work / 'ranges.gpkg').write_text('x')\n"
+        "    print(work, flush=True)\n"
+        "    if sys.argv[2] == 'wait':\n"
+        "        time.sleep(60)\n"
+    )
+
+    def start(mode):
+        proc = subprocess.Popen(
+            [sys.executable, "-c", child, str(tmp_path), mode],
+            cwd=repo,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        return proc, Path(proc.stdout.readline().strip())
+
+    proc, work = start("wait")
+    assert (work / "ranges.gpkg").exists()
+    proc.send_signal(signal.SIGTERM)
+    # still stopped, with the code a shell gives a SIGTERM'd process: the signal is not swallowed
+    assert proc.wait(timeout=30) == 128 + signal.SIGTERM
+    assert not work.exists()
+    # positive control in the same test: a run that ends normally removes its dir too, and leaves the shared root
+    proc, work = start("done")
+    assert proc.wait(timeout=30) == 0
+    assert not work.exists() and tmp_path.exists()
+
+
 # ---- evidence across months (spec, ruling 2026-10-02) ----------------------------------------------
 
 
