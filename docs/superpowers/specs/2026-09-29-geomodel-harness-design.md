@@ -122,6 +122,24 @@ Sample size: 30 species per collection (fewer where the collection or the data r
 - **El-Gabbas cross-check** (once, recorded in the PR, not every run): Spearman correlation between our
   all-records bird effort and El-Gabbas (2026, Zenodo 17591681, CC BY 4.0) at a matched grid.
 
+## Resuming a run that failed part way (added 2026-10-31)
+
+A run scores 13 collections over about 10 h and writes its verdicts once, at the end. On 2026-10-31 jobd 7853
+lost 6 h to one GBIF error in its 13th collection. The run now saves its run-level controls and each scored
+collection to `check_progress.json` under `--work`, and a rerun scores only the collections not yet saved
+(grill `grill_wildeye_geomodel_resume_2026-10-31`).
+
+- **Same draws either way**: each collection draws from its own random stream, all seeded from the run seed
+  before any collection runs, so a resumed run writes what an unbroken run with that seed writes (apart from
+  `generated_at` and a `resumed_from` stamp).
+- **Only the same run resumes**: same seed (a rerun without `--seed` takes the saved one), collections,
+  species per collection, model version and code (a hash of the check and its sources), started under 7
+  days ago. Otherwise the run starts again and says why.
+- **A failed control is not resumed**: it deletes the saved collections, so a rerun cannot redraw only the
+  failed collection until it passes. A finished run deletes them too.
+- **The daily job's one try per model** goes on with that model's saved collections, so a run that fails
+  part way is finished the next night rather than at the monthly check.
+
 ## Constraints
 
 - Network: GBIF API and AWS Open Data only in the monthly run; iNaturalist tile API only for the 3
