@@ -12,6 +12,8 @@ circles drawn around the model's own iNaturalist records at the same total area.
 
 from __future__ import annotations
 
+import datetime as dt
+import hashlib
 import logging
 import math
 import shutil
@@ -298,6 +300,9 @@ TILE_ZOOM = 3
 # 0.22 live at the z4 tiles the effort grid uses, 2.57 at the z3 tiles it first used (2026-09-29)
 PLACEMENT_ERROR_MAX = 0.4
 MAX_CANDIDATES = 3  # try up to 3 x SPECIES_PER_GROUP species to score SPECIES_PER_GROUP
+# a run's scored groups are saved as it goes, so a run that fails part way (jobd 7853: GBIF, after 12 of 13
+# groups, 6 h) is resumed rather than run again; saved groups older than this are scored again (grill 2026-10-31)
+PROGRESS_MAX_AGE_DAYS = 7
 
 
 class ControlFailure(RuntimeError):
@@ -495,34 +500,103 @@ def check_tile_agreement(
     return agreement
 
 
+def code_fingerprint() -> str:
+    """Which code scored a run's saved groups: groups scored by other code are not resumed into this run."""
+    here = Path(__file__).parent
+    digest = hashlib.sha256()
+    for name in ("geomodel_check.py", "geomodel_sources.py"):
+        digest.update((here / name).read_bytes())
+    return digest.hexdigest()[:16]
+
+
+def not_resumable(
+    saved: dict,
+    *,
+    seed: int | None,
+    groups: list[str],
+    species_per_group: int,
+    now: dt.datetime,
+) -> str | None:
+    """Why saved progress cannot be resumed into this run (None if it can). The model version is checked once
+    the sources are read."""
+    if seed is not None and saved["seed"] != seed:
+        return f"it ran with seed {saved['seed']}, this run's is {seed}"
+    if saved["collections"] != groups:
+        return f"it ran collections {saved['collections']}, this run's are {groups}"
+    if saved["species_per_group"] != species_per_group:
+        return f"it scored {saved['species_per_group']} species a group, this run {species_per_group}"
+    if saved["code"] != code_fingerprint():
+        return "it was scored by other code"
+    age = now - dt.datetime.fromisoformat(saved["started_at"])
+    if age > dt.timedelta(days=PROGRESS_MAX_AGE_DAYS):
+        return f"it started {age.days} days ago (resumed up to {PROGRESS_MAX_AGE_DAYS})"
+    return None
+
+
 def run(
     sources,
     groups: list[str],
     rng: np.random.Generator,
     species_per_group: int = SPECIES_PER_GROUP,
+    *,
+    resume: dict | None = None,
+    save=None,
 ) -> dict:
-    """Score every group, run the controls, and return the verdicts document; ControlFailure if any control fails."""
+    """Score every group, run the controls, and return the verdicts document; ControlFailure if any control fails.
+    `resume` is this run's saved progress (its groups are not scored again); `save` is given the progress after
+    the run's controls and after each group."""
     sources.verify()
-    # before hours of scoring: a background built from tiles that misplace records is not effort
-    placement = round(sources.placement_error(), 3)
-    log.info("effort placement error %s (max %s)", placement, PLACEMENT_ERROR_MAX)
-    if placement > PLACEMENT_ERROR_MAX:
-        raise ControlFailure(
-            f"GBIF count tiles misplace records: L1 error {placement} against occurrence search (must be <= {PLACEMENT_ERROR_MAX})"
+    version = sources.version()
+    if resume is not None and resume["geomodel_version"] != version:
+        raise ValueError(
+            f"saved progress checked geomodel {resume['geomodel_version']}, the sources serve {version}"
         )
-    agreement = check_tile_agreement(sources, groups, rng)
-    out_groups, out_controls = {}, {}
+    # each group draws from its own stream, all seeded from `rng` before any group runs: a group scores the
+    # same whether the run reached it in one go or resumed after failing in a later group
+    tile_rng = np.random.default_rng(int(rng.integers(2**63)))
+    group_rngs = {g: np.random.default_rng(int(rng.integers(2**63))) for g in groups}
+    if resume is None:
+        # before hours of scoring: a background built from tiles that misplace records is not effort
+        placement = round(sources.placement_error(), 3)
+        log.info("effort placement error %s (max %s)", placement, PLACEMENT_ERROR_MAX)
+        if placement > PLACEMENT_ERROR_MAX:
+            raise ControlFailure(
+                f"GBIF count tiles misplace records: L1 error {placement} against occurrence search (must be <= {PLACEMENT_ERROR_MAX})"
+            )
+        state = {
+            "geomodel_version": version,
+            "effort_placement_error": placement,
+            "tile_agreement": check_tile_agreement(sources, groups, tile_rng),
+            "groups": {},
+            "per_group": {},
+        }
+        if save:
+            save(state)
+    else:
+        state = resume
+        log.info(
+            "resuming: %d of %d groups scored already (%s)",
+            len(state["groups"]),
+            len(groups),
+            ", ".join(state["groups"]),
+        )
     for group in groups:
-        scored, controls = score_group(group, sources, rng, species_per_group)
+        if group in state["groups"]:
+            continue
+        scored, controls = score_group(
+            group, sources, group_rngs[group], species_per_group
+        )
         failures = check_controls(group, controls)
         if failures:  # the run will write nothing: stop now, not after hours more of the other groups
             raise ControlFailure("; ".join(failures))
-        out_controls[group] = controls
-        out_groups[group] = {
+        state["per_group"][group] = controls
+        state["groups"][group] = {
             **group_verdict(scored.results, scored.skipped),
             "species": [r.__dict__ for r in scored.results],
         }
-        v = out_groups[group]
+        if save:
+            save(state)
+        v = state["groups"][group]
         log.info(
             "%s: %s (%s scored, median TSS %s)",
             group,
@@ -531,7 +605,7 @@ def run(
             v.get("median_tss"),
         )
     return {
-        "geomodel_version": sources.version(),
+        "geomodel_version": version,
         "spec": "docs/superpowers/specs/2026-09-29-geomodel-harness-design.md",
         "thresholds": {
             "median_tss_min": MEDIAN_TSS_MIN,
@@ -540,11 +614,11 @@ def run(
             "min_presences": MIN_PRESENCES,
             "species_per_group": species_per_group,
         },
-        "groups": out_groups,
+        "groups": {g: state["groups"][g] for g in groups},
         "controls": {
-            "per_group": out_controls,
-            "tile_agreement": agreement,
-            "effort_placement_error": placement,
+            "per_group": {g: state["per_group"][g] for g in groups},
+            "tile_agreement": state["tile_agreement"],
+            "effort_placement_error": state["effort_placement_error"],
         },
     }
 
@@ -648,7 +722,6 @@ def run_workdir(root: Path, keep: bool = False):
 
 def main(argv=None, *, sources=None, now=None) -> int:
     import argparse
-    import datetime as dt
     import json
     import logging
     import os
@@ -704,6 +777,12 @@ def main(argv=None, *, sources=None, now=None) -> int:
         default=None,
         help="the models --if-new-model has tried (default: new_model_attempts.json under --work)",
     )
+    ap.add_argument(
+        "--progress",
+        type=Path,
+        default=None,
+        help="the groups this run has scored, for a rerun to resume (default: check_progress.json under --work)",
+    )
     args = ap.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     log = logging.getLogger("geomodel")
@@ -715,6 +794,7 @@ def main(argv=None, *, sources=None, now=None) -> int:
             ("--species-per-group", args.species_per_group),
             ("--keep-ranges", args.keep_ranges or None),
             ("--if-new-model", args.if_new_model or None),
+            ("--progress", args.progress),
         ]:
             if value is not None:
                 ap.error(
@@ -733,6 +813,23 @@ def main(argv=None, *, sources=None, now=None) -> int:
     # read before hours of GBIF work: an unreadable prior must stop the run, not lose its evidence after it
     prior_path = args.prior or args.out
     prior = json.loads(prior_path.read_text()) if prior_path.exists() else None
+    clock = now or (lambda: dt.datetime.now(dt.timezone.utc))
+    progress_path = args.progress or args.work / "check_progress.json"
+    saved = None
+    if not args.rejudge and progress_path.exists():
+        saved = json.loads(progress_path.read_text())
+        why = not_resumable(
+            saved,
+            seed=args.seed,
+            groups=groups,
+            species_per_group=species_per_group,
+            now=clock(),
+        )
+        if why:
+            log.info("not resuming the run started %s: %s", saved["started_at"], why)
+            saved = None
+        else:
+            seed = saved["seed"]
     if args.if_new_model:
         # the species list is only built from verdicts of the model it lists, so a new model left it stale until the
         # monthly run (2.34 -> 2.35, 2026-10-28, #140). The daily job asks here: it reads the ranges' metadata and checks the GBIF keys, and downloads no range
@@ -750,23 +847,29 @@ def main(argv=None, *, sources=None, now=None) -> int:
             json.loads(attempts_path.read_text()) if attempts_path.exists() else {}
         )
         if version in attempts:
-            # a control that fails on this model would otherwise start hours of GBIF work every night
+            if saved is None or saved["geomodel_version"] != version:
+                # a control that fails on this model would otherwise start hours of GBIF work every night
+                log.info(
+                    "geomodel %s was tried at %s and wrote no verdicts: the monthly run tries it again",
+                    version,
+                    attempts[version],
+                )
+                return 0
+            # a failed control deletes the saved groups, so these are from a run that failed some other way
             log.info(
-                "geomodel %s was tried at %s and wrote no verdicts: the monthly run tries it again",
+                "geomodel %s was tried at %s and stopped part way: going on with its saved groups",
                 version,
                 attempts[version],
             )
-            return 0
-        # recorded before the run, so a run killed part way is the one try too
-        attempts[version] = (
-            now or (lambda: dt.datetime.now(dt.timezone.utc))
-        )().isoformat(timespec="seconds")
-        write_atomic(attempts_path, attempts)
-        log.info(
-            "the verdicts checked geomodel %s, the model served now is %s: checking it",
-            prior and prior["geomodel_version"],
-            version,
-        )
+        else:
+            # recorded before the run, so a run killed part way is the one try too
+            attempts[version] = clock().isoformat(timespec="seconds")
+            write_atomic(attempts_path, attempts)
+            log.info(
+                "the verdicts checked geomodel %s, the model served now is %s: checking it",
+                prior and prior["geomodel_version"],
+                version,
+            )
     if args.rejudge:
         doc = json.loads(args.rejudge.read_text())
         log.info(
@@ -783,22 +886,51 @@ def main(argv=None, *, sources=None, now=None) -> int:
             else nullcontext() as work
         ):
             sources = sources or LiveSources(work)
+            if saved is not None:
+                sources.verify()
+                if saved["geomodel_version"] != sources.version():
+                    log.info(
+                        "not resuming the run started %s: it checked geomodel %s, the model served now is %s",
+                        saved["started_at"],
+                        saved["geomodel_version"],
+                        sources.version(),
+                    )
+                    saved = None
+            identity = {
+                "seed": seed,
+                "collections": groups,  # not "groups": that key holds the scored groups
+                "species_per_group": species_per_group,
+                "code": code_fingerprint(),
+                "started_at": saved["started_at"]
+                if saved
+                else clock().isoformat(timespec="seconds"),
+            }
             try:
                 doc = run(
-                    sources, groups, np.random.default_rng(seed), species_per_group
+                    sources,
+                    groups,
+                    np.random.default_rng(seed),
+                    species_per_group,
+                    resume=saved,
+                    save=lambda state: write_atomic(
+                        progress_path, {**state, **identity}
+                    ),
                 )
             except ControlFailure as e:
+                # a rerun must not redraw only the group that failed until it passes: it starts again
+                progress_path.unlink(missing_ok=True)
                 log.error("controls failed, no verdicts written: %s", e)
                 return 2
         doc = {
-            "generated_at": (
-                now or (lambda: dt.datetime.now(dt.timezone.utc))
-            )().isoformat(timespec="seconds"),
+            "generated_at": clock().isoformat(timespec="seconds"),
             "seed": seed,
+            **({"resumed_from": saved["started_at"]} if saved else {}),
             **doc,
         }
     doc = judge(doc, prior)
     write_atomic(args.out, doc)
+    if not args.rejudge:
+        progress_path.unlink(missing_ok=True)  # finished: nothing to resume
     log.info("wrote %s", args.out)
     return 0
 
