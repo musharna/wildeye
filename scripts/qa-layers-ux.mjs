@@ -21,6 +21,7 @@
  */
 import puppeteer from 'puppeteer';
 import { bootSettled } from './bootSettled.mjs';
+import { LAYER_GROUPS } from '../src/data/layerGroups.js';
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
@@ -29,6 +30,9 @@ const ON = { malaria: 'ml', 'neon-vectors': 'nv', penguins: 'pg' };
 const VIEW = `#v=2&lat=20.0000&lon=0.0000&alt=20000000&heading=0&pitch=-90&roll=0&map=esri-imagery&l=${Object.values(ON).join('.')}`;
 const GROUPS = ['Animal movement', 'Species records', 'Biodiversity patterns', 'Habitats', 'Land conditions',
   'Ocean conditions', 'Coral heat stress', 'Disease and vectors', 'Human impact'];
+// Every row the panel should hold, read from the authored groups: a hard-coded 68 failed this check on a correct panel
+// once a 75th layer shipped (2026-11-01 live sweep), and only a by-hand run would ever have seen it
+const ROWS = LAYER_GROUPS.reduce((n, g) => n + g.layers.length, 0);
 
 const results = [];
 const report = (check, ok, detail = {}) => {
@@ -152,8 +156,8 @@ try {
     return n.every((name, i) => i === 0 || n[i - 1].localeCompare(name, 'en', { sensitivity: 'base' }) <= 0);
   });
   report('every row is in one of the nine groups, in the fixed order, contiguous and alphabetical',
-    grouping.count === 68 && !grouping.seq.includes(null) && JSON.stringify(order) === JSON.stringify(GROUPS) && contiguous && alphabetical,
-    { rows: grouping.count, ungrouped: grouping.seq.filter((s) => s === null).length, order, contiguous, alphabetical });
+    grouping.count === ROWS && !grouping.seq.includes(null) && JSON.stringify(order) === JSON.stringify(GROUPS) && contiguous && alphabetical,
+    { rows: grouping.count, expected: ROWS, ungrouped: grouping.seq.filter((s) => s === null).length, order, contiguous, alphabetical });
 
   // Search.
   const box = await page.$('#data-panel input[type="search"]');
@@ -163,7 +167,7 @@ try {
       .filter((r) => r.getClientRects().length > 0).map((r) => ({ id: r.dataset.layerId, inView: window.__qaInView(r.querySelector('.data-name')) })));
     await box.click();
     await box.type('tick');
-    await page.waitForFunction(() => [...document.querySelectorAll('#data-panel .data-toggle-row')].filter((r) => r.getClientRects().length).length < 68, { timeout: 5000 }).catch(() => null);
+    await page.waitForFunction((rows) => [...document.querySelectorAll('#data-panel .data-toggle-row')].filter((r) => r.getClientRects().length).length < rows, { timeout: 5000 }, ROWS).catch(() => null);
     // The expected set is computed here from the manager's names and sources, not from the panel's own matcher.
     const expectTick = await page.evaluate(() => [...window.__godsEyeView.dataManager.layers.values()]
       .map((e) => e.module).filter((m) => m.showInTogglePanel !== false && `${m.name} ${m.source}`.toLowerCase().includes('tick'))
