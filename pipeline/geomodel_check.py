@@ -256,7 +256,7 @@ def judge(doc: dict, prior_doc: dict | None) -> dict:
         judged = carry_evidence(group_verdict(rows, v["skipped"]), prior.get(group))
         groups[group] = {**judged, "species": v["species"]}
         log.info(
-            "%s: %s (evidence %s over %s months; this month %s)",
+            "%s: %s (evidence %s over %s runs; this run %s)",
             group,
             judged["verdict"],
             judged["evidence"]["llr"],

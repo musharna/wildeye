@@ -71,6 +71,17 @@ edge ≥ 58% drops (H1 0.60 picked over 0.65 and 0.70 and caps 3 and 6 in
 Insecta and Mollusca, and holds Actinopterygii (evidence 1.21) and Plantae (2.02) that October's own sign
 test passed. `--rejudge FILE` judges a saved run again against `--prior` without network work.
 
+*Ruling 2026-11-01, after 2.35's first two runs fell on one day:* evidence counts runs, not calendar
+months. The daily job checks a new model once (`--if-new-model`), so in the month a model arrives the
+monthly run is that model's second: on 2026-11-01 jobd 8016 (05:00 EST, evidence from 0) and 8042 (13:21 EST)
+both counted, and Arachnida (40 of 60 species beat the baseline) and Fungi (41 of 60) listed. Both count
+because each run is a fresh draw: the two shared 0 of 30 species in 8 collections, 1 in Arachnida and
+Reptilia, 4 in Mammalia and Chromista; and a sequential test's error bound does not depend on when its draws
+arrive. The extra run happens at most once per model version. The key `months` keeps its name; the log says
+runs. Known limit: a small collection draws the same species again (Protozoa, 104 species: 13 of 30 shared
+between those two runs, and any two runs draw from the same pool, monthly ones included), so its runs are not
+independent and its error rate is higher than simulated. It fails today (24 of 60).
+
 Sample size: 30 species per collection (fewer where the collection or the data run out).
 
 ## Controls (a run with a failed control writes no verdicts and exits non-zero)
