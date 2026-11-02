@@ -5,6 +5,7 @@
  * globe, which is alpha-blended and filtered. An unknown colour is named, never snapped to a neighbour.
  */
 import { decodePng } from "./pngDecode.js";
+import { TILE_RETRIES, TILE_RETRY_MS, worthRetrying } from "./tileRetry.js";
 
 // atan(sinh(π)), not a truncated decimal: 85.0511287798 called a sliver of the map "outside"
 const MERCATOR_LIMIT = (Math.atan(Math.sinh(Math.PI)) * 180) / Math.PI;
@@ -110,15 +111,23 @@ async function decodeImageDefault(blob) {
  * `read(url, px, py, {reject}) → {rgba, timeActual}`: one fetch per tile URL (LRU of `cacheSize`); a failed fetch
  * is not cached, so the next click retries. `timeActual` is GIBS's `layer-time-actual` date, if sent.
  * `reject(image)` returns why a decoded tile is not to be trusted (or null): that tile fails like a fetch does.
+ * A failure `worth(status)` calls worth retrying (a 5xx by default) is asked again up to TILE_RETRIES times, `wait(ms)`
+ * apart (tileRetry.js).
  */
 export function createTilePixelReader({
   fetchImpl = (u) => fetch(u),
   decodeImage = decodeImageDefault,
   cacheSize = 32,
+  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  worth = worthRetrying,
 } = {}) {
   const cache = new Map();
   const load = async (url, reject) => {
-    const res = await fetchImpl(url);
+    let res = await fetchImpl(url);
+    for (let tries = 0; !res.ok && worth(res.status) && tries < TILE_RETRIES; tries += 1) {
+      await wait(TILE_RETRY_MS);
+      res = await fetchImpl(url);
+    }
     if (!res.ok) throw Object.assign(new Error(`GIBS tile HTTP ${res.status}`), { status: res.status });
     const image = await decodeImage(await res.blob());
     const why = reject?.(image);

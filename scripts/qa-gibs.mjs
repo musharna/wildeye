@@ -146,12 +146,17 @@ try {
       (times) => times,
       manifest.layers?.[id]?.times ?? [],
     );
+    // a tile is what its last answer was: GIBS answers some 500 and the same tile 200 seconds later, and the
+    // layer asks again (src/data/tileRetry.js), so a 500 that was then served is counted, not failed
+    const last = new Map(mine.map((t) => [t.url, t.status]));
+    const failedFirst = new Set(mine.filter((t) => t.status !== 200).map((t) => t.url));
     report(
       `${id}:tiles`,
-      mine.length > 0 && mine.every((t) => t.status === 200),
+      last.size > 0 && [...last.values()].every((s) => s === 200),
       {
-        n: mine.length,
-        bad: mine.filter((t) => t.status !== 200).slice(0, 3),
+        n: last.size,
+        retriedThenServed: [...failedFirst].filter((u) => last.get(u) === 200).length,
+        bad: [...last].filter(([, s]) => s !== 200).slice(0, 3).map(([url, status]) => ({ url, status })),
       },
     );
     // an undated layer (SEDAC) has no date segment: the tile matrix set follows /default/, and it shows asOf
