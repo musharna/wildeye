@@ -4,7 +4,9 @@ The cell sums run the pipeline's own DuckDB query on parquet files shaped like O
 the same `interpreted` struct), with planted records whose right answer is written out by hand.
 """
 
+import datetime as dt
 import json
+from pathlib import Path
 
 import pytest
 
@@ -237,6 +239,28 @@ def test_main_draws_only_cc0_and_cc_by_datasets(tmp_path):
             get=_fake_api(datasets, files),
         )
     assert not out2.exists()
+
+
+def test_the_grid_carries_a_generated_at_the_freshness_check_can_read(tmp_path):
+    # 2026-11-01: built once on 2026-10-03 and never again, the grid kept 472,199 records OBIS had since re-flagged as
+    # absences, and nothing noticed: it had no cron line and no generated_at, so stale-data.yml could not see it age
+    from pipeline import freshness
+
+    src = {IDS["a"]: _export(tmp_path / "a.parquet", IDS["a"], A_ROWS)}
+    datasets = [{"id": IDS["a"], "title": "A", "records": 6, "intellectualrights": CC0_TEXT}]
+    out = tmp_path / "out"
+    when = dt.datetime(2026, 11, 1, 9, 30, tzinfo=dt.timezone.utc)
+    argv = ["--out-dir", str(out), "--staging", str(tmp_path / "staging")]
+    get = _fake_api(datasets, {IDS["a"]: "e1"})
+    assert og.main(argv, get=get, source_url=lambda i: str(src[i]), now=lambda: when) == 0
+    # read as stale-data.yml reads it: the first 4096 bytes only
+    head = (out / "obis_grid.json").read_bytes()[:4096].decode("utf-8", "replace")
+    m = freshness.GENERATED_AT.search(head)
+    assert m and freshness._when(m.group(1)) == when
+    assert freshness.LAYERS["obis_grid.json"] == "monthly"
+    # positive control: the layer's own date is still there, and the cron wrapper exists
+    assert json.loads((out / "obis_grid.json").read_text())["asOf"] == "2026-11-01"
+    assert (Path(og.__file__).parent / "run_obis_grid.sh").exists()
 
 
 def test_a_rerun_reads_only_datasets_whose_file_changed(tmp_path):
