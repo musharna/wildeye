@@ -49,7 +49,7 @@ export function verdict(first, second) {
   return second === 0 ? 'flaky' : 'fail';
 }
 
-/** The failing checks a script printed (one JSON line per check, `ok: false`), else its last line. */
+/** The failing checks a script printed (one JSON line per check, `ok: false`); for a crash, its error; else its last line. */
 export function failedChecks(output) {
   const lines = output.split('\n').filter(Boolean);
   const bad = lines.flatMap((l) => {
@@ -60,7 +60,10 @@ export function failedChecks(output) {
       return [];
     }
   });
-  return bad.length ? bad : lines.slice(-1).map((l) => l.slice(0, 200));
+  if (bad.length) return bad;
+  // an uncaught throw ends with the stack and then "Node.js vX"; the "Error: ..." line above the stack says what went wrong
+  const thrown = lines.findLast((l) => /^[A-Za-z]*Error( \[[\w-]+\])?: /.test(l));
+  return [(thrown ?? lines.at(-1) ?? '').slice(0, 200)].filter(Boolean);
 }
 
 export function renderReport(results, notRun, missingShards = 0) {
