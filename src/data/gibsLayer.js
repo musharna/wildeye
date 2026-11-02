@@ -2,7 +2,7 @@ import * as Cesium from "cesium";
 import { setStackedImagery, legendItems } from "./rasterDrape.js";
 import { dateAtOrBefore, latestDate, extentOfTimes } from "./gibsTime.js";
 import { createTilePixelReader, decodePixel, gibsTileRequest } from "./gibsReadout.js";
-import { TILE_RETRIES, retryTileError } from "./tileRetry.js";
+import { TILE_RETRIES, gibsWorthRetrying, retryCallback } from "./tileRetry.js";
 
 /**
  * NASA GIBS tile layers (grill ledger 2026-09-22). Tiles load straight from GIBS; public/data/gibs.json
@@ -87,14 +87,17 @@ export function gibsTileUrl(entry, date) {
   return `${GIBS_WMTS}/${entry.gibsId}/default/${when}${entry.tileMatrixSet}/{z}/{y}/{x}.${entry.format}`;
 }
 
-/** The imagery provider for a GIBS tile URL template: each tile GIBS answers 5xx is asked for again (tileRetry.js). */
+/** The imagery provider for a GIBS tile URL template: each tile GIBS answers 5xx or 404 is asked for again (tileRetry.js). */
 export function gibsProvider(url, options) {
   return new Cesium.UrlTemplateImageryProvider({
-    url: new Cesium.Resource({ url, retryAttempts: TILE_RETRIES, retryCallback: retryTileError }),
+    url: new Cesium.Resource({ url, retryAttempts: TILE_RETRIES, retryCallback: retryCallback(gibsWorthRetrying) }),
     credit: "NASA GIBS",
     ...options,
   });
 }
+
+/** The readout's tile reader for GIBS: a tile answered 5xx or 404 is fetched again (tileRetry.js). */
+export const gibsTilePixelReader = (options = {}) => createTilePixelReader({ worth: gibsWorthRetrying, ...options });
 
 async function fetchJsonDefault(url) {
   const res = await fetch(`${url}?t=${Date.now()}`);
@@ -116,7 +119,7 @@ export function createGibsLayer({
     new Cesium.ImageryLayer(provider, options),
   stack = setStackedImagery,
   // (url, px, py) → {rgba, timeActual}: one pixel of the raw tile (stage 3 readout)
-  readTilePixel = createTilePixelReader(),
+  readTilePixel = gibsTilePixelReader(),
   // Cesium tile image → RGBA bytes, for the class-tile check gibs.json asks for (discardForeignTiles)
   tilePixels = canvasPixels,
 }) {

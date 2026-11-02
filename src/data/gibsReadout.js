@@ -111,18 +111,20 @@ async function decodeImageDefault(blob) {
  * `read(url, px, py, {reject}) → {rgba, timeActual}`: one fetch per tile URL (LRU of `cacheSize`); a failed fetch
  * is not cached, so the next click retries. `timeActual` is GIBS's `layer-time-actual` date, if sent.
  * `reject(image)` returns why a decoded tile is not to be trusted (or null): that tile fails like a fetch does.
- * A 5xx is asked again up to TILE_RETRIES times, `wait(ms)` apart (tileRetry.js).
+ * A failure `worth(status)` calls worth retrying (a 5xx by default) is asked again up to TILE_RETRIES times, `wait(ms)`
+ * apart (tileRetry.js).
  */
 export function createTilePixelReader({
   fetchImpl = (u) => fetch(u),
   decodeImage = decodeImageDefault,
   cacheSize = 32,
   wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  worth = worthRetrying,
 } = {}) {
   const cache = new Map();
   const load = async (url, reject) => {
     let res = await fetchImpl(url);
-    for (let tries = 0; !res.ok && worthRetrying(res.status) && tries < TILE_RETRIES; tries += 1) {
+    for (let tries = 0; !res.ok && worth(res.status) && tries < TILE_RETRIES; tries += 1) {
       await wait(TILE_RETRY_MS);
       res = await fetchImpl(url);
     }
