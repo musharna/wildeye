@@ -41,10 +41,19 @@ test('a failure is failing twice; failing then passing is flaky', () => {
   assert.equal(verdict(124, 2), 'fail'); // a timeout, then a crash
 });
 
-test('failing checks are named from the JSON lines; with none, the last line stands in', () => {
+test('failing checks are named from the JSON lines; a script that crashed is named by its error, not the Node.js line', () => {
   const out = ['{"check":"a","ok":true}', '{"check":"matches-tile","ok":false}', 'Node.js v24'].join('\n');
   assert.deepEqual(failedChecks(out), ['matches-tile']);
-  assert.deepEqual(failedChecks('Error: net::ERR_CONNECTION_CLOSED\nNode.js v24\n'), ['Node.js v24']);
+  // a real uncaught throw, as qa-haedat's on HAEDAT's 503 (sweep 2026-11-01 reported it as "Node.js v24.14.0")
+  const crash = spawnSync(process.execPath, ['--input-type=module', '-e', "await Promise.resolve(); throw new Error('https://example.org/archive.do: HTTP 503');"], { encoding: 'utf8' });
+  assert.notEqual(crash.status, 0);
+  assert.match(crash.stderr.trim().split('\n').at(-1), /^Node\.js v/); // the case: Node's last line is its version
+  assert.deepEqual(failedChecks(`${crash.stdout}${crash.stderr}`), ['Error: https://example.org/archive.do: HTTP 503']);
+  // any error class: a TypeError as puppeteer scripts throw, from a real throw too
+  const typeErr = spawnSync(process.execPath, ['-e', 'null.x'], { encoding: 'utf8' });
+  assert.deepEqual(failedChecks(typeErr.stderr), ["TypeError: Cannot read properties of null (reading 'x')"]);
+  // with no error line either, the last line still stands in
+  assert.deepEqual(failedChecks('timed out after 900 s\n'), ['timed out after 900 s']);
 });
 
 test('the report CLI exits 10 when a script failed twice, and 0 when none did', () => {
