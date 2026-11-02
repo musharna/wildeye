@@ -21,11 +21,19 @@ test('the shards together run every QA script once, except the not-run ones and 
   assert.deepEqual(runs.map((r) => r.notRun.length > 0), [true, false, false, false]);
 });
 
-test('the not-run list is exactly the scripts that need a truth file or a source download', () => {
+test('the not-run list is exactly the scripts that need a truth file, a source download or R', () => {
+  // either quote style: qa-penguins writes arg("--data", ...) and runs Rscript, and a single-quote-only match let it
+  // into the first live sweep, where it crashed twice before opening a browser (2026-11-01)
+  const needsLocal = (src) => /arg\(["']--(truth|python|data)["']/.test(src) || /\bRscript\b/.test(src);
   const needs = files.filter((f) => /^qa-.*\.mjs$/.test(f))
-    .filter((f) => /arg\('--(truth|python)'/.test(readFileSync(path.join(SCRIPTS, f), 'utf8')))
+    .filter((f) => needsLocal(readFileSync(path.join(SCRIPTS, f), 'utf8')))
     .map((f) => f.replace(/\.mjs$/, ''));
   assert.deepEqual(Object.keys(NOT_RUN).sort(), needs.sort());
+  // the match itself: both quote styles and R count; a script that only reads --url does not
+  assert.equal(needsLocal(`arg("--data", x)`), true);
+  assert.equal(needsLocal(`arg('--truth', x)`), true);
+  assert.equal(needsLocal('execFileSync("Rscript", [f])'), true);
+  assert.equal(needsLocal(`arg("--url", SITE)`), false);
 });
 
 test('--only takes named scripts and refuses a name that is not one', () => {
