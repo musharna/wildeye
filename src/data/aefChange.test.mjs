@@ -226,6 +226,11 @@ test('legend: one swatch per band in its colour with its area, then what the sco
   assert.match(NOTE, /deserts and Antarctica are not drawn/, 'the two masks of pipeline/aef_change.py');
   assert.match(NOTE, /the rest of its 82 km tile/, 'the score is relative to the file');
   assert.match(NOTE, /CC BY 4\.0/);
+  // the source shows a high-latitude summer a year late (fire perimeters 2019-2025, 2026-11-01): flagged inside Alaska's
+  // 2024 fires 46.5%, its 2025 fires 1.6%; Canada north of 55°N 76.3% and 27.5% (May 2025 starts 53.5%, August on 1.1%)
+  assert.match(NOTE, /in the far north a summer's change shows a year late: most fires flagged there burned in 2024, and fires from summer 2025 are mostly not flagged yet/);
+  // Severnaya Zemlya: 74.7% of its flags on glacier, 23.4% of its area; on-glacier 19.7% vs 2.05% off
+  assert.match(NOTE, /glaciers and ice caps flag where their surface changed/);
 });
 
 test('credit: the required text verbatim, the licence and what was changed, as CC BY asks', async () => {
