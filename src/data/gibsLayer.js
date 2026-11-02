@@ -2,6 +2,7 @@ import * as Cesium from "cesium";
 import { setStackedImagery, legendItems } from "./rasterDrape.js";
 import { dateAtOrBefore, latestDate, extentOfTimes } from "./gibsTime.js";
 import { createTilePixelReader, decodePixel, gibsTileRequest } from "./gibsReadout.js";
+import { TILE_RETRIES, retryTileError } from "./tileRetry.js";
 
 /**
  * NASA GIBS tile layers (grill ledger 2026-09-22). Tiles load straight from GIBS; public/data/gibs.json
@@ -86,6 +87,15 @@ export function gibsTileUrl(entry, date) {
   return `${GIBS_WMTS}/${entry.gibsId}/default/${when}${entry.tileMatrixSet}/{z}/{y}/{x}.${entry.format}`;
 }
 
+/** The imagery provider for a GIBS tile URL template: each tile GIBS answers 5xx is asked for again (tileRetry.js). */
+export function gibsProvider(url, options) {
+  return new Cesium.UrlTemplateImageryProvider({
+    url: new Cesium.Resource({ url, retryAttempts: TILE_RETRIES, retryCallback: retryTileError }),
+    credit: "NASA GIBS",
+    ...options,
+  });
+}
+
 async function fetchJsonDefault(url) {
   const res = await fetch(`${url}?t=${Date.now()}`);
   if (!res.ok) throw new Error(`${url} HTTP ${res.status}`);
@@ -101,12 +111,7 @@ export function createGibsLayer({
   zrank = 50,
   timeless = false,
   fetchJson = fetchJsonDefault,
-  providerFor = (url, options) =>
-    new Cesium.UrlTemplateImageryProvider({
-      url,
-      credit: "NASA GIBS",
-      ...options,
-    }),
+  providerFor = gibsProvider,
   imageryLayerFor = (provider, options) =>
     new Cesium.ImageryLayer(provider, options),
   stack = setStackedImagery,
