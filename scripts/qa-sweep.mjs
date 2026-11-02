@@ -16,13 +16,14 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// need --truth or --python with a downloaded source: run by hand (each script's header says how)
+// need --truth, --python or --data with a downloaded source, or R: run by hand (each script's header says how)
 export const NOT_RUN = Object.freeze({
   'qa-cmems-zooc': 'truth file needs CMEMS credentials',
   'qa-soil-bacteria': 'truth file needs the Zenodo ensemble zip',
   'qa-hotspots': 'truth script needs the source shapefile and pyogrio',
   'qa-ifl': 'truth script needs the IFL source files',
   'qa-kelp': 'truth script needs the kelp source raster',
+  'qa-penguins': 'truth script needs the mapppdr download and R',
   'qa-seagrass': 'truth script needs the seagrass source raster',
   'qa-tidal-marsh': 'truth script needs the tidal marsh source raster',
 });
