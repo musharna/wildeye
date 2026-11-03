@@ -72,7 +72,8 @@ try {
       const mine = hits.find((h) => String(h?.id?.id ?? '').startsWith(prefix) && h.id.polyline);
       if (mine) color = mine.id.polyline.material.getValue(v.clock.currentTime).color.withAlpha(1).toCssHexString();
     } while (!ids.some((i) => i.startsWith(prefix)) && Date.now() - t0 < waitMs);
-    return { ids: ids.slice(0, 6), color, polls: Math.round((Date.now() - t0) / 1000) };
+    // found is judged on every hit; ids is cut to 6 for the report only (the pick order shifts as tracks are added elsewhere)
+    return { found: ids.some((i) => i.startsWith(prefix)), hits: ids.length, ids: ids.slice(0, 6), color, polls: Math.round((Date.now() - t0) / 1000) };
   }, FERA.firstAt, waitMs, `trk:${FERA.dataset}:`);
   step = 'pick-before';
   const before = await pickAt();
@@ -92,7 +93,7 @@ try {
   step = 'pick-after';
   const after = await pickAt(240000);
   const landMammal = '#ffb74d';
-  report('drew', !before.ids.some((i) => i.startsWith(`trk:${FERA.dataset}:`)) && after.ids.some((i) => i.startsWith(`trk:${FERA.dataset}:`)) && after.color === landMammal,
+  report('drew', !before.found && after.found && after.color === landMammal,
     { before, after, expectColor: landMammal });
 
   step = 'file';
