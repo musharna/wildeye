@@ -62,9 +62,16 @@ export function failedChecks(output) {
     }
   });
   if (bad.length) return bad;
-  // an uncaught throw ends with the stack and then "Node.js vX"; the "Error: ..." line above the stack says what went wrong
-  const thrown = lines.findLast((l) => /^[A-Za-z]*Error( \[[\w-]+\])?: /.test(l));
-  return [(thrown ?? lines.at(-1) ?? '').slice(0, 200)].filter(Boolean);
+  // an uncaught throw ends with "Node.js vX". Above it, an error with a stack prints "Name: message"; one without
+  // (undici's "fetch failed", an aborted fetch) prints in inspect form, "[Name: message]" or "[Name: message] {",
+  // with the reason on an indented "[cause]: ..." line below
+  const plain = (l) => (/^[A-Za-z]*Error( \[[\w-]+\])?: /.test(l) ? l : null);
+  const inspected = (l) => l.match(/^\[([A-Za-z]*(?:Error|Exception)(?: \[[\w-]+\])?: [^\n]*)\](?: \{)?$/)?.[1] ?? null;
+  const at = lines.findLastIndex((l) => plain(l) ?? inspected(l));
+  if (at < 0) return [(lines.at(-1) ?? '').slice(0, 200)].filter(Boolean);
+  const cause = lines.slice(at + 1).find((l) => /^\s+\[cause\]: /.test(l));
+  const thrown = plain(lines[at]) ?? inspected(lines[at]);
+  return [(cause ? `${thrown} (cause: ${cause.replace(/^\s+\[cause\]: /, '')})` : thrown).slice(0, 200)];
 }
 
 export function renderReport(results, notRun, missingShards = 0) {
