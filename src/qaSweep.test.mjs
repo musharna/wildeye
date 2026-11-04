@@ -60,6 +60,16 @@ test('failing checks are named from the JSON lines; a script that crashed is nam
   // any error class: a TypeError as puppeteer scripts throw, from a real throw too
   const typeErr = spawnSync(process.execPath, ['-e', 'null.x'], { encoding: 'utf8' });
   assert.deepEqual(failedChecks(typeErr.stderr), ["TypeError: Cannot read properties of null (reading 'x')"]);
+  // an error with no stack prints in inspect form, "[TypeError: fetch failed] {" with the reason on a "[cause]:" line;
+  // qa-mhw crashed that way in the 2026-11-03 sweep and was reported as "Node.js v24.14.0". Real fetches, no network:
+  // a server that drops the connection, and one that never answers a fetch with a 200 ms timeout
+  const dropped = spawnSync(process.execPath, ['--input-type=module', '-e', "import net from 'node:net'; const s = net.createServer((c) => c.destroy()); await new Promise((r) => s.listen(0, '127.0.0.1', r)); await fetch(`http://127.0.0.1:${s.address().port}/`);"], { encoding: 'utf8', timeout: 20000 });
+  assert.match(dropped.stderr, /^\[TypeError: fetch failed\] \{$/m); // the case: no "TypeError: " line to find
+  assert.match(failedChecks(dropped.stderr)[0], /^TypeError: fetch failed \(cause: \w*Error: .+\)$/);
+  const slow = spawnSync(process.execPath, ['--input-type=module', '-e', "import http from 'node:http'; const s = http.createServer(() => {}); await new Promise((r) => s.listen(0, '127.0.0.1', r)); await fetch(`http://127.0.0.1:${s.address().port}/`, { signal: AbortSignal.timeout(200) });"], { encoding: 'utf8', timeout: 20000 });
+  assert.deepEqual(failedChecks(slow.stderr), ['DOMException [TimeoutError]: The operation was aborted due to timeout']);
+  // only a whole inspect-form line is a crash: a script's own log line that starts like one is not
+  assert.deepEqual(failedChecks('[Error: tile 503] retrying\ntimed out after 900 s\n'), ['timed out after 900 s']);
   // with no error line either, the last line still stands in
   assert.deepEqual(failedChecks('timed out after 900 s\n'), ['timed out after 900 s']);
 });
