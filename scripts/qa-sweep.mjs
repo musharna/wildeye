@@ -50,6 +50,22 @@ export function verdict(first, second) {
   return second === 0 ? 'flaky' : 'fail';
 }
 
+// a failing run keeps the end of its output, where the summary line and a crash's error are
+export const OUTPUT_TAIL = 64 * 1024;
+
+/**
+ * What the sweep keeps of one script's runs (first, and second when the first failed: { code, output }): its verdict,
+ * exit codes and failing checks, and for anything but a pass the end of each run's output, so a failure seen only in
+ * CI can be read from the artifact (2026-11-04: qa-readout, qa-species and qa-gibs failed in CI and no host could rerun
+ * them cleanly).
+ */
+export function record(name, first, second = null) {
+  const v = verdict(first.code, second?.code);
+  const r = { name, verdict: v, codes: [first.code, second?.code ?? null], checks: v === 'pass' ? [] : failedChecks((v === 'fail' ? second : first).output) };
+  if (v !== 'pass') r.outputs = [first, second].filter(Boolean).map((run) => run.output.slice(-OUTPUT_TAIL));
+  return r;
+}
+
 /** The failing checks a script printed (one JSON line per check, `ok: false`); for a crash, its error; else its last line. */
 export function failedChecks(output) {
   const lines = output.split('\n').filter(Boolean);
@@ -131,9 +147,9 @@ function main(argv) {
   for (const name of run) {
     const first = runOne(name, url);
     const second = first.code === 0 ? null : runOne(name, url);
-    const v = verdict(first.code, second?.code);
-    results.push({ name, verdict: v, codes: [first.code, second?.code ?? null], checks: v === 'pass' ? [] : failedChecks((v === 'fail' ? second : first).output) });
-    console.error(`${name}: ${v}`);
+    const r = record(name, first, second);
+    results.push(r);
+    console.error(`${name}: ${r.verdict}`);
   }
   writeFileSync(arg('--out', 'qa-sweep.json'), JSON.stringify({ results, notRun }, null, 1));
   return 0;

@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { FAILED_EXIT, NOT_RUN, failedChecks, plan, renderReport, verdict } from '../scripts/qa-sweep.mjs';
+import { FAILED_EXIT, NOT_RUN, OUTPUT_TAIL, failedChecks, plan, record, renderReport, verdict } from '../scripts/qa-sweep.mjs';
 
 const SCRIPTS = path.resolve('scripts');
 const files = readdirSync(SCRIPTS);
@@ -47,6 +47,34 @@ test('a failure is failing twice; failing then passing is flaky', () => {
   assert.equal(verdict(1, 0), 'flaky');
   assert.equal(verdict(1, 1), 'fail');
   assert.equal(verdict(124, 2), 'fail'); // a timeout, then a crash
+});
+
+test("a failing or flaky script keeps the end of each run's output in its record; a passing one keeps none", () => {
+  // real runs in child processes: a pass, a failed check, a crash
+  const run = (src) => {
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', src], { encoding: 'utf8' });
+    return { code: r.status ?? 1, output: `${r.stdout}${r.stderr}` };
+  };
+  const ok = run("console.log(JSON.stringify({ check: 'a', ok: true }));");
+  const bad = run("console.log(JSON.stringify({ check: 'tile', ok: false, got: 'blank' })); process.exit(1);");
+  const crash = run("await Promise.resolve(); throw new Error('https://example.org/x: HTTP 503');");
+  assert.deepEqual([ok.code, bad.code, crash.code], [0, 1, 1]);
+  const passed = record('qa-x', ok);
+  assert.deepEqual([passed.verdict, passed.outputs], ['pass', undefined]); // a pass keeps nothing
+  const failed = record('qa-x', bad, crash);
+  assert.deepEqual([failed.verdict, failed.checks, failed.outputs.length], ['fail', ['Error: https://example.org/x: HTTP 503'], 2]);
+  assert.match(failed.outputs[0], /"got":"blank"/); // the first run's detail, which the checks list drops
+  assert.match(failed.outputs[1], /^Error: https:\/\/example\.org\/x: HTTP 503$/m);
+  const flaky = record('qa-x', crash, ok);
+  assert.deepEqual([flaky.verdict, flaky.outputs.length], ['flaky', 2]);
+  assert.match(flaky.outputs[0], /HTTP 503/);
+  // a long run keeps its last OUTPUT_TAIL characters, where the summary and the error are
+  const long = { code: 1, output: `${'x'.repeat(OUTPUT_TAIL)}\nError: last words\n` };
+  const kept = record('qa-x', long, long).outputs[0];
+  assert.equal(kept.length, OUTPUT_TAIL);
+  assert.ok(kept.endsWith('\nError: last words\n'));
+  // the issue text stays the checks list: outputs go to the artifact only
+  assert.doesNotMatch(renderReport([failed], []), /"got":"blank"/);
 });
 
 test('failing checks are named from the JSON lines; a script that crashed is named by its error, not the Node.js line', () => {
