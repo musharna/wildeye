@@ -60,6 +60,8 @@ export const OUTPUT_TAIL = 64 * 1024;
  * them cleanly).
  */
 export function record(name, first, second = null) {
+  // "fail" means failing twice: a failing run alone has no verdict yet, so it is refused, never recorded as one
+  if (first.code !== 0 && !second) throw new Error(`${name} failed (exit ${first.code}) and was not run again: record() needs the second run`);
   const v = verdict(first.code, second?.code);
   const r = { name, verdict: v, codes: [first.code, second?.code ?? null], checks: v === 'pass' ? [] : failedChecks((v === 'fail' ? second : first).output) };
   if (v !== 'pass') r.outputs = [first, second].filter(Boolean).map((run) => run.output.slice(-OUTPUT_TAIL));
