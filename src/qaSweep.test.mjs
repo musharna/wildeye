@@ -67,6 +67,10 @@ test("a failing or flaky script keeps the end of each run's output in its record
   assert.match(failed.outputs[1], /^Error: https:\/\/example\.org\/x: HTTP 503$/m);
   const flaky = record('qa-x', crash, ok);
   assert.deepEqual([flaky.verdict, flaky.outputs.length], ['flaky', 2]);
+  // a failing run with no second run is a caller's mistake, not a verdict: failing twice is what "fail" means. It is
+  // refused by name, where it once crashed reading the missing run's output (review of #161); a pass alone, above, is not
+  assert.throws(() => record('qa-x', bad), /^Error: qa-x failed \(exit 1\) and was not run again/);
+  assert.throws(() => record('qa-x', crash, null), /^Error: qa-x failed \(exit 1\) and was not run again/);
   assert.match(flaky.outputs[0], /HTTP 503/);
   // a long run keeps its last OUTPUT_TAIL characters, where the summary and the error are
   const long = { code: 1, output: `${'x'.repeat(OUTPUT_TAIL)}\nError: last words\n` };

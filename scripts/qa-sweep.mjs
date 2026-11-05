@@ -57,9 +57,11 @@ export const OUTPUT_TAIL = 64 * 1024;
  * What the sweep keeps of one script's runs (first, and second when the first failed: { code, output }): its verdict,
  * exit codes and failing checks, and for anything but a pass the end of each run's output, so a failure seen only in
  * CI can be read from the artifact (2026-11-04: qa-readout, qa-species and qa-gibs failed in CI and no host could rerun
- * them cleanly).
+ * them cleanly). `second` may be left out only when `first` passed: a failing `first` with no `second` throws, since
+ * "fail" means failing twice and a failing run alone has no verdict yet.
  */
 export function record(name, first, second = null) {
+  if (first.code !== 0 && !second) throw new Error(`${name} failed (exit ${first.code}) and was not run again: record() needs the second run`);
   const v = verdict(first.code, second?.code);
   const r = { name, verdict: v, codes: [first.code, second?.code ?? null], checks: v === 'pass' ? [] : failedChecks((v === 'fail' ? second : first).output) };
   if (v !== 'pass') r.outputs = [first, second].filter(Boolean).map((run) => run.output.slice(-OUTPUT_TAIL));
