@@ -7,8 +7,8 @@
  *
  * The 60 scripts ran only by hand until 2026-11-01, when a sweep of all of them found two that had gone stale on a
  * correct site (a hard-coded layer count, a seasonal assumption) and one real stale layer (OBIS absences). A script
- * that fails is run once more: failing twice is a failure, passing the second time is flaky (GIBS and HAEDAT have
- * outages of their own). Scripts that need a truth file built from a large download or CMEMS credentials are listed
+ * that fails is run once more, after the shard's other scripts and a 15-minute wait: failing twice is a failure,
+ * passing the second time is flaky (GIBS, HAEDAT and PacIOOS have outages of their own). Scripts that need a truth file built from a large download or CMEMS credentials are listed
  * as not run, never counted as passing.
  */
 import { spawnSync } from 'node:child_process';
@@ -113,6 +113,36 @@ export function renderReport(results, notRun, missingShards = 0) {
   return out.join('\n');
 }
 
+// A failed script is rerun after the shard's other first runs and this wait, not at once: a retry seconds later lands
+// in the same outage. PacIOOS refused or stalled connections from home for about 15 minutes on 2026-11-05 (2:33-2:44 PM
+// EST, three 5-minute probes in a row), and in CI qa-mhw's immediate retry failed every time its first run did (5 of
+// 10 sweeps, 11-01 to 11-04). One wait per shard however many failed, so a bad day costs this once, not per script.
+export const RETRY_DELAY_SECONDS = 900;
+
+/**
+ * Run each named script once (run(name) → { code, output }), then, if any failed, wait(RETRY_DELAY_SECONDS) and run
+ * the failed ones once more; one record per script, in the order given.
+ */
+export async function sweep(names, run, wait, log = () => {}) {
+  const firsts = names.map((name) => {
+    const first = run(name);
+    log(`${name}: ${first.code === 0 ? 'pass' : `failed (exit ${first.code}), rerun later`}`);
+    return [name, first];
+  });
+  const failed = firsts.filter(([, first]) => first.code !== 0).map(([name]) => name);
+  const seconds = new Map();
+  if (failed.length) {
+    log(`${failed.length} failed; rerunning after ${RETRY_DELAY_SECONDS} s: ${failed.join(', ')}`);
+    await wait(RETRY_DELAY_SECONDS);
+    for (const name of failed) seconds.set(name, run(name));
+  }
+  return firsts.map(([name, first]) => {
+    const r = record(name, first, seconds.get(name) ?? null);
+    if (r.verdict !== 'pass') log(`${name}: ${r.verdict}`);
+    return r;
+  });
+}
+
 function runOne(name, url) {
   const res = spawnSync(process.execPath, [path.join('scripts', `${name}.mjs`), '--url', url], {
     encoding: 'utf8',
@@ -124,7 +154,7 @@ function runOne(name, url) {
   return { code, output: `${res.stdout ?? ''}${res.stderr ?? ''}${res.error ? `\n${res.error.message}` : ''}` };
 }
 
-function main(argv) {
+async function main(argv) {
   const arg = (name, fallback) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
   if (argv.includes('--report')) {
     let files = argv.slice(argv.indexOf('--report') + 1);
@@ -145,16 +175,10 @@ function main(argv) {
   const only = arg('--only', null)?.split(',');
   const dir = path.dirname(fileURLToPath(import.meta.url));
   const { run, notRun } = plan(readdirSync(dir), { shard: arg('--shard', '0/1'), only });
-  const results = [];
-  for (const name of run) {
-    const first = runOne(name, url);
-    const second = first.code === 0 ? null : runOne(name, url);
-    const r = record(name, first, second);
-    results.push(r);
-    console.error(`${name}: ${r.verdict}`);
-  }
+  const wait = (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+  const results = await sweep(run, (name) => runOne(name, url), wait, (line) => console.error(line));
   writeFileSync(arg('--out', 'qa-sweep.json'), JSON.stringify({ results, notRun }, null, 1));
   return 0;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) process.exit(main(process.argv.slice(2)));
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) process.exit(await main(process.argv.slice(2)));

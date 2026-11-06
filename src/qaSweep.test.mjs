@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { FAILED_EXIT, NOT_RUN, OUTPUT_TAIL, failedChecks, plan, record, renderReport, verdict } from '../scripts/qa-sweep.mjs';
+import { FAILED_EXIT, NOT_RUN, OUTPUT_TAIL, RETRY_DELAY_SECONDS, failedChecks, plan, record, renderReport, sweep, verdict } from '../scripts/qa-sweep.mjs';
 
 const SCRIPTS = path.resolve('scripts');
 const files = readdirSync(SCRIPTS);
@@ -47,6 +47,36 @@ test('a failure is failing twice; failing then passing is flaky', () => {
   assert.equal(verdict(1, 0), 'flaky');
   assert.equal(verdict(1, 1), 'fail');
   assert.equal(verdict(124, 2), 'fail'); // a timeout, then a crash
+});
+
+test('a failed script is rerun once, after every script has run and one wait; with no failure there is no wait', async () => {
+  // real runs in child processes: one passes, one fails then passes (its state in a file), one fails every time
+  const dir = mkdtempSync(path.join(tmpdir(), 'qa-sweep-retry-'));
+  const once = path.join(dir, 'ran-once');
+  const src = {
+    'qa-a': 'process.exit(0);',
+    'qa-b': `import { existsSync, writeFileSync } from 'node:fs'; if (existsSync(${JSON.stringify(once)})) process.exit(0); writeFileSync(${JSON.stringify(once)}, ''); process.exit(1);`,
+    'qa-c': "console.log(JSON.stringify({ check: 'tile', ok: false })); process.exit(1);",
+  };
+  const events = [];
+  const run = (name) => {
+    events.push(`run ${name}`);
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', src[name]], { encoding: 'utf8' });
+    return { code: r.status ?? 1, output: `${r.stdout}${r.stderr}` };
+  };
+  const wait = async (seconds) => events.push(`wait ${seconds}`);
+  const results = await sweep(['qa-a', 'qa-b', 'qa-c'], run, wait);
+  // the retry comes after the shard's other first runs and one wait, so an outage of a few minutes (PacIOOS, 11-05) has
+  // passed; one wait for the shard however many failed, so a bad day costs RETRY_DELAY_SECONDS once, not per script
+  assert.deepEqual(events, ['run qa-a', 'run qa-b', 'run qa-c', `wait ${RETRY_DELAY_SECONDS}`, 'run qa-b', 'run qa-c']);
+  assert.equal(RETRY_DELAY_SECONDS, 900); // longer than the 11-05 outage seen from home (three 5-min probes)
+  assert.deepEqual(results.map((r) => [r.name, r.verdict]), [['qa-a', 'pass'], ['qa-b', 'flaky'], ['qa-c', 'fail']]);
+  assert.deepEqual(results[2].checks, ['tile']);
+  // positive control: nothing failed, nothing is rerun and nothing waits
+  events.length = 0;
+  const clean = await sweep(['qa-a', 'qa-b'], run, wait);
+  assert.deepEqual(events, ['run qa-a', 'run qa-b']);
+  assert.deepEqual(clean.map((r) => r.verdict), ['pass', 'pass']);
 });
 
 test("a failing or flaky script keeps the end of each run's output in its record; a passing one keeps none", () => {
