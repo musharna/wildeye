@@ -42,7 +42,7 @@
     "build:geoid-grid": "node scripts/build-geoid-grid.mjs"
   },
   "dependencies": {
-    "cesium": "^1.146.0",
+    "cesium": "^1.147.0",
     "dompurify": "^3.4.17"
   },
   "devDependencies": {
@@ -52,7 +52,7 @@
     "pbf": "^5.1.2",
     "postcss": "^8.5.32",
     "puppeteer": "^25.16.0",
-    "rollup": "^4.66.0",
+    "rollup": "^4.67.5",
     "vite": "^8.3.5"
   },
   "overrides": {
