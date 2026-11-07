@@ -2,17 +2,22 @@
 /**
  * qa-sweep.mjs — run the browser QA scripts against the live site, one at a time, and report (.github/workflows/qa-sweep.yml).
  * Run:    node scripts/qa-sweep.mjs [--url <site>] [--shard i/n] [--only qa-a,qa-b] [--out results.json]
+ *         (each script once: a failure is left pending in results.json)
+ * Rerun:  node scripts/qa-sweep.mjs [--url <site>] --rerun <out-dir> results-0.json ...
+ *         (on another runner: each pending failure once more, after a 15-minute wait; writes <out-dir>/<same names>)
  * Report: node scripts/qa-sweep.mjs --report [--expect n] results-0.json ... > report.md
- *         (exit 10: a script failed twice, or fewer than n result files: a shard that crashed ran nothing it can report)
+ *         (exit 10: a script failed twice, or fewer than n result files: a shard that crashed ran nothing it can report;
+ *         a file with a failure still pending is refused, since it has no verdict yet)
  *
  * The 60 scripts ran only by hand until 2026-11-01, when a sweep of all of them found two that had gone stale on a
  * correct site (a hard-coded layer count, a seasonal assumption) and one real stale layer (OBIS absences). A script
- * that fails is run once more, after the shard's other scripts and a 15-minute wait: failing twice is a failure,
- * passing the second time is flaky (GIBS, HAEDAT and PacIOOS have outages of their own). Scripts that need a truth file built from a large download or CMEMS credentials are listed
- * as not run, never counted as passing.
+ * that fails is run once more by a later job on a runner of its own, after a 15-minute wait: failing twice is a
+ * failure, passing the second time is flaky (GIBS, HAEDAT and PacIOOS have outages of their own, and some runners
+ * cannot reach PacIOOS at all). Scripts that need a truth file built from a large download or CMEMS credentials are
+ * listed as not run, never counted as passing.
  */
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -106,41 +111,66 @@ export function renderReport(results, notRun, missingShards = 0) {
     for (const r of rows) out.push(`- \`${r.name}\`: ${r.checks.join('; ')}`);
     out.push('');
   };
-  if (missingShards) out.push(`**${missingShards} shard(s) wrote no results**: the shard itself failed (install, browser, runner), so its scripts are unchecked this week; see the run's log.`, '');
+  if (missingShards) out.push(`**${missingShards} shard(s) wrote no results**: the shard or the rerun job failed (install, browser, runner), so its scripts are unchecked this week; see the run's log.`, '');
   list('Failed twice', fail);
   list('Flaky (failed, then passed)', flaky);
   if (notRun.length) out.push('**Not run here** (need a downloaded source or credentials; run by hand)', '', ...notRun.map((n) => `- \`${n}\`: ${NOT_RUN[n]}`), '');
   return out.join('\n');
 }
 
-// A failed script is rerun after the shard's other first runs and this wait, not at once: a retry seconds later lands
-// in the same outage. PacIOOS refused or stalled connections from home for about 15 minutes on 2026-11-05 (2:33-2:44 PM
-// EST, three 5-minute probes in a row), and in CI qa-mhw's immediate retry failed every time its first run did (5 of
-// 10 sweeps, 11-01 to 11-04). One wait per shard however many failed, so a bad day costs this once, not per script.
+// A failed script is rerun on another runner and after this wait, never on its shard's runner at once. The wait: a retry
+// seconds later lands in the same outage, and PacIOOS refused or stalled connections from home for about 15 minutes on
+// 2026-11-05 (2:33-2:44 PM EST, three 5-minute probes in a row). The other runner: a GitHub runner keeps one IP for the
+// job, and some IPs cannot reach PacIOOS at all. In a probe on 2026-11-07, 4 of 20 runners failed all 20 tries over
+// 5 minutes, to its name and its bare IP, while reaching NOAA's ERDDAP every time; the other 16 never failed. In every
+// one of qa-mhw's 6 failures in 16 sweeps (11-01 to 11-07) the rerun on the same runner failed too, after the wait as
+// well as without it. One wait for the whole sweep however many failed, so a bad day costs this once, not per script.
 export const RETRY_DELAY_SECONDS = 900;
 
 /**
- * Run each named script once (run(name) → { code, output }), then, if any failed, wait(RETRY_DELAY_SECONDS) and run
- * the failed ones once more; one record per script, in the order given.
+ * A shard's runs: each named script once (run(name) → { code, output }). A pass is recorded; a failure is left pending,
+ * with the end of its output, for rerunFailed() on another runner. Returns { results, pending: [{ name, first }] }.
  */
-export async function sweep(names, run, wait, log = () => {}) {
-  const firsts = names.map((name) => {
+export function firstRuns(names, run, log = () => {}) {
+  const results = [];
+  const pending = [];
+  for (const name of names) {
     const first = run(name);
-    log(`${name}: ${first.code === 0 ? 'pass' : `failed (exit ${first.code}), rerun later`}`);
-    return [name, first];
-  });
-  const failed = firsts.filter(([, first]) => first.code !== 0).map(([name]) => name);
-  const seconds = new Map();
-  if (failed.length) {
-    log(`${failed.length} failed; rerunning after ${RETRY_DELAY_SECONDS} s: ${failed.join(', ')}`);
-    await wait(RETRY_DELAY_SECONDS);
-    for (const name of failed) seconds.set(name, run(name));
+    log(`${name}: ${first.code === 0 ? 'pass' : `failed (exit ${first.code}), rerun on another runner`}`);
+    if (first.code === 0) results.push(record(name, first));
+    else pending.push({ name, first: { code: first.code, output: first.output.slice(-OUTPUT_TAIL) } });
   }
-  return firsts.map(([name, first]) => {
-    const r = record(name, first, seconds.get(name) ?? null);
-    if (r.verdict !== 'pass') log(`${name}: ${r.verdict}`);
-    return r;
-  });
+  return { results, pending };
+}
+
+/**
+ * The rerun job: given the shards' files ({ results, notRun, pending }), if any failure is pending, wait(RETRY_DELAY_SECONDS)
+ * once, then run each pending script once more and record both runs. Returns the files with pending resolved into
+ * results, in the same order; a file with nothing pending comes back unchanged.
+ */
+export async function rerunFailed(parts, run, wait, log = () => {}) {
+  const names = parts.flatMap((p) => (p.pending ?? []).map((f) => f.name));
+  if (names.length) {
+    log(`${names.length} failed on their shard; rerunning here after ${RETRY_DELAY_SECONDS} s: ${names.join(', ')}`);
+    await wait(RETRY_DELAY_SECONDS);
+  }
+  return parts.map(({ pending = [], ...part }) => ({
+    ...part,
+    results: [
+      ...part.results,
+      ...pending.map(({ name, first }) => {
+        const r = record(name, first, run(name));
+        log(`${name}: ${r.verdict}`);
+        return r;
+      }),
+    ],
+  }));
+}
+
+/** --report's input: a file with a failure still pending has no verdict for it, so it is refused by name. */
+export function unresolved(parts) {
+  const names = parts.flatMap((p) => (p.pending ?? []).map((f) => f.name));
+  if (names.length) throw new Error(`failed once and not yet rerun: ${names.join(', ')}; run --rerun on these files first`);
 }
 
 function runOne(name, url) {
@@ -165,6 +195,7 @@ async function main(argv) {
       files = files.slice(2);
     }
     const parts = files.map((f) => JSON.parse(readFileSync(f, 'utf8')));
+    unresolved(parts);
     const results = parts.flatMap((p) => p.results);
     const notRun = parts.flatMap((p) => p.notRun);
     const missing = Math.max(0, expect - files.length);
@@ -172,12 +203,26 @@ async function main(argv) {
     return missing || results.some((r) => r.verdict === 'fail') ? FAILED_EXIT : 0;
   }
   const url = arg('--url', 'https://musharna.github.io/wildeye/');
+  const log = (line) => console.error(line);
+  if (argv.includes('--rerun')) {
+    const outDir = argv[argv.indexOf('--rerun') + 1];
+    const files = argv.slice(argv.indexOf('--rerun') + 2);
+    // every argument after the directory is a shard's file: a flag there (--url last) would be read as one
+    if (!outDir || outDir.startsWith('--')) throw new Error('--rerun needs an output directory');
+    const bad = files.filter((f) => !f.endsWith('.json'));
+    if (bad.length) throw new Error(`--rerun takes shard .json files after the directory, not: ${bad.join(' ')}`);
+    const parts = files.map((f) => JSON.parse(readFileSync(f, 'utf8')));
+    const wait = (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+    const done = await rerunFailed(parts, (name) => runOne(name, url), wait, log);
+    mkdirSync(outDir, { recursive: true });
+    done.forEach((part, k) => writeFileSync(path.join(outDir, path.basename(files[k])), JSON.stringify(part, null, 1)));
+    return 0;
+  }
   const only = arg('--only', null)?.split(',');
   const dir = path.dirname(fileURLToPath(import.meta.url));
   const { run, notRun } = plan(readdirSync(dir), { shard: arg('--shard', '0/1'), only });
-  const wait = (seconds) => new Promise((resolve) => setTimeout(resolve, seconds * 1000));
-  const results = await sweep(run, (name) => runOne(name, url), wait, (line) => console.error(line));
-  writeFileSync(arg('--out', 'qa-sweep.json'), JSON.stringify({ results, notRun }, null, 1));
+  const { results, pending } = firstRuns(run, (name) => runOne(name, url), log);
+  writeFileSync(arg('--out', 'qa-sweep.json'), JSON.stringify({ results, notRun, pending }, null, 1));
   return 0;
 }
 
