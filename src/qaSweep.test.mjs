@@ -100,6 +100,24 @@ test('the rerun job runs each pending failure once more after one wait; with not
   assert.deepEqual(same.map((p) => p.results.map((r) => r.verdict)), [['pass'], []]);
 });
 
+test("a flaky verdict names the first run's failing check even when more than the kept tail was printed after it", async () => {
+  // real child runs: the first prints a failing check, then more than OUTPUT_TAIL of log, and fails; the second passes.
+  // The shard keeps only the tail of a pending failure, so its checks are read there, from the whole output (review of #164)
+  const once = path.join(mkdtempSync(path.join(tmpdir(), 'qa-sweep-tail-')), 'ran-once');
+  const src = `import { existsSync, writeFileSync } from 'node:fs'; if (existsSync(${JSON.stringify(once)})) process.exit(0); writeFileSync(${JSON.stringify(once)}, ''); console.log(JSON.stringify({ check: 'early-tile', ok: false })); process.stdout.write('x'.repeat(${OUTPUT_TAIL + 1000}) + '\\nstill going\\n'); process.exitCode = 1;`;
+  const run = () => {
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', src], { encoding: 'utf8', maxBuffer: 8 * OUTPUT_TAIL });
+    return { code: r.status ?? 1, output: `${r.stdout}${r.stderr}` };
+  };
+  const shard = { results: [], notRun: [], ...firstRuns(['qa-t'], run) };
+  assert.equal(shard.pending[0].first.output.length, OUTPUT_TAIL); // the case: the check line is not in the kept tail
+  assert.doesNotMatch(shard.pending[0].first.output, /early-tile/);
+  const [done] = await rerunFailed([JSON.parse(JSON.stringify(shard))], run, async () => {});
+  assert.deepEqual(done.results.map((r) => [r.verdict, r.checks]), [['flaky', ['early-tile']]]);
+  // positive control: a run with no checks key is still read from its output, as before
+  assert.deepEqual(record('qa-t', { code: 1, output: '{"check":"late","ok":false}\n' }, { code: 0, output: '' }).checks, ['late']);
+});
+
 test('--report refuses a file with a failure still pending, by name; a resolved file is reported', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'qa-sweep-pending-'));
   const first = { code: 1, output: 'TypeError: fetch failed\n' };

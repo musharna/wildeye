@@ -64,10 +64,16 @@ jobs:
     needs: sweep
     # a job of its own, so a shard's failures are rerun from another runner: a runner keeps one IP for the job, and some
     # cannot reach PacIOOS at all (4 of 20 in a probe on 2026-11-07), which a rerun on the shard's own runner repeats.
-    # Also when a shard crashed: the others' failures still get their second run, and the report counts the missing file
+    # One lane per shard, in parallel, each with a shard's budget: a bad day that fails many scripts at once (a GIBS
+    # outage) costs no more time than it did, and a lane that times out loses only its shard (review of #164).
+    # Also when a shard crashed: its lane finds no file and writes none, and the report counts the missing file
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     env:
       PUPPETEER_SKIP_DOWNLOAD: '1'
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
@@ -81,19 +87,21 @@ jobs:
           cache: npm
       - run: npm ci
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        continue-on-error: true # every shard crashed: no artifact at all, and the report says 4 wrote nothing
+        continue-on-error: true # this shard crashed: no artifact, and the report counts it as wrote nothing
         with:
-          pattern: qa-first-*
-          merge-multiple: true
+          name: qa-first-${{ matrix.shard }}
           path: first
-      - name: Rerun the shards' failures on this runner, after one wait
+      - name: Rerun this shard's failures on this runner, after one wait
+        env:
+          SHARD: ${{ matrix.shard }}
         run: |
-          shopt -s nullglob
-          node scripts/qa-sweep.mjs --rerun final first/qa-sweep-*.json
+          f="first/qa-sweep-$SHARD.json"
+          if [ ! -f "$f" ]; then echo "shard $SHARD wrote no results; the report counts it"; exit 0; fi
+          node scripts/qa-sweep.mjs --rerun final "$f"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: qa-sweep-final
-          path: final/qa-sweep-*.json
+          name: qa-sweep-${{ matrix.shard }}
+          path: final/qa-sweep-${{ matrix.shard }}.json
 
   report:
     needs: rerun

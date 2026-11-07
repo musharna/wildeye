@@ -63,12 +63,14 @@ export const OUTPUT_TAIL = 64 * 1024;
  * exit codes and failing checks, and for anything but a pass the end of each run's output, so a failure seen only in
  * CI can be read from the artifact (2026-11-04: qa-readout, qa-species and qa-gibs failed in CI and no host could rerun
  * them cleanly). `second` may be left out only when `first` passed: a failing `first` with no `second` throws, since
- * "fail" means failing twice and a failing run alone has no verdict yet.
+ * "fail" means failing twice and a failing run alone has no verdict yet. A run may carry `checks` already read from
+ * its whole output (a shard's pending failure keeps only the tail); they are used in place of reading its output.
  */
 export function record(name, first, second = null) {
   if (first.code !== 0 && !second) throw new Error(`${name} failed (exit ${first.code}) and was not run again: record() needs the second run`);
   const v = verdict(first.code, second?.code);
-  const r = { name, verdict: v, codes: [first.code, second?.code ?? null], checks: v === 'pass' ? [] : failedChecks((v === 'fail' ? second : first).output) };
+  const named = v === 'fail' ? second : first;
+  const r = { name, verdict: v, codes: [first.code, second?.code ?? null], checks: v === 'pass' ? [] : (named.checks ?? failedChecks(named.output)) };
   if (v !== 'pass') r.outputs = [first, second].filter(Boolean).map((run) => run.output.slice(-OUTPUT_TAIL));
   return r;
 }
@@ -124,7 +126,8 @@ export function renderReport(results, notRun, missingShards = 0) {
 // job, and some IPs cannot reach PacIOOS at all. In a probe on 2026-11-07, 4 of 20 runners failed all 20 tries over
 // 5 minutes, to its name and its bare IP, while reaching NOAA's ERDDAP every time; the other 16 never failed. In every
 // one of qa-mhw's 6 failures in 16 sweeps (11-01 to 11-07) the rerun on the same runner failed too, after the wait as
-// well as without it. One wait for the whole sweep however many failed, so a bad day costs this once, not per script.
+// well as without it. One wait per call however many failed, so a bad day costs this once per shard's rerun lane (they
+// run in parallel), not per script.
 export const RETRY_DELAY_SECONDS = 900;
 
 /**
@@ -138,13 +141,15 @@ export function firstRuns(names, run, log = () => {}) {
     const first = run(name);
     log(`${name}: ${first.code === 0 ? 'pass' : `failed (exit ${first.code}), rerun on another runner`}`);
     if (first.code === 0) results.push(record(name, first));
-    else pending.push({ name, first: { code: first.code, output: first.output.slice(-OUTPUT_TAIL) } });
+    // the checks are read from the whole output here, where it still is: a failing check printed before the kept tail
+    // would otherwise be lost from a flaky verdict, which names the first run's checks (review of #164)
+    else pending.push({ name, first: { code: first.code, output: first.output.slice(-OUTPUT_TAIL), checks: failedChecks(first.output) } });
   }
   return { results, pending };
 }
 
 /**
- * The rerun job: given the shards' files ({ results, notRun, pending }), if any failure is pending, wait(RETRY_DELAY_SECONDS)
+ * A rerun lane (one per shard, so a bad day's reruns keep the shards' parallel budget): given shard files ({ results, notRun, pending }), if any failure is pending, wait(RETRY_DELAY_SECONDS)
  * once, then run each pending script once more and record both runs. Returns the files with pending resolved into
  * results, in the same order; a file with nothing pending comes back unchanged.
  */
