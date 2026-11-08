@@ -119,3 +119,21 @@ def test_the_expected_plant_is_exactly_0_with_no_effect_and_above_0_with_beta_1(
     on = rb.class_stats(rb.expected_cases(base, dsci, beta=1.0), dsci, draws=200)["classes"]["expected_beta_1"]
     assert not e0.excludes_zero(off["ci"]) and on["ci"][0] > 0.1
     assert sum(c["score_why"] == "stratum_flat" for c in null) > 0  # all-zero strata are dropped, not scored 0
+
+
+def test_a_case_at_the_turn_of_the_year_is_scored_as_its_own_iso_week():
+    # 2019-12-30 is ISO 2020 week 1. ISO 2020 is 100 and ISO 2024 is 200, the rest 0-2, so in its own stratum
+    # (ISO 2016-2024) the case is above 7 of 8 years: s = 7/8 - 1/2. Keyed by its calendar year (2019) it was scored
+    # as the week of 2018-12-31 (one of its own referents), in a stratum (2015-2023) that misses 2024.
+    rows, d = [], dt.date(2000, 1, 1)
+    while d <= dt.date(2026, 6, 30):
+        iy = d.isocalendar().year
+        rows.append({"mapDate": f"{d.isoformat()}T00:00:00", "dsci": {2020: 100.0, 2024: 200.0}.get(iy, float(iy % 3))})
+        d += dt.timedelta(days=1)
+    s = e0.Dsci(rows)
+    case = {"fips": "x", "start": dt.date(2019, 12, 30), "cls": "p"}
+    assert rb.case_score(case, s) == (7 / 8 - 0.5, None)
+    week53 = {"fips": "x", "start": dt.date(2021, 1, 1), "cls": "p"}  # ISO 2020 week 53: only 53-week years match
+    assert rb.case_score(week53, s)[1] in (None, "few_years") and rb.iso_year(week53["start"]) == 2020
+    plants = rb.planted_cases([case | {"id": 1}], {"x": s}, beta=0.0)
+    assert all(rb.case_score(p, s)[1] is None for p in plants)  # a drawn year is always one with a map

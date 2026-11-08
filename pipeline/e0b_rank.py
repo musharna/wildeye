@@ -23,8 +23,14 @@ from . import e0_dieoffs as e0
 MIN_STRATUM = 3  # the case year and at least 2 others
 
 
+def iso_year(d: dt.date) -> int:
+    """The year a stratum is keyed by: ISO, as same_week works in ISO weeks (2019-12-30 is ISO 2020 week 1; keying it
+    by its calendar year 2019 scored the week of 2018-12-31 as the case, found 2026-11-08 before the rules froze)."""
+    return d.isocalendar().year
+
+
 def stratum(center: int, day: dt.date, series: e0.Dsci) -> dict[int, float]:
-    """DSCI of `day`'s ISO week in each year center-4 .. center+4 that USDM has a map for."""
+    """DSCI of `day`'s ISO week in each ISO year center-4 .. center+4 that USDM has a map for."""
     out = {}
     for y in range(center - e0.YEARS_AROUND, center + e0.YEARS_AROUND + 1):
         d = e0.same_week(day, y)
@@ -56,8 +62,8 @@ def case_score(
     if "score" in c and not shift_weeks:
         return c["score"], c.get("score_why")
     day = c["start"] + dt.timedelta(weeks=shift_weeks)
-    center = c.get("stratum_year", day.year) if not shift_weeks else day.year
-    return rank_score(day.year, stratum(center, day, series))
+    center = c.get("stratum_year", iso_year(day)) if not shift_weeks else iso_year(day)
+    return rank_score(iso_year(day), stratum(center, day, series))
 
 
 def class_stats(
@@ -112,7 +118,7 @@ def planted_cases(
         s = dsci.get(c["fips"])
         if s is None:
             continue
-        vals = stratum(c["start"].year, c["start"], s)
+        vals = stratum(iso_year(c["start"]), c["start"], s)
         # every stratum year can be drawn (2000 and 2026 too), so with beta = 0 the drawn year is uniform over the
         # stratum it is scored in, and s averages exactly 0
         opts = [(y, math.exp(beta * v / 100)) for y, v in vals.items()]
@@ -127,7 +133,7 @@ def planted_cases(
                     c
                     | {
                         "start": d,
-                        "stratum_year": c["start"].year,
+                        "stratum_year": iso_year(c["start"]),
                         "cls": f"planted_beta_{beta:g}",
                     }
                 )
@@ -146,7 +152,7 @@ def expected_cases(cases: list[dict], dsci: dict, beta: float) -> list[dict]:
         s = dsci.get(c["fips"])
         if s is None:
             continue
-        vals = stratum(c["start"].year, c["start"], s)
+        vals = stratum(iso_year(c["start"]), c["start"], s)
         scored = [(rank_score(y, vals), math.exp(beta * v / 100)) for y, v in vals.items()]
         whys = {why for (sc, why), _ in scored if sc is None}
         if whys or not scored:
