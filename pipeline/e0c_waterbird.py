@@ -117,7 +117,7 @@ def verdict(real: dict, placebo: dict, planted_on: dict, planted_off: dict) -> d
 
 
 def load(cache: Path):
-    confirmed, suspect, dsci, unmapped, n_events, why = rb.load(cache)
+    confirmed, _suspect, dsci, _unmapped, _n_events, _why = rb.load(cache)
     events = json.loads((cache / "whispers_events.json").read_text())
     groups = {e["id"]: bird_group(e) for e in events}
     return confirmed, dsci, groups

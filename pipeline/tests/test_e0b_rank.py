@@ -11,7 +11,13 @@ def zero_inflated_panel(n_counties=200, seed=5):
     (first week of July, 48,022 county-years, 2026-11-08): 0 56.1%, 1-10 2.4%, 10-50 4.5%, 50-200 24.2%, >200 12.8%.
     E0's unit-test panel (uniform 0-400, no zeros) could not show the tail that voided E0; this one does (below)."""
     rng = random.Random(seed)
-    bins = [(0.561, 0, 0), (0.024, 1, 10), (0.045, 10, 50), (0.242, 50, 200), (0.128, 200, 500)]
+    bins = [
+        (0.561, 0, 0),
+        (0.024, 1, 10),
+        (0.045, 10, 50),
+        (0.242, 50, 200),
+        (0.128, 200, 500),
+    ]
 
     def draw():
         u = rng.random()
@@ -114,11 +120,17 @@ def test_the_expected_plant_is_exactly_0_with_no_effect_and_above_0_with_beta_1(
     base = cases_on(dsci)
     null = rb.expected_cases(base, dsci, beta=0.0)
     scored = [c["score"] for c in null if c["score"] is not None]
-    assert len(scored) > 200 and all(v == 0 for v in scored)  # a mid-rank averages exactly 1/2 over positions
+    assert len(scored) > 200 and all(
+        v == 0 for v in scored
+    )  # a mid-rank averages exactly 1/2 over positions
     off = rb.class_stats(null, dsci, draws=200)["classes"]["expected_beta_0"]
-    on = rb.class_stats(rb.expected_cases(base, dsci, beta=1.0), dsci, draws=200)["classes"]["expected_beta_1"]
+    on = rb.class_stats(rb.expected_cases(base, dsci, beta=1.0), dsci, draws=200)[
+        "classes"
+    ]["expected_beta_1"]
     assert not e0.excludes_zero(off["ci"]) and on["ci"][0] > 0.1
-    assert sum(c["score_why"] == "stratum_flat" for c in null) > 0  # all-zero strata are dropped, not scored 0
+    assert (
+        sum(c["score_why"] == "stratum_flat" for c in null) > 0
+    )  # all-zero strata are dropped, not scored 0
 
 
 def test_a_case_at_the_turn_of_the_year_is_scored_as_its_own_iso_week():
@@ -128,12 +140,26 @@ def test_a_case_at_the_turn_of_the_year_is_scored_as_its_own_iso_week():
     rows, d = [], dt.date(2000, 1, 1)
     while d <= dt.date(2026, 6, 30):
         iy = d.isocalendar().year
-        rows.append({"mapDate": f"{d.isoformat()}T00:00:00", "dsci": {2020: 100.0, 2024: 200.0}.get(iy, float(iy % 3))})
+        rows.append(
+            {
+                "mapDate": f"{d.isoformat()}T00:00:00",
+                "dsci": {2020: 100.0, 2024: 200.0}.get(iy, float(iy % 3)),
+            }
+        )
         d += dt.timedelta(days=1)
     s = e0.Dsci(rows)
     case = {"fips": "x", "start": dt.date(2019, 12, 30), "cls": "p"}
     assert rb.case_score(case, s) == (7 / 8 - 0.5, None)
-    week53 = {"fips": "x", "start": dt.date(2021, 1, 1), "cls": "p"}  # ISO 2020 week 53: only 53-week years match
-    assert rb.case_score(week53, s)[1] in (None, "few_years") and rb.iso_year(week53["start"]) == 2020
+    week53 = {
+        "fips": "x",
+        "start": dt.date(2021, 1, 1),
+        "cls": "p",
+    }  # ISO 2020 week 53: only 53-week years match
+    assert (
+        rb.case_score(week53, s)[1] in (None, "few_years")
+        and rb.iso_year(week53["start"]) == 2020
+    )
     plants = rb.planted_cases([case | {"id": 1}], {"x": s}, beta=0.0)
-    assert all(rb.case_score(p, s)[1] is None for p in plants)  # a drawn year is always one with a map
+    assert all(
+        rb.case_score(p, s)[1] is None for p in plants
+    )  # a drawn year is always one with a map

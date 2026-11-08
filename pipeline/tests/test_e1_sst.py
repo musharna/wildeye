@@ -108,7 +108,7 @@ def test_murre_check_fires_on_a_planted_heatwave_and_not_without_one():
     assert not cold["fired"]
 
 
-def test_download_fails_loud_on_a_curl_error_and_passes_a_good_answer():
+def test_download_fails_loud_on_a_curl_error_and_passes_a_good_answer(tmp_path):
     import pytest
 
     class R:
@@ -116,9 +116,8 @@ def test_download_fails_loud_on_a_curl_error_and_passes_a_good_answer():
             self.returncode, self.stderr = code, err
 
     seen = []
-    e1.download(
-        "https://x/y.nc", "/tmp/never", run=lambda cmd, **kw: seen.append(cmd) or R(0)
-    )
+    dest = str(tmp_path / "never.nc")
+    e1.download("https://x/y.nc", dest, run=lambda cmd, **kw: seen.append(cmd) or R(0))
     assert (
         "--fail" in seen[0]
         and "--retry-all-errors" in seen[0]
@@ -127,7 +126,7 @@ def test_download_fails_loud_on_a_curl_error_and_passes_a_good_answer():
     with pytest.raises(RuntimeError, match="curl exit 22.*404 Not Found"):
         e1.download(
             "https://x/y.nc",
-            "/tmp/never",
+            dest,
             run=lambda cmd, **kw: R(22, "curl: (22) 404 Not Found"),
         )
 

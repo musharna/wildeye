@@ -153,14 +153,23 @@ def expected_cases(cases: list[dict], dsci: dict, beta: float) -> list[dict]:
         if s is None:
             continue
         vals = stratum(iso_year(c["start"]), c["start"], s)
-        scored = [(rank_score(y, vals), math.exp(beta * v / 100)) for y, v in vals.items()]
+        scored = [
+            (rank_score(y, vals), math.exp(beta * v / 100)) for y, v in vals.items()
+        ]
         whys = {why for (sc, why), _ in scored if sc is None}
         if whys or not scored:
-            score, why = None, (sorted(whys)[0] if whys else "few_years")
+            score, why = None, (min(whys) if whys else "few_years")
         else:
             # rounded: float residue (1e-17) must not read as an effect when the CI is compared with 0
-            score, why = round(sum(sc * w for (sc, _), w in scored) / sum(w for _, w in scored), 12), None
-        out.append(c | {"score": score, "score_why": why, "cls": f"expected_beta_{beta:g}"})
+            score, why = (
+                round(
+                    sum(sc * w for (sc, _), w in scored) / sum(w for _, w in scored), 12
+                ),
+                None,
+            )
+        out.append(
+            c | {"score": score, "score_why": why, "cls": f"expected_beta_{beta:g}"}
+        )
     return out
 
 
@@ -202,8 +211,12 @@ def main(argv=None) -> None:
         "expected_beta_1": on,
         "expected_beta_0": off,
         # one random draw each, reported beside the gate, never gating
-        "planted_draw_beta_1": class_stats(planted_cases(confirmed, dsci, beta=1.0), dsci),
-        "planted_draw_beta_0": class_stats(planted_cases(confirmed, dsci, beta=0.0), dsci),
+        "planted_draw_beta_1": class_stats(
+            planted_cases(confirmed, dsci, beta=1.0), dsci
+        ),
+        "planted_draw_beta_0": class_stats(
+            planted_cases(confirmed, dsci, beta=0.0), dsci
+        ),
     }
     if not a.planted_only:
         counts = {}
@@ -226,7 +239,15 @@ def main(argv=None) -> None:
             "verdict": e0.verdict(real, placebo, on, off),
         }
     a.out.write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    show = {arm: doc[arm]["classes"] for arm in ("expected_beta_1", "expected_beta_0", "planted_draw_beta_1", "planted_draw_beta_0")}
+    show = {
+        arm: doc[arm]["classes"]
+        for arm in (
+            "expected_beta_1",
+            "expected_beta_0",
+            "planted_draw_beta_1",
+            "planted_draw_beta_0",
+        )
+    }
     if "verdict" in doc:
         show["verdict"] = {
             key: doc["verdict"][key]

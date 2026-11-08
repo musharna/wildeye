@@ -144,7 +144,11 @@ def panel(n_counties=60, seed=3):
     for i in range(n_counties):
         level = {y: rng.uniform(0, 400) for y in range(2000, 2027)}
         out[f"{i:05d}"] = e0.Dsci(
-            weekly(dt.date(2000, 1, 4), dt.date(2026, 6, 30), lambda d: level[d.year])
+            weekly(
+                dt.date(2000, 1, 4),
+                dt.date(2026, 6, 30),
+                lambda d, lv=level: lv[d.year],
+            )
         )
     return out
 

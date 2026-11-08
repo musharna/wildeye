@@ -23,9 +23,9 @@ def test_a_dropout_after_one_good_lookup_is_served_and_a_new_host_still_raises()
             raise socket.gaierror(-5, "No address associated with hostname")
         return [("ok", host)]
 
-    look = lambda h: dns_memo.lookup(
-        h, 443, ttl=300, resolve=resolver, clock=lambda: now[0]
-    )  # noqa: E731
+    def look(h):
+        return dns_memo.lookup(h, 443, ttl=300, resolve=resolver, clock=lambda: now[0])
+
     assert look("a.example") == [("ok", "a.example")] and calls == ["a.example"]
     now[0] = 100.0
     assert (
@@ -57,7 +57,9 @@ def test_installed_it_resolves_a_real_host_and_a_real_fetch_goes_through_it():
 
 
 def test_install_routes_getaddrinfo_through_the_memo(monkeypatch):
-    answers = iter([[("ip1",)], socket.gaierror(-5, "No address associated with hostname")])
+    answers = iter(
+        [[("ip1",)], socket.gaierror(-5, "No address associated with hostname")]
+    )
 
     def fake(*a, **k):
         x = next(answers)
@@ -66,6 +68,10 @@ def test_install_routes_getaddrinfo_through_the_memo(monkeypatch):
         return x
 
     monkeypatch.setattr(dns_memo, "_real", fake)
-    dns_memo.install(ttl=0.0)  # every call looks up again, so the second one meets the dropout
+    dns_memo.install(
+        ttl=0.0
+    )  # every call looks up again, so the second one meets the dropout
     assert socket.getaddrinfo("h.example", 443) == [("ip1",)]
-    assert socket.getaddrinfo("h.example", 443) == [("ip1",)]  # dropout: served from the memo
+    assert socket.getaddrinfo("h.example", 443) == [
+        ("ip1",)
+    ]  # dropout: served from the memo

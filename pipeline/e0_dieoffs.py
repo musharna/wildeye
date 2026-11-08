@@ -109,7 +109,7 @@ class Dsci:
 
 
 def same_week(d: dt.date, year: int) -> dt.date | None:
-    y, w, wd = d.isocalendar()
+    _, w, wd = d.isocalendar()
     try:
         return dt.date.fromisocalendar(year, w, wd)
     except ValueError:  # week 53 in a year that has 52

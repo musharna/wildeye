@@ -311,7 +311,7 @@ def main(argv=None) -> None:
     a = ap.parse_args(argv)
     if a.cmd == "fetch":
         return cmd_fetch(a)
-    confirmed, suspect, _dsci, _unmapped, n_events, _why = rb.load(a.e0_cache)
+    confirmed, suspect, _dsci, _unmapped, _n_events, _why = rb.load(a.e0_cache)
     events = json.loads((a.e0_cache / "whispers_events.json").read_text())
     sst = load_sst(a.cache)
     coastal = [c for c in confirmed if c["fips"] in sst]

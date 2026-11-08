@@ -60,7 +60,10 @@ def stats(mean, lo, hi, n=100):
 
 def test_verdict_reads_each_outcome_and_is_void_when_the_plant_fails_or_the_arm_is_small():
     on, off = stats(0.26, 0.25, 0.27), stats(0.0, 0.0, 0.0)
-    v = lambda real, on=on, off=off: wb.verdict(real, stats(0, -0.1, 0.1), on, off)
+
+    def v(real, on=on, off=off):
+        return wb.verdict(real, stats(0, -0.1, 0.1), on, off)
+
     assert v(stats(0.06, 0.01, 0.1))["reading"] == "detection_supported"
     assert (
         v(stats(0.0, -0.03, 0.03))["reading"] == "detection_of_finding_size_ruled_out"
