@@ -49,6 +49,28 @@ Grill ledger: `grill_wildeye_disease_program_2026-11-07.md` (outside the repo).
 - **Inconclusive**: otherwise. The objection stays open.
 - The gate's placebo is reported; it does not change the reading. One run; nothing changes after this commit.
 
-## Result
+## Result: CLOSED, inconclusive (run 2026-11-08 01:55 EST)
 
-Not run yet.
+Run: `python -m pipeline.e0c_waterbird --cache ~/.cache/wildeye/e0 --out docs/analysis/e0c_waterbird.json`; figure
+`e0c_waterbird.png` (`e0c_waterbird_figure.R`).
+
+- **Planted truth passed** (as pre-freeze): β = 0 0.0 (0.0 to 0.0), β = 1 0.279 (0.263 to 0.295).
+- **Gate, waterbird Trauma: s = +0.003 (CI −0.039 to +0.047), 168 cases in 148 counties.** The CI contains 0 but its
+  upper bound is above +0.044 by 0.003, so a detection effect the finding's size is not ruled out: **inconclusive**,
+  and E0b's detection objection stays open. Placebo +0.035 (−0.010 to +0.083).
+- **Descriptive, Bacteria split** (97.5%): waterbird events +0.074 (+0.031 to +0.116, 233 cases in 136 counties;
+  placebo +0.027, −0.022 to +0.074); other-bird events +0.028 (−0.022 to +0.078, 151 cases; placebo −0.004). E0b's
+  lean sits in waterbird events.
+
+**What this does and does not say.**
+
+- Waterbird Trauma's point estimate is near 0 while waterbird Bacteria's is +0.074. Read against that number, rather
+  than the frozen +0.044, the gate's upper bound (+0.047) would exclude a detection effect large enough to explain the
+  waterbird Bacteria lean. That comparison was not the frozen rule and is not claimed.
+- The lean sitting in waterbird events fits both stories: crowding onto fewer wetlands raises avian cholera
+  transmission and raises the chance a die-off is found. Only the gate separates them, and at 168 cases it could not.
+- Nothing more can be done with WHISPers Trauma in waterbirds: these are all the confirmed single-county US cases
+  2001–2025. A sharper test needs an outcome with known effort (e.g. refuge mortality surveys that walk the same
+  wetlands every week), not more of this series.
+
+Not for the site: the Bacteria finding still does not survive its stand-in critic.

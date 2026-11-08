@@ -1,0 +1,213 @@
+{
+ "generated_at": "2026-11-08T06:54:19+00:00",
+ "rules": "docs/analysis/e0c-waterbird-detection.md",
+ "arm_counts": {
+  "waterbird_trauma": 175,
+  "waterbird_bacteria": 237,
+  "other_bird_bacteria": 154
+ },
+ "group_counts": {
+  "waterbird": 2943,
+  "other_bird": 2639,
+  "excluded": 2490
+ },
+ "expected_beta_1": {
+  "classes": {
+   "expected_beta_1": {
+    "cases": 168,
+    "counties": 148,
+    "mean_s": 0.2792896690806726,
+    "ci": [
+     0.2627400400965629,
+     0.29514084926354706
+    ]
+   }
+  },
+  "dropped": {
+   "stratum_flat": 4,
+   "few_years": 2
+  },
+  "level": 0.95
+ },
+ "expected_beta_0": {
+  "classes": {
+   "expected_beta_0": {
+    "cases": 168,
+    "counties": 148,
+    "mean_s": 0.0,
+    "ci": [
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "dropped": {
+   "stratum_flat": 4,
+   "few_years": 2
+  },
+  "level": 0.95
+ },
+ "width_check": {
+  "seeds": 40,
+  "upper_median": 0.04054736654125963,
+  "upper_below_finding": 22,
+  "mean_of_means": -0.0011034934807256252
+ },
+ "levels": {
+  "gate": 0.95,
+  "side": 0.975
+ },
+ "real": {
+  "classes": {
+   "waterbird_trauma": {
+    "cases": 168,
+    "counties": 148,
+    "mean_s": 0.0034934807256235823,
+    "ci": [
+     -0.0394353940406572,
+     0.04652529761904762
+    ],
+    "level": 0.95
+   },
+   "other_bird_bacteria": {
+    "cases": 151,
+    "counties": 139,
+    "mean_s": 0.027719962157048247,
+    "ci": [
+     -0.021807729941291588,
+     0.07751018170426065
+    ],
+    "level": 0.975
+   },
+   "waterbird_bacteria": {
+    "cases": 233,
+    "counties": 136,
+    "mean_s": 0.07365879828326181,
+    "ci": [
+     0.03064306508629653,
+     0.11558507549361208
+    ],
+    "level": 0.975
+   }
+  },
+  "dropped": {
+   "stratum_flat": 9,
+   "few_years": 4,
+   "no_series": 1
+  }
+ },
+ "placebo": {
+  "classes": {
+   "waterbird_trauma": {
+    "cases": 171,
+    "counties": 150,
+    "mean_s": 0.03515385686438318,
+    "ci": [
+     -0.009557438794726932,
+     0.08295611849390919
+    ],
+    "level": 0.95
+   },
+   "other_bird_bacteria": {
+    "cases": 152,
+    "counties": 139,
+    "mean_s": -0.004284147869674186,
+    "ci": [
+     -0.05653153153153154,
+     0.05238486842105263
+    ],
+    "level": 0.975
+   },
+   "waterbird_bacteria": {
+    "cases": 233,
+    "counties": 137,
+    "mean_s": 0.02702840792969548,
+    "ci": [
+     -0.021956997084548107,
+     0.07392693315858453
+    ],
+    "level": 0.975
+   }
+  },
+  "dropped": {
+   "stratum_flat": 7,
+   "no_series": 1,
+   "few_years": 2
+  }
+ },
+ "verdict": {
+  "status": "CLOSED",
+  "planted_ok": true,
+  "gate": "waterbird_trauma",
+  "reading": "inconclusive",
+  "finding_tested_against": 0.044004922644163155,
+  "per_arm": {
+   "waterbird_trauma": {
+    "real": {
+     "cases": 168,
+     "counties": 148,
+     "mean_s": 0.0034934807256235823,
+     "ci": [
+      -0.0394353940406572,
+      0.04652529761904762
+     ],
+     "level": 0.95
+    },
+    "placebo": {
+     "cases": 171,
+     "counties": 150,
+     "mean_s": 0.03515385686438318,
+     "ci": [
+      -0.009557438794726932,
+      0.08295611849390919
+     ],
+     "level": 0.95
+    }
+   },
+   "waterbird_bacteria": {
+    "real": {
+     "cases": 233,
+     "counties": 136,
+     "mean_s": 0.07365879828326181,
+     "ci": [
+      0.03064306508629653,
+      0.11558507549361208
+     ],
+     "level": 0.975
+    },
+    "placebo": {
+     "cases": 233,
+     "counties": 137,
+     "mean_s": 0.02702840792969548,
+     "ci": [
+      -0.021956997084548107,
+      0.07392693315858453
+     ],
+     "level": 0.975
+    }
+   },
+   "other_bird_bacteria": {
+    "real": {
+     "cases": 151,
+     "counties": 139,
+     "mean_s": 0.027719962157048247,
+     "ci": [
+      -0.021807729941291588,
+      0.07751018170426065
+     ],
+     "level": 0.975
+    },
+    "placebo": {
+     "cases": 152,
+     "counties": 139,
+     "mean_s": -0.004284147869674186,
+     "ci": [
+      -0.05653153153153154,
+      0.05238486842105263
+     ],
+     "level": 0.975
+    }
+   }
+  }
+ }
+}
