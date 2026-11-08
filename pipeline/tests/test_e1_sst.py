@@ -162,3 +162,23 @@ def test_murre_check_fires_at_one_sd_and_not_at_half_an_sd():
     two = e1.murre_check(case, {"A": week_series(base | {2015: 13.1}, day)})
     assert 0.4 < half["mean_z"] < 0.6 and not half["fired"]
     assert two["mean_z"] > 2 and two["fired"]
+
+
+def test_a_murre_check_that_does_not_fire_voids_the_findings_too():
+    def arm(cls_rows):
+        return {"classes": cls_rows}
+
+    def row(mean, lo, hi):
+        return {"cases": 100, "counties": 50, "mean_s": mean, "ci": [lo, hi]}
+
+    real = arm({"Toxin": row(0.1, 0.05, 0.15), "Trauma": row(0.0, -0.03, 0.03)})
+    placebo = arm({"Toxin": row(0.0, -0.05, 0.05), "Trauma": row(0.0, -0.03, 0.03)})
+    on = arm({"expected_beta_1": row(0.26, 0.25, 0.27)})
+    off = arm({"expected_beta_0": row(0.0, 0.0, 0.0)})
+    fired = e1.verdict(real, placebo, on, off, murre_fired=True)
+    assert fired["status"] == "CLOSED" and fired["findings"] == [
+        "Toxin"
+    ]  # positive control
+    void = e1.verdict(real, placebo, on, off, murre_fired=False)
+    assert void["status"] == "VOID" and void["findings"] == []
+    assert not any(r["finding"] for r in void["per_class"].values())

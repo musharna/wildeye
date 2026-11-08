@@ -155,10 +155,10 @@ def test_a_case_at_the_turn_of_the_year_is_scored_as_its_own_iso_week():
         "start": dt.date(2021, 1, 1),
         "cls": "p",
     }  # ISO 2020 week 53: only 53-week years match
-    assert (
-        rb.case_score(week53, s)[1] in (None, "few_years")
-        and rb.iso_year(week53["start"]) == 2020
-    )
+    # 2016-2024 holds one 53-week ISO year (2020), so the stratum is too small to score (review of PR #167: the old
+    # `in (None, "few_years")` also passed if the case were wrongly scored)
+    assert rb.case_score(week53, s) == (None, "few_years")
+    assert rb.iso_year(week53["start"]) == 2020
     plants = rb.planted_cases([case | {"id": 1}], {"x": s}, beta=0.0)
     assert all(
         rb.case_score(p, s)[1] is None for p in plants

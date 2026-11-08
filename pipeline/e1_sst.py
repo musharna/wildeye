@@ -294,6 +294,18 @@ def relabel(stats: dict, label: str) -> dict:
     return stats | {"classes": {label: next(iter(stats["classes"].values()))}}
 
 
+def verdict(real: dict, placebo: dict, on: dict, off: dict, murre_fired: bool) -> dict:
+    """E0's verdict plus the known-positive gate. A gate that fails voids the whole verdict: status, the findings
+    list and every class's finding flag (e0.verdict clears findings only for its own two gates; review of PR #167)."""
+    v = e0.verdict(real, placebo, on, off) | {"murre_fired": murre_fired}
+    if not murre_fired:
+        v["status"] = "VOID"
+        v["findings"] = []
+        for row in v["per_class"].values():
+            row["finding"] = False
+    return v
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -353,11 +365,8 @@ def main(argv=None) -> None:
             "placebo": placebo,
             "nut_met_dev_without_murres": rb.class_stats(no_murre, sst, k=k),
             "suspect_arm": rb.class_stats(coastal_suspect, sst, k=k),
-            "verdict": e0.verdict(real, placebo, on, off)
-            | {"murre_fired": doc["murre_check"]["fired"]},
+            "verdict": verdict(real, placebo, on, off, doc["murre_check"]["fired"]),
         }
-        if not doc["murre_check"]["fired"]:
-            doc["verdict"]["status"] = "VOID"
     a.out.write_text(json.dumps(doc, indent=1, default=str) + "\n")
     show = {k: doc[k] for k in ("cases_coastal", "coastal_counties")}
     show["murre"] = {
