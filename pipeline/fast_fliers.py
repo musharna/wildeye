@@ -264,7 +264,7 @@ def duck_share(
 ) -> dict:
     base = {
         "datasetKey": EBIRD,
-        "geo_distance": f"{site['lat']},{site['lon']},{M4_KM}km",
+        "geoDistance": f"{site['lat']},{site['lon']},{M4_KM}km",  # GBIF's documented name (geo_distance also filters, checked live 2026-11-08)
         "eventDate": f"{start.isoformat()},{end.isoformat()}",
     }
     aves = gbif_count(base | {"classKey": AVES}, get)
@@ -370,14 +370,17 @@ def parse_raob_csv(text: str) -> dict[dt.datetime, list[dict]]:
     return out
 
 
-_SONDES: dict[str, dict] = {}
+_SONDES: dict[
+    tuple[str, tuple[int, ...]], dict
+] = {}  # keyed by every input: station AND seasons
 
 
 def sondes(
     station: str, years: list[int], cache: Path
 ) -> dict[dt.datetime, list[dict]]:
     """Every launch at `station` over the seasons, one IEM request per station-season, cached on disk."""
-    if station not in _SONDES:
+    key = (station, tuple(years))
+    if key not in _SONDES:
         got: dict[dt.datetime, list[dict]] = {}
         for y in years:
             (m0, d0), (m1, d1) = SEASON
@@ -398,8 +401,8 @@ def sondes(
                     f"IEM returned no launches for {station} in {y} ({f}): a station it does not serve"
                 )
             got |= season
-        _SONDES[station] = got
-    return _SONDES[station]
+        _SONDES[key] = got
+    return _SONDES[key]
 
 
 # --- run ------------------------------------------------------------------------------------------------------

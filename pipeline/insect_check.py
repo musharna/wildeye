@@ -189,7 +189,7 @@ def _get(
     tries: int = 8,
     sleep=time.sleep,
 ) -> bytes:
-    """GET (a byte range of) url. A dropped route or name lookup is retried with doubling waits (5 s ... 640 s,
+    """GET (a byte range of) url. A dropped route or name lookup is retried with doubling waits (5 s ... 320 s,
     ~10 min in all: a DNS dropout on this host outlasted the old 75 s, 2026-11-07); an HTTP 4xx raises at once."""
     for k in range(tries):
         try:

@@ -1,5 +1,6 @@
 import datetime as dt
 import json
+import urllib.parse
 
 import pytest
 
@@ -220,6 +221,30 @@ def test_pick_station_passes_over_a_station_with_no_launches_and_says_why(
     ff._SONDES.clear()
 
 
+def test_sondes_cache_serves_each_set_of_seasons_its_own_launches(
+    monkeypatch, tmp_path
+):
+    """The in-memory cache is keyed by station AND seasons: asking for 2026 after 2025 must not get 2025's launches
+    (review of PR #169: keyed by station alone, a second call with other years got the first call's)."""
+    head = b"station,validUTC,levelcode,pressure_mb,height_m,tmpc,dwpc,drct,speed_kts\n"
+
+    def get(url):
+        y = "2026" if "sts=2026" in url else "2025"
+        return head + f"KIAD,{y}-10-01 00:00:00,4,1000.0,150.0,1,1,85.0,7\n".encode()
+
+    monkeypatch.setattr(ff.ic, "_get", get)
+    monkeypatch.setattr(ff.time, "sleep", lambda s: None)
+    ff._SONDES.clear()
+    first = ff.sondes("KIAD", [2025], tmp_path)
+    second = ff.sondes("KIAD", [2026], tmp_path)
+    assert {t.year for t in first} == {2025}
+    assert {t.year for t in second} == {2026}
+    assert (
+        ff.sondes("KIAD", [2025], tmp_path) is first
+    )  # the same seasons are still served from the cache
+    ff._SONDES.clear()
+
+
 def test_duck_share_asks_gbif_for_ebird_inside_150_km_and_a_countless_answer_raises():
     asked = []
 
@@ -237,7 +262,8 @@ def test_duck_share_asks_gbif_for_ebird_inside_150_km_and_a_countless_answer_rai
     assert r == {"aves": 1000, "anatidae": 50, "share": 0.05}
     assert all(
         "datasetKey=4fa7b334-ce0d-4e88-aaae-2e0c138d049e" in u
-        and "150km" in u
+        and urllib.parse.parse_qs(urllib.parse.urlparse(u).query).get("geoDistance")
+        == ["40.0,-73.0,150km"]
         and "limit=0" in u
         for u in asked
     )
