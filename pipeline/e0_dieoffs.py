@@ -23,7 +23,6 @@ import urllib.request
 from pathlib import Path
 
 from . import whispers
-from .net import urlopen
 
 FIRST, LAST = dt.date(2001, 1, 1), dt.date(2025, 12, 31)
 YEARS_AROUND = 4
@@ -248,6 +247,28 @@ def verdict(real: dict, placebo: dict, planted_on: dict, planted_off: dict) -> d
 # --- io --------------------------------------------------------------------------------------------------------
 
 
+def _read_json(req):
+    with urlopen(req, timeout=120) as r:
+        return json.load(r)
+
+
+def _with_retries(call, what: str, tries: int = 6, wait: float = 5.0, sleep=time.sleep):
+    """call() with up to `tries` attempts on a network error (this laptop's route drops for seconds at a time:
+    'Network is unreachable', 2026-11-07), waits doubling from `wait`; the last error is raised with `what`.
+    An HTTP error status is an answer, not a dropped route, and is raised at once."""
+    import urllib.error
+
+    for k in range(tries):
+        try:
+            return call()
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+            if k == tries - 1:
+                raise RuntimeError(f"{what}: {tries} tries failed, last: {e!r}") from e
+            sleep(wait * 2**k)
+
+
 def fetch_dsci(fips: str, cache: Path, sleep: float = 1.0) -> list[dict]:
     f = cache / f"dsci_{fips}.json"
     if not f.exists():
@@ -255,8 +276,7 @@ def fetch_dsci(fips: str, cache: Path, sleep: float = 1.0) -> list[dict]:
         req = urllib.request.Request(
             url, headers={"User-Agent": whispers.UA, "Accept": "application/json"}
         )
-        with urlopen(req, timeout=120) as r:
-            body = json.load(r)
+        body = _with_retries(lambda: _read_json(req), what=f"USDM {fips}")
         if not isinstance(body, list):
             raise ValueError(f"USDM gave no DSCI list for {fips}: {str(body)[:200]}")
         # [] is a real answer: a FIPS USDM never mapped (e.g. 02261 Valdez-Cordova, split in 2019). It is cached

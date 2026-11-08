@@ -246,3 +246,33 @@ def test_the_ci_widens_with_the_number_of_classes_tested():
     )
     assert one["level"] == 0.95 and eight["level"] == pytest.approx(1 - 0.05 / 8)
     assert b[0] < a[0] and b[1] > a[1]
+
+
+def test_a_dropped_route_is_retried_an_http_error_is_not_and_the_last_failure_names_the_fetch():
+    import urllib.error
+
+    calls, waits = [], []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise urllib.error.URLError(OSError(101, "Network is unreachable"))
+        return [{"ok": 1}]
+
+    assert e0._with_retries(flaky, "USDM 01001", sleep=waits.append) == [{"ok": 1}]
+    assert len(calls) == 3 and waits == [5.0, 10.0]
+
+    def down():
+        raise urllib.error.URLError(OSError(101, "Network is unreachable"))
+
+    with pytest.raises(RuntimeError, match="USDM 01001: 6 tries failed"):
+        e0._with_retries(down, "USDM 01001", sleep=lambda s: None)
+
+    def http500():
+        calls.append(1)
+        raise urllib.error.HTTPError("u", 500, "boom", {}, None)
+
+    calls.clear()
+    with pytest.raises(urllib.error.HTTPError):
+        e0._with_retries(http500, "USDM 01001", sleep=lambda s: None)
+    assert len(calls) == 1
