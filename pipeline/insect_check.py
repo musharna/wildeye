@@ -184,7 +184,10 @@ def turn_error_deg(lat, lon, ij: tuple[int, int], geo: tuple[float, float]) -> f
 
 
 def _get(
-    url: str, rng: tuple[int, int | None] | None = None, tries: int = 8, sleep=time.sleep
+    url: str,
+    rng: tuple[int, int | None] | None = None,
+    tries: int = 8,
+    sleep=time.sleep,
 ) -> bytes:
     """GET (a byte range of) url. A dropped route or name lookup is retried with doubling waits (5 s ... 640 s,
     ~10 min in all: a DNS dropout on this host outlasted the old 75 s, 2026-11-07); an HTTP 4xx raises at once."""

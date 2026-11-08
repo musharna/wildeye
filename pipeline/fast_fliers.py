@@ -202,7 +202,7 @@ def weekly_fast_share(nights: dict) -> dict[str, float]:
     """{ISO week 'YYYY-Www': fast share} pooling the week's class densities."""
     weeks: dict[str, dict] = {}
     for n, d in nights.items():
-        y, w, _ = dt.date.fromisoformat(n).isocalendar()
+        _, w, _ = dt.date.fromisoformat(n).isocalendar()
         acc = weeks.setdefault(f"W{w:02d}", {c: 0.0 for c in CLASSES})
         for c in CLASSES:
             acc[c] += d[c]
@@ -427,7 +427,9 @@ def cmd_ebird(a):
     a.out.write_text(json.dumps(doc, indent=1) + "\n")
 
 
-RAP_LAG = dt.timedelta(hours=3)  # an RAP analysis hour is on S3 about 1 h after it; 3 h is margin
+RAP_LAG = dt.timedelta(
+    hours=3
+)  # an RAP analysis hour is on S3 about 1 h after it; 3 h is margin
 
 
 def season_over(windows: dict, now: dt.datetime) -> None:
@@ -541,7 +543,7 @@ def cmd_run(a):
             rap = class_density(
                 profs, lambda t, sid=sid: (winds.get(ic.nearest_hour(t)) or {}).get(sid)
             )
-            raob = class_density(profs, lambda t: col)
+            raob = class_density(profs, lambda t, col=col: col)
             pairs.setdefault(sid, {})[n.isoformat()] = (rap, raob)
             rcol = winds.get(h00, {}).get(sid)
             for p in ic.RAOB_LEVELS_HPA:

@@ -266,7 +266,9 @@ def test_get_rides_out_a_long_name_lookup_dropout_and_a_4xx_raises_at_once(monke
     def dns_down_then_up(req, timeout=None):
         calls.append(req.full_url)
         if len(calls) < 7:  # six failures: the old 6-try, 75 s schedule gave up here
-            raise urllib.error.URLError(OSError(-5, "No address associated with hostname"))
+            raise urllib.error.URLError(
+                OSError(-5, "No address associated with hostname")
+            )
         return Resp(b"grib")
 
     monkeypatch.setattr(urllib.request, "urlopen", dns_down_then_up)
