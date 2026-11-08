@@ -7,7 +7,7 @@ WHISPers cause class at once, whether die-offs start in drier weeks than the sam
 E0 is drought only; heat, marine heatwaves and algal blooms need a temperature history wildeye does not hold
 yet and are a later E1.
 
-Rules written 2026-11-07 ~22:30 EST, **before any WHISPers event was joined to a drought value**. Grill ledger:
+Rules written 2026-11-07 ~22:14 EST (commit cb4c76ad3), **before any WHISPers event was joined to a drought value**. Grill ledger:
 `grill_wildeye_disease_program_2026-11-07.md` (outside the repo); prior-art map:
 `triage_wildeye_disease_seam_2026-11-07.md` (outside the repo).
 
