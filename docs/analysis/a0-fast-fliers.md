@@ -24,7 +24,7 @@ count was fetched**. Grill ledger: `grill_wildeye_disease_program_2026-11-07.md`
 
 - **Data.** The stored 10-minute profiles of all 20 radars (`pipeline/sites.json`), falls 2025 and 2026
   (Aug 1 – Nov 15, `pipeline/bird_seasons.py`), nights as `pipeline/bird_nights.py` defines them. No new radar scans.
-  *Clarified 2026-11-08 ~01:30 EST, before any gate was computed (the only numbers seen are the 3-night pilot's:
+  *Clarified 2026-11-08 01:13 EST, before any gate was computed (the only numbers seen are the 3-night pilot's:
   M0 and the Aug 1–3 classes).* Fall 2026 is stored in two places: the season backfill (`vp-season`, Aug 1 – Sep 27)
   and the nightly cron's store (msi-4080 `~/.cache/wildeye/vp`, Sep 27 on). The run reads their union
   (`~/.cache/wildeye/vp-a0`: hard links of the first, then the second pulled with `--ignore-existing`; 0 file names
