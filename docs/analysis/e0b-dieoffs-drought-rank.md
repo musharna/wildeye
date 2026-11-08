@@ -68,3 +68,37 @@ the real cache's mix (0: 56%, 1–10: 2.4%, 10–50: 4.5%, 50–200: 24%, > 200:
   contains 0, and the planted truth passed. **CLOSED** when every tested class has a verdict, findings or not;
   **VOID** if Trauma or the planted truth fails.
 - One run. No threshold, window, stratum, class rule or score changes after this file is committed.
+
+## Result: CLOSED, one finding (run 2026-11-08 01:40 EST)
+
+Run: `python -m pipeline.e0b_rank --cache ~/.cache/wildeye/e0 --out docs/analysis/e0b_dieoffs.json`; figure
+`e0b_dieoffs.png` (`e0b_dieoffs_figure.R`). 5,783 confirmed cases; scored 5,584 (148 flat strata, 32 counties USDM
+never mapped, 19 strata with < 3 years). k = 8, CIs at 99.375%.
+
+- **Controls passed.** Expected plant β = 0: 0.0 (CI 0.0 to 0.0); β = 1: 0.2645 (0.2599 to 0.2694). Trauma: +0.012
+  (−0.017 to +0.045). The random-draw plant read −0.0087 (−0.0165 to −0.0010), as on the pre-freeze run; not gating.
+- **Finding: Bacteria**, s = +0.044 (CI +0.011 to +0.081, 474 cases in 309 counties); placebo +0.013 (−0.026 to
+  +0.050). Bacterial die-offs start in weeks that rank drier than the same week in the neighbouring years: mean rank
+  0.544 where 0.5 is no difference, about a sixth of what the β = 1 plant reads. By major diagnosis the class is
+  avian cholera 200 of 483 confirmed events, salmonellosis 136, and 11 smaller diagnoses (composition only; no
+  diagnosis was tested on its own).
+- **Not findings.** Virus +0.038 (+0.011 to +0.068) and Other +0.023 (+0.001 to +0.044) read above 0, but so do their
+  placebos (+0.053, +0.022 to +0.085; +0.030, +0.008 to +0.050). Toxin, the stated hypothesis (botulism): +0.017
+  (−0.012 to +0.045), not supported. Fungus +0.004, Nut/Met/Dev +0.016, Parasite −0.001: CIs contain 0.
+- **Suspect-only arm** (sensitivity, no class has ≥ 76 cases except Toxin, Trauma, Virus): Bacteria +0.066 (−0.023
+  to +0.159), same sign, CI through 0.
+
+**Limits, and the strongest stand-in objection.**
+
+- The effect is small, and its lower bound (+0.011) is near 0. It is one run of one frozen rule over 8 classes.
+- *Detection, not disease* (Schwartz-style: who reports): in dry weeks birds crowd onto fewer wetlands, so a die-off
+  may be easier to find and report, not more likely to happen. Trauma, which shares the reporting chain and did not
+  move, argues against a general reporting effect but not against one specific to waterbird gatherings. E0b cannot
+  separate the two.
+- The +26-week placebo is not a clean null for slow drought: a drought spell can last past 26 weeks, so a real
+  effect can show in the placebo too. That is a reason Virus and Other might be real; under the frozen rule they are
+  not claimed.
+- Multi-county events (478) are left out, as in E0.
+
+Not for the site yet: the program's bar is a result that survives its stand-in critic, and the detection objection
+above is open.
