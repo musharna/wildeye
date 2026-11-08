@@ -24,6 +24,14 @@ count was fetched**. Grill ledger: `grill_wildeye_disease_program_2026-11-07.md`
 
 - **Data.** The stored 10-minute profiles of all 20 radars (`pipeline/sites.json`), falls 2025 and 2026
   (Aug 1 – Nov 15, `pipeline/bird_seasons.py`), nights as `pipeline/bird_nights.py` defines them. No new radar scans.
+  *Clarified 2026-11-08 ~01:30 EST, before any gate was computed (the only numbers seen are the 3-night pilot's:
+  M0 and the Aug 1–3 classes).* Fall 2026 is stored in two places: the season backfill (`vp-season`, Aug 1 – Sep 27)
+  and the nightly cron's store (msi-4080 `~/.cache/wildeye/vp`, Sep 27 on). The run reads their union
+  (`~/.cache/wildeye/vp-a0`: hard links of the first, then the second pulled with `--ignore-existing`; 0 file names
+  in both, 0 profile times in both on the Sep 26–28 nights at all 20 radars, ~73 profiles per radar-night either
+  side). The first full run was started on Nov 7 while fall 2026 was still going on; it stopped at an RAP hour not yet
+  published (2026-11-08 06 UTC). The binding run waits until the Nov 15 night has ended; `fast_fliers.season_over`
+  now refuses any earlier run.
 - **Airspeed.** Per bin, as `pipeline/insect_check.py` computes it: |vol2bird (u, v) − RAP wind at the bin's middle
   height|, RAP hour nearest the profile, turned to earth-relative.
 - **Classes.** Insect-like < 5 m/s (as `bird-insects.md`); **slow** 5 ≤ a < 12; intermediate 12 ≤ a < 15 (reported,

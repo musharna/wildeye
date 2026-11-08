@@ -427,6 +427,20 @@ def cmd_ebird(a):
     a.out.write_text(json.dumps(doc, indent=1) + "\n")
 
 
+RAP_LAG = dt.timedelta(hours=3)  # an RAP analysis hour is on S3 about 1 h after it; 3 h is margin
+
+
+def season_over(windows: dict, now: dt.datetime) -> None:
+    """Refuse to run while any night in the rules' window has not ended (its RAP hours would 404 part way through,
+    and a fall cut short is not the fall the rules name)."""
+    last = max(r for _, r in windows.values())
+    if last + RAP_LAG > now:
+        raise SystemExit(
+            f"the season is not over: its last night ends {last:%Y-%m-%d %H:%M} UTC; run after "
+            f"{last + RAP_LAG:%Y-%m-%d %H:%M} UTC"
+        )
+
+
 def cmd_run(a):
     from . import dns_memo
 
@@ -445,6 +459,7 @@ def cmd_run(a):
         for sid in sids
         for n in nights
     }
+    season_over(windows, dt.datetime.now(dt.UTC))
     hours = sorted(
         {
             ic.nearest_hour(s) + dt.timedelta(hours=k)

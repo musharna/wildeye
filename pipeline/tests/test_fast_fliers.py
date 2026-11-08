@@ -302,3 +302,14 @@ def test_merged_area_ids_are_skipped_for_the_real_station_and_an_empty_season_ra
     )
     assert len(ff.sondes("KOKX", [2025], tmp_path)) == 1
     ff._SONDES.clear()
+
+
+def test_the_run_refuses_a_season_whose_last_night_has_not_ended():
+    end = dt.datetime(2026, 11, 16, 11, 30, tzinfo=dt.UTC)
+    windows = {("KOKX", dt.date(2026, 11, 15)): (end - dt.timedelta(hours=13), end),
+               ("KOKX", dt.date(2026, 8, 1)): (dt.datetime(2026, 8, 1, 0, tzinfo=dt.UTC), dt.datetime(2026, 8, 1, 10, tzinfo=dt.UTC))}
+    with pytest.raises(SystemExit, match="not over: its last night ends 2026-11-16 11:30 UTC; run after 2026-11-16 14:30"):
+        ff.season_over(windows, dt.datetime(2026, 11, 8, 6, tzinfo=dt.UTC))
+    with pytest.raises(SystemExit, match="not over"):
+        ff.season_over(windows, end + dt.timedelta(hours=2))  # inside the RAP lag
+    assert ff.season_over(windows, end + dt.timedelta(hours=3, minutes=1)) is None  # over: the run goes ahead
