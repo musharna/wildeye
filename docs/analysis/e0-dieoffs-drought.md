@@ -57,3 +57,33 @@ Rules written 2026-11-07 ~22:14 EST (commit cb4c76ad3), **before any WHISPers ev
   the planted truth passed.
 - **CLOSED** when every tested class has a verdict, findings or not. **VOID** if Trauma or the planted truth fails.
 - No threshold, window, class rule or referent rule changes after this file is committed.
+
+## Result: VOID (run 2026-11-08 01:14 EST)
+
+Run: `python -m pipeline.e0_dieoffs run --cache ~/.cache/wildeye/e0` → `e0_dieoffs.json`; figure `e0_dieoffs.png`
+(`e0_dieoffs_figure.R`). 8,072 WHISPers events; 5,783 confirmed one-county US cases (1,017 suspect, the
+sensitivity arm); not cases: 478 multi-county, 362 outside 2001–2025, 154 no diagnosis, 147 not mortality, 120
+outside the US, 11 no county. 11 county codes USDM never mapped (CT's 8 old counties, 02261, 60010, 60050, 74300).
+All 8 classes had ≥ 50 cases, so k = 8 and the CIs are at 99.375%.
+
+**Both design controls failed, so no class is a finding:**
+
+- **Planted truth: failed.** The plant with no drought effect (β = 0) read mean z 0.73, CI 0.30 to 1.35 (5,515
+  cases); it must contain 0. The β = 1 plant was recovered (2.89, CI 2.30 to 3.64).
+- **Trauma: failed.** Mean z 0.35, CI 0.07 to 0.79 (775 cases); it must contain 0.
+- Every class's real CI and every placebo CI sits right of 0 or touches it (lowest: Parasite −0.10 to 0.45 real,
+  Nut/Met/Dev −0.04 to 0.53 placebo). Toxin, the one stated hypothesis, read 1.23 (0.17 to 3.14) at real dates and
+  1.22 (0.09 to 4.44) 26 weeks later: no difference to claim.
+
+**Why (diagnosed after the verdict; does not change it).** `analysis/e0_null_bias.py` → `e0_null_bias.json`,
+figure `e0_null_bias.png`. Under the β = 0 plant the median z is −0.47 and the mean 0.73: 2.0% of cases have
+z > 5 (largest 1,143), weeks of drought among calm referent years whose SD is near 0, while z cannot fall below
+about −3.3. DSCI is mostly 0 with rare spikes, and the mean of z over such series is pulled up by that tail. Clipped
+to ±3 the null mean is −0.02; a rank statistic (share of referents below the case week) averages 0.492 (0.5 = no
+effect). Not the cause: years at the edges of the record (restricted to 2005–2021 the null mean is still 0.39) or
+a drought trend (mid-July mean DSCI by year moves 15 to 174 with no direction). The unit-test plant passed because
+its synthetic DSCI was uniform on 0–400 with no zeros; the plant on the real series is the one that caught it.
+
+**What follows.** E0 stays VOID. A redesign (rank or clipped statistic, frozen before running) would be E0b, a new
+rules file. Disclosure for it: the first diagnostic run also printed real Trauma (rank 0.511, clipped mean 0.07) and
+Toxin (0.516, 0.09), so E0b is not blind for those two classes.
