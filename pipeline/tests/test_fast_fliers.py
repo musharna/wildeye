@@ -173,11 +173,51 @@ def test_near_stations_takes_the_nearest_within_50_km_only():
     sites = {"KOKX": {"lat": 40.8656, "lon": -72.8639}}
     feats = [
         {"geometry": {"coordinates": [-72.86, 40.87]}, "properties": {"sid": "OKX"}},
-        {"geometry": {"coordinates": [-72.0, 41.3]}, "properties": {"sid": "FAR"}},
+        {
+            "geometry": {"coordinates": [-72.6, 40.9]},
+            "properties": {"sid": "FAR"},
+        },  # ~22 km
+        {
+            "geometry": {"coordinates": [-72.0, 41.3]},
+            "properties": {"sid": "OUT85"},
+        },  # ~85 km, beyond 50
         {"geometry": {"coordinates": [-75.0, 40.0]}, "properties": {"sid": "OUT"}},
     ]
-    assert ff.near_stations(sites, feats)["KOKX"]["station"] == "OKX"
+    assert [c["station"] for c in ff.near_stations(sites, feats)["KOKX"]] == [
+        "OKX",
+        "FAR",
+    ]
     assert ff.near_stations(sites, feats[2:]) == {}
+
+
+def test_pick_station_passes_over_a_station_with_no_launches_and_says_why(
+    tmp_path, monkeypatch
+):
+    head = b"station,validUTC,levelcode,pressure_mb,height_m,tmpc,dwpc,drct,speed_kts\n"
+    row = b"KIAD,2025-10-01 00:00:00,4,1000.0,150.0,1,1,85.0,7\n"
+    monkeypatch.setattr(
+        ff.ic, "_get", lambda url: head + (row if "KIAD" in url else b"")
+    )
+    monkeypatch.setattr(ff.time, "sleep", lambda s: None)
+    ff._SONDES.clear()
+    pick, skipped = ff.pick_station(
+        [{"station": "KNEL", "km": 13.2}, {"station": "KIAD", "km": 40.0}],
+        [2025],
+        tmp_path,
+    )
+    assert pick == {"station": "KIAD", "km": 40.0}
+    assert [s["station"] for s in skipped] == ["KNEL"] and "no launches" in skipped[0][
+        "why"
+    ]
+    pick, skipped = ff.pick_station([{"station": "KNEL", "km": 13.2}], [2025], tmp_path)
+    assert pick is None and len(skipped) == 1
+    monkeypatch.setattr(
+        ff.ic, "_get", lambda url: b"station,validUTC\n"
+    )  # a broken answer is not "no launches"
+    ff._SONDES.clear()
+    with pytest.raises(ValueError, match="header lacks"):
+        ff.pick_station([{"station": "KXXX", "km": 1.0}], [2024], tmp_path)
+    ff._SONDES.clear()
 
 
 def test_duck_share_asks_gbif_for_ebird_inside_150_km_and_a_countless_answer_raises():
@@ -216,3 +256,49 @@ def test_iso_weeks_cover_the_season_once():
 def test_verdict_is_fired_only_when_every_gate_passes():
     assert ff.verdict({"M0": {"passes": True}, "M1": {"passes": True}}) == "FIRED"
     assert ff.verdict({"M0": {"passes": True}, "M1": {"passes": False}}) == "VOID"
+
+
+def test_raob_csv_groups_levels_by_launch_reads_m_as_missing_and_refuses_a_header_without_wind():
+    text = (
+        "station,validUTC,levelcode,pressure_mb,height_m,tmpc,dwpc,drct,speed_kts,bearing,range_sm\n"
+        "KOKX,2025-10-01 00:00:00,4,1000.0,150.0,20.8,13.8,85.0,7,M,M\n"
+        "KOKX,2025-10-01 00:00:00,4,1002.0,132.47,20.8,13.8,M,M,M,M\n"
+        "KOKX,2025-10-01 12:00:00,4,925.0,800.0,15.0,10.0,270.0,20,M,M\n"
+    )
+    got = ff.parse_raob_csv(text)
+    t0 = dt.datetime(2025, 10, 1, 0, tzinfo=dt.UTC)
+    assert sorted(got) == [t0, dt.datetime(2025, 10, 1, 12, tzinfo=dt.UTC)]
+    assert got[t0][0] == {"pres": 1000.0, "hght": 150.0, "drct": 85.0, "sknt": 7.0}
+    assert got[t0][1]["drct"] is None and got[t0][1]["sknt"] is None
+    assert ff.raob_column(got[t0]) is None  # one level with wind is not a column
+    assert (
+        ff.ic.raob_uv(got[t0], 1000.0) is not None
+    )  # the M0 reader takes these rows as they are
+    with pytest.raises(ValueError, match="header lacks"):
+        ff.parse_raob_csv(
+            "station,validUTC,pressure_mb,height_m\nKOKX,2025-10-01 00:00:00,1000,150\n"
+        )
+
+
+def test_merged_area_ids_are_skipped_for_the_real_station_and_an_empty_season_raises(
+    tmp_path, monkeypatch
+):
+    sites = {"KJAX": {"lat": 30.4847, "lon": -81.7019}}
+    feats = [
+        {"geometry": {"coordinates": [-81.70, 30.48]}, "properties": {"sid": "_JAX"}},
+        {"geometry": {"coordinates": [-81.68, 30.50]}, "properties": {"sid": "KJAX"}},
+    ]
+    assert [c["station"] for c in ff.near_stations(sites, feats)["KJAX"]] == ["KJAX"]
+    head = b"station,validUTC,levelcode,pressure_mb,height_m,tmpc,dwpc,drct,speed_kts\n"
+    monkeypatch.setattr(ff.ic, "_get", lambda url: head)
+    monkeypatch.setattr(ff.time, "sleep", lambda s: None)
+    ff._SONDES.clear()
+    with pytest.raises(ValueError, match="no launches for KZZZ"):
+        ff.sondes("KZZZ", [2025], tmp_path)
+    monkeypatch.setattr(
+        ff.ic,
+        "_get",
+        lambda url: head + b"KOKX,2025-10-01 00:00:00,4,1000.0,150.0,1,1,85.0,7\n",
+    )
+    assert len(ff.sondes("KOKX", [2025], tmp_path)) == 1
+    ff._SONDES.clear()

@@ -40,7 +40,9 @@ count was fetched**. Grill ledger: `grill_wildeye_disease_program_2026-11-07.md`
   in each fall. Positive control in the same gate: the slow class's median night falls between Sep 10 and Oct 20
   (the eastern songbird peak) at ≥ 14 of 20 radars; if it does not, the slow class is not songbirds and M2 fails.
 - **M3 a second wind engine.** A fast bin could be a songbird whose wind was misread by 3+ m/s. At every radar with
-  an upper-air station ≤ 50 km away (IEM station list, chosen by distance before any profile is read), profiles
+  an upper-air station ≤ 50 km away (IEM station list, chosen by distance before any profile is read; the
+  nearest one that launched that fall, skipping IEM's merged `_XXX` area ids, which its CSV service does not
+  serve; every station passed over is listed in the output: clarified 2026-11-07 before any M3 number existed), profiles
   within 30 min of 00Z get their airspeed again from the radiosonde wind (linear in height). Over those nights:
   median Spearman ≥ 0.6 between the RAP and radiosonde nightly fast shares, and the pooled fast share by
   radiosonde within 0.5–2× the RAP one. Deepest shared layer: vol2bird's (u, v), common to both; the error under

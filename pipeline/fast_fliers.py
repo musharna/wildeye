@@ -288,18 +288,42 @@ def km(lat1, lon1, lat2, lon2) -> float:
 
 
 def near_stations(sites: dict, stations: list[dict]) -> dict[str, dict]:
-    """{site: nearest RAOB station within M3_MAX_KM}, from the IEM station GeoJSON features."""
+    """{site: nearest RAOB station within M3_MAX_KM}, from the IEM station GeoJSON features. IEM's '_XXX' ids are
+    merged 'area' series of nearby launch sites (e.g. _JAX = KNIP KAYS KJAX); its CSV service answers them with a
+    header and no rows, so they are skipped and the real station beside them is used. Returns every candidate
+    within M3_MAX_KM, nearest first; pick_station takes the nearest one that launched."""
     out = {}
     for sid, s in sites.items():
-        best = None
+        cands = []
         for f in stations:
+            if f["properties"]["sid"].startswith("_"):
+                continue
             lon, lat = f["geometry"]["coordinates"][:2]
             d = km(s["lat"], s["lon"], lat, lon)
-            if d <= M3_MAX_KM and (best is None or d < best["km"]):
-                best = {"station": f["properties"]["sid"], "km": round(d, 1)}
-        if best:
-            out[sid] = best
+            if d <= M3_MAX_KM:
+                cands.append({"station": f["properties"]["sid"], "km": round(d, 1)})
+        if cands:
+            out[sid] = sorted(cands, key=lambda c: c["km"])
     return out
+
+
+class NoLaunches(ValueError):
+    """IEM holds no launches for a station in a season (a listed station that does not fly, e.g. KNEL in 2025)."""
+
+
+def pick_station(
+    cands: list[dict], years: list[int], cache: Path
+) -> tuple[dict | None, list[dict]]:
+    """The nearest candidate with launches in every season, and the ones passed over (with why)."""
+    skipped = []
+    for c in cands:
+        try:
+            sondes(c["station"], years, cache)
+        except NoLaunches as e:
+            skipped.append(c | {"why": str(e)})
+            continue
+        return c, skipped
+    return None, skipped
 
 
 def raob_column(rows: list[dict]) -> dict | None:
@@ -314,6 +338,68 @@ def raob_column(rows: list[dict]) -> dict | None:
         return None
     hs = sorted(pts)
     return {"hgt": hs, "u": [pts[h][0] for h in hs], "v": [pts[h][1] for h in hs]}
+
+
+IEM_RAOB_CSV = "https://mesonet.agron.iastate.edu/cgi-bin/request/raob.py"
+
+
+def parse_raob_csv(text: str) -> dict[dt.datetime, list[dict]]:
+    """IEM's RAOB CSV (one row per level) -> {launch time: rows as raob.py names them: pres, hght, drct, sknt}.
+    'M' is missing. A header that lacks a needed column raises rather than reading every level as missing."""
+    lines = text.strip().splitlines()
+    head = lines[0].split(",") if lines else []
+    need = ("validUTC", "pressure_mb", "height_m", "drct", "speed_kts")
+    if any(c not in head for c in need):
+        raise ValueError(f"IEM RAOB CSV header lacks {need}: {head}")
+    ix = {c: head.index(c) for c in need}
+    num = lambda s: None if s in ("M", "") else float(s)
+    out: dict[dt.datetime, list[dict]] = {}
+    for line in lines[1:]:
+        f = line.split(",")
+        t = dt.datetime.strptime(f[ix["validUTC"]], "%Y-%m-%d %H:%M:%S").replace(
+            tzinfo=dt.UTC
+        )
+        out.setdefault(t, []).append(
+            {
+                "pres": num(f[ix["pressure_mb"]]),
+                "hght": num(f[ix["height_m"]]),
+                "drct": num(f[ix["drct"]]),
+                "sknt": num(f[ix["speed_kts"]]),
+            }
+        )
+    return out
+
+
+_SONDES: dict[str, dict] = {}
+
+
+def sondes(
+    station: str, years: list[int], cache: Path
+) -> dict[dt.datetime, list[dict]]:
+    """Every launch at `station` over the seasons, one IEM request per station-season, cached on disk."""
+    if station not in _SONDES:
+        got: dict[dt.datetime, list[dict]] = {}
+        for y in years:
+            (m0, d0), (m1, d1) = SEASON
+            f = cache / f"raob_{station}_{y}.csv"
+            if not f.exists():
+                q = urllib.parse.urlencode(
+                    {
+                        "station": station,
+                        "sts": f"{y}-{m0:02d}-{d0:02d}T00:00Z",
+                        "ets": f"{y}-{m1:02d}-{d1 + 1:02d}T12:00Z",
+                    }
+                )
+                f.write_bytes(ic._get(f"{IEM_RAOB_CSV}?{q}"))
+                time.sleep(2)
+            season = parse_raob_csv(f.read_text())
+            if not season:
+                raise NoLaunches(
+                    f"IEM returned no launches for {station} in {y} ({f}): a station it does not serve"
+                )
+            got |= season
+        _SONDES[station] = got
+    return _SONDES[station]
 
 
 # --- run ------------------------------------------------------------------------------------------------------
@@ -367,15 +453,23 @@ def cmd_run(a):
         }
     )
     t0 = time.monotonic()
-    with cf.ThreadPoolExecutor(4) as ex:
+    # S3 latency, not bandwidth, sets the fetch pace; decoding each GRIB (~2.5 s) sets the rest: both in parallel
+    with cf.ThreadPoolExecutor(a.fetch_threads) as ex:
         for k, _ in enumerate(ex.map(lambda h: ic.fetch_hour(h, a.cache), hours)):
-            if k % 24 == 0:
+            if k % 100 == 0:
                 print(
                     f"fetched {k + 1}/{len(hours)} in {time.monotonic() - t0:.0f} s",
                     flush=True,
                 )
     fetch_s = time.monotonic() - t0
-    winds = {h: ic.columns(ic.fetch_hour(h, a.cache), sites) for h in hours}
+    paths = [ic.fetch_hour(h, a.cache) for h in hours]  # cached now: no network
+    with cf.ProcessPoolExecutor(a.workers) as ex:
+        cols = list(ex.map(ic.columns, paths, [sites] * len(paths), chunksize=8))
+    winds = dict(zip(hours, cols))
+    print(
+        f"decoded {len(hours)} hours in {time.monotonic() - t0 - fetch_s:.0f} s",
+        flush=True,
+    )
     turn = max(c["turn_error_deg"] for cols in winds.values() for c in cols.values())
     classes, mt = {}, {}
     for sid in sids:
@@ -391,9 +485,16 @@ def cmd_run(a):
             mt.setdefault(sid, {})[n.isoformat()] = night_total(profs, sunset, sunrise)[
                 "mt_birds_km"
             ]
-    stations = near_stations(
+    cands = near_stations(
         sites, json.loads(ic._get(IEM_RAOB_STATIONS).decode())["features"]
     )
+    stations, skipped = {}, {}
+    for sid, cs in cands.items():
+        pick, passed = pick_station(cs, years, a.cache)
+        if passed:
+            skipped[sid] = passed
+        if pick:
+            stations[sid] = pick
     pairs, errs = {}, []
     for sid, st in stations.items():
         for n in nights:
@@ -415,16 +516,8 @@ def cmd_run(a):
             )
             if not profs:
                 continue
-            cache = a.cache / f"raob_{st['station']}_{h00:%Y%m%d%H}.json"
-            if not cache.exists():
-                cache.write_bytes(
-                    ic._get(
-                        f"{ic.IEM_RAOB}?ts={h00:%Y%m%d%H%M}&station={st['station']}"
-                    )
-                )
-                time.sleep(2)
-            got = json.loads(cache.read_text()).get("profiles") or []
-            col = raob_column(got[0]["profile"]) if got else None
+            rows = sondes(st["station"], years, a.cache).get(h00)
+            col = raob_column(rows) if rows else None
             if col is None:
                 continue
             rap = class_density(
@@ -434,7 +527,7 @@ def cmd_run(a):
             pairs.setdefault(sid, {})[n.isoformat()] = (rap, raob)
             rcol = winds.get(h00, {}).get(sid)
             for p in ic.RAOB_LEVELS_HPA:
-                obs = ic.raob_uv(got[0]["profile"], float(p))
+                obs = ic.raob_uv(rows, float(p))
                 if obs is not None and rcol is not None:
                     ue, ve = ic.col_at_pressure(rcol, p)
                     errs.append(math.hypot(ue - obs[0], ve - obs[1]))
@@ -475,6 +568,7 @@ def cmd_run(a):
         "hours": len(hours),
         "rap_fetch_s": round(fetch_s),
         "stations": stations,
+        "stations_skipped": skipped,
         "verdict": verdict(gates),
         "gates": gates,
         "classes": {str(y): v for y, v in classes.items()},
@@ -507,6 +601,10 @@ def main(argv=None):
     r.add_argument("--ebird", type=Path, default=None)
     r.add_argument(
         "--limit-nights", type=int, default=0, help="pilot: the first N nights only"
+    )
+    r.add_argument("--fetch-threads", type=int, default=12)
+    r.add_argument(
+        "--workers", type=int, default=12, help="processes decoding RAP files"
     )
     a = ap.parse_args(argv)
     if a.cmd == "run":
