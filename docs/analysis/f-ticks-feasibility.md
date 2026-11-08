@@ -6,8 +6,8 @@ written feasibility verdict, not a run. Written 2026-11-08 01:44 EST. Grill ledg
 
 ## Verdict: not feasible with the data wildeye holds
 
-No outcome in reach measures ticks arriving with birds, and the one tick series wildeye has (NEON) sits near only
-6 of the 20 radars. F reopens only if one of the routes under "What would change it" appears.
+No outcome in reach measures ticks arriving with birds, and the one tick series wildeye has (NEON) has sites near
+only 4 of the 20 radars (6 sites). F reopens only if one of the routes under "What would change it" appears.
 
 ## Why
 
@@ -19,9 +19,11 @@ No outcome in reach measures ticks arriving with birds, and the one tick series 
   2021, *The Great Lakes Entomologist* 53, doi:10.22543/0090-0222.2378). Local larvae dominate drag counts (OSBS,
   August 2026: 5,700 of 5,727 ticks). A season's bird delivery would not show in them; this is reasoned from those
   numbers, not a computed power analysis.
-- **Too few sites.** 6 of NEON's 47 sites lie within 150 km of a wildeye radar, and 3 of those share one radar
-  (BLAN 49 km, SCBI 58, SERC 80 from KLWX; DSNY 77 from KMLB; OSBS 93 from KJAX; HARV 107 from KBOX; computed from
-  `public/data/neon-vectors.geojson` and `pipeline/sites.json`, 2026-11-08). With two falls of radar, that is no
+- **Too few sites.** 6 of NEON's 47 sites lie within 150 km of a wildeye radar, and they touch only 4 radars, since
+  3 share one (BLAN 49 km, SCBI 58, SERC 80 from KLWX; DSNY 77 from KMLB; OSBS 93 from KJAX; HARV 107 from KBOX;
+  computed from the live site's `data/neon-vectors.geojson`, 47 sites, fetched 2026-11-08, and `pipeline/sites.json`.
+  The repo's seed copy, `public/data/seed/neon-vectors.geojson`, has 46: it lacks DELA, 316 km from the nearest
+  radar, KFFC). With two falls of radar, that is no
   design. NEON lab counts also lag months (August 2026 still pending at 5 of the 6 on 2026-11-08).
 - **No arrivals data.** No open, dated US series of ticks taken from migrating birds was found (checked: GBIF dataset
   search for "ticks on birds", "ticks migratory birds", "ectoparasites birds banding", "Ixodes birds", 2026-11-08:
