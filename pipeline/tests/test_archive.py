@@ -173,3 +173,140 @@ def test_start_without_end_is_a_usage_error(tmp_path):
         ba.parser().parse_args(["--start", "2026-09-10", "--end", "2026-09-10"]).end
         == "2026-09-10"
     )
+
+
+def _catch_up(root: Path, monkeypatch, now: str) -> tuple[int, dict]:
+    monkeypatch.setattr(ba, "_now", lambda: t(now))
+    rc = ba.main(["--catch-up", "--out", str(root), "--workdir", str(root / "w")])
+    return rc, json.loads((root / "manifest.json").read_text())
+
+
+def test_a_permanent_hole_is_retried_to_the_threshold_then_recorded_and_passed(
+    tmp_path, monkeypatch
+):
+    """An hour no site ever answers (an upstream outage) stopped every nightly run at it forever: the
+    archive never advanced and the prune never ran. It is now retried on MISSING_TRIES runs spread over
+    MISSING_AGE, then recorded as missing and passed, so H+1 gets built."""
+    hole = t("2026-09-11T02:00")
+    _fake_site(monkeypatch, fail_at=hole)
+    seen = []
+    key_at = ba.volume_key_at
+    monkeypatch.setattr(
+        ba,
+        "volume_key_at",
+        lambda sid, when, tol: seen.append(when) or key_at(sid, when, tol),
+    )
+    _seed(tmp_path, "2026-09-10T12")
+    tries_at_hole = lambda: sum(1 for w in seen if w == hole) // 2  # 2 sites per try
+    nightly = [
+        "2026-09-11T13:00",
+        "2026-09-12T13:00",
+        "2026-09-13T13:00",
+        "2026-09-14T13:00",
+    ]
+    for now in nightly[
+        :2
+    ]:  # before the threshold: stop loud at the hole, nothing past it
+        rc, m = _catch_up(tmp_path, monkeypatch, now)
+        assert rc == 1
+        assert max(m["frames"]) == "2026-09-11T01"
+    assert tries_at_hole() == 2
+    rc, m = _catch_up(tmp_path, monkeypatch, nightly[2])
+    # the third nightly try reaches the threshold: the hour after the hole is built
+    assert "2026-09-11T03" in m["frames"], (
+        f"archive still stops at the hole: newest frame {max(m['frames'])}"
+    )
+    assert max(m["frames"]) == "2026-09-13T12"
+    # consumers read frames only, so the hole is recorded beside them, not as a frame
+    assert "2026-09-11T02" not in m["frames"]
+    rec = m["missing"]["2026-09-11T02"]
+    assert rec["tries"] == ba.MISSING_TRIES == 3 and rec["terminal"] is True
+    assert rec["first_seen"].startswith("2026-09-11T13")
+    assert "0/2 sites" in rec["reason"]
+    assert rc == 1  # the run that gives an hour up says so, once
+    rc, m = _catch_up(tmp_path, monkeypatch, nightly[3])
+    assert rc == 0 and max(m["frames"]) == "2026-09-14T12"
+    assert tries_at_hole() == 3  # a terminal hole is not retried
+
+
+def test_quick_reruns_do_not_spend_a_holes_retries(tmp_path, monkeypatch):
+    """The threshold is tries AND age: reruns minutes apart must not give up on an hour whose scans
+    may still land."""
+    _fake_site(monkeypatch, fail_at=t("2026-09-11T02:00"))
+    _seed(tmp_path, "2026-09-10T12")
+    for now in [
+        "2026-09-11T13:00",
+        "2026-09-11T13:20",
+        "2026-09-11T13:40",
+        "2026-09-12T13:00",
+    ]:
+        rc, m = _catch_up(tmp_path, monkeypatch, now)
+        assert rc == 1 and max(m["frames"]) == "2026-09-11T01"
+    rec = m["missing"]["2026-09-11T02"]
+    assert rec["tries"] == 4 and rec["terminal"] is False
+    # positive control: the next nightly run, past MISSING_AGE, passes it
+    rc, m = _catch_up(tmp_path, monkeypatch, "2026-09-13T13:00")
+    assert m["missing"]["2026-09-11T02"]["terminal"] and "2026-09-11T03" in m["frames"]
+
+
+def test_a_hole_that_fills_on_retry_becomes_a_frame(tmp_path, monkeypatch):
+    _fake_site(monkeypatch, fail_at=t("2026-09-11T02:00"))
+    _seed(tmp_path, "2026-09-10T12")
+    rc, m = _catch_up(tmp_path, monkeypatch, "2026-09-11T13:00")
+    assert rc == 1 and "2026-09-11T02" in m["missing"]
+    _fake_site(monkeypatch)  # the late scans landed
+    rc, m = _catch_up(tmp_path, monkeypatch, "2026-09-12T13:00")
+    assert rc == 0 and "2026-09-11T02" in m["frames"] and m["missing"] == {}
+
+
+def test_catch_up_starts_after_the_newest_built_or_terminal_hour():
+    man = {
+        "frames": {"2026-09-11T01": {}},
+        "missing": {
+            "2026-09-11T02": {"terminal": True},
+            "2026-09-11T04": {
+                "terminal": False
+            },  # still being retried: inside the window
+        },
+    }
+    now = t("2026-09-11T06:00")
+    assert ba.pending_hours(ba.archive_end(man), now, NIGHT, SETTLE)[0] == t(
+        "2026-09-11T03:00"
+    )
+    # positive control: built frames alone give the old edge
+    assert ba.pending_hours(
+        ba.archive_end({"frames": man["frames"]}), now, NIGHT, SETTLE
+    )[0] == t("2026-09-11T02:00")
+
+
+def test_prune_drops_missing_records_with_their_nights(tmp_path):
+    ids = ["2026-09-01T00", "2026-09-02T00", "2026-09-03T05"]
+    man = {
+        "frames": {i: _frame(tmp_path, i) for i in ids},
+        "missing": {
+            "2026-09-01T03": {"terminal": True},
+            "2026-09-02T03": {"terminal": True},
+        },
+    }
+    ba.prune_nights(man, tmp_path, keep=2)
+    assert sorted(man["missing"]) == ["2026-09-02T03"]
+    assert sorted(man["frames"]) == ["2026-09-02T00", "2026-09-03T05"]
+
+
+def test_the_freshness_check_can_read_the_archive_manifests_stamp(
+    tmp_path, monkeypatch
+):
+    """freshness reads only a file's first 4096 bytes for generated_at; the live manifest (182 frames,
+    47 KB on 2026-11-07) had it at byte 47333, after frames."""
+    import pipeline.freshness as fr
+
+    assert fr.LAYERS["birds_archive/manifest.json"] == "daily"
+    _fake_site(monkeypatch)
+    _seed(tmp_path, "2026-09-10T12")
+    rc, _ = _catch_up(
+        tmp_path, monkeypatch, "2026-09-20T13:00"
+    )  # ~10 nights, > 4096 bytes
+    raw = (tmp_path / "manifest.json").read_bytes()
+    assert rc == 0 and len(raw) > 4096
+    stamp = fr.GENERATED_AT.search(raw[:4096].decode())
+    assert stamp and fr._parse(stamp.group(1)) is not None

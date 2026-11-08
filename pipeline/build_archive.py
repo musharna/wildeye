@@ -8,6 +8,13 @@ Two modes. --start/--end backfills an explicit range. --catch-up (the nightly cr
 window from the archive itself: from the hour after the newest frame to the newest hour whose scans
 have landed, then prunes to --keep-nights. The window was once only the one-shot backfill, so the
 archive stopped at 2026-09-10 while the page's clock kept going; a stalled run now catches up.
+
+An hour no site answers (EmptyFrame) stops the run there, so the next run retries it. Each try is
+recorded in manifest["missing"][id]; after MISSING_TRIES tries spanning MISSING_AGE the hour is marked
+terminal and passed, and the window starts after the newest built-or-terminal hour. Without that, a
+permanent upstream gap stopped every nightly run at the same hour forever. manifest["frames"] holds
+only frames on disk; every reader (src/data/birds.js, scripts/qa-observed-time.mjs, the prunes here
+and in deploy_pages.sh) reads frames alone, so a missing hour is simply not a frame to them.
 """
 
 from __future__ import annotations
@@ -30,6 +37,14 @@ from .ppi import write_ppi_png
 # A night is ~13 MB (399 MB for 30 nights on 2026-10-26), and the whole Pages site may be no larger than 1 GB:
 # 30 nights were 45% of an 880 MB site. 14 nights (~190 MB) leave room for other layers.
 KEEP_NIGHTS = 14
+# An empty hour is given up only after MISSING_TRIES runs AND MISSING_AGE since its first failed try. On the
+# nightly cron that is the third night (~48 h): two retries for late uploads or a passing outage. The age floor
+# stops reruns minutes apart from spending the tries; 36 h, not 48, because a later run reaches the hole sooner
+# after its start than the first run did (it is first in the window, not after a night of frames). EmptyFrame is
+# also what a runner with no network raises, so an outage that long loses at most one hour per MISSING_TRIES runs:
+# the run stops at the next empty hour.
+MISSING_TRIES = 3
+MISSING_AGE = dt.timedelta(hours=36)
 
 log = logging.getLogger("archive")
 
@@ -137,9 +152,16 @@ def pending_hours(
     return list(hours(newest + dt.timedelta(hours=1), now - settle, utc_hours))
 
 
+def archive_end(manifest: dict) -> list[str]:
+    """Hours the archive is done with: built frames and hours given up as terminally missing. An hour
+    still being retried is not done, so the catch-up window starts at it."""
+    gone = [i for i, m in manifest.get("missing", {}).items() if m.get("terminal")]
+    return [*manifest["frames"], *gone]
+
+
 def prune_nights(manifest: dict, root: Path, keep: int) -> list[str]:
     """Drop frames outside the newest `keep` UTC nights present in the archive (counted from the data,
-    not the clock). Returns the dropped frame ids."""
+    not the clock), and missing-hour records older than the oldest kept night. Returns the dropped frame ids."""
     ids = sorted(manifest["frames"])
     kept = set(sorted({i[:10] for i in ids})[-keep:])
     dropped = [i for i in ids if i[:10] not in kept]
@@ -148,6 +170,9 @@ def prune_nights(manifest: dict, root: Path, keep: int) -> list[str]:
             root / manifest["frames"].pop(i)["dir"].split("birds_archive/", 1)[1],
             ignore_errors=True,
         )
+    missing = manifest.get("missing", {})
+    for i in [i for i in missing if kept and i[:10] < min(kept)]:
+        del missing[i]
     for d in sorted(root.glob("*/*/*"), reverse=True) + sorted(
         root.glob("*/*"), reverse=True
     ):
@@ -204,14 +229,14 @@ def main(argv=None):
     utc_hours = set(range(h0, h1 + 1))
     sites = SITES[: a.sites] if a.sites else SITES
     manifest_path = a.out / "manifest.json"
-    manifest = (
-        json.loads(manifest_path.read_text())
-        if manifest_path.exists()
-        else {"frames": {}}
+    # generated_at first: pipeline/freshness.py looks for it in a file's first 4096 bytes
+    manifest = {"generated_at": None, "frames": {}, "missing": {}} | (
+        json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
     )
+    missing = manifest["missing"]
     if a.catch_up:
         todo = pending_hours(
-            manifest["frames"],
+            archive_end(manifest),
             _now(),
             utc_hours,
             dt.timedelta(minutes=a.tolerance_min + 15),
@@ -231,16 +256,47 @@ def main(argv=None):
     )
     t0 = time.time()
     n = 0
+    gave_up = []
     for t in todo:
         ft = time.time()
+        fid = frame_id(t)
+        if missing.get(fid, {}).get("terminal"):
+            log.info(
+                "%s terminally missing (%s), not retried", fid, missing[fid]["reason"]
+            )
+            continue
         try:
             fj = build_frame(t, sites, a.out, a.workdir, a.workers, a.tolerance_min)
         except EmptyFrame as e:
-            # stop, don't skip: frames past a hole would move the archive's end past it and it would
-            # never be retried. Exit non-zero so cron's log and the caller see it.
-            log.error("STOPPED at empty frame, next run retries it: %s", e)
-            return 1
-        manifest["frames"][frame_id(t)] = {
+            now = _now()
+            rec = missing.setdefault(
+                fid, {"first_seen": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "tries": 0}
+            )
+            rec |= {"reason": str(e), "tries": rec["tries"] + 1, "terminal": False}
+            age = now - dt.datetime.strptime(
+                rec["first_seen"], "%Y-%m-%dT%H:%M:%SZ"
+            ).replace(tzinfo=dt.UTC)
+            rec["terminal"] = rec["tries"] >= MISSING_TRIES and age >= MISSING_AGE
+            write_atomic(manifest_path, manifest)
+            if not rec["terminal"]:
+                # stop, don't skip: frames past a hole would move the archive's end past it and it would
+                # never be retried. Exit non-zero so cron's log and the caller see it.
+                log.error(
+                    "STOPPED at empty frame (try %d), next run retries it: %s",
+                    rec["tries"],
+                    e,
+                )
+                return 1
+            log.error(
+                "GAVE UP on empty frame after %d tries over %s, recorded missing: %s",
+                rec["tries"],
+                age,
+                e,
+            )
+            gave_up.append(fid)
+            continue
+        missing.pop(fid, None)
+        manifest["frames"][fid] = {
             "fresh": fj["fresh_count"],
             "sites": fj["site_count"],
             "png": fj.get("png"),
@@ -272,6 +328,11 @@ def main(argv=None):
             len(dropped),
             a.keep_nights,
         )
+    if gave_up:  # the archive moved on, but hours were lost: say so once, in this run's exit status
+        log.error(
+            "recorded %d hour(s) as missing: %s", len(gave_up), ", ".join(gave_up)
+        )
+        return 1
     return 0
 
 
