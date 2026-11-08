@@ -34,6 +34,7 @@ SLACK = dt.timedelta(hours=6)
 LAYERS = {
     "birds.geojson": "daily",  # every 10 minutes; the site changes daily
     "birds_field.json": "daily",
+    "birds_archive/manifest.json": "daily",  # run_archive.sh; stamped only when a frame is built
     "aloft.geojson": "daily",
     "rasters.json": "daily",
     "gibs.json": "daily",
