@@ -85,8 +85,8 @@ never mapped, 19 strata with < 3 years). k = 8, CIs at 99.375%.
 - **Not findings.** Virus +0.038 (+0.011 to +0.068) and Other +0.023 (+0.001 to +0.044) read above 0, but so do their
   placebos (+0.053, +0.022 to +0.085; +0.030, +0.008 to +0.050). Toxin, the stated hypothesis (botulism): +0.017
   (−0.012 to +0.045), not supported. Fungus +0.004, Nut/Met/Dev +0.016, Parasite −0.001: CIs contain 0.
-- **Suspect-only arm** (sensitivity, no class has ≥ 76 cases except Toxin, Trauma, Virus): Bacteria +0.066 (−0.023
-  to +0.159), same sign, CI through 0.
+- **Suspect-only arm** (sensitivity; 33 to 228 cases per class): Bacteria +0.066 (−0.023 to +0.159, 76 cases), same
+  sign, CI through 0; no class's CI excludes 0.
 
 **Limits, and the strongest stand-in objection.**
 
