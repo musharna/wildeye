@@ -247,3 +247,47 @@ def test_a_void_or_missing_night_is_unclear():
         "airspeed_ms": None,
         "insect_share": None,
     }
+
+
+def test_get_rides_out_a_long_name_lookup_dropout_and_a_4xx_raises_at_once(monkeypatch):
+    import io
+    import urllib.error
+    import urllib.request
+
+    calls, waits = [], []
+
+    class Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def dns_down_then_up(req, timeout=None):
+        calls.append(req.full_url)
+        if len(calls) < 7:  # six failures: the old 6-try, 75 s schedule gave up here
+            raise urllib.error.URLError(
+                OSError(-5, "No address associated with hostname")
+            )
+        return Resp(b"grib")
+
+    monkeypatch.setattr(urllib.request, "urlopen", dns_down_then_up)
+    assert ic._get("https://x/a", sleep=waits.append) == b"grib"
+    assert waits == [5.0, 10.0, 20.0, 40.0, 80.0, 160.0] and sum(waits) > 300
+
+    def missing(req, timeout=None):
+        calls.append(req.full_url)
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+    calls.clear()
+    monkeypatch.setattr(urllib.request, "urlopen", missing)
+    with pytest.raises(urllib.error.HTTPError, match="Not Found"):
+        ic._get("https://x/b", sleep=lambda s: None)
+    assert len(calls) == 1
+
+    def always_down(req, timeout=None):
+        raise urllib.error.URLError(OSError(-5, "No address associated with hostname"))
+
+    monkeypatch.setattr(urllib.request, "urlopen", always_down)
+    with pytest.raises(urllib.error.URLError, match="No address"):
+        ic._get("https://x/c", sleep=lambda s: None)
