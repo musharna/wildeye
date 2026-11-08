@@ -428,6 +428,9 @@ def cmd_ebird(a):
 
 
 def cmd_run(a):
+    from . import dns_memo
+
+    dns_memo.install()  # ~6,000 RAP range requests; this host's resolver drops out (dns_memo docstring)
     sites = {
         s["id"]: s
         for s in json.loads((Path(__file__).parent / "sites.json").read_text())
