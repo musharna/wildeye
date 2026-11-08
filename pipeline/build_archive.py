@@ -5,8 +5,8 @@ plus a top-level manifest.json. Resumable (existing frames skipped). No last-goo
 a site that fails for an hour is simply absent from that frame and listed in failures.
 
 Two modes. --start/--end backfills an explicit range. --catch-up (the nightly cron) derives its
-window from the archive itself: from the hour after the newest frame to the newest hour whose scans
-have landed, then prunes to --keep-nights. The window was once only the one-shot backfill, so the
+window from the archive itself: from the hour after the archive's end (its newest frame or terminally
+missing hour, archive_end) to the newest hour whose scans have landed, then prunes to --keep-nights. The window was once only the one-shot backfill, so the
 archive stopped at 2026-09-10 while the page's clock kept going; a stalled run now catches up.
 
 An hour no site answers (EmptyFrame) stops the run there, so the next run retries it. Each try is
@@ -142,7 +142,7 @@ def hours(start: dt.datetime, end: dt.datetime, utc_hours: set[int]):
 def pending_hours(
     frame_ids, now: dt.datetime, utc_hours: set[int], settle: dt.timedelta
 ) -> list[dt.datetime]:
-    """Hours after the archive's newest frame whose scans have landed (a frame at HH reads scans up to
+    """Hours after the newest of `frame_ids` (archive_end: built frames and terminal-missing hours) whose scans have landed (a frame at HH reads scans up to
     HH + tolerance, so it is settled once `now - settle` has passed it)."""
     if not frame_ids:
         raise SystemExit(
