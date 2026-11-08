@@ -66,6 +66,30 @@ in the same run as the classes.
   **VOID** if Trauma, the planted truth or the murre check fails.
 - One run. No threshold, radius, window, stratum, class rule or score changes after this file is committed.
 
-## Result
+## Result: VOID, the negative control failed (run 2026-11-08 03:29 EST)
 
-Not run yet.
+Run: `python -m pipeline.e1_sst run --e0-cache ~/.cache/wildeye/e0 --cache ~/.cache/wildeye/e1 --out
+docs/analysis/e1_dieoffs_sst.json`; figure `e1_dieoffs_sst.png` (`e1_dieoffs_sst_figure.R`). 2,114 confirmed coastal
+cases in 431 counties (6 `no_map`, 8 `few_years`); k = 8, CIs at 99.375%.
+
+- **Planted truth passed**: β = 0 0.0 (0.0 to 0.0); β = 1 per °C 0.266 (0.259 to 0.274).
+- **Known positive fired**: the 6 coastal confirmed murre cases (5 Nut/Met/Dev, 1 Other; Alaska and Washington)
+  ran 2.15 SD above 1997–2012 on average (1.43 to 3.50), as Piatt et al. 2020 describe.
+- **Trauma failed**: s = −0.054 (CI −0.100 to −0.001, 311 cases), so **E1 is VOID** under the frozen rule.
+  Trauma die-offs lean to cooler weeks than usual; its placebo is −0.001.
+- **No class reads warm, VOID or not.** No class other than Trauma has a CI excluding 0. Toxin +0.045 (−0.005 to
+  +0.091), its placebo the same (+0.055); Nut/Met/Dev −0.019 (−0.078 to +0.042), −0.024 without the murres; the
+  rest between −0.052 and −0.007. The two named hypotheses are not supported.
+
+**Read after the run (not claimed).**
+
+- *Trauma is not neutral to sea temperature.* It was the negative control for drought and was carried to SST
+  without asking whether its causes move with water temperature. Storms (wrecks, hail) and cold upwelling plausibly
+  do; a lean to cooler weeks fits that. A post hoc story, not a tested one.
+- *The rank score dilutes a multi-year heatwave.* The murre cases ran 2.15 SD warm, but their rank scores are only
+  +0.125 to +0.375 (mean +0.25): 2014, 2016, 2018 and 2019 were warm too, so the 2015 week ranks below several of
+  its neighbours. The rules named this as working against an effect. A fixed-climatology heatwave measure (Hobday
+  et al.'s, against a 30-year baseline) would not have this blind spot; it would be a new pre-registration, and not
+  blind, since E1's numbers are now seen.
+
+Not for the site.
