@@ -257,8 +257,10 @@ def fetch_dsci(fips: str, cache: Path, sleep: float = 1.0) -> list[dict]:
         )
         with urlopen(req, timeout=120) as r:
             body = json.load(r)
-        if not isinstance(body, list) or not body:
-            raise ValueError(f"USDM gave no DSCI rows for {fips}: {str(body)[:200]}")
+        if not isinstance(body, list):
+            raise ValueError(f"USDM gave no DSCI list for {fips}: {str(body)[:200]}")
+        # [] is a real answer: a FIPS USDM never mapped (e.g. 02261 Valdez-Cordova, split in 2019). It is cached
+        # as such; the run counts its cases under dropped.no_series and lists the county, never substitutes one.
         f.write_text(json.dumps(body))
         time.sleep(sleep)
     return json.loads(f.read_text())
@@ -299,11 +301,17 @@ def cmd_run(a):
     cases, why = load_cases(events)
     confirmed = [c for c in cases if not c["suspect"]]
     suspect = [c for c in cases if c["suspect"]]
-    dsci = {
-        f: Dsci(json.loads(p.read_text()))
+    raw = {
+        p.stem.split("_")[1]: json.loads(p.read_text())
         for p in a.cache.glob("dsci_*.json")
-        if (f := p.stem.split("_")[1])
     }
+    unmapped = sorted(f for f, rows in raw.items() if not rows)
+    dsci = {f: Dsci(rows) for f, rows in raw.items() if rows}
+    missing = sorted({c["fips"] for c in cases} - set(raw))
+    if missing:
+        raise ValueError(
+            f"{len(missing)} case counties were never fetched (run fetch first): {missing[:10]}"
+        )
     counts = {}
     for c in confirmed:
         counts[c["cls"]] = counts.get(c["cls"], 0) + 1
@@ -320,6 +328,7 @@ def cmd_run(a):
         "cases_confirmed": len(confirmed),
         "cases_suspect": len(suspect),
         "class_counts": counts,
+        "counties_usdm_never_mapped": unmapped,
         "k": k,
         "real": real,
         "placebo": placebo,
