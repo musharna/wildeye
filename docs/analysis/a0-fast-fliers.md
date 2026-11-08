@@ -5,7 +5,7 @@ Bird flu (HPAI H5) in wild birds is mostly a waterfowl disease; vol2bird's night
 needs a waterfowl series, and this check asks whether airspeed gives one. If it does not, A stops in its waterfowl
 form (VOID), and the full backfill is not run.
 
-Rules written 2026-11-07 ~22:45 EST, **before any airspeed was computed on the season store and before any eBird
+Rules written 2026-11-07 ~22:05 EST (commit cfdb763b1), **before any airspeed was computed on the season store and before any eBird
 count was fetched**. Grill ledger: `grill_wildeye_disease_program_2026-11-07.md` (outside the repo); prior-art map:
 `triage_wildeye_disease_seam_2026-11-07.md` (outside the repo).
 
