@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { FAILED_EXIT, NOT_RUN, OUTPUT_TAIL, failedChecks, plan, record, renderReport, verdict } from '../scripts/qa-sweep.mjs';
+import { FAILED_EXIT, NOT_RUN, OUTPUT_TAIL, RETRY_DELAY_SECONDS, failedChecks, firstRuns, plan, record, renderReport, rerunFailed, unresolved, verdict } from '../scripts/qa-sweep.mjs';
 
 const SCRIPTS = path.resolve('scripts');
 const files = readdirSync(SCRIPTS);
@@ -47,6 +47,112 @@ test('a failure is failing twice; failing then passing is flaky', () => {
   assert.equal(verdict(1, 0), 'flaky');
   assert.equal(verdict(1, 1), 'fail');
   assert.equal(verdict(124, 2), 'fail'); // a timeout, then a crash
+});
+
+// real runs in child processes: one passes, one fails then passes (its state in a file), one fails every time
+function childScripts() {
+  const once = path.join(mkdtempSync(path.join(tmpdir(), 'qa-sweep-retry-')), 'ran-once');
+  const src = {
+    'qa-a': 'process.exit(0);',
+    'qa-b': `import { existsSync, writeFileSync } from 'node:fs'; if (existsSync(${JSON.stringify(once)})) process.exit(0); writeFileSync(${JSON.stringify(once)}, ''); process.exit(1);`,
+    'qa-c': "console.log(JSON.stringify({ check: 'tile', ok: false })); process.exit(1);",
+  };
+  const events = [];
+  const run = (name) => {
+    events.push(`run ${name}`);
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', src[name]], { encoding: 'utf8' });
+    return { code: r.status ?? 1, output: `${r.stdout}${r.stderr}` };
+  };
+  const wait = async (seconds) => events.push(`wait ${seconds}`);
+  return { events, run, wait };
+}
+
+test("a shard runs each script once and leaves its failures pending: none is rerun on the shard's runner", () => {
+  // a runner keeps one IP for the job and some cannot reach PacIOOS at all (probe 2026-11-07: 4 of 20), so a rerun here
+  // repeats the failure: in all 6 of qa-mhw's CI failures (11-01 to 11-07) the same-runner rerun failed too
+  const { events, run } = childScripts();
+  const { results, pending } = firstRuns(['qa-a', 'qa-b', 'qa-c'], run);
+  assert.deepEqual(events, ['run qa-a', 'run qa-b', 'run qa-c']);
+  assert.deepEqual(results.map((r) => [r.name, r.verdict]), [['qa-a', 'pass']]);
+  assert.deepEqual(pending.map((f) => [f.name, f.first.code]), [['qa-b', 1], ['qa-c', 1]]);
+  assert.match(pending[1].first.output, /"check":"tile"/); // the first run's evidence travels with it
+});
+
+test('the rerun job runs each pending failure once more after one wait; with nothing pending there is no wait', async () => {
+  const { events, run, wait } = childScripts();
+  const shard0 = { results: [], notRun: ['qa-kelp'], ...firstRuns(['qa-a', 'qa-b'], run) };
+  const shard1 = { results: [], notRun: [], ...firstRuns(['qa-c'], run) };
+  events.length = 0;
+  const done = await rerunFailed([shard0, shard1], run, wait);
+  // one wait for the whole sweep however many failed, then each failure once, from every shard
+  assert.deepEqual(events, [`wait ${RETRY_DELAY_SECONDS}`, 'run qa-b', 'run qa-c']);
+  assert.equal(RETRY_DELAY_SECONDS, 900); // longer than the 11-05 outage seen from home (three 5-min probes)
+  assert.deepEqual(done.map((p) => p.results.map((r) => [r.name, r.verdict])), [[['qa-a', 'pass'], ['qa-b', 'flaky']], [['qa-c', 'fail']]]);
+  assert.deepEqual(done[1].results[0].checks, ['tile']);
+  assert.deepEqual(done.map((p) => [p.notRun, 'pending' in p]), [[['qa-kelp'], false], [[], false]]);
+  assert.doesNotThrow(() => unresolved(done));
+  // positive control: nothing pending (and a PR's empty shard file, written with no pending key), nothing runs or waits
+  events.length = 0;
+  const clean = { results: [], notRun: [], ...firstRuns(['qa-a'], run) };
+  events.length = 0;
+  const same = await rerunFailed([clean, { results: [], notRun: [] }], run, wait);
+  assert.deepEqual(events, []);
+  assert.deepEqual(same.map((p) => p.results.map((r) => r.verdict)), [['pass'], []]);
+});
+
+test("a flaky verdict names the first run's failing check even when more than the kept tail was printed after it", async () => {
+  // real child runs: the first prints a failing check, then more than OUTPUT_TAIL of log, and fails; the second passes.
+  // The shard keeps only the tail of a pending failure, so its checks are read there, from the whole output (review of #164)
+  const once = path.join(mkdtempSync(path.join(tmpdir(), 'qa-sweep-tail-')), 'ran-once');
+  const src = `import { existsSync, writeFileSync } from 'node:fs'; if (existsSync(${JSON.stringify(once)})) process.exit(0); writeFileSync(${JSON.stringify(once)}, ''); console.log(JSON.stringify({ check: 'early-tile', ok: false })); process.stdout.write('x'.repeat(${OUTPUT_TAIL + 1000}) + '\\nstill going\\n'); process.exitCode = 1;`;
+  const run = () => {
+    const r = spawnSync(process.execPath, ['--input-type=module', '-e', src], { encoding: 'utf8', maxBuffer: 8 * OUTPUT_TAIL });
+    return { code: r.status ?? 1, output: `${r.stdout}${r.stderr}` };
+  };
+  const shard = { results: [], notRun: [], ...firstRuns(['qa-t'], run) };
+  assert.equal(shard.pending[0].first.output.length, OUTPUT_TAIL); // the case: the check line is not in the kept tail
+  assert.doesNotMatch(shard.pending[0].first.output, /early-tile/);
+  const [done] = await rerunFailed([JSON.parse(JSON.stringify(shard))], run, async () => {});
+  assert.deepEqual(done.results.map((r) => [r.verdict, r.checks]), [['flaky', ['early-tile']]]);
+  // positive control: a run with no checks key is still read from its output, as before
+  assert.deepEqual(record('qa-t', { code: 1, output: '{"check":"late","ok":false}\n' }, { code: 0, output: '' }).checks, ['late']);
+});
+
+test('--report refuses a file with a failure still pending, by name; a resolved file is reported', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'qa-sweep-pending-'));
+  const first = { code: 1, output: 'TypeError: fetch failed\n' };
+  const raw = path.join(dir, 'raw.json');
+  writeFileSync(raw, JSON.stringify({ results: [], notRun: [], pending: [{ name: 'qa-mhw', first }] }));
+  const res = spawnSync(process.execPath, [path.join(SCRIPTS, 'qa-sweep.mjs'), '--report', raw], { encoding: 'utf8' });
+  assert.equal(res.status, 1); // an error, not FAILED_EXIT: the report itself cannot be written
+  assert.match(res.stderr, /failed once and not yet rerun: qa-mhw; run --rerun/);
+  assert.equal(res.stdout, '');
+  // positive control: the same failure with its second run is a verdict, reported and exiting FAILED_EXIT
+  const resolved = path.join(dir, 'resolved.json');
+  writeFileSync(resolved, JSON.stringify({ results: [record('qa-mhw', first, first)], notRun: [] }));
+  const ok = spawnSync(process.execPath, [path.join(SCRIPTS, 'qa-sweep.mjs'), '--report', resolved], { encoding: 'utf8' });
+  assert.equal(ok.status, FAILED_EXIT);
+  assert.match(ok.stdout, /`qa-mhw`: TypeError: fetch failed/);
+});
+
+test('the --rerun CLI resolves shard files into a directory of the same names, and refuses a flag where a file goes', () => {
+  // real CLI, nothing pending, so no wait and no script runs: the files pass through with pending gone
+  const dir = mkdtempSync(path.join(tmpdir(), 'qa-sweep-rerun-'));
+  const shard = path.join(dir, 'qa-sweep-0.json');
+  const pass = { name: 'qa-a', verdict: 'pass', codes: [0, null], checks: [] };
+  writeFileSync(shard, JSON.stringify({ results: [pass], notRun: ['qa-kelp'], pending: [] }));
+  const cli = (...a) => spawnSync(process.execPath, [path.join(SCRIPTS, 'qa-sweep.mjs'), ...a], { encoding: 'utf8', timeout: 20000 });
+  const out = path.join(dir, 'final');
+  const res = cli('--rerun', out, shard);
+  assert.equal(res.status, 0, res.stderr);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(out, 'qa-sweep-0.json'), 'utf8')), { results: [pass], notRun: ['qa-kelp'] });
+  assert.equal(cli('--report', path.join(out, 'qa-sweep-0.json')).status, 0);
+  // a flag after --rerun's directory would be read as a shard file; refused by name, before anything runs or is written
+  const late = cli('--rerun', path.join(dir, 'late'), shard, '--url', 'http://example.org/');
+  assert.equal(late.status, 1);
+  assert.match(late.stderr, /--rerun takes shard \.json files after the directory, not: --url http:\/\/example\.org\//);
+  assert.throws(() => readdirSync(path.join(dir, 'late')), /ENOENT/);
+  assert.match(cli('--rerun').stderr, /--rerun needs an output directory/);
 });
 
 test("a failing or flaky script keeps the end of each run's output in its record; a passing one keeps none", () => {
