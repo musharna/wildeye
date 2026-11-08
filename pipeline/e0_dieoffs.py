@@ -307,6 +307,9 @@ def load_cases(events: list[dict]) -> tuple[list[dict], dict]:
 
 
 def cmd_fetch(a):
+    from . import dns_memo
+
+    dns_memo.install()  # ~1,900 requests to two hosts; this host's resolver drops out (dns_memo docstring)
     a.cache.mkdir(parents=True, exist_ok=True)
     ev = a.cache / "whispers_events.json"
     if not ev.exists():
