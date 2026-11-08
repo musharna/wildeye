@@ -32,6 +32,7 @@ DRAWS, SEED, ALPHA = 2000, 20261107, 0.05
 PLACEBO_WEEKS = 26
 MAP_MAX_AGE_DAYS = 7
 NEGATIVE_CONTROL = "Trauma"
+US_COUNTRY = 30  # WHISPers /api/countries/: 30 United States, 7 Canada, 19 Mexico (read 2026-11-07)
 USDM = "https://usdmdataservices.unl.edu/api/CountyStatistics/GetDSCI"
 
 
@@ -55,17 +56,24 @@ def to_case(e: dict) -> tuple[dict | None, str | None]:
     start = dt.date.fromisoformat(e["start_date"])
     if not FIRST <= start <= LAST:
         return None, "outside_years"
+    # US counties only (WHISPers country 30). Canadian census divisions sit in the same field as 4-digit codes
+    # ("1005 " = a Newfoundland division, 2026-11-07): padded, they would read as US counties (01005 Barbour, AL).
+    levels = e.get("administrativelevelones") or []
+    if not levels or any(lv.get("country") != US_COUNTRY for lv in levels):
+        return None, "not_us"
     fips = sorted(
         {
-            str(a["fips_code"]).zfill(5)
+            str(a["fips_code"]).strip().zfill(5)
             for a in e.get("administrativeleveltwos") or []
-            if a.get("fips_code")
+            if str(a.get("fips_code") or "").strip()
         }
     )
     if not fips:
         return None, "no_county"
     if len(fips) > 1:
         return None, "multi_county"
+    if not (len(fips[0]) == 5 and fips[0].isdigit()):
+        return None, "bad_fips"
     d = major_diagnosis(e)
     if d is None or not d.get("diagnosis_type_string"):
         return None, "no_diagnosis"

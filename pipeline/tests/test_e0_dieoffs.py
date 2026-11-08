@@ -7,7 +7,12 @@ from pipeline import e0_dieoffs as e0
 
 
 def event(
-    fips=("01001",), start="2012-07-10", kind="Mortality/Morbidity", diags=None, eid=1
+    fips=("01001",),
+    start="2012-07-10",
+    kind="Mortality/Morbidity",
+    diags=None,
+    eid=1,
+    countries=(30,),
 ):
     diags = (
         diags
@@ -25,6 +30,7 @@ def event(
         "id": eid,
         "event_type_string": kind,
         "start_date": start,
+        "administrativelevelones": [{"country": c} for c in countries],
         "administrativeleveltwos": [{"fips_code": f} for f in fips],
         "eventdiagnoses": diags,
     }
@@ -46,6 +52,15 @@ def test_a_case_is_one_county_a_dated_mortality_event_with_a_major_diagnosis():
     assert (
         e0.to_case(event(fips=(1001,)))[0]["fips"] == "01001"
     )  # numeric FIPS keep their leading zero
+    # a Canadian census division ("1005 ", Newfoundland) must not be padded into Barbour County, AL
+    assert e0.to_case(event(fips=("1005 ",), countries=(7,)))[1] == "not_us"
+    assert e0.to_case(event(countries=(30, 7)))[1] == "not_us"  # straddles the border
+    assert e0.to_case(event(countries=()))[1] == "not_us"  # no state recorded
+    assert (
+        e0.to_case(event(fips=("01005 ", "01005")))[0]["fips"] == "01005"
+    )  # a stray space; the same county twice is one county
+    assert e0.to_case(event(fips=("ab123",)))[1] == "bad_fips"
+    assert e0.to_case(event(fips=("  ",)))[1] == "no_county"
 
 
 def test_the_major_diagnosis_wins_over_priority_and_suspect_is_kept_for_the_sensitivity_arm():
