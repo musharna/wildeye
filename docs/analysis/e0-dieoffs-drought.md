@@ -63,7 +63,7 @@ Rules written 2026-11-07 ~22:14 EST (commit cb4c76ad3), **before any WHISPers ev
 Run: `python -m pipeline.e0_dieoffs run --cache ~/.cache/wildeye/e0` → `e0_dieoffs.json`; figure `e0_dieoffs.png`
 (`e0_dieoffs_figure.R`). 8,072 WHISPers events; 5,783 confirmed one-county US cases (1,017 suspect, the
 sensitivity arm); not cases: 478 multi-county, 362 outside 2001–2025, 154 no diagnosis, 147 not mortality, 120
-outside the US, 11 no county. 11 county codes USDM never mapped (CT's 8 old counties, 02261, 60010, 60050, 74300).
+outside the US, 11 no county. 11 county codes USDM never mapped (7 of Connecticut's 8 former counties, Alaska's abolished 02261, and three territory codes: 60010, 60050, 74300).
 All 8 classes had ≥ 50 cases, so k = 8 and the CIs are at 99.375%.
 
 **Both design controls failed, so no class is a finding:**
