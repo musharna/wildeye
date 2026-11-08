@@ -188,7 +188,7 @@ def parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--catch-up",
         action="store_true",
-        help="append every settled hour after the archive's newest frame, then prune",
+        help="append every settled hour after the archive's end (newest frame or terminally missing hour), then prune",
     )
     ap.add_argument("--end", help="UTC inclusive, e.g. 2026-09-10")
     ap.add_argument(
