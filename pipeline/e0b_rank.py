@@ -51,7 +51,10 @@ def rank_score(year: int, values: dict[int, float]) -> tuple[float | None, str |
 def case_score(
     c: dict, series: e0.Dsci, shift_weeks: int = 0
 ) -> tuple[float | None, str | None]:
-    """A real case is scored in the stratum centred on its own year; a planted case in its source case's stratum."""
+    """A real case is scored in the stratum centred on its own year; a planted case in its source case's stratum; an
+    expected-plant case carries its score already (expected_cases)."""
+    if "score" in c and not shift_weeks:
+        return c["score"], c.get("score_why")
     day = c["start"] + dt.timedelta(weeks=shift_weeks)
     center = c.get("stratum_year", day.year) if not shift_weeks else day.year
     return rank_score(day.year, stratum(center, day, series))
@@ -132,6 +135,29 @@ def planted_cases(
     return out
 
 
+def expected_cases(cases: list[dict], dsci: dict, beta: float) -> list[dict]:
+    """The plant without the luck of one draw: each real case scored by the EXPECTED s of a year drawn from its stratum
+    with probability proportional to exp(beta * DSCI / 100), i.e. sum(w_y * s_y) / sum(w_y). With beta = 0 this is
+    exactly 0 for every case if and only if the scoring is a correct mid-rank (the mean mid-rank over all positions of
+    any list is 1/2); one random draw (planted_cases) misses 0 by chance 1 time in 20 at 95%, as it did on the real
+    series before the rules were frozen (docs/analysis/e0b-dieoffs-drought-rank.md)."""
+    out = []
+    for c in cases:
+        s = dsci.get(c["fips"])
+        if s is None:
+            continue
+        vals = stratum(c["start"].year, c["start"], s)
+        scored = [(rank_score(y, vals), math.exp(beta * v / 100)) for y, v in vals.items()]
+        whys = {why for (sc, why), _ in scored if sc is None}
+        if whys or not scored:
+            score, why = None, (sorted(whys)[0] if whys else "few_years")
+        else:
+            # rounded: float residue (1e-17) must not read as an effect when the CI is compared with 0
+            score, why = round(sum(sc * w for (sc, _), w in scored) / sum(w for _, w in scored), 12), None
+        out.append(c | {"score": score, "score_why": why, "cls": f"expected_beta_{beta:g}"})
+    return out
+
+
 def load(cache: Path) -> tuple[list[dict], list[dict], dict, list[str], int, dict]:
     events = json.loads((cache / "whispers_events.json").read_text())
     cases, why = e0.load_cases(events)
@@ -162,13 +188,16 @@ def main(argv=None) -> None:
     )
     a = ap.parse_args(argv)
     confirmed, suspect, dsci, unmapped, n_events, why = load(a.cache)
-    on = class_stats(planted_cases(confirmed, dsci, beta=1.0), dsci)
-    off = class_stats(planted_cases(confirmed, dsci, beta=0.0), dsci)
+    on = class_stats(expected_cases(confirmed, dsci, beta=1.0), dsci)
+    off = class_stats(expected_cases(confirmed, dsci, beta=0.0), dsci)
     doc = {
         "generated_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "rules": "docs/analysis/e0b-dieoffs-drought-rank.md",
-        "planted_beta_1": on,
-        "planted_beta_0": off,
+        "expected_beta_1": on,
+        "expected_beta_0": off,
+        # one random draw each, reported beside the gate, never gating
+        "planted_draw_beta_1": class_stats(planted_cases(confirmed, dsci, beta=1.0), dsci),
+        "planted_draw_beta_0": class_stats(planted_cases(confirmed, dsci, beta=0.0), dsci),
     }
     if not a.planted_only:
         counts = {}
@@ -191,7 +220,7 @@ def main(argv=None) -> None:
             "verdict": e0.verdict(real, placebo, on, off),
         }
     a.out.write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    show = {arm: doc[arm]["classes"] for arm in ("planted_beta_1", "planted_beta_0")}
+    show = {arm: doc[arm]["classes"] for arm in ("expected_beta_1", "expected_beta_0", "planted_draw_beta_1", "planted_draw_beta_0")}
     if "verdict" in doc:
         show["verdict"] = {
             key: doc["verdict"][key]

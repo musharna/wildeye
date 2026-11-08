@@ -107,3 +107,15 @@ def test_a_planted_case_is_scored_in_its_source_cases_stratum_and_the_placebo_in
         rb.case_score(real, s, shift_weeks=26)[0]
         == rb.rank_score(2013, rb.stratum(2013, shifted, s))[0]
     )
+
+
+def test_the_expected_plant_is_exactly_0_with_no_effect_and_above_0_with_beta_1():
+    dsci = zero_inflated_panel(n_counties=60)
+    base = cases_on(dsci)
+    null = rb.expected_cases(base, dsci, beta=0.0)
+    scored = [c["score"] for c in null if c["score"] is not None]
+    assert len(scored) > 200 and all(v == 0 for v in scored)  # a mid-rank averages exactly 1/2 over positions
+    off = rb.class_stats(null, dsci, draws=200)["classes"]["expected_beta_0"]
+    on = rb.class_stats(rb.expected_cases(base, dsci, beta=1.0), dsci, draws=200)["classes"]["expected_beta_1"]
+    assert not e0.excludes_zero(off["ci"]) and on["ci"][0] > 0.1
+    assert sum(c["score_why"] == "stratum_flat" for c in null) > 0  # all-zero strata are dropped, not scored 0
