@@ -23,6 +23,7 @@ import urllib.request
 from pathlib import Path
 
 from . import whispers
+from .net import urlopen
 
 FIRST, LAST = dt.date(2001, 1, 1), dt.date(2025, 12, 31)
 YEARS_AROUND = 4

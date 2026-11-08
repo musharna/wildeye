@@ -276,3 +276,44 @@ def test_a_dropped_route_is_retried_an_http_error_is_not_and_the_last_failure_na
     with pytest.raises(urllib.error.HTTPError):
         e0._with_retries(http500, "USDM 01001", sleep=lambda s: None)
     assert len(calls) == 1
+
+
+def test_fetch_dsci_goes_through_the_web_opener_caches_and_keeps_an_empty_answer(
+    tmp_path, monkeypatch
+):
+    import io
+    import json as _json
+    import urllib.request
+
+    asked = []
+
+    class Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake(req, timeout=None):
+        asked.append(req.full_url)
+        body = (
+            b"[]"
+            if "02261" in req.full_url
+            else _json.dumps([{"mapDate": "2012-01-03T00:00:00", "dsci": 7}]).encode()
+        )
+        return Resp(body)
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    assert e0.fetch_dsci("01001", tmp_path, sleep=0) == [
+        {"mapDate": "2012-01-03T00:00:00", "dsci": 7}
+    ]
+    assert (
+        e0.fetch_dsci("01001", tmp_path, sleep=0)[0]["dsci"] == 7 and len(asked) == 1
+    )  # second call from cache
+    assert (
+        e0.fetch_dsci("02261", tmp_path, sleep=0) == []
+        and (tmp_path / "dsci_02261.json").read_text() == "[]"
+    )
+    assert "aoi=01001" in asked[0] and asked[0].startswith(
+        "https://usdmdataservices.unl.edu/"
+    )
