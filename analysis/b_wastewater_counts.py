@@ -6,7 +6,8 @@ served county within 150 km of a radar in pipeline/sites.json, and prints sample
 fall (Aug 1 - Dec 31), for the sources the license policy allows (CDC_Verily, State_Territory) and for all sources.
 When to reach for it: to re-check docs/analysis/b-wastewater-feasibility.md against newer data.
 Output: tables on stdout. No radar data is read, so it says nothing about migration.
-Check: the row total printed must equal the dataset's count(*) (128,361 on 2026-11-08).
+Check: the rows must equal the server's count(*) (128,361 on 2026-11-08), or it raises; so does a detect value
+other than yes/no.
 """
 
 import argparse
@@ -23,6 +24,7 @@ GAZ = "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2021_Gazetteer/
 FIELDS = "site,source,county_fips,sample_collect_date,pcr_target,pcr_target_detect"
 PAGE = 50000
 R_KM = 150
+H5_TARGET = "fluav a h5"
 EXCLUDED = (
     "WastewaterSCAN"  # CC BY-NC (DATA_SOURCES.md); fails the site's license policy
 )
@@ -68,6 +70,16 @@ def fetch(cache: Path) -> tuple[list[dict], dict[str, tuple[float, float]]]:
         if len(page) < PAGE:
             break
         offset += PAGE
+    # The acceptance check, mechanized: the pages must add up to the server's own row count, taken with them.
+    n = cache / "h5_count.json"
+    if not n.exists():
+        curl(H5, n, {"$select": "count(*)"})
+    want = int(json.loads(n.read_text())[0]["count"])
+    if len(rows) != want:
+        raise RuntimeError(
+            f"{len(rows)} rows in {cache}, server count {want}: paging fell short or the cache is stale; "
+            "delete the cache and rerun"
+        )
     z = cache / "gaz.zip"
     if not z.exists():
         curl(GAZ, z)
@@ -88,6 +100,26 @@ def km(a: tuple[float, float], b: tuple[float, float]) -> float:
         + math.cos(la1) * math.cos(la2) * math.sin((lo2 - lo1) / 2) ** 2
     )
     return 2 * 6371.0 * math.asin(math.sqrt(h))
+
+
+def h5_only(rows: list[dict]) -> tuple[list[dict], int]:
+    """Rows of the H5 assay, and how many others were dropped (every row was H5 on 2026-11-08; a later release
+    could add assays, as the SARS-CoV-2 resource carries several and pipeline/wastewater.py filters it)."""
+    kept = [
+        r for r in rows if str(r.get("pcr_target") or "").strip().lower() == H5_TARGET
+    ]
+    return kept, len(rows) - len(kept)
+
+
+def detected(r: dict) -> bool:
+    """yes/no in any case or padding; anything else stops the count rather than counting as a non-detection."""
+    v = str(r.get("pcr_target_detect") or "").strip().lower()
+    if v not in ("yes", "no"):
+        raise ValueError(
+            f"pcr_target_detect {r.get('pcr_target_detect')!r} at site {r.get('site')} on "
+            f"{r.get('sample_collect_date')} is neither yes nor no"
+        )
+    return v == "yes"
 
 
 def fall(day: str) -> int | None:
@@ -127,11 +159,14 @@ def main() -> None:
     )
     a = ap.parse_args()
     rows, cent = fetch(a.cache)
+    total = len(rows)
+    rows, other_assays = h5_only(rows)
     radars = json.loads(a.sites.read_text())
     near, unplaced = near_radars(rows, cent, radars)
-    det_all = sum(r["pcr_target_detect"] == "yes" for r in rows)
+    det_all = sum(detected(r) for r in rows)
     print(
-        f"rows {len(rows)}, detections {det_all}, sites {len({r['site'] for r in rows})}, "
+        f"rows {total} (other assays dropped {other_assays}), detections {det_all}, "
+        f"sites {len({r['site'] for r in rows})}, "
         f"unplaceable {unplaced}, within {R_KM} km of a radar {len(near)}"
     )
     for label, keep in (
@@ -146,7 +181,7 @@ def main() -> None:
                 for r in rows
                 if keep(r) and r["site"] in near and fall(r["sample_collect_date"]) == y
             ]
-            det = [r for r in rs if r["pcr_target_detect"] == "yes"]
+            det = [r for r in rs if detected(r)]
             for r in det:
                 hit_radars |= near[r["site"]]
             by = collections.Counter(r["site"] for r in det)
@@ -166,9 +201,7 @@ def main() -> None:
             st = collections.Counter(
                 str(r.get("county_fips") or "")[:2]
                 for r in rows
-                if keep(r)
-                and r["pcr_target_detect"] == "yes"
-                and fall(r["sample_collect_date"]) == y
+                if keep(r) and detected(r) and fall(r["sample_collect_date"]) == y
             )
             print(f"  fall {y}: {sum(st.values())} {st.most_common(4)}")
 
