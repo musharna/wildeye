@@ -82,6 +82,9 @@ python3 -m pipeline.aloft --out public/data/aloft.geojson --workers 12   # cron 
 Lists the 187 radar prefixes in the Aloft bucket, downloads each radar's newest daily VPTS CSV,
 takes the latest profile with data, and reduces it with the same reducer as NEXRAD. Radars with
 no file this year (decommissioned) are listed in `failures`. Measured 2026-09-11: 144/187 in 26 s.
+A radar whose newest profile is older than 4 days 6 h (`STALE_AFTER`: ~48 h publication lag plus the
+layer's freshness allowance) stays on the map marked `stale`; `fresh_count` + `stale_count` count them
+apart. A run where every radar fails leaves the file and its `generated_at` as they were and exits 1.
 No drape for Europe: raw OPERA volumes are not redistributable; profiles are.
 
 ## Raster drapes (config-driven)
@@ -98,7 +101,11 @@ class overlays high), legend text and credit. Writes `public/data/rasters/<id>.p
 `rasters.json` (last-good kept per product, marked `stale`; `masked_fraction` logged), and
 archives every new acquisition to `rasters/<id>/<stamp>.png` (`keep_days`, default 30) listed
 as `history` in the manifest — the frontend drape shows the archived acquisition at the shared
-observed time. Measured 2026-09-11: ~209 s per product (ERDDAP redirect is slow).
+observed time. Per product, the new image is staged as `<id>.tmp.png` and renamed over `<id>.png`
+only after its gaps and archive frame are done, the manifest is written next, and expired frames
+are deleted after that. A run killed by the cron's `timeout 1800` during the fetches or gap fills
+leaves the old image with its old entry; what remains is the instant between the rename and the
+manifest write. A frame is never deleted while the manifest on disk lists it. Measured 2026-09-11: ~209 s per product (ERDDAP redirect is slow).
 Products: `crw-bleaching` (NOAA CRW Bleaching Alert Area, daily) · `oisst` (NOAA OISST v2.1 Preliminary,
 `ncdcOisst21NrtAgg_LonPM180`, ~1 day behind; the Final aggregate lags ~2 weeks) · `chlor-a` (NOAA VIIRS gap-filled chlorophyll-a, log scale, daily NRT) · `crw-outlook` (NOAA CRW Four-Month Coral Bleaching Heat Stress Outlook v5, the newest weekly NetCDF issue at 60% and 90%, ~4 s; `pipeline/crw_outlook.py` also writes `rasters/crw-outlook.data.png` for the click readout).
 Requests carry a wildeye User-Agent: the ERDDAP redirect target (coastwatch.noaa.gov) returns 403 to Python-urllib.
