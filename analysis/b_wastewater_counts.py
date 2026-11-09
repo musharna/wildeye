@@ -46,7 +46,7 @@ def curl(url: str, dest: Path, params: dict | None = None) -> None:
         ]
     else:
         args.append(url)
-    subprocess.run(args, check=True)  # nosec B603
+    subprocess.run(args, check=True)  # nosec B603 - list argv, no shell; URLs are this file's constants
 
 
 def fetch(cache: Path) -> tuple[list[dict], dict[str, tuple[float, float]]]:
