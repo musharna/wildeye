@@ -378,13 +378,13 @@ def test_main_refuses_an_only_naming_an_unknown_product(tmp_path, monkeypatch):
 
 def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_history(tmp_path):
     import datetime as dt
-    from pipeline.raster import archive_frame
+    from pipeline.raster import archive_frame, prune_frames
     latest = tmp_path / "x.png"; latest.write_bytes(b"png-bytes")
     old = tmp_path / "x" ; old.mkdir()
     stale = (dt.datetime.now(dt.UTC) - dt.timedelta(days=40)).strftime("%Y%m%dT%H%M%SZ")
     (old / f"{stale}.png").write_bytes(b"old")
     (old / "notes.txt").write_text("ignored")
-    # acquisitions dated from today: archive_frame prunes against the wall clock, so fixed dates expire (this test's
+    # acquisitions dated from today: archive_frame and prune_frames cut against the wall clock, so fixed dates expire (this test's
     # 2026-09-10 frame was pruned on arrival from 2026-10-10)
     day = (dt.datetime.now(dt.UTC) - dt.timedelta(days=2)).replace(hour=12, minute=0, second=0, microsecond=0)
     t1, t2 = (d.strftime("%Y-%m-%dT%H:%M:%SZ") for d in (day, day + dt.timedelta(days=1)))
@@ -394,8 +394,10 @@ def test_archive_frame_dedupes_same_acquisition_prunes_old_and_returns_sorted_hi
     h3 = archive_frame(latest, "x", t2, tmp_path, keep_days=30)
     assert h1 == h2 == [{"time": t1, "png": f"data/rasters/x/{f1}"}]
     assert [e["time"] for e in h3] == [t1, t2]
-    assert not (old / f"{stale}.png").exists(), "frame older than keep_days pruned"
+    assert (old / f"{stale}.png").exists(), "an expired frame is left out of the history, not deleted yet"
+    assert prune_frames(tmp_path, "x", 30, h3) == [old / f"{stale}.png"], "frame older than keep_days pruned"
     assert sorted(p.name for p in old.iterdir()) == [f1, f2, "notes.txt"]
+    assert prune_frames(tmp_path, "x", 1, h3) == [], "a listed frame is never pruned, however old"
 
 
 def test_catalog_products_take_the_year_from_the_date_not_the_manifest():
@@ -1175,3 +1177,80 @@ def test_log_lines_carry_utc_with_a_z_whatever_the_process_wide_converter(monkey
     finally:
         monkeypatch.undo()
         time.tzset()
+
+
+def _old_product(out):
+    """data/ holding last run's oisst: its image, one archived frame 40 days old, and the manifest that lists both."""
+    import datetime as dt
+    import json
+    from pipeline.raster import _stamp
+    d = out / "rasters" / "oisst"
+    d.mkdir(parents=True)
+    (out / "rasters" / "oisst.png").write_bytes(b"old image")
+    expired = (dt.datetime.now(dt.UTC) - dt.timedelta(days=40)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    frame = d / f"{_stamp(expired)}.png"
+    frame.write_bytes(b"old frame")
+    entry = {"id": "oisst", "png": "data/rasters/oisst.png", "time": expired,
+             "history": [{"time": expired, "png": f"data/rasters/oisst/{frame.name}"}]}
+    (out / "rasters.json").write_text(json.dumps({"generated_at": "t", "products": [entry]}))
+    return frame
+
+
+def _listed_files_exist(out):
+    import json
+    m = json.loads((out / "rasters.json").read_text())
+    paths = [e["png"] for e in m["products"]] + [h["png"] for e in m["products"] for h in e.get("history", [])]
+    return all((out.parent / p).exists() for p in paths)
+
+
+def test_a_run_killed_before_the_manifest_leaves_the_old_image_beside_the_old_manifest(monkeypatch, tmp_path):
+    """process() renamed the new <id>.png into place and then filled gaps (up to GAP_MAX fetches) before main wrote
+    rasters.json, so the cron's timeout 1800 landing in between left a new image under the old entry's time and
+    bounds. The image is now renamed in last, after the gaps and the archive. A run that is not killed publishes
+    both (the positive control)."""
+    import json
+    import pytest
+    from PIL import Image
+    from pipeline import raster
+    out = tmp_path / "data"
+    _old_product(out)
+    edges = {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+    img = np.full((2, 4, 4), 200, np.uint8)
+    monkeypatch.setattr(raster, "render", lambda v, d: (img, _days_ago(0), {"bounds": edges}, 0.0))
+    monkeypatch.setattr(raster, "fill_gaps", lambda *a, **k: (_ for _ in ()).throw(SystemExit("killed by timeout")))
+    with pytest.raises(SystemExit, match="killed by timeout"):
+        raster.main(["--out", str(out), "--only", "oisst"])
+    assert (out / "rasters" / "oisst.png").read_bytes() == b"old image", "the new image must wait for its manifest"
+    assert json.loads((out / "rasters.json").read_text())["products"][0]["time"] != _days_ago(0)
+    assert not list(out.rglob("*.tmp.png")), "the staged image is removed"
+
+    monkeypatch.setattr(raster, "fill_gaps", lambda *a, **k: {})
+    raster.main(["--out", str(out), "--only", "oisst"])
+    oisst, = json.loads((out / "rasters.json").read_text())["products"]
+    assert oisst["time"] == _days_ago(0) and oisst["bounds"] == edges
+    assert np.array_equal(np.asarray(Image.open(out / "rasters" / "oisst.png")), img)
+    assert _listed_files_exist(out) and not list(out.rglob("*.tmp.png"))
+
+
+def test_an_expired_frame_is_deleted_only_after_the_manifest_stops_listing_it(monkeypatch, tmp_path):
+    """archive_frame deleted frames past keep_days before main wrote the manifest that dropped them, so a run killed
+    between the two left rasters.json listing a frame that was gone. A run that writes its manifest prunes the
+    frame (the positive control)."""
+    import pytest
+    from pipeline import raster
+    out = tmp_path / "data"
+    frame = _old_product(out)
+    edges = {"west": -180.0, "south": -90.0, "east": 180.0, "north": 90.0}
+    img = np.full((2, 4, 4), 200, np.uint8)
+    monkeypatch.setattr(raster, "render", lambda v, d: (img, _days_ago(0), {"bounds": edges}, 0.0))
+    monkeypatch.setattr(raster, "fill_gaps", lambda *a, **k: {})
+    real_write = raster.write_atomic
+    monkeypatch.setattr(raster, "write_atomic", lambda p, o: (_ for _ in ()).throw(SystemExit("killed by timeout")))
+    with pytest.raises(SystemExit, match="killed by timeout"):
+        raster.main(["--out", str(out), "--only", "oisst"])
+    assert frame.exists() and _listed_files_exist(out), "the old manifest still lists the frame"
+
+    monkeypatch.setattr(raster, "write_atomic", real_write)
+    raster.main(["--out", str(out), "--only", "oisst"])
+    assert not frame.exists(), "pruned once the manifest no longer lists it"
+    assert _listed_files_exist(out)
