@@ -122,6 +122,39 @@ year and under each of the 5 wrong years; its rank among the 6 is reported, desc
   separately prompted fresh-eyes verdict on whether a structurally better route exists. A run of more than an hour on
   gt76 needs the user's start time.
 
+## Amendment 1 (2026-11-10 EST): passage source
+
+Written before A0's verdict, before any fast share is computed from the new source, and before any outcome is set
+beside any radar series.
+
+- **Pilot.** `bird_nights backfill --workers 16 --every-min 10` on gt76, KDIX × 7 nights of fall 2021 (Aug 1 to
+  Dec 23, every 24 days): 532 volumes in 311 s, 0.585 s per volume, 59–89 volumes a night. Projection: about
+  960,000 volumes, about 156 h. RAP for every needed hour (9,953): 0.25 s per file, about 0.7 h. Over 2 h, so the
+  rule above applies.
+- **Fresh-eyes verdict** (a separately prompted agent): do not re-run vol2bird. BirdCast publishes per-scan vol2bird
+  profiles, `birdcastdata.s3.amazonaws.com/nexrad/daily/{radar}/{year}/{radar}_vpts_{yyyymmdd}.csv` (u, v, dens,
+  eta and gate counts in 100 m bins from 0 to 4,900 m, with the source volume's name). Checked from the bucket
+  listing on 2026-11-10: every one of the 19 radars has 143–153 of 153 days from Aug 1 to Dec 31 in each fall
+  2021–2025, and all 46 days from Nov 16 to Dec 31, 2025. Files run to 2026-11-09. The vol2bird version and
+  settings BirdCast used are not stated, and its 100 m bins differ from the pinned image's 200 m.
+- **Change.** Every passage fall, 2021–2025, and the 2026 replication, comes from BirdCast, fall 2025 included, so
+  all years share one method. A0's store is not used for A's exposure. From each night the first `_V06` scan of each
+  10-minute slot from sunset is kept, as the backfill does. Each kept scan is written in vol2bird's own text layout
+  (time to the minute, as vol2bird prints it) and goes through the same `night_total` and fast-share functions as
+  A0. Fast passage, the weekly exposure and everything under The test are unchanged.
+- **Bridge, run after A0's verdict.** On Aug 1 – Nov 15, 2025, radar-nights present in both BirdCast and A0's
+  pinned store, per radar the Spearman correlation between the two sources' nightly values:
+  - **B1**: median over radars ≥ 0.9 for night total `mt_birds_km`.
+  - **B2**: median over radars ≥ 0.8 for nightly fast passage, and at least 0.2 above the same median with A0's
+    fall-2026 store set against BirdCast 2025 by date (a wrong year, which shares only the season's shape).
+
+  Only Spearman correlations are gated, because a constant factor between sources does not change the test. Within
+  a radar-fall, a constant added to x cancels in the multinomial.
+- **If the bridge fails,** A does not run on BirdCast. It falls back to the pinned image at a 30-minute cadence for
+  every passage fall, with A0's fall-2025 store thinned to the same cadence. On fall 2025, 30 minutes against
+  10 minutes moved the 14-night mean night total by a median of 2.4 % (90th percentile 5.9 %, at most 8.3 %).
+  That run takes about 52 h on gt76 and needs the user's start time.
+
 ## Site
 
 Only a PASS ships, as a line in the radar popup. Everything else stays here.
