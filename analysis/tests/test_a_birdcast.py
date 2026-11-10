@@ -48,6 +48,8 @@ FIELDS = [
     "n_all",
     "n_dbz_all",
     "rcs",
+    "sd_vvp_threshold",
+    "radar_height",
     "source_file",
 ]
 
@@ -69,6 +71,8 @@ def birdcast_rows(text, when, source, missing=""):
                 "height": col["HGHT"],
                 "height_reference": "sea",
                 "rcs": "11",
+                "sd_vvp_threshold": "1",
+                "radar_height": "45",
                 "source_file": source,
                 "dbz_all": col["DBZH"],
                 "gap": {"T": "true", "F": "false"}[col["gap"]],
@@ -215,6 +219,25 @@ def test_scans_refuses_heights_not_above_sea_level():
     assert (
         len(bc.scans(to_csv(good), "KDIX")["KDIX20251019_072226_V06"]) == 5
     )  # "sea" passes
+    blank = [
+        dict(r, height_reference="") for r in good
+    ]  # every 2023 file: no label, heights still ASL
+    assert len(bc.scans(to_csv(blank), "KDIX")["KDIX20251019_072226_V06"]) == 5
+    buf = io.StringIO()  # the 26-column files have no height_reference column at all
+    w = csv.DictWriter(
+        buf,
+        fieldnames=[f for f in FIELDS if f != "height_reference"],
+        extrasaction="ignore",
+    )
+    w.writeheader()
+    w.writerows(good)
+    assert "height_reference" not in buf.getvalue().splitlines()[0]
+    assert len(bc.scans(buf.getvalue(), "KDIX")["KDIX20251019_072226_V06"]) == 5
+    ground_frame = [
+        dict(r, height_reference="", radar_height="361") for r in good
+    ]  # gates at 0-200 m, antenna 361
+    with pytest.raises(ValueError, match="below the antenna at 361 m"):
+        bc.scans(to_csv(ground_frame), "KDIX")
     above_antenna = [dict(r, height_reference="radar") for r in good]
     with pytest.raises(ValueError, match="heights above 'radar', not sea level"):
         bc.scans(to_csv(above_antenna), "KDIX")
@@ -314,3 +337,83 @@ def test_select_matches_backfill_night(tmp_path, monkeypatch):
             sorted(ran) == sorted(bc.select(names, sunset, sunrise, every))
             and len(ran) == n
         )
+
+
+def test_a_scan_at_another_sd_vvp_threshold_gives_its_slot_to_the_next_scan(
+    tmp_path, monkeypatch
+):
+    site = {"id": "KDIX", "lat": 39.947, "lon": -74.411}
+    monkeypatch.setattr(bc, "fall_nights", lambda year: [dt.date(2021, 9, 15)])
+    sunset, _ = night_window(dt.date(2021, 9, 15), site["lon"], site["lat"])
+    plant = {}
+
+    def scan(t, threshold):
+        name = f"KDIX{t:%Y%m%d_%H%M%S}_V06"
+        rows = birdcast_rows(V2B, f"{t:%Y-%m-%dT%H:%M:%SZ}", name)
+        plant.setdefault(t.date(), []).extend(
+            dict(r, sd_vvp_threshold=threshold) for r in rows
+        )
+        return name
+
+    first = scan(sunset + dt.timedelta(minutes=2), "2")  # night, slot 0: dropped
+    second = scan(
+        sunset + dt.timedelta(minutes=6), "1"
+    )  # night, slot 0: takes the slot
+    scan(sunset - dt.timedelta(hours=3), "2")  # by day: dropped, not counted
+    later = scan(sunset + dt.timedelta(minutes=12), "1")  # slot 1, untouched
+
+    def get(radar, day):
+        return (
+            (to_csv(plant[day]), {"etag": None, "last_modified": None})
+            if day in plant
+            else None
+        )
+
+    r = bc.radar_fall(site, 2021, tmp_path, get)
+    stored = sorted(p.name for p in (tmp_path / "KDIX").rglob("*.txt.gz"))
+    assert (
+        stored == sorted([second + ".txt.gz", later + ".txt.gz"])
+        and first + ".txt.gz" not in stored
+    )
+    assert r["other_threshold_scans"] == 1 and r["profiles"] == 2
+
+
+def test_main_lists_a_failed_radar_fall_and_still_writes_the_rest(
+    tmp_path, monkeypatch
+):
+    import concurrent.futures as cf
+    import json
+
+    def fake(site, year, root):
+        if site["id"] == "KBOX":
+            raise ValueError("planted failure")
+        return {
+            "nights": 1,
+            "nights_with_profiles": 1,
+            "profiles": 3,
+            "missing_days": [],
+            "days": {},
+        }
+
+    monkeypatch.setattr(bc, "EXECUTOR", cf.ThreadPoolExecutor)
+    monkeypatch.setattr(bc, "radar_fall", fake)
+    args = [
+        "--root",
+        str(tmp_path),
+        "--falls",
+        "2021",
+        "--site",
+        "KDIX",
+        "--site",
+        "KBOX",
+        "--workers",
+        "2",
+    ]
+    with pytest.raises(SystemExit, match=r"failed: \['KBOX 2021'\]"):
+        bc.main(args)
+    (manifest,) = tmp_path.glob("manifest_*.json")
+    doc = json.loads(manifest.read_text())
+    assert doc["failed_radar_falls"] == {"KBOX 2021": "ValueError('planted failure')"}
+    assert (
+        doc["radar_falls"]["KDIX 2021"]["profiles"] == 3
+    )  # the good radar-fall is kept

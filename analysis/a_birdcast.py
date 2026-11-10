@@ -34,6 +34,10 @@ log = logging.getLogger("a_birdcast")
 URL = "https://birdcastdata.s3.amazonaws.com/nexrad/daily/{r}/{d:%Y}/{r}_vpts_{d:%Y%m%d}.csv"
 EVERY_MIN = 10  # the backfill's slot rule (bird_nights.backfill_night --every-min 10)
 FALL = ((8, 1), (12, 31))
+SD_VVP_THRESHOLD = (
+    "1"  # BirdCast's setting in every file sampled (19 radars x 2021-2026, Oct 15)
+)
+EXECUTOR = cf.ProcessPoolExecutor
 # vol2bird's columns, in its order; BirdCast's column for each (DBZH is vol2bird's name for dbz_all)
 COLUMNS = [
     ("u", "u"),
@@ -83,20 +87,34 @@ def fetch(radar: str, day: dt.date, tries: int = 5) -> tuple[str, dict] | None:
 
 def scans(text: str, radar: str) -> dict[str, list[dict]]:
     """{source volume name: its rows} from one BirdCast day file; every row of a scan must share one time. Heights
-    must be above sea level, the frame integrate_profile and the height quartiles assume (pipeline/vol2bird.py)."""
+    must be above sea level, the frame integrate_profile and the height quartiles assume (pipeline/vol2bird.py):
+    height_reference is "sea", "" (every 2023 file) or absent (the 26-column files: 31 days of fall 2024 and every
+    Jan 1, 2026; layout census 2026-11-10), and in every scan no bin below the one holding the antenna has gates,
+    which a frame counted from the ground would break."""
     out: dict[str, list[dict]] = {}
     for row in csv.DictReader(io.StringIO(text)):
         if row["radar"] != radar:
             raise ValueError(f"{radar} file holds a row for {row['radar']}")
-        if row["height_reference"] != "sea":
+        ref = row.get(
+            "height_reference"
+        )  # None: the 26-column layout has no such column
+        if ref not in ("sea", "", None):
             raise ValueError(
-                f"{row['source_file']}: heights above {row['height_reference']!r}, not sea level"
+                f"{row['source_file']}: heights above {ref!r}, not sea level"
             )
         out.setdefault(row["source_file"], []).append(row)
     for name, rows in out.items():
         times = {r["datetime"] for r in rows}
         if len(times) != 1:
             raise ValueError(f"{name}: rows at {len(times)} times {sorted(times)[:3]}")
+        antenna = float(rows[0]["radar_height"])
+        antenna_bin = max(h for h in (float(r["height"]) for r in rows) if h <= antenna)
+        gated = [float(r["height"]) for r in rows if int(r["n_all"] or 0) > 0]
+        if gated and min(gated) < antenna_bin:
+            raise ValueError(
+                f"{name}: gates in the {min(gated):.0f} m bin, below the antenna at {antenna:.0f} m: "
+                "heights are not above sea level"
+            )
     return out
 
 
@@ -162,6 +180,7 @@ def radar_fall(site: dict, year: int, root: Path, get=fetch) -> dict:
         "nights_with_profiles": 0,
         "profiles": 0,
         "missing_days": [],
+        "other_threshold_scans": 0,
         "days": meta,
     }
     for night in fall_nights(year):
@@ -181,7 +200,17 @@ def radar_fall(site: dict, year: int, root: Path, get=fetch) -> dict:
             d += dt.timedelta(days=1)
         for old in [k for k in days if k < sunset.date()]:
             del days[old]
-        kept = select(list(names), sunset, sunrise)
+        # one sd_vvp threshold for every scan: the rare scan run at another (4 of 169 on KAKQ 2022-10-15, all by
+        # day) is dropped before the slot rule, which then takes the slot's next scan; counted when in the night
+        other = [
+            k
+            for k, rows in names.items()
+            if any(r["sd_vvp_threshold"] != SD_VVP_THRESHOLD for r in rows)
+        ]
+        out["other_threshold_scans"] += len(
+            select(other, sunset, sunrise, every_min=1e-9)
+        )
+        kept = select([k for k in names if k not in set(other)], sunset, sunrise)
         for k in kept:
             save_profile(to_vol2bird(names[k]), site["id"], k, root)
         out["nights"] += 1
@@ -216,14 +245,19 @@ def main(argv=None):
     a.root.mkdir(parents=True, exist_ok=True)
     started = dt.datetime.now(ZoneInfo("America/New_York"))
     jobs = [(sid, y) for sid in ids for y in years]
-    res = {}
-    with cf.ProcessPoolExecutor(a.workers) as ex:
+    res, errors = {}, {}
+    with EXECUTOR(a.workers) as ex:
         futs = {
             ex.submit(radar_fall, sites[sid], y, a.root): (sid, y) for sid, y in jobs
         }
         for fut in cf.as_completed(futs):
             sid, y = futs[fut]
-            r = res[f"{sid} {y}"] = fut.result()
+            try:
+                r = res[f"{sid} {y}"] = fut.result()
+            except Exception as e:  # noqa: BLE001 - one bad radar-fall must not cost the others; listed, run fails
+                errors[f"{sid} {y}"] = repr(e)
+                log.error("%s %d FAILED: %r", sid, y, e)
+                continue
             log.info(
                 "%s %d: %d/%d nights with profiles, %d profiles, %d day files missing",
                 sid,
@@ -243,14 +277,17 @@ def main(argv=None):
         ),
         "radar_falls": dict(sorted(res.items())),
         "empty_radar_falls": empty,
+        "failed_radar_falls": dict(sorted(errors.items())),
     }
     name = f"manifest_{'-'.join(map(str, years))}_{started:%Y%m%dT%H%M}.json"
     (a.root / name).write_text(json.dumps(doc, indent=1) + "\n")
     print(
         f"{len(res)} radar-falls, {sum(r['profiles'] for r in res.values())} profiles, empty: {empty}; {name}"
     )
-    if empty:
-        raise SystemExit(f"radar-falls with no profiles: {empty}")
+    if empty or errors:
+        raise SystemExit(
+            f"radar-falls with no profiles: {empty}; failed: {sorted(errors)}"
+        )
 
 
 if __name__ == "__main__":

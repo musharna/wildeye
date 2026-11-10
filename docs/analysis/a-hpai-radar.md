@@ -136,13 +136,25 @@ beside any radar series.
   eta and gate counts in 100 m bins from 0 to 4,900 m, with the source volume's name). Checked from the bucket
   listing on 2026-11-10: every one of the 19 radars has 143–153 of 153 days from Aug 1 to Dec 31 in each fall
   2021–2025, and all 46 days from Nov 16 to Dec 31, 2025. Files run to 2026-11-09. The vol2bird version and
-  settings BirdCast used are not stated, and its 100 m bins differ from the pinned image's 200 m. KDIX files from
-  2021, 2024 and 2025 (checked 2026-11-10) were all written Jan 27–29, 2026, with the same 27 columns, 100 m bins to
-  4,900 m, rcs 11 and sd_vvp threshold 1. The 2025 files print times with milliseconds (`00:02:25.000Z`), the others
-  without (`00:05:37Z`). That is the only layout difference found, and the converter reads both.
+  settings BirdCast used are not stated, and its 100 m bins differ from the pinned image's 200 m.
+- **Layout census** (2026-11-10). The header and first row of every file needed, 16,549 radar-days from Aug 1 to
+  Jan 1, 2021–2026; 115 days have no file. Every file was written in 2026, and all share 100 m bins.
+  - Heights: `height_reference` is "sea" in most files, blank in every fall-2023 file, and absent (26 columns) in
+    31 days of fall 2024 and every Jan 1, 2026.
+  - Times: fall-2025 files print milliseconds (`00:02:25.000Z`).
+
+  Sampled on Oct 15 across 19 radars × 2021–2026, plus Oct 15, 2022 on KAKQ: rcs is 11 everywhere and the sd_vvp
+  threshold is 1, except 4 of 169 KAKQ scans on Oct 15, 2022, all by day, at 2. For the blank and absent labels:
+  on KPBZ, KCLE and KTBW in 2022–2024, the lowest bin with any gates is the one holding the antenna every year
+  (400, 200 and 0 m), so the heights are above sea level.
 - **Change.** Every passage fall, 2021–2025, and the 2026 replication, comes from BirdCast, fall 2025 included, so
-  all years share one method. A0's store is not used for A's exposure. From each night the first `_V06` scan of each
-  10-minute slot from sunset is kept, as the backfill does. Each kept scan is written in vol2bird's own text layout
+  all years share one method. A0's store is not used for A's exposure.
+  - A scan is used only if its heights are labeled "sea", blank or absent, and no bin below the one holding the
+    antenna has gates. A file that breaks this stops its radar-fall.
+  - A scan whose sd_vvp threshold is not 1 is dropped. The night's count of these goes in the manifest.
+  - From each night the first `_V06` scan of each 10-minute slot from sunset is kept, as the backfill does.
+
+  Each kept scan is written in vol2bird's own text layout
   (time to the minute, as vol2bird prints it) and goes through the same `night_total` and fast-share functions as
   A0. Fast passage, the weekly exposure and everything under The test are unchanged.
 - **Bridge, run after A0's verdict.** On Aug 1 – Nov 15, 2025, radar-nights present in both BirdCast and A0's
