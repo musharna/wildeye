@@ -115,8 +115,8 @@ def fall_week(day: dt.date) -> tuple[int, int] | None:
 
 def gazetteer(zip_path: Path) -> dict[tuple[str, str], tuple[float, float]]:
     """(normalised state name, normalised county name) -> internal point, the key pipeline/hpai.py matches on."""
-    z = zipfile.ZipFile(zip_path)
-    lines = io.TextIOWrapper(z.open(GAZ_NAME), encoding="latin-1").read().splitlines()
+    with zipfile.ZipFile(zip_path) as z, z.open(GAZ_NAME) as f:
+        lines = io.TextIOWrapper(f, encoding="latin-1").read().splitlines()
     head = [h.strip() for h in lines[0].split("\t")]
     out = {}
     for line in lines[1:]:
@@ -132,9 +132,10 @@ def gazetteer(zip_path: Path) -> dict[tuple[str, str], tuple[float, float]]:
 
 
 def count(
-    rows: list[dict], places: dict, radars: list[dict]
+    rows: list[dict], places: dict, radars: list[dict], today: dt.date
 ) -> tuple[dict, collections.Counter]:
-    """{radar: {year: {method: Counter(week)}}} and the drop reasons. A detection counts for every radar within
+    """{radar: {year: {method: Counter(week)}}} and the drop reasons. A row collected after `today` (the run date)
+    is a data error and is dropped. A detection counts for every radar within
     R_KM of its county."""
     out: dict = {
         r["id"]: {y: collections.defaultdict(collections.Counter) for y in YEARS}
@@ -152,6 +153,9 @@ def count(
             )
         if r["collected"] is None:
             why["no_collection_date"] += 1
+            continue
+        if r["collected"] > today:
+            why["collected_after_run_date"] += 1
             continue
         fw = fall_week(r["collected"])
         if fw is None or fw[0] not in YEARS:
@@ -186,13 +190,19 @@ def main(argv=None):
         required=True,
         help="2021 county gazetteer zip (B's cache has one)",
     )
+    ap.add_argument("--refresh", action="store_true", help="fetch the APHIS CSV again")
+    ap.add_argument("--today", type=dt.date.fromisoformat, default=dt.date.today())
     a = ap.parse_args(argv)
     a.cache.mkdir(parents=True, exist_ok=True)
     csv_path = a.cache / "hpai-wild-birds.csv"
-    if not csv_path.exists():
+    if a.refresh or not csv_path.exists():
         csv_path.write_text(fetch_csv(), encoding="utf-8")
+    fetched = dt.datetime.fromtimestamp(csv_path.stat().st_mtime)
+    print(
+        f"APHIS CSV fetched {fetched:%Y-%m-%d %H:%M} local ({csv_path}; --refresh to fetch again)"
+    )
     rows, pc = parse_rows(csv_path.read_text(encoding="utf-8"))
-    out, why = count(rows, gazetteer(a.gaz), SITES)
+    out, why = count(rows, gazetteer(a.gaz), SITES, a.today)
     accounted = sum(why.values()) + pc.get("no_date", 0)
     if accounted != pc["rows"]:
         raise RuntimeError(
