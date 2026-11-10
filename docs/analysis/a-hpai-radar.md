@@ -136,7 +136,10 @@ beside any radar series.
   eta and gate counts in 100 m bins from 0 to 4,900 m, with the source volume's name). Checked from the bucket
   listing on 2026-11-10: every one of the 19 radars has 143–153 of 153 days from Aug 1 to Dec 31 in each fall
   2021–2025, and all 46 days from Nov 16 to Dec 31, 2025. Files run to 2026-11-09. The vol2bird version and
-  settings BirdCast used are not stated, and its 100 m bins differ from the pinned image's 200 m.
+  settings BirdCast used are not stated, and its 100 m bins differ from the pinned image's 200 m. KDIX files from
+  2021, 2024 and 2025 (checked 2026-11-10) were all written Jan 27–29, 2026, with the same 27 columns, 100 m bins to
+  4,900 m, rcs 11 and sd_vvp threshold 1. The 2025 files print times with milliseconds (`00:02:25.000Z`), the others
+  without (`00:05:37Z`). That is the only layout difference found, and the converter reads both.
 - **Change.** Every passage fall, 2021–2025, and the 2026 replication, comes from BirdCast, fall 2025 included, so
   all years share one method. A0's store is not used for A's exposure. From each night the first `_V06` scan of each
   10-minute slot from sunset is kept, as the backfill does. Each kept scan is written in vol2bird's own text layout

@@ -3,7 +3,9 @@ must be the ones the backfill would have kept."""
 
 import csv
 import datetime as dt
+import http.server
 import io
+import threading
 
 import pytest
 
@@ -99,11 +101,16 @@ def to_csv(rows):
     return buf.getvalue()
 
 
-@pytest.mark.parametrize("missing", ["", "NaN"])
-def test_birdcast_scan_reads_like_the_vol2bird_profile(missing):
-    rows = birdcast_rows(
-        V2B, "2025-10-19T07:22:26Z", "KDIX20251019_072226_V06", missing
-    )
+@pytest.mark.parametrize(
+    "missing, when",  # both time layouts BirdCast uses: 2021-2024 files, and 2025 files with milliseconds
+    [
+        ("", "2025-10-19T07:22:26Z"),
+        ("NaN", "2025-10-19T07:22:26Z"),
+        ("", "2025-10-19T07:22:26.000Z"),
+    ],
+)
+def test_birdcast_scan_reads_like_the_vol2bird_profile(missing, when):
+    rows = birdcast_rows(V2B, when, "KDIX20251019_072226_V06", missing)
     text = bc.to_vol2bird(rows)
     assert parse_profile(text) == parse_profile(V2B)
     assert (
@@ -193,3 +200,117 @@ def test_radar_fall_fills_a_store_night_total_reads(tmp_path, monkeypatch):
     r2 = bc.radar_fall(site, 2021, tmp_path / "second", get)
     assert r2["missing_days"] == [sunrise.date().isoformat()]
     assert 0 < r2["profiles"] < expect
+
+
+def test_to_vol2bird_refuses_a_time_that_is_not_utc():
+    utc = birdcast_rows(V2B, "2025-10-19T07:22:26.000Z", "KDIX20251019_072226_V06")
+    assert " 0722 " in bc.to_vol2bird(utc)  # positive control
+    local = birdcast_rows(V2B, "2025-10-19T07:22:26-04:00", "KDIX20251019_072226_V06")
+    with pytest.raises(ValueError, match="is not UTC"):
+        bc.to_vol2bird(local)
+
+
+def test_scans_refuses_heights_not_above_sea_level():
+    good = birdcast_rows(V2B, "2025-10-19T07:22:26Z", "KDIX20251019_072226_V06")
+    assert (
+        len(bc.scans(to_csv(good), "KDIX")["KDIX20251019_072226_V06"]) == 5
+    )  # "sea" passes
+    above_antenna = [dict(r, height_reference="radar") for r in good]
+    with pytest.raises(ValueError, match="heights above 'radar', not sea level"):
+        bc.scans(to_csv(above_antenna), "KDIX")
+
+
+def test_fetch_against_a_real_http_server(monkeypatch):
+    """fetch() over real HTTP: 200 returns text + ETag, 404 is a missing day (None), a 500 is retried, a 403 raises."""
+    hits = {}
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits[self.path] = hits.get(self.path, 0) + 1
+            day = self.path.rsplit("/", 1)[-1]
+            code = {"20210916.csv": 404, "20210918.csv": 403}.get(day, 200)
+            if day == "20210917.csv" and hits[self.path] == 1:
+                code = 500
+            self.send_response(code)
+            if code == 200:
+                self.send_header("ETag", '"abc"')
+            self.end_headers()
+            if code == 200:
+                self.wfile.write(b"radar,datetime\nKDIX,x\n")
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        monkeypatch.setattr(
+            bc, "URL", f"http://127.0.0.1:{srv.server_port}/{{r}}/{{d:%Y%m%d}}.csv"
+        )
+        monkeypatch.setattr(bc.time, "sleep", lambda s: None)
+        text, meta = bc.fetch("KDIX", dt.date(2021, 9, 15))
+        assert text == "radar,datetime\nKDIX,x\n" and meta["etag"] == '"abc"'
+        assert bc.fetch("KDIX", dt.date(2021, 9, 16)) is None
+        assert (
+            bc.fetch("KDIX", dt.date(2021, 9, 17))[0].startswith("radar")
+            and hits["/KDIX/20210917.csv"] == 2
+        )
+        with pytest.raises(bc.urllib.error.HTTPError, match="403"):
+            bc.fetch("KDIX", dt.date(2021, 9, 18), tries=2)
+        assert hits["/KDIX/20210918.csv"] == 2
+    finally:
+        srv.shutdown()
+
+
+def test_select_matches_backfill_night(tmp_path, monkeypatch):
+    """The two copies of the slot rule (backfill_night's and select's) keep the same scans from one archive listing,
+    at 10 and 30 min; edge cases: before sunset, two in a slot, a non-volume key, after sunrise."""
+    import pipeline.bird_nights as bn
+    import pipeline.nexrad as nx
+
+    site = {"id": "KDIX", "lat": 39.947, "lon": -74.411}
+    sunset, sunrise = night_window(dt.date(2021, 9, 15), site["lon"], site["lat"])
+    times = [
+        sunset + dt.timedelta(minutes=m)
+        # no scan at sunset and none within a second of a boundary (keys drop fractions of a second):
+        # slots from sunset keep 3, 11, 25, 400; counted from the first scan they would keep 3, 14, 25, 400
+        for m in (-5, 3, 9, 11, 14, 25, 27, 400)
+    ]
+    times.append(sunrise + dt.timedelta(minutes=1))
+    keys = [f"{t:%Y/%m/%d}/KDIX/KDIX{t:%Y%m%d_%H%M%S}_V06" for t in times]
+    keys.append(
+        f"{sunset:%Y/%m/%d}/KDIX/KDIX{sunset + dt.timedelta(minutes=1):%Y%m%d_%H%M%S}_MDM"
+    )
+    monkeypatch.setattr(
+        nx,
+        "list_day_keys",
+        lambda sid, day: [k for k in keys if k.split("/")[2] == f"{day:%d}"],
+    )
+    ran = []
+
+    def fake_download(k, dest):
+        ran.append(k.rsplit("/", 1)[-1])
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / "v").write_bytes(b"x")
+        return dest / "v"
+
+    monkeypatch.setattr(nx, "download_volume", fake_download)
+    monkeypatch.setattr(bn, "run_vol2bird", lambda vol, options=None: "raw")
+    names = [k.rsplit("/", 1)[-1] for k in keys]
+    for every, root, n in ((10, "a", 4), (30, "b", 2)):
+        ran.clear()
+        assert (
+            bn.backfill_night(
+                site,
+                dt.date(2021, 9, 15),
+                tmp_path / root,
+                tmp_path / "w",
+                1,
+                every_min=every,
+            )
+            == []
+        )
+        assert (
+            sorted(ran) == sorted(bc.select(names, sunset, sunrise, every))
+            and len(ran) == n
+        )

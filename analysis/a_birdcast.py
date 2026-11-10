@@ -82,11 +82,16 @@ def fetch(radar: str, day: dt.date, tries: int = 5) -> tuple[str, dict] | None:
 
 
 def scans(text: str, radar: str) -> dict[str, list[dict]]:
-    """{source volume name: its rows} from one BirdCast day file; every row of a scan must share one time."""
+    """{source volume name: its rows} from one BirdCast day file; every row of a scan must share one time. Heights
+    must be above sea level, the frame integrate_profile and the height quartiles assume (pipeline/vol2bird.py)."""
     out: dict[str, list[dict]] = {}
     for row in csv.DictReader(io.StringIO(text)):
         if row["radar"] != radar:
             raise ValueError(f"{radar} file holds a row for {row['radar']}")
+        if row["height_reference"] != "sea":
+            raise ValueError(
+                f"{row['source_file']}: heights above {row['height_reference']!r}, not sea level"
+            )
         out.setdefault(row["source_file"], []).append(row)
     for name, rows in out.items():
         times = {r["datetime"] for r in rows}
@@ -104,9 +109,12 @@ def _val(column: str, raw: str) -> str:
 def to_vol2bird(rows: list[dict]) -> str:
     """One scan's rows as vol2bird prints a profile: '# ... HGHT ...' header, then 'YYYYMMDD HHMM HGHT values'
     (time to the minute, as vol2bird prints it), lowest bin first."""
-    t = dt.datetime.strptime(
-        rows[0]["datetime"].replace("Z", "+0000"), "%Y-%m-%dT%H:%M:%S%z"
-    )
+    # 2021-2024 files print "...T00:05:37Z", 2025 files "...T00:02:25.000Z" (same Jan 2026 batch, same columns)
+    t = dt.datetime.fromisoformat(rows[0]["datetime"])
+    if t.utcoffset() != dt.timedelta(0):
+        raise ValueError(
+            f"{rows[0]['source_file']}: time {rows[0]['datetime']} is not UTC"
+        )
     stamp = f"{t:%Y%m%d} {t:%H%M}"
     lines = [
         "# vol2bird Vertical Profile of Birds (VPB)",
@@ -126,8 +134,8 @@ def select(
     sunrise: dt.datetime,
     every_min: float = EVERY_MIN,
 ) -> list[str]:
-    """The backfill's rule: _V06 volumes with sunset <= scan time <= sunrise, then the first of each every_min slot
-    counted from sunset."""
+    """The backfill's rule (bird_nights.backfill_night, kept identical by test_select_matches_backfill_night):
+    _V06 volumes with sunset <= scan time <= sunrise, then the first of each every_min slot counted from sunset."""
     night = sorted(
         (k for k in names if k.endswith("_V06") and sunset <= key_time(k) <= sunrise),
         key=key_time,
