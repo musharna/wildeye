@@ -122,8 +122,11 @@ def main(argv=None):
             except Exception as e:  # logged loud; last-good keeps the site
                 failures[s["id"]] = repr(e)
                 log.error("%s FAILED: %r", s["id"], e)
+    # generated_at is the last run with any new scan: when every site fails, the file still says so (every feature
+    # stale, failures listed) but keeps the previous stamp, so freshness.py, which reads only generated_at, sees the
+    # outage. birds_field.json takes the same stamp.
     fc = {"type": "FeatureCollection",
-          "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+          "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ") if new else (prev or {}).get("generated_at"),
           "site_count": len(sites), "fresh_count": len(new), "failures": failures,
           "features": merge_last_good(new, prev)}
     write_atomic(a.out, fc)

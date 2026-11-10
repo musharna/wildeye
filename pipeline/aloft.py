@@ -1,7 +1,8 @@
 """Aloft / BALTRAD vertical profiles (CC0) → latest profile per European radar.
 
 Source: https://aloftdata.s3-eu-west-1.amazonaws.com/baltrad/daily/<radar>/<year>/<radar>_vpts_<YYYYMMDD>.csv
-Daily files, 5-min profiles, published within ~48 h. Same reducer as NEXRAD.
+Daily files, 5-min profiles, published within ~48 h. Same reducer as NEXRAD. A radar whose newest profile is
+older than STALE_AFTER is kept on the map but marked stale.
 """
 from __future__ import annotations
 import argparse, csv, datetime as dt, io, json, logging, re, time
@@ -11,12 +12,19 @@ import urllib.request
 from .vol2bird import reduce_profile
 from .atomic import write_atomic
 from .net import urlopen
+from .freshness import LAYERS, limit
 
 log = logging.getLogger("aloft")
 BUCKET = "https://aloftdata.s3-eu-west-1.amazonaws.com"
 PREFIX = "baltrad/daily/"
 _KEY = re.compile(r"<Key>([^<]+)</Key>")
 _PFX = re.compile(r"<Prefix>([^<]+)</Prefix>")
+# A profile reaches the bucket up to ~48 h after it was measured; on top of that, the same allowance freshness.py gives
+# this layer's file (two missed daily runs plus 6 h). Older than both and the radar has missed two daily files: 4 days
+# 6 h. Measured on the live layer 2026-11-08: 134 of 153 radars 34-37 h old, then 47 h, 73 h, 91 h, and 16 at 154 h
+# to 553 days.
+PUBLISH_LAG = dt.timedelta(hours=48)
+STALE_AFTER = PUBLISH_LAG + limit(LAYERS["aloft.geojson"])
 
 def _get(url: str, timeout: int = 60) -> str:
     with urlopen(url, timeout=timeout) as r:
@@ -65,13 +73,16 @@ def latest_profile(prof: dict) -> tuple[str, list[dict]]:
             return key[0], sorted(bins, key=lambda b: b["height_m"] if b["height_m"] is not None else 1e9)
     raise ValueError(f"{prof['radar']}: no profile with data")
 
+def is_stale(scan_time: str, now: dt.datetime) -> bool:
+    return now - dt.datetime.fromisoformat(scan_time) > STALE_AFTER
+
 def radar_feature(prof: dict) -> dict:
     t, bins = latest_profile(prof)
     rec = reduce_profile(bins)
     return {"type": "Feature",
             "geometry": {"type": "Point", "coordinates": [prof["lon"], prof["lat"]]},
             "properties": {"site": prof["radar"], "name": prof["radar"].upper(), "scan_time": t,
-                           "stale": False, "source": "aloft-baltrad", **rec}}
+                           "stale": is_stale(t, dt.datetime.now(dt.UTC)), "source": "aloft-baltrad", **rec}}
 
 def process_radar(radar: str) -> dict:
     key = latest_daily_key(radar)
@@ -97,13 +108,17 @@ def main(argv=None):
                 feats[r] = fut.result()
             except Exception as e:
                 failures[r] = repr(e); log.error("%s FAILED: %r", r, e)
-    fc = {"type": "FeatureCollection", "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-          "source": "Aloft / BALTRAD_VPTS (CC0)", "site_count": len(radars), "fresh_count": len(feats),
-          "failures": failures, "features": [feats[k] for k in sorted(feats)]}
-    write_atomic(a.out, fc)
-    log.info("wrote %s fresh=%d/%d wall=%.0fs", a.out, len(feats), len(radars), time.time() - t0)
     if not feats:
-        raise SystemExit("every radar failed")
+        # the file is left as it was: rewriting it stamped generated_at = now over an empty map, and freshness.py
+        # (which reads only generated_at) saw a healthy layer through the outage
+        raise SystemExit(f"every radar failed; {a.out} left as it was")
+    stale = sum(f["properties"]["stale"] for f in feats.values())
+    fc = {"type": "FeatureCollection", "generated_at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+          "source": "Aloft / BALTRAD_VPTS (CC0)", "site_count": len(radars), "fresh_count": len(feats) - stale,
+          "stale_count": stale, "failures": failures, "features": [feats[k] for k in sorted(feats)]}
+    write_atomic(a.out, fc)
+    log.info("wrote %s fresh=%d stale=%d failed=%d of %d wall=%.0fs", a.out, len(feats) - stale, stale, len(failures),
+             len(radars), time.time() - t0)
 
 if __name__ == "__main__":
     main()
