@@ -20,6 +20,7 @@ import math
 import sys
 import zipfile
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from pipeline.hpai import _norm, fetch_csv, parse_rows
@@ -191,15 +192,21 @@ def main(argv=None):
         help="2021 county gazetteer zip (B's cache has one)",
     )
     ap.add_argument("--refresh", action="store_true", help="fetch the APHIS CSV again")
-    ap.add_argument("--today", type=dt.date.fromisoformat, default=dt.date.today())
+    ap.add_argument(
+        "--today",
+        type=dt.date.fromisoformat,
+        default=dt.datetime.now(ZoneInfo("America/New_York")).date(),
+    )
     a = ap.parse_args(argv)
     a.cache.mkdir(parents=True, exist_ok=True)
     csv_path = a.cache / "hpai-wild-birds.csv"
     if a.refresh or not csv_path.exists():
         csv_path.write_text(fetch_csv(), encoding="utf-8")
-    fetched = dt.datetime.fromtimestamp(csv_path.stat().st_mtime)
+    fetched = dt.datetime.fromtimestamp(
+        csv_path.stat().st_mtime, ZoneInfo("America/New_York")
+    )
     print(
-        f"APHIS CSV fetched {fetched:%Y-%m-%d %H:%M} local ({csv_path}; --refresh to fetch again)"
+        f"APHIS CSV fetched {fetched:%Y-%m-%d %H:%M %Z} ({csv_path}; --refresh to fetch again)"
     )
     rows, pc = parse_rows(csv_path.read_text(encoding="utf-8"))
     out, why = count(rows, gazetteer(a.gaz), SITES, a.today)
