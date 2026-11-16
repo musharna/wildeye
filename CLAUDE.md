@@ -32,8 +32,8 @@ Every test ships with three controls:
    that drives the real thing, not only a fixture.
 
 A fixture encodes your belief; it cannot fail on that belief. A wall-clock
-budget cannot tell a slow host from a broken test. A surviving mutant
-(`nightly-guardrails.yml`) is the coverage report.
+budget cannot tell a slow host from a broken test. A surviving mutant (in
+repos that run `nightly-guardrails.yml`) is the coverage report.
 
 ## 3. House rules (enforced; see `.pre-commit-config.yaml`)
 
@@ -59,8 +59,8 @@ is wrong, fix the hook in `repo-template` and resync.
 
 ## 4. When you miss, write the lesson, do not hand-fix in silence
 
-A finding from review, the nightly fuzz or mutation job, or a human reading
-the diff means the bar was missed. The fix is two commits, not one:
+A finding from review, the nightly fuzz or mutation job where one runs, or a
+human reading the diff means the bar was missed. The fix is two commits, not one:
 
 1. the code fix, with the test that now fails on the old code;
 2. the lesson, appended to `LESSONS.md` (create it on first use): one line,

@@ -158,3 +158,36 @@ def test_main_writes_the_night_table_even_when_every_site_fails(tmp_path: Path, 
         bb.main(["--out", str(out), "--sites", "2", "--workers", "1", "--vp-dir", str(tmp_path / "vp")])
     assert calls == [(tmp_path / "vp", ["KOKX", "KBOX"], tmp_path / "data" / "birds_nights.json")]
     assert json.loads(out.read_text())["fresh_count"] == 0
+
+
+def test_a_run_where_every_site_fails_keeps_the_last_generated_at(tmp_path: Path, monkeypatch):
+    """Every site failing still wrote generated_at = now, so freshness.py (which reads only generated_at) saw a
+    healthy layer through an outage. The run now keeps the last good stamp, marks every site stale and still exits
+    with "every site failed". A run where one site succeeds stamps now (the positive control)."""
+    import datetime as dt
+    import pytest
+    import pipeline.build_birds as bb
+
+    def one_ok(site, workdir, ppi_dir, vp_dir=None):
+        if site["id"] != "KOKX":
+            raise RuntimeError("no volume")
+        return build_feature(site, {**REC, "mtr_birds_km_h": 40.0}, "2026/09/11/KOKX/KOKX20260911_001210_V06"), None
+
+    def boom(site, workdir, ppi_dir, vp_dir=None):
+        raise RuntimeError("no volume")
+    monkeypatch.setattr(bb, "build_nights", lambda root, sites, out, now, **kw: {"failures": {}})
+    out = tmp_path / "data" / "birds.geojson"
+    args = ["--out", str(out), "--sites", "2", "--workers", "1", "--vp-dir", str(tmp_path / "vp")]
+    monkeypatch.setattr(bb, "process_site", one_ok)
+    t0 = dt.datetime.now(dt.UTC).replace(microsecond=0)
+    bb.main(args)
+    fc = json.loads(out.read_text())
+    assert fc["fresh_count"] == 1 and list(fc["failures"]) == ["KBOX"]
+    assert dt.datetime.fromisoformat(fc["generated_at"]) >= t0
+    out.write_text(json.dumps(fc | {"generated_at": "2026-11-01T06:20:00Z"}))
+    monkeypatch.setattr(bb, "process_site", boom)
+    with pytest.raises(SystemExit, match="every site failed"):
+        bb.main(args)
+    fc = json.loads(out.read_text())
+    assert fc["generated_at"] == "2026-11-01T06:20:00Z" and fc["fresh_count"] == 0 and sorted(fc["failures"]) == ["KBOX", "KOKX"]
+    assert [(f["properties"]["site"], f["properties"]["stale"]) for f in fc["features"]] == [("KOKX", True)]

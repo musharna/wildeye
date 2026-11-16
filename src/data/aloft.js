@@ -14,7 +14,9 @@ export function describeAloft(p, h) {
     ? `${Number(p.density_birds_km3).toFixed(1)} birds/km³ (0–3 km mean), heading ${Math.round(p.heading_deg)}°, ` +
       `${Number(p.speed_ms ?? 0).toFixed(0)} m/s${densestText(p.peak_altitude_m)}`
     : 'Quiet — no biological echo in the latest profile';
-  return `${head}${body}<br>profile ${scanTime(p.scan_time)} · published daily, 1–2 day lag · CC0`;
+  // stale: the pipeline found no profile newer than 4 days 6 h (pipeline/aloft.py STALE_AFTER)
+  const stale = p.stale ? ' (stale: no newer profile)' : '';
+  return `${head}${body}<br>profile ${scanTime(p.scan_time)}${stale} · published daily, 1–2 day lag · CC0`;
 }
 
 export function createAloftLayer() {

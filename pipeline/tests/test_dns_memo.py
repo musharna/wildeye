@@ -23,9 +23,9 @@ def test_a_dropout_after_one_good_lookup_is_served_and_a_new_host_still_raises()
             raise socket.gaierror(-5, "No address associated with hostname")
         return [("ok", host)]
 
-    look = lambda h: dns_memo.lookup(
-        h, 443, ttl=300, resolve=resolver, clock=lambda: now[0]
-    )
+    def look(h):
+        return dns_memo.lookup(h, 443, ttl=300, resolve=resolver, clock=lambda: now[0])
+
     assert look("a.example") == [("ok", "a.example")] and calls == ["a.example"]
     now[0] = 100.0
     assert (

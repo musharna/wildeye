@@ -463,18 +463,34 @@ def bounded(fn, name: str):
     return payload
 
 
+def _keep_days(product: dict) -> int:
+    return int(product.get("keep_days", KEEP_DAYS))
+
+
 def process(product: dict, out_dir: Path) -> dict:
+    """The product's manifest entry, with its newest image in place as <id>.png. The image is drawn to <id>.tmp.png and
+    renamed over <id>.png only once the gaps and the archive are done, and main writes the manifest straight after: it
+    used to be renamed first, so the cron's timeout 1800 landing in fill_gaps (up to GAP_MAX fetches) left a new image
+    under the old entry's time and bounds. A kill before the rename now leaves the old image with the old entry (and at
+    worst a *.tmp.png, which deploy_pages.sh does not ship); only the instant from the rename to that write is left."""
     rgba, when, extras, masked = bounded(lambda: render(product, out_dir), product["id"])
     png = out_dir / f"{product['id']}.png"
-    _save_png(rgba, png)
-    keep_days = int(product.get("keep_days", KEEP_DAYS))
-    gap_failures = fill_gaps(product, out_dir, when, extras.get("bounds", product.get("bounds")), keep_days)
-    history = archive_frame(png, product["id"], when, out_dir, keep_days)
-    keep = ("id", "name", "icon", "bounds", "legend", "credit", "credit_key", "classes", "ramp", "kind", "zrank")
-    return {k: product[k] for k in keep if k in product} | {
-        "png": f"data/rasters/{product['id']}.png", "time": when,
-        "width": int(rgba.shape[1]), "height": int(rgba.shape[0]), "masked_fraction": round(masked, 4),
-        "history": history} | extras | ({"gap_failures": gap_failures} if gap_failures else {})
+    staged = png.with_suffix(".tmp.png")
+    try:
+        png.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(rgba, "RGBA").save(staged, optimize=True)
+        keep_days = _keep_days(product)
+        gap_failures = fill_gaps(product, out_dir, when, extras.get("bounds", product.get("bounds")), keep_days)
+        history = archive_frame(staged, product["id"], when, out_dir, keep_days)
+        keep = ("id", "name", "icon", "bounds", "legend", "credit", "credit_key", "classes", "ramp", "kind", "zrank")
+        entry = {k: product[k] for k in keep if k in product} | {
+            "png": f"data/rasters/{product['id']}.png", "time": when,
+            "width": int(rgba.shape[1]), "height": int(rgba.shape[0]), "masked_fraction": round(masked, 4),
+            "history": history} | extras | ({"gap_failures": gap_failures} if gap_failures else {})
+        staged.replace(png)
+        return entry
+    finally:
+        staged.unlink(missing_ok=True)
 
 
 GAP_MAX = 7  # steps drawn per product per run: ~200 s each for oisst at 06:45, and the deploy is at 09:00
@@ -564,10 +580,18 @@ def _stamp(when: str | None) -> str:
     return (when or dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")).replace(":", "").replace("-", "")
 
 
+def _frame_time(f: Path) -> dt.datetime | None:
+    try:
+        return dt.datetime.strptime(f.stem, "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.UTC)
+    except ValueError:
+        return None
+
+
 def archive_frame(latest_png: Path, pid: str, when: str | None, out_dir: Path, keep_days: int) -> list[dict]:
     """Copy the latest image into rasters/<id>/<stamp>.png (skipped when that acquisition
-    is already archived), prune frames older than keep_days, and return the sorted history
-    [{time, png}] — the time dimension a replay slider needs (panel audit 2026-09-11)."""
+    is already archived) and return the sorted history [{time, png}] of the frames within
+    keep_days — the time dimension a replay slider needs (panel audit 2026-09-11). Older
+    frames stay on disk until prune_frames, once the manifest no longer lists them."""
     d = out_dir / pid
     d.mkdir(parents=True, exist_ok=True)
     frame = d / f"{_stamp(when)}.png"
@@ -578,16 +602,27 @@ def archive_frame(latest_png: Path, pid: str, when: str | None, out_dir: Path, k
     cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=keep_days)
     hist = []
     for f in sorted(d.glob("*.png")):
-        stamp = f.stem
-        try:
-            t = dt.datetime.strptime(stamp, "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.UTC)
-        except ValueError:
-            continue
-        if t < cutoff:
-            f.unlink()
+        t = _frame_time(f)
+        if t is None or t < cutoff:
             continue
         hist.append({"time": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "png": f"data/rasters/{pid}/{f.name}"})
     return hist
+
+
+def prune_frames(out_dir: Path, pid: str, keep_days: int, history: list[dict]) -> list[Path]:
+    """Delete rasters/<id>/ frames older than keep_days that `history` does not list. main calls it after writing the
+    manifest that holds `history`: archive_frame used to delete them before, so a run killed between the two left
+    rasters.json listing frames that were gone."""
+    listed = {h["png"].rsplit("/", 1)[-1] for h in history}
+    cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=keep_days)
+    d = out_dir / pid
+    gone = []
+    for f in sorted(d.glob("*.png")) if d.exists() else []:
+        t = _frame_time(f)
+        if t is not None and t < cutoff and f.name not in listed:
+            f.unlink()
+            gone.append(f)
+    return gone
 
 RETRY_ATTEMPTS = 3
 RETRY_WAIT_S = 30  # then 60: the daily run has hours of slack before the 09:00 deploy
@@ -665,8 +700,10 @@ def main(argv=None):
                                      "products": [entries[k] for k in sorted(entries)]})
     for p in products:
         t0 = time.time()
+        done = False
         try:
             entries[p["id"]] = with_retries(lambda: process(p, a.out / "rasters"), p["id"])
+            done = True
             if entries[p["id"]].get("gap_failures"):
                 gap_failures[p["id"]] = entries[p["id"]].pop("gap_failures")
             log.info("%s ok time=%s %.0fs", p["id"], entries[p["id"]]["time"], time.time() - t0)
@@ -675,6 +712,9 @@ def main(argv=None):
             if p["id"] in prev:
                 entries[p["id"]] = prev[p["id"]] | {"stale": True}
         write_manifest()  # each product as it finishes: a run killed partway keeps what it did (the cron's timeout 1800)
+        if done:  # only now that the manifest no longer lists them
+            for f in prune_frames(a.out / "rasters", p["id"], _keep_days(p), entries[p["id"]].get("history", [])):
+                log.info("%s pruned %s", p["id"], f.name)
     if failures and len(failures) == len(products):
         raise SystemExit(f"every selected raster failed: {failures}")
 
