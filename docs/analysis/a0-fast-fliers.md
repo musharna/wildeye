@@ -78,3 +78,34 @@ count was fetched**. Grill ledger: `grill_wildeye_disease_program_2026-11-07.md`
   heading flip changes nothing.
 - **Runtime.** The RAP fetch is timed on 3 nights first; if the projected total is over 2 h, the run is
   restructured before launch.
+
+## Result (2026-11-16 EST): VOID
+
+Binding run 2026-11-16 10:46–10:59 EST (`pipeline.fast_fliers run`, falls 2025 + 2026, 214 nights, 3,021 RAP
+hours), after the Nov 15 night had ended. Output: `a0_fast_fliers.json`; figure: `a0_fast_fliers.png`
+(`a0_fast_fliers_figure.R`). 2,128 radar-nights in 2025 and 2,119 in 2026; all 20 radars in both falls. KJAX has no
+profiles from Nov 14 14:40 UTC: the radar was off the air (NOAA's level-2 archive holds no KJAX volume for Nov 15–16;
+checked 2026-11-16).
+
+| Gate | Needed | Got | |
+|---|---|---|---|
+| M0 wind | turn ≤ 0.2°, radiosonde RMS ≤ 3 m/s | 0.034°, 2.02 m/s over 6,171 levels | pass |
+| M1 2025 | fast ≥ 2 % at ≥ 14 radars | 0 of 20; largest 0.06 % (KILN), median 0.00 % | **fail** |
+| M1 2026 | same | 0 of 20; largest 0.28 % (KAKQ), median 0.01 % | **fail** |
+| M2 2025 | fast ≥ 7 d after slow at ≥ 14; slow in Sep 10–Oct 20 at ≥ 14 | 17 later; control 20 | pass |
+| M2 2026 | same | 13 later; control 20 | **fail** |
+| M3 second wind | median ρ ≥ 0.6; radiosonde/RAP fast share 0.5–2× | ρ 0.71 (11 radars); ratio 3.30 (0.072 % vs 0.022 %) | **fail** |
+| M4 eBird ducks | same year beats wrong year at ≥ 15 radars | 14 of 20 | **fail** |
+
+M1 decides it: the fast class is not there to measure. Of all classed density, slow holds 65 %, insect-like 34 %,
+intermediate 0.7 % and fast 0.01 % (2025) and 0.03 % (2026). A further 23 % (2025) and 21 % (2026), relative to the
+classed total, was counted but not classed, as the rules say: it is the 0–200 m bin, whose middle lies below RAP's
+lowest level (195–265 m at KDIX, KOKX, KFFC, KOHX on 2025-10-10 04 UTC). This check says nothing about that bin. M2 2025, M3's ρ and M4's 14 of 20 are computed on that
+sliver and are not read as support. Why, offered after the fact and not tested: a vol2bird bin's speed is the
+mean over every target in it (see Prior art), and waterfowl almost never dominate a bin, so their passage is
+averaged into the slow class rather than missing from the radar. M3's ratio says the same: the two wind
+engines disagree by 3× on a share this small.
+
+What follows (rules above): A does not go ahead in its waterfowl form. A's frozen rules (`a-hpai-radar.md`) run
+only if A0 is FIRED, so A is VOID, and its Amendment 1 bridge and fast-passage run do not run. No class edge,
+threshold or radar set is changed after this result.
