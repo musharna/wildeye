@@ -9,6 +9,7 @@ from shapely.geometry import box
 from pipeline import geomodel_check as gc
 from pipeline import geomodel_species as gsp
 from pipeline.geomodel_sources import GROUPS, SourceError
+from pipeline.tests.test_geomodel_check import RANGE as gc_RANGE
 from pipeline.tests.test_geomodel_check import FakeSources
 
 
@@ -160,7 +161,7 @@ class Killed(BaseException):
 
 
 def test_progress_is_written_as_it_goes_so_a_killed_run_keeps_it(tmp_path, monkeypatch):
-    monkeypatch.setattr(gsp, "CHECKPOINT_EVERY", 2)
+    monkeypatch.setattr(gsp, "CHECKPOINT_TILES", 2 * gsp.full_tiles(gc_RANGE.bounds))
 
     class KilledAt4(ListingFakes):
         def tile_mask(self, taxon_id, z, x, y):
@@ -182,6 +183,59 @@ def test_progress_is_written_as_it_goes_so_a_killed_run_keeps_it(tmp_path, monke
         None,
     ]
     assert doc["unchecked"] == 2
+
+
+def test_a_killed_run_keeps_what_it_checked_however_few_species_the_tiles_bought(
+    tmp_path, monkeypatch, caplog
+):
+    # 2026-11-09 to 11-19 (jobd 8985 ... 9696): the list was saved every 200 species and progress logged every 100, but
+    # the full check takes the cheapest species first, so by then 100 species were 2,154 tiles and an hour; jobd's idle
+    # timeout killed nine nights before the 200th species, nothing was saved, and each night asked the same tiles again.
+    # Tiles are the clock (a second each at least), so the save and the log line follow tiles asked.
+    monkeypatch.setattr(gsp, "CHECKPOINT_TILES", 4, raising=False)
+
+    class KilledAt5(TileLog):
+        def tile_mask(self, taxon_id, z, x, y):
+            if taxon_id == 5:
+                raise Killed()
+            return super().tile_mask(taxon_id, z, x, y)
+
+    caplog.set_level("INFO", logger="geomodel")
+    with pytest.raises(Killed):
+        _run(
+            tmp_path, KilledAt5(n=7), _verdicts(tmp_path, Arachnida="pass")
+        )  # 2 tiles a species, far under 200 species
+    doc = json.loads((tmp_path / "species.json").read_text())
+    # saved after species 1 and 3 (4 and 8 tiles); species 4 was checked after the last save and is asked again
+    assert [doc["species"][f"Species {i}"]["iou"] for i in range(7)] == [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        None,
+        None,
+        None,
+    ]
+    # the tiles a killed run asked count against the day's budget
+    assert [e["tiles"] for e in doc["tile_log"]] == [8]
+    progress = [
+        r.getMessage() for r in caplog.records if "species checked" in r.getMessage()
+    ]
+    assert progress == [
+        "2/7 species checked, 0 failed, 4 tiles",
+        "4/7 species checked, 0 failed, 8 tiles",
+    ]
+
+    # positive control: a run nothing kills saves every species, and logs the last one though no save was due there
+    caplog.clear()
+    code, out = _run(tmp_path, TileLog(n=7), _verdicts(tmp_path, Arachnida="pass"))
+    assert code == 0 and json.loads(out.read_text())["unchecked"] == 0
+    assert [
+        r.getMessage() for r in caplog.records if "species checked" in r.getMessage()
+    ] == [
+        "2/3 species checked, 0 failed, 4 tiles",
+        "3/3 species checked, 0 failed, 6 tiles",
+    ]
 
 
 def test_a_run_killed_on_its_first_species_already_names_them_all(tmp_path):
@@ -430,6 +484,39 @@ def test_a_daily_budget_counts_the_tiles_runs_asked_in_the_last_24_hours(tmp_pat
     assert len(later.calls) == 6  # positive control: a day on, the budget is back
     log_ = json.loads((tmp_path / "species.json").read_text())["tile_log"]
     assert [e["tiles"] for e in log_] == [6, 0, 6]
+
+
+def test_the_next_nights_cron_finds_its_budget_when_it_starts_seconds_early(tmp_path):
+    # A 24 h window against a 24 h cron left the budget to the seconds the job happened to start at: 2026-11-05 and
+    # 11-08 ran two minutes with "0 left". The window is half an hour short of a day.
+    import datetime as dt
+
+    verdicts = _verdicts(tmp_path, Arachnida="pass")
+    t0 = dt.datetime(2026, 11, 19, 3, 1, 12, tzinfo=dt.timezone.utc)
+
+    def run(fake, at):
+        out = tmp_path / "species.json"
+        args = [
+            "--verdicts",
+            str(verdicts),
+            "--out",
+            str(out),
+            "--max-tiles-per-day",
+            "6",
+        ]
+        return gsp.main(args, sources=fake, now=lambda: at)
+
+    first = TileLog(n=6)
+    assert run(first, t0) == 3 and len(first.calls) == 6
+    # negative control: a rerun 23 h 29 min on is still the same day and asks nothing
+    same_day = TileLog(n=6)
+    assert (
+        run(same_day, t0 + dt.timedelta(hours=23, minutes=29)) == 3
+        and same_day.calls == []
+    )
+    next_night = TileLog(n=6)
+    assert run(next_night, t0 + dt.timedelta(hours=24, seconds=-9)) == 0
+    assert len(next_night.calls) == 6
 
 
 def test_the_tile_log_survives_a_new_model_version(tmp_path):
