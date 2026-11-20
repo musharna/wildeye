@@ -35,7 +35,8 @@ No result met the program's bar for the site (a result that survives its stronge
 CDC ArboNET, county of residence × year, 1999–2025: 28,305 county-years, 63,155 human WNV cases (CDC's
 month-of-onset file sums to 63,153). A county counts as near a radar when its Census 2021 internal point is within
 150 km (the grill's frozen radius); a county near two radars counts for both. Connecticut's nine planning regions,
-which CDC reports by from 2023, are not in the 2021 file and are placed at their Census 2024 internal points.
+which CDC has used in place of counties since 2023, are not in the 2021 file and are placed at their Census 2024
+internal points.
 
 | Radar | Counties | Cases 1999–2025 | Median a year, 2003–25 | Years with none, 2003–25 |
 |---|---:|---:|---:|---:|
