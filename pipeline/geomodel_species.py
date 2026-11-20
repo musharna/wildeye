@@ -228,7 +228,10 @@ def main(argv=None, *, sources=None, now=None) -> int:
     )
     ap.add_argument("--mode", choices=("skim", "full"), default="full")
     ap.add_argument(
-        "--only", type=Path, default=None, help="check only the species named in this file, one per line"
+        "--only",
+        type=Path,
+        default=None,
+        help="check only the species named in this file, one per line",
     )
     ap.add_argument(
         "--include-full",
@@ -269,11 +272,24 @@ def main(argv=None, *, sources=None, now=None) -> int:
     max_tiles = args.max_tiles
     if args.max_tiles_per_day is not None:
         day = dt.timedelta(hours=24)
-        used = sum(e["tiles"] for e in prior_log if started - dt.datetime.fromisoformat(e["at"]) < day)
+        used = sum(
+            e["tiles"]
+            for e in prior_log
+            if started - dt.datetime.fromisoformat(e["at"]) < day
+        )
         left = max(0, args.max_tiles_per_day - used)
-        log.info("daily tile budget %s: %s asked in the last 24 h, %s left", args.max_tiles_per_day, used, left)
+        log.info(
+            "daily tile budget %s: %s asked in the last 24 h, %s left",
+            args.max_tiles_per_day,
+            used,
+            left,
+        )
         max_tiles = left if max_tiles is None else min(max_tiles, left)
-    kept_log = [e for e in prior_log if started - dt.datetime.fromisoformat(e["at"]) < dt.timedelta(hours=48)]
+    kept_log = [
+        e
+        for e in prior_log
+        if started - dt.datetime.fromisoformat(e["at"]) < dt.timedelta(hours=48)
+    ]
 
     def write(species: dict, asked: int) -> None:
         unchecked = sum(1 for s in species.values() if s["iou"] is None)
@@ -289,7 +305,8 @@ def main(argv=None, *, sources=None, now=None) -> int:
                 "species_iou_min": SPECIES_IOU_MIN,
                 "unchecked": unchecked,
                 "groups": groups,
-                "tile_log": kept_log + [{"at": started.isoformat(timespec="seconds"), "tiles": asked}],
+                "tile_log": kept_log
+                + [{"at": started.isoformat(timespec="seconds"), "tiles": asked}],
                 "species": species,
             },
         )
@@ -306,10 +323,16 @@ def main(argv=None, *, sources=None, now=None) -> int:
             return 2
         only = None
         if args.only is not None:
-            only = {line.strip() for line in args.only.read_text().splitlines() if line.strip()}
+            only = {
+                line.strip()
+                for line in args.only.read_text().splitlines()
+                if line.strip()
+            }
             unknown = sorted(only - {n for _, _, n in todo})
             if unknown:
-                ap.error(f"--only names species not in a passing collection: {unknown[:5]}")
+                ap.error(
+                    f"--only names species not in a passing collection: {unknown[:5]}"
+                )
         unchecked = check_tiles(
             sources,
             todo,
