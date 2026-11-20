@@ -2,6 +2,8 @@
 
 import hashlib
 import io
+import urllib.error
+import urllib.request
 import zipfile
 
 import pytest
@@ -267,3 +269,52 @@ def test_a_download_that_is_not_the_pinned_file_is_refused_and_a_good_one_is_fet
         RuntimeError, match="a.csv: sha256 .* expected .*; delete it and rerun"
     ):
         d.fetch_inputs(tmp_path, get=get, pause=0)
+
+
+class _Answer:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return b"body"
+
+
+def _http(code):
+    return urllib.error.HTTPError(
+        "https://example.org/x", code, "x", {}, io.BytesIO(b"")
+    )
+
+
+def test_get_retries_a_busy_server_or_a_dropped_connection_and_gives_a_refusal_back_at_once(
+    monkeypatch,
+):
+    waits, answers = [], []
+
+    def fake_urlopen(url, timeout=None):
+        a = answers.pop(0)
+        if isinstance(a, BaseException):
+            raise a
+        return a
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(d.time, "sleep", waits.append)
+    # positive control: a 503, a 429 and a dropped connection are each waited out, longer each time
+    answers[:] = [_http(503), _http(429), ConnectionResetError(104, "reset"), _Answer()]
+    assert d.get("https://example.org/x") == b"body"
+    assert waits == [5, 10, 20]
+    # a refusal (403, 404) is the answer: raised as it came, with no wait and no second request
+    for code in (403, 404):
+        waits.clear()
+        answers[:] = [_http(code), _Answer()]
+        with pytest.raises(urllib.error.HTTPError) as e:
+            d.get("https://example.org/x")
+        assert e.value.code == code and waits == [] and len(answers) == 1
+    # a server that stays busy is given up on after `tries` requests, and its last error is the one raised
+    waits.clear()
+    answers[:] = [_http(503), _http(502), _Answer()]
+    with pytest.raises(urllib.error.HTTPError) as e:
+        d.get("https://example.org/x", tries=2)
+    assert e.value.code == 502 and waits == [5] and len(answers) == 1
