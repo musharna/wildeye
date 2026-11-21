@@ -1,7 +1,7 @@
 // src/bio/datasetList.test.mjs — 'Top datasets' rows (R-7u): facet order, DOI or gbif.org links, counts, failed lookups, text only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createDatasetList, createDatasetRows, datasetRows, DATASETS_HEADING } from './datasetList.js';
+import { createDatasetList, createDatasetRows, datasetRows, DATASETS_HEADING, showTallLinkStart, tallLinkScroll } from './datasetList.js';
 
 const INAT_RG = '50c9509d-22c7-4a22-a47d-8c48425ef4a7'; // DOI 10.15468/ab3s5x (live 2026-09-14)
 const OTHER = '6ac3f774-d9fb-4796-b3e9-92bf6c81c084';
@@ -66,4 +66,35 @@ test('the rows can be built on their own, labelled by a heading elsewhere in the
   const list = createDatasetRows(fakeDoc(), [{ key: INAT_RG, count: 3, title: 'iNaturalist Research-grade Observations', doi: '10.15468/ab3s5x' }], { labelledBy: 'species-datasets-heading' });
   assert.deepEqual([list.tag, list.className, list.attributes['aria-labelledby'], list.attributes['aria-label']], ['ol', 'dataset-list-rows', 'species-datasets-heading', undefined]);
   assert.deepEqual(list.children.map((li) => [li.children[0].href, li.children[0].rel, li.children[1].textContent]), [['https://doi.org/10.15468/ab3s5x', 'noopener noreferrer', '3']]);
+});
+
+// #174. Geometry as measured on the live card at 667x375 on 2026-11-21: the rows' view 25 px from 223.7, 3 px of scroll padding, link lines of
+// 16.2 px. The real layout is checked by scripts/qa-species.mjs (card-foot-rest); these pin the rule.
+test('a focused link taller than the rows\' view is scrolled to its start, and one that fits is left to the browser', () => {
+  const view = { viewTop: 223.7, viewHeight: 25, inset: 3 };
+  assert.equal(tallLinkScroll({ ...view, linkTop: 212.5, linkHeight: 48.6 }), 212.5 - 226.7, 'three lines in a one-line view, top above it: scrolled up by 14.2 px to the padding');
+  assert.equal(tallLinkScroll({ ...view, linkTop: 260, linkHeight: 48.6 }), 260 - 226.7, 'below the view: scrolled down to the same place');
+  assert.equal(tallLinkScroll({ ...view, linkTop: 212.5, linkHeight: 16.2 }), 0, 'one line fits 25 - 2 x 3 px: not moved, wherever it is');
+  assert.equal(tallLinkScroll({ ...view, linkTop: 212.5, linkHeight: 19 }), 0, 'exactly the view inside its padding still fits');
+  assert.notEqual(tallLinkScroll({ ...view, linkTop: 212.5, linkHeight: 19.5 }), 0, 'half a pixel more does not');
+  assert.equal(tallLinkScroll({ viewTop: 223.7, viewHeight: 25, inset: 0, linkTop: 212.5, linkHeight: 19.5 }), 0, 'the padding is part of the rule: with none, 19.5 px fits 25');
+});
+
+test('focus on a dataset link scrolls its rows by the rule, from the rows\' own measurements; focus elsewhere in the rows moves nothing', () => {
+  const listeners = {};
+  const rows = {
+    scrollTop: 40, clientTop: 1, clientHeight: 25,
+    addEventListener(type, fn) { listeners[type] = fn; },
+    getBoundingClientRect: () => ({ top: 222.7 }),
+  };
+  const link = (top, height) => ({ getBoundingClientRect: () => ({ top, height }) });
+  const target = (found) => ({ closest: (selector) => (selector === '.dataset-row-link' ? found : null) });
+  showTallLinkStart(rows, { computedStyle: (element) => (element === rows ? { scrollPaddingTop: '3px' } : {}) });
+  assert.deepEqual(Object.keys(listeners), ['focusin']);
+  listeners.focusin({ target: target(null) });
+  assert.equal(rows.scrollTop, 40, 'not a dataset link: nothing moves');
+  listeners.focusin({ target: target(link(212.5, 16.2)) });
+  assert.equal(rows.scrollTop, 40, 'a link that fits: nothing moves');
+  listeners.focusin({ target: target(link(212.5, 48.6)) });
+  assert.ok(Math.abs(rows.scrollTop - (40 + 212.5 - (222.7 + 1 + 3))) < 1e-9, `a tall link: its top goes to the view's top (box top + border) plus the padding, got ${rows.scrollTop}`);
 });

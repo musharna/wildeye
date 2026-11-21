@@ -7,7 +7,7 @@
  * foot; GBIF and iNaturalist strings only ever go through textContent.
  */
 import DOMPurify from 'dompurify';
-import { createDatasetList } from './datasetList.js';
+import { createDatasetList, showTallLinkStart } from './datasetList.js';
 import { observeEndWithIntersectionObserver, watchMoreBelow } from './moreCue.js';
 
 export const BIO_CARD_LAYER_IDS = new Set([
@@ -326,6 +326,7 @@ export function createDetailsCard({ viewer, layerName = (id) => id, doc = docume
           const block = foot.appendChild(createDatasetList(doc, datasets, { heading: 'Top datasets in this area' }));
           // [heading, rows, cue] (createDatasetList): the panel's cue, shown while more rows are below the rows' view.
           stopDatasetsCue = watchMoreBelow(block.children[1], block.children[2], observeEnd);
+          showTallLinkStart(block.children[1]);
         }
         let note = null;
         if (footerNote) {

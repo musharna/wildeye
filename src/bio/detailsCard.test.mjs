@@ -332,6 +332,8 @@ test('a list foot names the top datasets above the gbif.org link; with none it i
     [`https://www.gbif.org/dataset/${OTHER_DATASET}`, '3', 'dataset lookup failed: HTTP 503'],
   ]);
   assert.deepEqual(list.children.map((li) => [li.children[0].target, li.children[0].rel]), [['_blank', 'noopener noreferrer'], ['_blank', 'noopener noreferrer']]);
+  // #174: the card's rows scroll, so they show the start of a focused link taller than their view (showTallLinkStart; the heading does not listen)
+  assert.deepEqual([typeof list.listeners.focusin, heading.listeners.focusin], ['function', undefined]);
   card.showList({ ...base, footerNote: "gbif.org can't show this area as a circle", datasets: [{ key: INAT_RG, count: 1, title: 'iNaturalist Research-grade Observations', doi: null }] });
   assert.deepEqual(foot.children.map((c) => c.className), ['dataset-list', 'bio-card-foot-note', ''], 'the datasets, then the note about the link, then the link');
   card.showList(base);
