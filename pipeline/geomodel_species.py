@@ -6,7 +6,7 @@ iNaturalist asks for under 10,000 requests a day, and a full check of Arachnida 
 two passes (spec: "Skim first"): `--mode skim` checks one tile per species, the z3 tile holding most of its range, which catches
 a served map that is mostly a different shape; `--mode full` (the default) then checks every tile, a day's budget at a time
 (`--max-tiles`), replacing skim scores as it goes. Each entry says which check its `iou` comes from (`check`: skim or full).
-The list names every species from its first write (iou null until checked), rewrites itself every CHECKPOINT_EVERY species,
+The list names every species from its first write (iou null until checked), rewrites itself every CHECKPOINT_TILES tiles,
 and a later run of the same model version picks up what is left.
 Exit 2 = nothing written (the ranges are not the model that was checked, or a name is listed twice); exit 3 =
 written, but some species are still unchecked (iou null, never shown): tiles failed, or the budget ran out.
@@ -30,7 +30,14 @@ from .geomodel_check import (
 from .geomodel_sources import GROUPS, SourceError
 
 SPECIES_IOU_MIN = 0.70  # spec ruling 1, fixed before the first per-species run
-CHECKPOINT_EVERY = 200
+# Save and log by tiles asked, not species checked: a tile is the unit of time (at least a second each), and the
+# full check takes the cheapest species first, so a count of species stretches as the run goes on (2026-11-09 to
+# 11-19: 100 species passed an hour of silence, jobd's idle timeout, before the 200th would have saved anything).
+CHECKPOINT_TILES = 500
+# The day a budget is counted over. Half an hour short of 24 h, so a nightly cron that starts a few seconds earlier
+# than the night before still finds its budget (a 24 h window made that a coin toss: 2026-11-05 and 11-08 ran with
+# 0 left). At one request a second the half hour can add at most 1,800 tiles to a day's --max-tiles-per-day.
+BUDGET_WINDOW_H = 23.5
 log = logging.getLogger("geomodel")
 
 
@@ -124,7 +131,7 @@ def check_tiles(
     max_tiles: int | None = None,
     only: set[str] | None = None,
 ) -> int:
-    """Score each species in `mode`, reusing `known`; write(species) from the start and every CHECKPOINT_EVERY checks.
+    """Score each species in `mode`, reusing `known`; write(species) from the start and every CHECKPOINT_TILES tiles.
     A skim scores species with no check yet (with include_full, every species without a skim score, recording it beside a
     full check without changing that check); a full check scores every species not yet fully checked. Stops before a
     species would take the tiles asked past max_tiles. Returns how many species are unchecked."""
@@ -164,7 +171,7 @@ def check_tiles(
         len(missing),
         len(todo),
     )
-    failed = asked = 0
+    failed = asked = saved_at = 0
     write(species, asked)
     for i, (group, taxon_id, name) in enumerate(missing, 1):
         s = species[name]
@@ -194,9 +201,11 @@ def check_tiles(
                 "tiles for %s (%s, taxon %s) failed: %s", name, group, taxon_id, e
             )
             failed += 1
-        if i % CHECKPOINT_EVERY == 0:
+        due = asked - saved_at >= CHECKPOINT_TILES
+        if due:
             write(species, asked)
-        if i % 100 == 0 or i == len(missing):
+            saved_at = asked
+        if due or i == len(missing):
             log.info(
                 "%s/%s species checked, %s failed, %s tiles",
                 i,
@@ -228,7 +237,10 @@ def main(argv=None, *, sources=None, now=None) -> int:
     )
     ap.add_argument("--mode", choices=("skim", "full"), default="full")
     ap.add_argument(
-        "--only", type=Path, default=None, help="check only the species named in this file, one per line"
+        "--only",
+        type=Path,
+        default=None,
+        help="check only the species named in this file, one per line",
     )
     ap.add_argument(
         "--include-full",
@@ -245,7 +257,7 @@ def main(argv=None, *, sources=None, now=None) -> int:
         "--max-tiles-per-day",
         type=int,
         default=None,
-        help="stop before the tiles asked in the last 24 h (this file's tile_log, all runs) pass this",
+        help="stop before the tiles asked in the last 23.5 h (this file's tile_log, all runs) pass this",
     )
     args = ap.parse_args(argv)
     if args.include_full and args.mode != "skim":
@@ -263,17 +275,31 @@ def main(argv=None, *, sources=None, now=None) -> int:
     }
 
     # iNaturalist asks for under 10,000 requests a day: every run logs what it asked, and a daily budget is what the
-    # last 24 h of runs left, whatever model version they checked
+    # runs of the last BUDGET_WINDOW_H left, whatever model version they checked
     started = (now or (lambda: dt.datetime.now(dt.timezone.utc)))()
     prior_log = previous_tile_log(args.out)
     max_tiles = args.max_tiles
     if args.max_tiles_per_day is not None:
-        day = dt.timedelta(hours=24)
-        used = sum(e["tiles"] for e in prior_log if started - dt.datetime.fromisoformat(e["at"]) < day)
+        day = dt.timedelta(hours=BUDGET_WINDOW_H)
+        used = sum(
+            e["tiles"]
+            for e in prior_log
+            if started - dt.datetime.fromisoformat(e["at"]) < day
+        )
         left = max(0, args.max_tiles_per_day - used)
-        log.info("daily tile budget %s: %s asked in the last 24 h, %s left", args.max_tiles_per_day, used, left)
+        log.info(
+            "daily tile budget %s: %s asked in the last %s h, %s left",
+            args.max_tiles_per_day,
+            used,
+            BUDGET_WINDOW_H,
+            left,
+        )
         max_tiles = left if max_tiles is None else min(max_tiles, left)
-    kept_log = [e for e in prior_log if started - dt.datetime.fromisoformat(e["at"]) < dt.timedelta(hours=48)]
+    kept_log = [
+        e
+        for e in prior_log
+        if started - dt.datetime.fromisoformat(e["at"]) < dt.timedelta(hours=48)
+    ]
 
     def write(species: dict, asked: int) -> None:
         unchecked = sum(1 for s in species.values() if s["iou"] is None)
@@ -289,7 +315,8 @@ def main(argv=None, *, sources=None, now=None) -> int:
                 "species_iou_min": SPECIES_IOU_MIN,
                 "unchecked": unchecked,
                 "groups": groups,
-                "tile_log": kept_log + [{"at": started.isoformat(timespec="seconds"), "tiles": asked}],
+                "tile_log": kept_log
+                + [{"at": started.isoformat(timespec="seconds"), "tiles": asked}],
                 "species": species,
             },
         )
@@ -306,10 +333,16 @@ def main(argv=None, *, sources=None, now=None) -> int:
             return 2
         only = None
         if args.only is not None:
-            only = {line.strip() for line in args.only.read_text().splitlines() if line.strip()}
+            only = {
+                line.strip()
+                for line in args.only.read_text().splitlines()
+                if line.strip()
+            }
             unknown = sorted(only - {n for _, _, n in todo})
             if unknown:
-                ap.error(f"--only names species not in a passing collection: {unknown[:5]}")
+                ap.error(
+                    f"--only names species not in a passing collection: {unknown[:5]}"
+                )
         unchecked = check_tiles(
             sources,
             todo,
