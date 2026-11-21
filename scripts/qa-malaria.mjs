@@ -15,14 +15,17 @@ const argv = process.argv.slice(2);
 const arg = (n, f) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : f);
 const SITE = arg("--url", "https://musharna.github.io/wildeye/");
 const ID = "malaria";
-// 1/24° cell centres; the rate, LCI and UCI are the WCS values, printed as malaria.js prints them
+// 1/24° cell centres; the rate, LCI and UCI are the WCS values, printed as malaria.js prints them.
+// MAP revised the 2026-08 release in place (same layer name) between 2026-10-03 and 2026-11-09: the three estimates
+// below moved by up to 0.7 points and their intervals by up to 7 (N Ghana 2025 was 26.1%, 3.2% to 68.7%). Values re-read
+// through WCS GetCoverage on 2026-11-21; the site, which reads GetFeatureInfo, showed the same numbers that day.
 const KNOWN = [
   { what: "N Ghana 2025 (live)", lat: 10.0208333, lon: -0.0208333, status: "value", date: "2025",
-    text: "26.1% of children aged 2–10 carry P. falciparum (95% interval 3.2% to 68.7%)" },
+    text: "25.4% of children aged 2–10 carry P. falciparum (95% interval 2.8% to 61.7%)" },
   { what: "N Ghana 2015", lat: 10.0208333, lon: -0.0208333, observed: "2015-07-01T00:00:00Z", status: "value", date: "2015",
-    text: "60.2% of children aged 2–10 carry P. falciparum (95% interval 40.1% to 76.8%)" },
+    text: "60.6% of children aged 2–10 carry P. falciparum (95% interval 39.9% to 75.4%)" },
   { what: "Malawi 2010", lat: -13.4791667, lon: 33.4791667, observed: "2010-07-01T00:00:00Z", status: "value", date: "2010",
-    text: "61.0% of children aged 2–10 carry P. falciparum (95% interval 49.7% to 73.1%)" },
+    text: "61.0% of children aged 2–10 carry P. falciparum (95% interval 49.4% to 72.9%)" },
   { what: "Paris: no estimate", lat: 48.8125, lon: 2.3125, status: "nodata", date: "2025" },
   { what: "Amazon: masked, sparsely populated", lat: -4.9791667, lon: -65.0208333, status: "value", date: "2025",
     text: "Sparsely populated: MAP masks the estimate here" },
