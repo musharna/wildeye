@@ -8,7 +8,9 @@ Nile pages carry no CSV, so the scriptable, weekly, public source is the NNDSS W
 dataset on data.cdc.gov (`x9gk-5huc`, "NNDSS Weekly Data", Office of Public Health Data,
 Surveillance, and Technology, CDC), which republishes ArboNET-fed case counts per reporting
 area and MMWR week for West Nile, Eastern equine encephalitis, La Crosse, St. Louis
-encephalitis, Powassan, Jamestown Canyon and dengue. State level only (county is not public).
+encephalitis, Powassan, Jamestown Canyon and dengue. State level only: this dataset's unit is the
+reporting area. CDC's historic-data dashboards do publish county totals, but one number a year
+(analysis/d_arbo_counts.py reads them), so they cannot feed a weekly layer.
 
 The weekly bin is NOT the dataset's "current week" column: arboviral cases are back-filled
 into the cumulative year-to-date column (`m3`) weeks after the report they first appear in
@@ -22,6 +24,7 @@ State and is merged into it. State polygons are the Census 2021 cartographic bou
 """
 
 from __future__ import annotations
+
 import argparse
 import collections
 import datetime as dt
@@ -35,6 +38,7 @@ import urllib.parse
 import urllib.request
 import zipfile
 from pathlib import Path
+
 from .atomic import write_atomic
 from .net import urlopen
 
@@ -364,8 +368,13 @@ def main(argv=None):
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
     t0 = time.time()
-    today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
-    y, w = mmwr_year_week(today)
+    # the UTC date: the cron host runs on UTC, so this is the date `date.today()` gave there
+    today = (
+        dt.date.fromisoformat(a.today)
+        if a.today
+        else dt.datetime.now(dt.timezone.utc).date()
+    )
+    y, _ = mmwr_year_week(today)
     first = today - dt.timedelta(days=7 * a.weeks)
     fy, fw = mmwr_year_week(first)
     rows = []
@@ -391,7 +400,10 @@ def main(argv=None):
     # every shape is a feature now, so the empty-run guard must look at the index, not the features
     if not states:
         raise SystemExit("no states with cases")
-    newest = max((f["properties"]["asof"] for f in feats if f["properties"]["asof"]), default=None)
+    newest = max(
+        (f["properties"]["asof"] for f in feats if f["properties"]["asof"]),
+        default=None,
+    )
     write_atomic(
         a.out,
         {

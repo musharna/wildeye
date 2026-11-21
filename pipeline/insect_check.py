@@ -19,6 +19,7 @@ import itertools
 import json
 import math
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -182,7 +183,14 @@ def turn_error_deg(lat, lon, ij: tuple[int, int], geo: tuple[float, float]) -> f
     return abs((d + 180) % 360 - 180)
 
 
-def _get(url: str, rng: tuple[int, int | None] | None = None, tries: int = 6) -> bytes:
+def _get(
+    url: str,
+    rng: tuple[int, int | None] | None = None,
+    tries: int = 8,
+    sleep=time.sleep,
+) -> bytes:
+    """GET (a byte range of) url. A dropped route or name lookup is retried with doubling waits (5 s ... 320 s,
+    ~10 min in all: a DNS dropout on this host outlasted the old 75 s, 2026-11-07); an HTTP 4xx raises at once."""
     for k in range(tries):
         try:
             req = urllib.request.Request(
@@ -193,10 +201,14 @@ def _get(url: str, rng: tuple[int, int | None] | None = None, tries: int = 6) ->
             )
             with urllib.request.urlopen(req, timeout=60) as r:  # nosec B310 - always the https RAP or IEM_RAOB constant + fixed fields
                 return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code < 500 or k == tries - 1:
+                raise
+            sleep(5.0 * 2**k)
         except OSError:
             if k == tries - 1:
                 raise
-            time.sleep(5 * (k + 1))  # WSL DNS drops out for tens of seconds at a time
+            sleep(5.0 * 2**k)
 
 
 def fetch_hour(hour: dt.datetime, cache: Path) -> Path:

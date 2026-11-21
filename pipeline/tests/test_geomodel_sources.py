@@ -466,6 +466,96 @@ def test_fetch_backs_off_for_minutes_when_gbif_says_too_many_requests(monkeypatc
     assert waits == []
 
 
+def test_fetch_retries_a_connection_the_server_drops_and_gives_up_with_a_source_error(
+    monkeypatch,
+):
+    # 2026-11-10 and 11-17 (jobd 9142, 9561): iNaturalist closed a tile request without answering. http.client raises
+    # RemoteDisconnected for that and urllib does not wrap it in URLError, so it passed fetch's retry and the species
+    # check's `except SourceError` and ended the night as a crash. A real socket here: a patched urlopen would only
+    # raise what the test believes urllib raises.
+    import http.server
+    import threading
+
+    answers = []  # what the server does with each request in turn, then a whole tile
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            how = answers.pop(0) if answers else "whole"
+            self.close_connection = True
+            if how == "drop":  # close without a status line: RemoteDisconnected
+                return
+            self.send_response(200)
+            self.send_header("Content-Length", "4")
+            self.end_headers()
+            self.wfile.write(
+                b"tile" if how == "whole" else b"ti"
+            )  # "short": IncompleteRead
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    waits = []
+    monkeypatch.setattr(gs.time, "sleep", waits.append)
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+    url = f"http://127.0.0.1:{server.server_port}/v2/geomodel/1/3/4/3.png"
+    try:
+        # positive control: a drop and a body cut short, then the tile
+        answers[:] = ["drop", "short"]
+        assert gs.fetch(url) == b"tile"
+        assert len(waits) == 2 and answers == []
+        # a server that never answers is a failed tile (SourceError, which the species check counts), not a crash
+        answers[:] = ["drop"] * 5
+        with pytest.raises(
+            gs.SourceError,
+            match="gave up on http://127.0.0.1.*Remote end closed connection",
+        ):
+            gs.fetch(url, attempts=3)
+        assert len(answers) == 2
+        answers[:] = ["short"] * 5
+        with pytest.raises(
+            gs.SourceError, match="gave up on http://127.0.0.1.*IncompleteRead"
+        ):
+            gs.fetch(url, attempts=3)
+        assert len(answers) == 2
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_fetch_retries_a_connection_reset_while_the_answer_is_read(monkeypatch):
+    # a reset after the status line reaches the caller as ConnectionResetError, also not a URLError (a fixture: a reset
+    # at a chosen moment is not something a local server gives on demand)
+    import urllib.request
+
+    resets = [1]
+
+    class Answer:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            if resets[0] > 0:
+                resets[0] -= 1
+                raise ConnectionResetError(104, "Connection reset by peer")
+            return b"tile"
+
+    waits = []
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: Answer())
+    monkeypatch.setattr(gs.time, "sleep", waits.append)
+    assert gs.fetch("https://api.inaturalist.org/v2/geomodel/1/3/4/3.png") == b"tile"
+    assert len(waits) == 1
+    resets[0] = 9
+    with pytest.raises(
+        gs.SourceError, match="gave up on https://api.inaturalist.org.*Connection reset"
+    ):
+        gs.fetch("https://api.inaturalist.org/v2/geomodel/1/3/4/3.png", attempts=2)
+
+
 def test_fetch_retries_a_404_from_occurrence_search_and_nothing_else(monkeypatch):
     # 2026-10-31, jobd 7853: one search page answered 404 with an empty body in a burst of 429s and ended a 6 h check;
     # the same URL then gave 200. A search with no matches is 200 with count 0 (checked live), so a 404 is the server

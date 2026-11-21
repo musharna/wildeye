@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import math
@@ -140,8 +141,8 @@ class SourceError(RuntimeError):
 
 
 def fetch(url: str, *, attempts: int = 6, pause: float = 0.0) -> bytes:
-    """GET with retries on 429, 5xx and a 404 from GBIF's occurrence search; anything else, or the last failure, raises
-    with the URL.
+    """GET with retries on 429, 5xx, a failed or dropped connection and a 404 from GBIF's occurrence search; anything
+    else, or the last failure, raises SourceError with the URL.
 
     429 means the server is loaded (GBIF's limit follows its load): wait its Retry-After, else a minute
     doubling each time, about half an hour in all before giving up."""
@@ -174,7 +175,15 @@ def fetch(url: str, *, attempts: int = 6, pause: float = 0.0) -> bytes:
                 log.info("429 from %s, waiting %d s", url.split("?")[0], wait)
             if search_404:
                 log.info("404 from %s, waiting %d s", url.split("?")[0], wait)
-        except (urllib.error.URLError, TimeoutError) as e:
+        # A connection the server drops without answering, or part way through a body, is not a URLError: urllib lets
+        # http.client's own errors through (2026-11-10 and 11-17: one RemoteDisconnected from an iNaturalist tile
+        # ended the night's species check as a crash).
+        except (
+            urllib.error.URLError,
+            TimeoutError,
+            http.client.HTTPException,
+            ConnectionError,
+        ) as e:
             last = e
         if attempt < attempts - 1:
             time.sleep(wait)
