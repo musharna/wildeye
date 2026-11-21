@@ -1097,14 +1097,22 @@ if (CHECKS.has('card-foot-rest')) {
         }
         const round = (b) => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, +v.toFixed(1)]));
         const inside = ring.left >= clip.left - 0.05 && ring.top >= clip.top - 0.05 && ring.right <= clip.right + 0.05 && ring.bottom <= clip.bottom + 0.05;
-        return { index: i, focused: document.activeElement === a, focusVisible: a.matches(':focus-visible'), outline: `${cs.outlineStyle} ${cs.outlineWidth} offset ${cs.outlineOffset}`, ring: round(ring), clip: round(clip), clippers, inside, boxWhole: r.left >= clip.left - 0.05 && r.top >= clip.top - 0.05 && r.right <= clip.right + 0.05 && r.bottom <= clip.bottom + 0.05 };
+        // #174: a name taller than the rows' view inside its scroll padding cannot show whole. Focus must then show its start: the ring's top
+        // and sides and the whole first line (the site's rule is tallLinkScroll in src/bio/datasetList.js).
+        const rows = a.closest('.dataset-list-rows');
+        const tall = r.height > rows.clientHeight - 2 * (parseFloat(getComputedStyle(rows).scrollPaddingTop) || 0);
+        const range = document.createRange();
+        range.selectNodeContents(a);
+        const first = range.getClientRects()[0];
+        const startShown = ring.left >= clip.left - 0.05 && ring.top >= clip.top - 0.05 && ring.right <= clip.right + 0.05 && Boolean(first) && first.bottom <= clip.bottom + 0.05;
+        return { tall, startShown, index: i, focused: document.activeElement === a, focusVisible: a.matches(':focus-visible'), outline: `${cs.outlineStyle} ${cs.outlineWidth} offset ${cs.outlineOffset}`, ring: round(ring), clip: round(clip), clippers, inside, boxWhole: r.left >= clip.left - 0.05 && r.top >= clip.top - 0.05 && r.right <= clip.right + 0.05 && r.bottom <= clip.bottom + 0.05 };
       }, index));
     }
     await page.evaluate(() => { document.activeElement?.blur?.(); for (const el of document.querySelectorAll('#bio-card *')) el.scrollTop = 0; });
     // Where the rows already showed a whole link line at rest (one line inside the 6 px ring inset), focus must not cost the list anything.
     const rowsHeldALine = restRows >= 11 * 1.35 + 6 - 0.5;
     const bodyOk = bodies.every((b) => b.cut.every((line) => line.ok) && (!rowsHeldALine || Math.abs(b.height - restBody.height) <= 1));
-    return { rings, restBody, restRows, rowsHeldALine, bodies, bodyOk, ok: rings.length >= 2 && rings.every((r) => r.focused && r.focusVisible && r.outline.startsWith('auto') && r.inside && r.boxWhole) && bodyOk };
+    return { rings, restBody, restRows, rowsHeldALine, bodies, bodyOk, ok: rings.length >= 2 && rings.every((r) => r.focused && r.focusVisible && r.outline.startsWith('auto') && (r.tall ? r.startShown : r.inside && r.boxWhole)) && bodyOk };
   };
   // The cue while the rows are cut: shown at rest, gone at their scroll end; with nothing cut, not shown.
   const cueAtEnd = () => page.evaluate(async () => {
@@ -1193,7 +1201,20 @@ if (CHECKS.has('card-foot-rest')) {
       rest.cueEnd = await cueAtEnd();
       await shot(`card-foot-rest-${failed ? 'failed' : 'normal'}-${width}x${height}`);
       const focus = RING_SIZES.has(`${width}x${height}`) ? await focusRings(`${failed ? 'failed' : 'normal'}-${width}x${height}`) : null;
-      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed, `${width}x${height}`) && (focus === null || focus.ok), share: share(rest, `${width}x${height}`), focus, ...rest });
+      // #174: the live names decide whether any link is taller than the rows' view (Taveuni's list gained a four-line name in November 2026),
+      // so both cases are also set here: a first name of one line, shown whole, and a last name taller than the view at every ring size.
+      let longFocus = null;
+      if (focus !== null && !failed) {
+        await page.evaluate((long) => {
+          const links = document.querySelectorAll('#bio-card .bio-card-foot .dataset-row-link');
+          links[0].textContent = 'qa: a short name';
+          links[links.length - 1].textContent = long;
+        }, Array.from({ length: 40 }, (_, n) => `qa long dataset name ${n + 1}`).join(', '));
+        longFocus = await focusRings(`long-${width}x${height}`);
+        longFocus.cases = { firstFits: longFocus.rings[0]?.tall === false, lastTall: longFocus.rings.at(-1)?.tall === true };
+        longFocus.ok = longFocus.ok && longFocus.cases.firstFits && longFocus.cases.lastTall;
+      }
+      results.push({ viewport: `${width}x${height}`, failed, ok: restOk(rest, failed, `${width}x${height}`) && (focus === null || focus.ok) && (longFocus === null || longFocus.ok), share: share(rest, `${width}x${height}`), focus, longFocus, ...rest });
       await closeCard();
     }
   } catch (caught) {

@@ -51,6 +51,29 @@ export function createDatasetRows(doc, datasets, { label = DATASETS_HEADING, lab
 }
 
 /**
+ * How far a rows' view must scroll for a focused link too tall for it to show its start (#174): 0 when the link fits the view inside its
+ * scroll padding (`inset`), where the browser's own focus scroll shows it whole; otherwise the distance that puts the link's top at the
+ * view's top, inside the padding. Left alone, the browser does not move a link that already covers the view, so a four-line name in a
+ * one-line view (667x375) showed a middle line with its focus ring cut at both edges. Tops and heights in px, tops in one coordinate space.
+ */
+export function tallLinkScroll({ viewTop, viewHeight, linkTop, linkHeight, inset }) {
+  if (linkHeight <= viewHeight - 2 * inset) return 0;
+  return linkTop - (viewTop + inset);
+}
+
+/** Keep the start of a focused link in view where `rows` scrolls and the link is taller than its view (tallLinkScroll). */
+export function showTallLinkStart(rows, { computedStyle = (element) => globalThis.getComputedStyle(element) } = {}) {
+  rows.addEventListener('focusin', (event) => {
+    const link = event.target?.closest?.('.dataset-row-link');
+    if (!link) return;
+    const view = rows.getBoundingClientRect();
+    const box = link.getBoundingClientRect();
+    const inset = Number.parseFloat(computedStyle(rows).scrollPaddingTop) || 0;
+    rows.scrollTop += tallLinkScroll({ viewTop: view.top + rows.clientTop, viewHeight: rows.clientHeight, linkTop: box.top, linkHeight: box.height, inset });
+  });
+}
+
+/**
  * The block: a heading, then its rows (createDatasetRows), then the "more ↓" cue for the rows (brief B S-1), hidden from screen readers.
  * Children in that order: [heading, rows, cue]. The cue starts hidden; watchMoreBelow (moreCue.js) shows it while more rows are below.
  */
